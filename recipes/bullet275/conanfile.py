@@ -57,7 +57,7 @@ class Bullet275Conan(ConanFile):
              "endif()\n"
              # Optional ASan instrumentation for heap-corruption hunts:
              # BULLET275_ASAN=1 conan create ... builds instrumented libs so
-             # the OpenMMD ASan build (build/asan) can see OOB writes inside
+             # the MikuDanceStudio ASan build (build/asan) can see OOB writes inside
              # Bullet itself.
              + ("add_compile_options(/fsanitize=address /Zc:alignedNew-)\n"
                 if os.environ.get("BULLET275_ASAN") == "1" else "")
