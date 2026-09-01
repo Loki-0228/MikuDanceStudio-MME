@@ -1,0 +1,200 @@
+// ===========================================================================
+// VA 0x00424DC0 - InitToonTextures  (original: sub_424DC0, 0x2FA bytes)
+// ===========================================================================
+// Toon-shading gradient loader (NOT the font system - reclassified; the
+// translated file's "font init" comment was wrong):
+//   1. release the 11 texture slots at this+650720..+650760
+//   2. texture slot 0: embedded PNG resource 0x67 via
+//      D3DXCreateTextureFromFileInMemoryEx (A8R8G8B8, MANAGED pool)
+//   3. edge-colour table at this+655632 (14 floats, exact values below)
+//   4. slots 1..10: data\toon%02d.bmp via D3DXCreateTextureFromFileExA
+//      (fmt 21 = A8R8G8B8, pool 1 = MANAGED); on failure fall back to the
+//      embedded PNG resource (id+103); on success read the bottom-left
+//      pixel via LockRect and store B/G/R * (1/256) into the same table.
+//
+// D3DX fidelity: the original imports d3dx9_32.dll specifically; the port
+// LoadLibrary's the very same DLL and resolves the two entry points, so no
+// build-time D3DX dependency is introduced.
+// Device: *(this+657092)+120032 (guard: null until the D3D init is ported).
+// =========================================================================//
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#include <d3d9.h>
+
+#include <cstdio>
+#include <cstring>
+
+#include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/ported_funcs.hpp"
+
+namespace mikudancestudio {
+namespace {
+
+// runtime-resolved d3dx9_32.dll entry points (import table of the original)
+using FnCreateTexInMemEx = HRESULT(WINAPI*)(
+    IDirect3DDevice9*, LPCVOID, UINT, UINT, UINT, UINT, DWORD, D3DFORMAT,
+    D3DPOOL, DWORD, DWORD, D3DCOLOR, void*, void*, IDirect3DTexture9**);
+using FnCreateTexFromFileExA = HRESULT(WINAPI*)(
+    IDirect3DDevice9*, LPCSTR, UINT, UINT, UINT, DWORD, D3DFORMAT, D3DPOOL,
+    DWORD, DWORD, D3DCOLOR, void*, void*, IDirect3DTexture9**);
+
+// Binary-compatible D3DXIMAGE_INFO layout.  The project resolves D3DX at
+// runtime, so it cannot include the legacy D3DX SDK header directly.
+struct D3dxImageInfo {
+    UINT Width;
+    UINT Height;
+    UINT Depth;
+    UINT MipLevels;
+    D3DFORMAT Format;
+    D3DRESOURCETYPE ResourceType;
+    UINT ImageFileFormat;
+};
+
+struct D3dxApi {
+    HMODULE module = nullptr;
+    FnCreateTexInMemEx fromMemEx = nullptr;
+    FnCreateTexFromFileExA fromFileExA = nullptr;
+
+    bool Load() {
+        if (module != nullptr)
+            return fromMemEx != nullptr;
+        // original import: x86 links d3dx9_32, the x64 rebuild d3dx9_43
+        module = LoadLibraryA(sizeof(void*) == 8 ? "d3dx9_43.dll"
+                                                 : "d3dx9_32.dll");
+        if (module == nullptr)
+            return false;
+        fromMemEx = reinterpret_cast<FnCreateTexInMemEx>(
+            GetProcAddress(module, "D3DXCreateTextureFromFileInMemoryEx"));
+        fromFileExA = reinterpret_cast<FnCreateTexFromFileExA>(
+            GetProcAddress(module, "D3DXCreateTextureFromFileExA"));
+        return fromMemEx != nullptr && fromFileExA != nullptr;
+    }
+};
+
+D3dxApi g_d3dx;
+
+IDirect3DDevice9* DeviceOf(MMDApp* app) {
+    D3DRenderer* sub = app->Renderer();                           // 657092
+    if (sub == nullptr)
+        return nullptr;
+    return sub->device;                                           // +0x1D4E0
+}
+
+}  // namespace
+
+bool InitToonTextures(MMDApp* app) {
+    auto& s = *app;
+    // TEMP x64 diagnostic: dump the toon-slot region before the release loop
+    // to identify what pollutes it (removed once the writer is found).
+    {
+        char dir[MAX_PATH]{};
+        if (GetEnvironmentVariableA("MIKUDANCESTUDIO_STATE_DUMP_DIR", dir, MAX_PATH) > 0) {
+            char path[MAX_PATH]{};
+            std::snprintf(path, sizeof(path), "%s\\toon_region.txt", dir);
+            if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) {
+                FILE* fp = nullptr;
+                if (fopen_s(&fp, path, "wb") == 0 && fp != nullptr) {
+                    std::fprintf(fp, "app=%p\n", app);
+                    for (int row = 654700; row < 655000; row += 16) {
+                        std::fprintf(fp, "%06X:", row);
+                        for (int b = 0; b < 16; ++b)
+                            std::fprintf(fp, " %02X",
+                                app->storage()[row + b]);
+                        std::fprintf(fp, "\n");
+                    }
+                    std::fclose(fp);
+                }
+            }
+        }
+    }
+    IDirect3DDevice9* device = DeviceOf(app);
+    if (device == nullptr || !g_d3dx.Load())
+        return false;   // original would fail on the resource-path call chain
+
+    SetCurrentDirectoryW(app->ExeDir());                          // 657102
+
+    // release the 11 toon texture slots (vtable+8 = Release)
+    for (int i = 0; i < 11; ++i) {
+        IDirect3DTexture9* tex = s.ToonTexture(i);                // 650720..
+        if (tex != nullptr) {
+            static_cast<IUnknown*>(tex)->Release();
+            s.ToonTexture(i) = nullptr;
+        }
+    }
+
+    // slot 0: embedded PNG (resource 0x67, type "PNG")
+    HRSRC res = FindResourceA(static_cast<HMODULE>(s.HInstance()),
+                              MAKEINTRESOURCEA(0x67), "PNG");
+    DWORD size = SizeofResource(nullptr, res);
+    HGLOBAL glob = LoadResource(static_cast<HMODULE>(s.HInstance()), res);
+    void* data = LockResource(glob);
+    IDirect3DTexture9* tex0 = nullptr;
+    if (FAILED(g_d3dx.fromMemEx(device, data, size,
+                                static_cast<UINT>(-1), static_cast<UINT>(-1),
+                                1, 0, D3DFMT_UNKNOWN, D3DPOOL_MANAGED,
+                                static_cast<DWORD>(-1), static_cast<DWORD>(-1),
+                                0, nullptr, nullptr, &tex0)))
+        return false;
+    s.ToonTexture(0) = tex0;
+
+    // edge-colour table defaults (this+655632, exact original values)
+    const float defaults[14] = {
+        0.80078101f, 0.80078101f, 0.80078101f, 0.95703101f, 0.87890601f,
+        0.87890601f, 0.60156298f, 0.60156298f, 0.60156298f, 0.96875f,
+        0.93359399f, 0.91796899f, 1.0f, 0.90234399f,
+    };
+    for (int i = 0; i < 14; ++i)
+        s.raw<float>(offsets::kFloatToonedge + 4 * i) = defaults[i];
+    // trailing 22 floats (655688..655748) zeroed in the original via 1.0/0.0
+    for (int i = 14; i < 30; ++i)
+        s.raw<float>(offsets::kFloatToonedge + 4 * i) =
+            (i >= 24) ? 0.0f : (i == 23 ? 0.86328101f : 1.0f);
+    s.raw<float>(offsets::kFloatToonedge + 4 * 30) = 0.76171899f;
+    s.raw<float>(offsets::kFloatToonedge + 4 * 31) = 0.671875f;
+    s.raw<float>(offsets::kFloatToonedge + 4 * 32) = 0.011719f;
+    for (int i = 33; i < 37; ++i)
+        s.raw<float>(offsets::kFloatToonedge + 4 * i) = 1.0f;
+
+    // slots 1..10: toonNN.bmp with embedded PNG fallback, colour from pixel
+    for (int i = 1; i < 11; ++i) {
+        char path[256];
+        sprintf_s(path, 0x100, "data\\toon%02d.bmp", i);
+        IDirect3DTexture9** slot = &s.ToonTexture(i);
+        D3dxImageInfo info{};
+        if (FAILED(g_d3dx.fromFileExA(device, path,
+                                      static_cast<UINT>(-1),
+                                      static_cast<UINT>(-1), 1, 0,
+                                      D3DFMT_A8R8G8B8 /*21*/,
+                                      D3DPOOL_MANAGED /*1*/,
+                                      static_cast<DWORD>(-1),
+                                      static_cast<DWORD>(-1), 0,
+                                      &info, nullptr, slot))) {
+            HRSRC r = FindResourceA(static_cast<HMODULE>(s.HInstance()),
+                                    MAKEINTRESOURCEA(i + 103), "PNG");
+            DWORD sz = SizeofResource(nullptr, r);
+            HGLOBAL g = LoadResource(static_cast<HMODULE>(s.HInstance()), r);
+            void* d = LockResource(g);
+            g_d3dx.fromMemEx(device, d, sz, static_cast<UINT>(-1),
+                             static_cast<UINT>(-1), 1, 0, D3DFMT_UNKNOWN,
+                             D3DPOOL_MANAGED, static_cast<DWORD>(-1),
+                             static_cast<DWORD>(-1), 0, nullptr, nullptr,
+                             slot);
+        } else {
+            // sample the bottom-left pixel -> B/G/R * (1/256) into the table
+            D3DLOCKED_RECT rect;
+            if (SUCCEEDED((*slot)->LockRect(0, &rect, nullptr, 0))) {
+                auto* row = static_cast<unsigned char*>(rect.pBits) +
+                            rect.Pitch * (info.Height - 1);
+                float* out = &s.raw<float>(offsets::kFloatToonedge + 4 * i);
+                out[1] = row[0] * 0.00390625f;     // G? original: [0]->v7[1]
+                out[0] = row[1] * 0.00390625f;
+                out[-1] = row[2] * 0.00390625f;
+                (*slot)->UnlockRect(0);
+            }
+        }
+    }
+    return true;
+}
+
+}  // namespace mikudancestudio

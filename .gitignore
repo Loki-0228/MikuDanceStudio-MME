@@ -1,0 +1,34 @@
+# Build directories
+build/
+build-*/
+out/
+
+# Conan
+recipes/bullet275/bullet-src/
+
+# Python
+__pycache__/
+*.pyc
+
+# Binaries / artifacts
+*.exe
+*.dll
+*.lib
+*.pdb
+*.obj
+*.i64
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+
+# OS
+Thumbs.db
+Desktop.ini
