@@ -434,12 +434,26 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         SendMessageA(hwnd, WM_CLOSE, 0, 0);
         break;
 
-    case 0xC9: {     // Help: About - version banner (EN text verified)
-        wchar_t text[256];
-        swprintf_s(text, 256,
-                   L"MikuDanceStudio Ver.%4.2f\n  (DirectX9 Version)\n\n"
-                   L"programmed by Yu Higuchi", 9.32f);
-        MessageBoxW(hwnd, text, L"About MikuDanceStudio", MB_OK);
+    case 0xC9: {     // Help: About (x64 0x7FF7CB472BAD)
+        // Raise the dialog-in-flight flags (x64 app+0x58/+0xC0 =
+        // dialogFlags[9]/bC), compose the banner into a 256-byte ANSI
+        // buffer - the Japanese branch carries the Shift-JIS bytes of the
+        // author's name (樋口優, 0x7FF7CB54F980) - and pop it over the
+        // floating viewport window when one exists (x64 app+0xA1DE0).
+        s.state.dialogFlags[9] = 1;
+        s.state.bC = 1;
+        char text[256];
+        sprintf_s(text, 256,
+                  s.EnglishUI() != 0
+                      ? "MikuDanceStudio Ver.%4.2f\n  (DirectX9 Version)\n\n"
+                        "programmed by Yu Higuchi"
+                      : "MikuDanceStudio Ver.%4.2f\n  (DirectX9 Version)\n\n"
+                        "programmed by \x94\xF3\x8C\xFB\x97\x44",
+                  9.32);
+        const HWND owner = s.state.floatingWindow != 0
+                               ? reinterpret_cast<HWND>(s.state.floatingWindow)
+                               : hwnd;
+        MessageBoxA(owner, text, "About", MB_OK);
         break;
     }
 
