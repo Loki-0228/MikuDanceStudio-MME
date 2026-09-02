@@ -3,9 +3,10 @@
 
 Sources of truth (all committed to the repo, no original exe needed):
   res/assets/      native-format leaf resources (png / bmp / ico / fx / x)
-  res/templates/   binary Win32 templates (DIALOG / MENU) - compiled
-                   DLGTEMPLATE/MENUITEMTEMPLATE streams have no source text
-                   form; they are kept verbatim (see res/README.md)
+  res/templates/   binary Win32 templates (DIALOG / MENU) - kept verbatim
+                   as build input; the human-editable .rc source form
+                   lives alongside (dialogs.rc / menus.rc, regenerated and
+                   byte-verified against rc.exe by scripts/dialog_rc.py)
   res/mmd_manifest.xml / res/mmd_manifest_x64.xml
 
 The .res files are COFF object resources written directly (no rc.exe), in the
