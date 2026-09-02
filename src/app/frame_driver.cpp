@@ -51,7 +51,11 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "frame_state_dump.hpp"
 
+// key_ladder.cpp (registered in CMakeLists next to frame_modes_bone.cpp):
+// main-pump letter hotkey consumption ladder (x86 0x46FF35..0x4739E2).
 namespace mikudancestudio {
+
+void ConsumeLetterHotkeys(MMDApp* app);
 
 namespace {
 
@@ -392,6 +396,8 @@ void FrameDriver(MMDApp* app) {
 
     // ---- 1. mouse-delta snapshot reset ------------------------------------
     MouseInteractionBegin(app);                                  // per-frame
+    // 0x46FF02 poll done; consume the letter hotkey ladder (0x46FF35..)
+    mikudancestudio::ConsumeLetterHotkeys(app);  // key_ladder.cpp
     TraceOperationInput(app, "before");
 
     // ---- 2. interaction-mode dispatch --------------------------------------

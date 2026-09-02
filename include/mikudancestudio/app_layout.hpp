@@ -56,8 +56,9 @@ struct MMDAppState {
     // 0x30..0x78: dialog re-entry guards - nonzero while the matching
     // dialog is up; the menu command switch reads them to reject
     // re-entry.  The same ints double as letter key-down counters for
-    // PollKey ('z x c v a b s g h i k' fill 0x30..0x60, 'p u j f r l'
-    // fill 0x60..0x78); modal dialog pumps never run PollKey, so the
+    // PollKey ('z x c v a b g s h i k' fill 0x30..0x60 - 'g' on slot 7,
+    // 's' on slot 8, per the binary poll tables - 'p u j f r l' fill
+    // 0x60..0x78); modal dialog pumps never run PollKey, so the
     // two roles never collide.
     std::int32_t dialogFlags[18];
     std::int32_t keyState221;               // +0x78 (GetKeyState(221))

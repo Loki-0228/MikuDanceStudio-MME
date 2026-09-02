@@ -205,24 +205,27 @@ bool EditModeRecord(MMDApp* app, int mode) {
     if (mode >= 4 && mode <= 6) {
         const int axis = mode - 4;
         if (app->state.a9edb4 != 0) {
-            unsigned char* base =
-                static_cast<unsigned char*>(app->state.boneRecordArray);
+            // Physics-editor joint page: drag edits the joint rotation
+            // (dialog edits 754..756).
+            auto* joints =
+                static_cast<mikudancestudio::mdl::JointRecord*>(
+                    app->state.boneRecordArray);
             const int index = app->state.sel8c;
-            if (base != nullptr && index >= 0) {
-                float& value = *reinterpret_cast<float*>(
-                    base + 140 * index + 48 + 4 * axis);
+            if (joints != nullptr && index >= 0) {
+                float& value = joints[index].rotation[axis];
                 value = static_cast<float>(value -
                     static_cast<double>(dy) * kAccDrag);
                 EchoRecord(dialog, 754 + axis, "%3.2f",
                     value / g_ConvB52B768 * g_ConvA52B760);
             }
         } else {
-            unsigned char* base =
-                static_cast<unsigned char*>(app->state.cameraRecordArray);
+            // Rigid-body page: drag edits the body rotation (715..717).
+            auto* bodies =
+                static_cast<mikudancestudio::mdl::RigidRecord*>(
+                    app->state.cameraRecordArray);
             const int index = app->state.selAcc;
-            if (base != nullptr && index >= 0) {
-                float& value = *reinterpret_cast<float*>(
-                    base + 172 * index + 64 + 4 * axis);
+            if (bodies != nullptr && index >= 0) {
+                float& value = bodies[index].rotation[axis];
                 value = static_cast<float>(value -
                     static_cast<double>(dy) * kAccDrag);
                 EchoRecord(dialog, 715 + axis, "%3.2f",
@@ -236,24 +239,27 @@ bool EditModeRecord(MMDApp* app, int mode) {
         const int axis = mode - 10;
         constexpr double kStep = 0.05000000074505806;
         if (app->state.a9edb4 != 0) {
-            unsigned char* base =
-                static_cast<unsigned char*>(app->state.boneRecordArray);
+            // Joint position drag (744..746).
+            auto* joints =
+                static_cast<mikudancestudio::mdl::JointRecord*>(
+                    app->state.boneRecordArray);
             const int index = app->state.sel8c;
-            if (base != nullptr && index >= 0) {
-                float& value = *reinterpret_cast<float*>(
-                    base + 140 * index + 36 + 4 * axis);
+            if (joints != nullptr && index >= 0) {
+                float& value = joints[index].position[axis];
                 value = static_cast<float>(value - dy * kStep);
                 EchoRecord(dialog, 744 + axis, "%5.4f", value);
             }
         } else {
-            unsigned char* base =
-                static_cast<unsigned char*>(app->state.cameraRecordArray);
+            // Rigid body: shift-drag scales the shape size (709..711),
+            // plain drag moves the body (712..714).
+            auto* bodies =
+                static_cast<mikudancestudio::mdl::RigidRecord*>(
+                    app->state.cameraRecordArray);
             const int index = app->state.selAcc;
-            if (base != nullptr && index >= 0) {
+            if (bodies != nullptr && index >= 0) {
                 const bool scale = app->ShiftModifierActive();
-                const std::size_t field = (scale ? 40u : 52u) + 4u * axis;
-                float& value = *reinterpret_cast<float*>(
-                    base + 172 * index + field);
+                float& value = scale ? bodies[index].size[axis]
+                                     : bodies[index].position[axis];
                 value = static_cast<float>(value - dy * kStep);
                 if (scale && value < 0.1f)
                     value = 0.1f;

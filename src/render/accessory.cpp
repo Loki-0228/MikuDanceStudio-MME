@@ -477,6 +477,37 @@ bool LoadOneTexture(D3DRenderer* sub, void* accessory, DWORD material,
     return LoadTextureShared(wrapperBytes, destination) != 0;
 }
 
+// ---- "Cannot find xfile!!" (x64 sub_7FF7CB4FC560 not-found paths) -------
+// 0x7FF7CB551448: JP caption "アクセサリ読込"; 0x7FF7CB552858: JP text
+// "xファイルが見つかりません" (SJIS, byte-exact).
+constexpr char kCaptionLoadAccessoryJp[] =
+    "\x83\x41\x83\x4E\x83\x5A\x83\x54\x83\x8A\x93\xC7\x8D\x9E";
+constexpr char kMsgCannotFindXfileJp[] =
+    "x\x83\x74\x83\x40\x83\x43\x83\x8B\x82\xAA\x8C\xA9\x82\xC2\x82\xA9"
+    "\x82\xE8\x82\xDC\x82\xB9\x82\xF1";
+// 0x7FF7CB551458: JP twin of the caller's "This is not x_file." text
+// ("正しいｘファイルではありません").
+constexpr char kMsgNotXFileJp[] =
+    "\x90\xB3\x82\xB5\x82\xA2\x82\x98\x83\x74\x83\x40\x83\x43\x83\x8B"
+    "\x82\xC5\x82\xCD\x82\xA0\x82\xE8\x82\xDC\x82\xB9\x82\xF1";
+
+// The original object loader pops this box (uType 0) on every not-found
+// path - empty resolved path, missing directory separator, and a failed
+// open of the resolved file - before returning 0 to the caller (which then
+// adds its own "This is not x_file." box, mirroring the double prompt of
+// the original).
+void ShowCannotFindXfile(MMDApp* app) {
+    const bool english = app->state.englishUI != 0;
+    MessageBoxA(static_cast<HWND>(app->Hwnd()),
+                english
+                    ? "Cannot find xfile!!\n\nIf Japanese font is "
+                      "included in the filename,please rewrite it in "
+                      "English font."
+                    : kMsgCannotFindXfileJp,
+                english ? "load accessory" : kCaptionLoadAccessoryJp,
+                MB_OK);
+}
+
 }  // namespace
 
 // VA 0x004C4700 - moved out of the anonymous namespace so the PMM loaders
@@ -504,20 +535,33 @@ bool LoadAccessoryObject(MMDApp* app, void* accessory, const wchar_t* path) {
     TraceAccessoryLoadStage("entry", accessory);
     PathResolutionWorkspace& paths = app->PathWorkspace();
     const wchar_t* resolved = ResolveUserFilePath(paths, path);
-    if (resolved[0] == L'\0')
+    if (resolved[0] == L'\0') {
+        ShowCannotFindXfile(app);  // x64 sub_7FF7CB4FC5CC path
         return false;
+    }
 
     wchar_t source[256];
     wcscpy_s(source, resolved);
     wchar_t* tail = wcsrchr(source, L'\\');
-    if (tail == nullptr)
+    if (tail == nullptr) {
+        ShowCannotFindXfile(app);  // x64 sub_7FF7CB4FC768 path
         return false;
+    }
     mdl::AccessoryRecord& record = *mdl::Accessory(accessory);
     WideToAnsi(tail + 1, record.name, sizeof record.name);
     tail[1] = L'\0';
     wcscpy_s(record.directory, source);
     SetCurrentDirectoryW(source);
     wcscpy_s(record.sourcePath, resolved);
+
+    // The original opens the resolved file before the .vac split; a failed
+    // open is the third "Cannot find xfile!!" path (x64 sub_7FF7CB4FC71F).
+    FILE* probe = nullptr;
+    if (_wfopen_s(&probe, resolved, L"r") != 0 || probe == nullptr) {
+        ShowCannotFindXfile(app);
+        return false;
+    }
+    fclose(probe);
 
     wchar_t meshPath[256];
     wcscpy_s(meshPath, resolved);
@@ -675,10 +719,13 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
     Sub04B0Init(accessory);
     app->AccessorySlot(slot) = static_cast<mdl::AccessoryRecord*>(accessory);
     if (!LoadAccessoryObject(app, accessory, path)) {
+        const bool english = app->state.englishUI != 0;
         MessageBoxA(static_cast<HWND>(app->Hwnd()),
-            "This is not x_file.\n\nIf Japanese font is included in the "
-            "filename,please rewrite it in English font.",
-            "load accessory", MB_OK);
+            english
+                ? "This is not x_file.\n\nIf Japanese font is included in "
+                  "the filename,please rewrite it in English font."
+                : kMsgNotXFileJp,
+            english ? "load accessory" : kCaptionLoadAccessoryJp, MB_OK);
         DisposeAccessory(accessory);
         ::operator delete(accessory);
         app->AccessorySlot(slot) = nullptr;

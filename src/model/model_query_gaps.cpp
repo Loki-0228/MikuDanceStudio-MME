@@ -189,16 +189,18 @@ void Sub42D3A0(MMDApp* app) {
     // 0x42D435..0x42D525 (two keys per cell): letter hotkeys share the
     // dialog re-entry guard ints (MMDAppState::dialogFlags, cells
     // app+48..+116); lowercase/uppercase VK pairs fold onto one slot.
-    // The pairings follow the original table exactly: 's' lands on slot 7
-    // and 'g' on slot 8, and 'h' (slot 10) is scanned before 'i' (slot 9).
-    // frame_modes.cpp kLetterKeys now carries the same s/g pairing (its
-    // earlier swap against this ground-truth table was fixed 2026-09).
+    // Pairings verified against both binaries' poll tables: 'g' lands on
+    // slot 7 (x86 0x42D4CE writes 'g' to app+0x4C) and 's' on slot 8
+    // (0x42D4E5 writes 's' to app+0x50); the pump's frame-seek /
+    // shadow / fine-shadow three-way branch (x86 0x4726B2) gates on the
+    // 'G' cell.  'h' (slot 10) is scanned before 'i' (slot 9).
+    // frame_modes.cpp kLetterKeys carries the same pairing.
     static constexpr struct { int key; int flagIndex; } kLetterKeys[] = {
         {'x', 0}, {'X', 0}, {'z', 1}, {'Z', 1},
         {'c', 2}, {'C', 2}, {'v', 3}, {'V', 3},
         {'d', 4}, {'D', 4}, {'a', 5}, {'A', 5},
-        {'b', 6}, {'B', 6}, {'s', 7}, {'S', 7},
-        {'g', 8}, {'G', 8}, {'h', 10}, {'H', 10},
+        {'b', 6}, {'B', 6}, {'g', 7}, {'G', 7},
+        {'s', 8}, {'S', 8}, {'h', 10}, {'H', 10},
         {'i', 9}, {'I', 9}, {'k', 11}, {'K', 11},
         {'p', 12}, {'P', 12}, {'u', 13}, {'U', 13},
         {'j', 14}, {'J', 14}, {'f', 15}, {'F', 15},

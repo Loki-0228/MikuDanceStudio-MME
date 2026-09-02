@@ -326,36 +326,53 @@ void DrawPhysicsCollisionDebug(PhysicsScene* scene) {
     }
 }
 
+// Physics-editor scratch-array capacity (must track the dialog's own
+// kMaxEditRecords: x86 original 10,000 slots, x64 recompile 100,000).
+#if defined(_M_X64) || defined(__x86_64__)
+constexpr int kDebugRecordCapacity = 100000;
+#else
+constexpr int kDebugRecordCapacity = 10000;
+#endif
+
 void DrawAccessoryDebug(MMDApp* app) {
     auto& api = d3dx::Get();
     PhysicsScene* scene = app->Physics();   // +650672 (kPtrSub048)
-    unsigned char* records =
-        static_cast<unsigned char*>(app->state.cameraRecordArray);
-    unsigned char* links =
-        static_cast<unsigned char*>(app->state.boneRecordArray);
+    // The physics-model editor's scratch arrays double as the draw source:
+    // cameraRecordArray = rigid bodies (mdl::RigidRecord), boneRecordArray =
+    // joints (mdl::JointRecord).  While the dialog is open the records'
+    // keyData / constraint slots hold the combo index (-1 = deleted slot).
+    auto* bodies =
+        static_cast<mikudancestudio::mdl::RigidRecord*>(
+            app->state.cameraRecordArray);
+    auto* joints =
+        static_cast<mikudancestudio::mdl::JointRecord*>(
+            app->state.boneRecordArray);
     const bool dialogSelection = app->state.a9edb4 != 0;
-    for (int index = 0; index < 10000; ++index) {
-        unsigned char* record = records + 172 * index;
-        if (At<std::int32_t>(record, 84) >= 0) {
+    for (int index = 0; index < kDebugRecordCapacity; ++index) {
+        mikudancestudio::mdl::RigidRecord* record = &bodies[index];
+        const int comboSlot =
+            static_cast<int>(reinterpret_cast<std::intptr_t>(record->keyData));
+        if (comboSlot >= 0) {
             Matrix world;
             Matrix temp;
-            api.rotZ(&world, At<float>(record, 72));
-            api.rotX(&temp, At<float>(record, 64));
+            api.rotZ(&world, record->rotation[2]);
+            api.rotX(&temp, record->rotation[0]);
             api.multiply(&world, &world, &temp);
-            api.rotY(&temp, At<float>(record, 68));
+            api.rotY(&temp, record->rotation[1]);
             api.multiply(&world, &world, &temp);
-            api.translation(&temp, At<float>(record, 52),
-                            At<float>(record, 56), At<float>(record, 60));
+            api.translation(&temp, record->position[0],
+                            record->position[1], record->position[2]);
             api.multiply(&world, &world, &temp);
-            AttachToBone(app, &world, At<std::int32_t>(record, 28));
+            AttachToBone(app, &world, record->boneIndex);
 
             bool selected = false;
             if (dialogSelection) {
                 const int linkIndex = app->state.sel8c;
                 if (linkIndex >= 0) {
-                    unsigned char* link = links + 140 * linkIndex;
-                    selected = index == At<std::int32_t>(link, 28) ||
-                               index == At<std::int32_t>(link, 32);
+                    const mikudancestudio::mdl::JointRecord* link =
+                        &joints[linkIndex];
+                    selected = index == link->rigidA ||
+                               index == link->rigidB;
                 }
             } else {
                 selected = index == app->state.selAcc;
@@ -364,33 +381,33 @@ void DrawAccessoryDebug(MMDApp* app) {
                 SetDebugColor(scene, 255, dialogSelection ? 75 : 0,
                               dialogSelection ? 75 : 0);
 
-            const std::uint8_t type = At<std::uint8_t>(record, 36);
+            const std::uint8_t type = record->shape;
             if (type == 0)
-                DrawSphere(scene, At<float>(record, 40), world);
+                DrawSphere(scene, record->size[0], world);
             else if (type == 1)
-                DrawBox(scene, At<float>(record, 40), At<float>(record, 44),
-                        At<float>(record, 48), world);
+                DrawBox(scene, record->size[0], record->size[1],
+                        record->size[2], world);
             else
-                DrawCapsule(scene, At<float>(record, 40),
-                            At<float>(record, 44) * 0.5f, world);
+                DrawCapsule(scene, record->size[0],
+                            record->size[1] * 0.5f, world);
             if (selected)
                 SetDebugColor(scene, 155, 255, 0);
         }
 
-        unsigned char* link = links + 140 * index;
-        if (At<std::int32_t>(link, 132) < 0)
+        mikudancestudio::mdl::JointRecord* link = &joints[index];
+        if (link->constraint < 0)
             continue;
         Matrix world;
         Matrix temp;
-        api.rotZ(&world, At<float>(link, 56));
-        api.rotX(&temp, At<float>(link, 48));
+        api.rotZ(&world, link->rotation[2]);
+        api.rotX(&temp, link->rotation[0]);
         api.multiply(&world, &world, &temp);
         api.scaling(&temp, 1.5f, 1.5f, 1.5f);
         api.multiply(&world, &temp, &world);
-        api.rotY(&temp, At<float>(link, 52));
+        api.rotY(&temp, link->rotation[1]);
         api.multiply(&world, &world, &temp);
-        api.translation(&temp, At<float>(link, 36), At<float>(link, 40),
-                        At<float>(link, 44));
+        api.translation(&temp, link->position[0], link->position[1],
+                        link->position[2]);
         api.multiply(&world, &world, &temp);
         auto* device = DeviceFromScene(scene);
         Matrix oldWorld;

@@ -263,6 +263,7 @@ void Sub45F240(HWND hDlg);                       // VA 0x0045F240
 void Sub45F050(HWND hDlg);                       // VA 0x0045F050
 void Sub45EF10(HWND hDlg);                       // VA 0x0045EF10
 void Sub45EDC0(HWND hDlg);                       // VA 0x0045EDC0
+void Sub43BED0(MMDApp* app, HWND hEdit, int idx);  // VA 0x0043BED0 (collector)
 // enhance-model IO (toon collect / save model): enhance_model_io.cpp
 int Sub41EA20(HWND hDlg);                        // VA 0x0041EA20
 // (Sub41EC10 / Sub4A4850 declared in ported_funcs.hpp; Sub40B5A0 below)
@@ -291,7 +292,6 @@ constexpr std::size_t kModelBoneFrames = 0x26E0;  // bone display frames, 0x3C
 constexpr std::size_t kModelMorphFrames = 0x26E4; // morph frames, 0x14 stride
 constexpr std::size_t kModelOtherFrames = 0x26E8; // other frames, 0x1C stride
 constexpr std::size_t kModelOrder2D7C = 0x2D7C;   // combo order byte (+1 based)
-constexpr std::size_t kModelOrder2D7D = 0x2D7D;   // applied order byte (288 OK)
 constexpr std::size_t kModelFps31C0 = 0x31C0;     // current-FPS float (253)
 constexpr std::size_t kModelNames33D8 = 0x33D8;   // enhance-model names, 10 x
                                                   // char[100] (261)
@@ -433,7 +433,6 @@ static const wchar_t kTitleOpenJp[] =
 // Forward declarations (bodies below / later in this TU).
 void Sub41E980(MMDApp* app, float fps);                   // VA 0x0041E980
 void Sub45FD80(MMDApp* app, int idx, float v);            // VA 0x0045FD80
-void Sub43BED0(MMDApp* app, HWND hEdit, int idx);         // VA 0x0043BED0
 void Sub412B20(MMDApp* app, std::int32_t frame);          // VA 0x00412B20
 // VA 0x0042E270 - edit-646 (0x286) subclass of the model-info dialog (253):
 // on WM_KEYDOWN+VK_RETURN it reads the edit text, applies it through the
@@ -518,16 +517,18 @@ LRESULT CALLBACK Sub45ECC0(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 // VA 0x0041E910 - reorder-dialog OK apply: walks the order array
 // (app+0xA0B1C, filled by 0x41E7B0 with slotIndex+1 per order) and stores
-// the applied order byte into model+0x2D7D.  The original indexes the
-// 0x780 slot array with the stored slotIndex+1 value verbatim (no -1),
-// i.e. it addresses slot+1 - a quirk of the original kept as-is.
+// the combo order byte into model+0x2D7C (x64 twin 12552, the same field
+// ExpGetPmdOrder reads - verified on the x64 binary's OK handler).
+// Two quirks kept as-is from the original: element [0] is never written
+// (values start at 1), and the 0x780 slot array is indexed with the stored
+// slotIndex+1 value verbatim (no -1), i.e. it addresses slot+1.
 void Sub41E910(MMDApp* app, int count, HWND hDlg) {
     (void)hDlg;  // the original's second pushed argument is never read
     std::int32_t* order =
         static_cast<std::int32_t*>(app->AccessoryOrderArray());
-    for (int i = 0; i < count; ++i) {
+    for (int i = 1; i < count; ++i) {
         unsigned char* model = app->ModelSlot(order[i]);
-        model[kModelOrder2D7D] = static_cast<unsigned char>(i);
+        model[kModelOrder2D7C] = static_cast<unsigned char>(i);
     }
 }
 // VA 0x00466370 - accessory-frame dialog (266) edit subclass: WM_KEYDOWN +
@@ -694,12 +695,123 @@ int g_dword545938 = 0;  // frame-copy dialog combo count (0x545938)
 
 // Newly-required unported dependencies (0x45ECC0 / 0x460080 call sites) -
 // file-local stub bodies so the call sites link (stubs.cpp must not be
-// modified).  TODO(port): real bodies.
-void Sub43BED0(MMDApp* app, HWND hEdit, int idx) {  // VA 0x0043BED0
-    (void)app; (void)hEdit; (void)idx;              // model-edge collector
-}
+// modified).  Sub43BED0's real body now lives in model_edge_dialog.cpp;
+// only the forward declaration at the top of this TU is needed.
+// VA 0x00412B20 (x64 twin sub_7FF7CB47DA60, confirmed on the x64 binary;
+// the pre-existing "frame-table rebuild" label was wrong): the gravity
+// keyframe registrar.  Walks the gravity track's next-chain (app+0x380,
+// 36-byte GravityKey records, 10000 slots) to the first record with
+// frame >= target: exact hit overwrites the live gravity cluster
+// (magnitude / direction xyz / noise / noise-mode byte, selected = 1)
+// into that record and returns; otherwise a fresh slot is taken from the
+// frame == 0 holes (records 1..9999; record 1 is checked first) and
+// spliced in - before the found record, or appended after the chain's
+// dead end - with lastRegisteredFrame bumped to max(current, frame).
+// No free slot raises the "You cannot regist over %dpoint." box
+// (limit 10000, EN/JP by englishUI) and returns without registering.
+// 0x460080 (Sub460080 above) calls this at the current frame.
 void Sub412B20(MMDApp* app, std::int32_t frame) {   // VA 0x00412B20
-    (void)app; (void)frame;                         // frame-table rebuild
+    // JP overflow strings (0x52B918 / 0x52B908, SJIS byte-exact - the
+    // same pair key_registrars.cpp uses for the model-track registrars)
+    static const char kJpOverflow[] =
+        "\x93\x6f\x98\x5e\x83\x7c\x83\x43\x83\x93\x83\x67\x90\x94\x82\xaa%d"
+        "\x8c\xc2\x82\xf0\x89\x7a\x82\xa6\x82\xdc\x82\xb5\x82\xbd\n"
+        "\x82\xb1\x82\xea\x88\xc8\x8f\xe3\x82\xcc\x93\x6f\x98\x5e\x82\xcd\x8d"
+        "\x73\x82\xa6\x82\xdc\x82\xb5\x82\xf1\n"
+        "\x81\x75\xcc\xda\xb0\xd1\x95\xd2\x8f\x57\x81\x76\x82\xcc\x81\x75\x95"
+        "\x73\x97\x70\xcc\xda\xb0\xd1\x8d\xed\x8f\x9c\x81\x76\x82\xf0\x8e\xc0"
+        "\x8d\x73\x82\xb5\x82\xc4\x89\xba\x82\xb3\x82\xa2";
+    static const char kJpFrameRegTitle[] =  // "フレーム登録"
+        "\xcc\xda\xb0\xd1\x93\x6f\x98\x5e";
+
+    mdl::GravityKey* keys = app->GravityKeys();
+    const std::uint32_t target = static_cast<std::uint32_t>(frame);
+
+    // Walk the chain from record 0 for the first frame >= target; a dead
+    // end leaves `current` on the chain's last record (append there).
+    std::uint32_t current = 0;
+    bool spliceBefore = keys[0].frame >= target;
+    if (!spliceBefore) {
+        std::uint32_t node = 0;
+        for (;;) {
+            const std::uint32_t next = keys[node].next;
+            if (next == 0)
+                break;
+            current = next;
+            node = next;
+            if (keys[current].frame >= target) {
+                spliceBefore = true;
+                break;
+            }
+        }
+    }
+
+    // Exact hit: overwrite the live cluster into the record.
+    if (spliceBefore && keys[current].frame == target) {
+        mdl::GravityKey& key = keys[current];
+        key.acceleration = app->state.gravityMagnitude;
+        key.direction[0] = app->state.gravityX;
+        key.direction[1] = app->state.gravityY;
+        key.direction[2] = app->state.gravityZ;
+        key.noise = app->state.gravityNoise;
+        key.noiseEnabled = app->GravityNoiseEnabled();
+        key.selected = 1;
+        return;
+    }
+
+    // Fresh slot from the frame == 0 holes (record 1 first, then 2..).
+    std::uint32_t freeIndex = 1;
+    if (keys[1].frame != 0) {
+        bool freeFound = false;
+        for (std::uint32_t index = 2; index < mdl::kTimelineKeyCapacity;
+             ++index) {
+            if (keys[index].frame == 0) {
+                freeIndex = index;
+                freeFound = true;
+                break;
+            }
+        }
+        if (!freeFound) {
+            char text[256];
+            if (app->EnglishUI() != 0) {
+                sprintf_s(text, 0x100,
+                          "You cannot regist over %dpoint.\n"
+                          "Please execute 'delete unused frame'",
+                          static_cast<int>(mdl::kTimelineKeyCapacity));
+                MessageBoxA(static_cast<HWND>(app->Hwnd()), text,
+                            "register frame", 0);
+            } else {
+                sprintf_s(text, 0x100, kJpOverflow,
+                          static_cast<int>(mdl::kTimelineKeyCapacity));
+                MessageBoxA(static_cast<HWND>(app->Hwnd()), text,
+                            kJpFrameRegTitle, 0);
+            }
+            return;
+        }
+    }
+
+    mdl::GravityKey& added = keys[freeIndex];
+    if (spliceBefore) {
+        const std::uint32_t previous = keys[current].previous;
+        keys[previous].next = freeIndex;
+        added.previous = previous;
+        keys[current].previous = freeIndex;
+        added.next = current;
+    } else {
+        keys[current].next = freeIndex;
+        added.previous = current;
+        // added.next keeps the zeroed hole's value, as the original does.
+    }
+    added.frame = target;
+    added.acceleration = app->state.gravityMagnitude;
+    added.direction[0] = app->state.gravityX;
+    added.direction[1] = app->state.gravityY;
+    added.direction[2] = app->state.gravityZ;
+    added.noise = app->state.gravityNoise;
+    added.noiseEnabled = app->GravityNoiseEnabled();
+    added.selected = 1;
+    if (target > app->state.lastRegisteredFrame)
+        app->state.lastRegisteredFrame = target;
 }
 
 // ---- JP strings of the dialogs, byte-exact -------------------------------
@@ -713,6 +825,17 @@ static const wchar_t kJpCamLightAcc[] = {
     0xFF7E, 0xFF7B, 0xFF98, 0x0000};
 static const wchar_t kJpScreen[] = {0x5730, 0x9762, 0x0000};
 static const wchar_t kJpNone[] = {0x306A, 0x3057, 0x0000};
+// "fine shadow mode" notice (x64 0x7FF7CB54D6A0 / 0x7FF7CB54D6B0): JP
+// caption = the Fshadow button's two-kanji label + "モード"; JP text =
+// "この命令は画面右上の「<Fshadow label>」ボタンに取って変わりました"
+// (SJIS, byte-exact).
+static const char kCaptionFineShadowJp[] =
+    "\x94\xFC\x89\x65\x83\x82\x81\x5B\x83\x68";
+static const char kMsgFineShadowJp[] =
+    "\x82\xB1\x82\xCC\x89\x42\x82\xB5\x83\x52\x83\x7D\x83\x93\x83\x68\x82\xCD"
+    "\x89\xE6\x96\xCA\x89\x45\x8F\xE3\x82\xCC\x81\x75\x94\xFC\x81\x40\x89\x65"
+    "\x81\x76\x83\x7B\x83\x5E\x83\x93\x82\xC9\x8E\xE6\x82\xC1\x82\xC4\x95\xCF"
+    "\x82\xED\x82\xE8\x82\xDC\x82\xB5\x82\xBD";
 
 // ===========================================================================
 // 0x44D3F0 - case 251 "frame control" dialog (0x294 EN / 0x27C JP).
@@ -1511,6 +1634,39 @@ INT_PTR CALLBACK Sub4641F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 }  // namespace
+
+// ===========================================================================
+// "fine shadow mode" notice - the Ctrl+S branch of the 'S' letter hotkey
+// (x64 main pump sub_7FF7CB4474F0 @ 0x7FF7CB44F625).
+// ===========================================================================
+// The branch is NOT a menu command case: it lives in the main pump's letter
+// hotkey ladder (x86 0x4726B2, right after the 0x46FF02 key-poll call;
+// ported in src/app/key_ladder.cpp, which calls this from its 'G' block).
+// Original block:
+//   gate: (GetFocus() == main window || separate-window byte 0x9FCDD) &&
+//         dialogFlags[7] == 1 ('G' pressed this frame - the cell the
+//         PollKey letter table assigns to 'g'/'G') &&
+//         GetFocus() != the frame-number edit 0x22A
+//   - Shift held (shiftModifierState == 3): toggle the byte at
+//     x64 app+0xA1DC8 (shadow render-mode toggle; x86 twin VA unrecovered)
+//   - Ctrl held (ctrlModifierState == 3, the "fine" modifier - NOT the
+//     selection mode): THIS notice
+//   - plain 'S': frame-number edit 0x22A read-back, seek and echo into
+//     0x1A1 (same body as command case 553)
+// EN: caption "fine shadow mode" (0x7FF7CB54D658), text "This command is
+// changed for \"Fshadow\" button." (0x7FF7CB54D670); JP: byte_7FF7CB54D6A0 /
+// byte_7FF7CB54D6B0 (constants above), gated by the English-UI byte.
+// =========================================================================//
+void FineShadowModeNotice(MMDApp* app) {
+    const bool english = app->state.englishUI != 0;
+    MessageBoxA(app->state.hwnd,
+                english
+                    ? "This command is changed for \"Fshadow\" button."
+                    : kMsgFineShadowJp,
+                english ? "fine shadow mode" : kCaptionFineShadowJp,
+                0);
+}
+
 // (defined in effect_api.cpp; declared at namespace scope - an
 // anonymous-namespace declaration would be an undefined internal entity)
 void WideToSjisPath(char* dst, const wchar_t* src, rsize_t size);  // 0x407910

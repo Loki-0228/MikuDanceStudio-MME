@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(MikuMikuDanceE LANGUAGES CXX)
+project(MikuDanceStudio LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # MikuDanceStudio: behavioural restoration of MikuMikuDance v932.
@@ -79,6 +79,7 @@ add_library(mikudancestudio_core STATIC
     src/app/timeline_advance.cpp
     src/app/frame_modes.cpp
     src/app/frame_modes_bone.cpp
+    src/app/key_ladder.cpp
     src/physics/physics_create.cpp
     src/physics/physics_frame.cpp
     src/physics/scene_create.cpp
@@ -207,14 +208,14 @@ if (CMAKE_SIZEOF_VOID_P EQUAL 8)
 else()
     set(MIKUDANCESTUDIO_GEN_RES res/gen_resources.res)
 endif()
-add_executable(MikuMikuDanceE WIN32
+add_executable(MikuDanceStudio WIN32
     src/main/winmain.cpp
     res/MMD.rc
     ${MIKUDANCESTUDIO_GEN_RES}
     ${CMAKE_CURRENT_SOURCE_DIR}/exports/MikuMikuDance.def
 )
 
-target_link_libraries(MikuMikuDanceE PRIVATE
+target_link_libraries(MikuDanceStudio PRIVATE
     mikudancestudio_core
     winmm      # timeGetTime - main loop timing
     dsound     # original timeline/audio subsystem initialization (0x4C2470)
@@ -225,12 +226,12 @@ target_link_libraries(MikuMikuDanceE PRIVATE
 # .res directly as an input file (CMake itself would classify it as <None>).
 # /MANIFEST:NO keeps the linker from adding a default manifest on top of the
 # original one embedded through the .res.
-target_link_options(MikuMikuDanceE PRIVATE
+target_link_options(MikuDanceStudio PRIVATE
     "/MAP:${CMAKE_CURRENT_BINARY_DIR}/MikuMikuDanceE.map"
     "/MANIFEST:NO"
     "${CMAKE_CURRENT_SOURCE_DIR}/${MIKUDANCESTUDIO_GEN_RES}"
 )
-set_target_properties(MikuMikuDanceE PROPERTIES
+set_target_properties(MikuDanceStudio PROPERTIES
     OUTPUT_NAME "MikuMikuDanceE"
     # Export the 37 Exp* symbols from the .def file (ordinals 1..37).
     ENABLE_EXPORTS ON

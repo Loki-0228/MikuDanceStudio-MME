@@ -312,10 +312,16 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     wc.lpszClassName = "Polygon Movie Maker";
     wc.lpszMenuName = s.EnglishUI() ? "SAMPLE02E" : "SAMPLE02";
 
-    const bool jpMsg = s.EnglishUI() == 0;   // original swaps to JP text
     if (!RegisterClassA(&wc)) {                                 // 0x47BC14
-        MessageBoxA(nullptr, "RegisterClass failed", "create main window", MB_OK);
-        (void)jpMsg;  // TODO(port): JP message strings at 0x52EC30
+        // Original swaps only the caption on JP UI (text stays English):
+        // x64 0x7FF7CB54B0E8 = "メインウィンドウ作成".
+        static const char kCaptionCreateWndJp[] =
+            "\x83\x81\x83\x43\x83\x93\x83\x45\x83\x42\x83\x93\x83\x68\x83\x45"
+            "\x8D\xEC\x90\xAC";
+        MessageBoxA(nullptr, "RegisterClass failed",
+                    s.EnglishUI() ? "create main window"
+                                  : kCaptionCreateWndJp,
+                    MB_OK);
         return false;
     }
 
