@@ -140,8 +140,11 @@ void BumpCursor(MMDApp* app) {
 void OrderedMorphPhysicsPass(MMDApp* app, int count, bool selSkip) {
     auto& s = *app;
     unsigned char** models = s.ModelSlots();
-    for (int order = 0; order < 100; ++order) {
-        for (int j = 0; j < 100; ++j) {
+    // x64 pump sub_7FF7CB4474F0: both ordering passes run order and slot
+    // walks to 255 (block 1 cmp edi/rbx, 0FFh at 0x7FF7CB44BB0E/0x7FF7CB44BADA;
+    // block 2 at 0x7FF7CB44BDDA/0x7FF7CB44BD7D; comboSelIndex2 = model+0x3109).
+    for (int order = 0; order < kModelSlotCount; ++order) {
+        for (int j = 0; j < kModelSlotCount; ++j) {
             unsigned char* mdl = models[j];
             if (mdl == nullptr || mikudancestudio::mdl::Mdl(mdl)->comboSelIndex2 != order)
                 continue;
@@ -159,8 +162,11 @@ void OrderedMorphPhysicsPass(MMDApp* app, int count, bool selSkip) {
 void KinematicSyncPass(MMDApp* app, bool reverse, bool selSkip) {
     auto& s = *app;
     unsigned char** models = s.ModelSlots();
-    const int begin = reverse ? 99 : 0;
-    const int end = reverse ? -1 : 100;
+    // x64: reverse walk is a 255 count-down from slot 254
+    // (mov edi, 0FFh ... dec rdi at 0x7FF7CB44BB16); forward-with-skip walk
+    // counts down 255 from slot 0 (mov esi, 0FFh ... dec rsi at 0x7FF7CB44BDF1).
+    const int begin = reverse ? kModelSlotCount - 1 : 0;
+    const int end = reverse ? -1 : kModelSlotCount;
     const int step = reverse ? -1 : 1;
     for (int j = begin; j != end; j += step) {
         unsigned char* mdl = models[j];

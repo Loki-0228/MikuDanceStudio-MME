@@ -107,7 +107,9 @@ void HandleLButtonDblClk(MMDApp* app) {
         app->PlaybackActive() == 0) {
 
         // ---- 1. model IK sweep: snapshot + clear any set IK flags ---------
-        for (int i = 0; i < 100; ++i) {
+        // x64 twin sub_7FF7CB45D790 sweeps all 255 slots (count-down from
+        // 0xFF at 0x7FF7CB45D840).
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model == nullptr)
                 continue;
@@ -142,7 +144,9 @@ void HandleLButtonDblClk(MMDApp* app) {
                      reinterpret_cast<LPARAM>(frameText));
 
         // ---- 3. per-slot bone-frame apply + active-slot panel sync --------
-        for (int i = 0; i < 100; ++i) {
+        // x64 twin sub_7FF7CB45D790: apply loop runs v16 < 255
+        // (0x7FF7CB45D988..0x7FF7CB45D9CB).
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model == nullptr)
                 continue;

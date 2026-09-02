@@ -132,8 +132,10 @@ void LocalizeUI(MMDApp* app) {
     }
     SendMessageA(combo433, CB_SETCURSEL, 3, 0);
 
-    // model-slot language flag sweep (20 x 5 slots at this+1920)
-    for (int i = 0; i < 100; ++i) {
+    // model-slot language flag sweep (20 x 5 slots at this+1920); the x64
+    // twin sub_7FF7CB438E0 sweeps all 255 slots (mov r8d, 0FFh ... dec r8
+    // at 0x7FF7CB43A4E0, writing model+0x3560).
+    for (int i = 0; i < kModelSlotCount; ++i) {
         unsigned char* slot = s.ModelSlot(i);
         if (slot != nullptr)
             *reinterpret_cast<unsigned char*>(
@@ -198,10 +200,13 @@ void LocalizeUI(MMDApp* app) {
                      (LPARAM)L"\x306a\x3057");                           // 0x52D360
     }
 
-    // add every loaded model's name to all three selectors
-    for (int order = 1; order < 100; ++order) {
+    // add every loaded model's name to all three selectors; x64 twin
+    // sub_7FF7CB438E70 runs the comboSelIndex (model+0x3108) slot scan and
+    // the order walk to 255 (cmp edx, 0FFh at 0x7FF7CB43A96C / cmp ebp,
+    // 0FFh at 0x7FF7CB43AA8D) - same family as model_edge_dialog.cpp.
+    for (int order = 1; order < kModelSlotCount; ++order) {
         int slotIdx = -1;
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* slot = s.ModelSlot(i);
             if (slot != nullptr &&
                 *reinterpret_cast<unsigned char*>(

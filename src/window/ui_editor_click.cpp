@@ -1115,7 +1115,7 @@ void HandleLButtonDown(MMDApp* app) {
             goto L_tail;
         app->CameraAttachmentTransformSuppressed() = 0;
         // Snapshot every model with edited bones, then clear its edit flags.
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = ModelAtSlot(app, i);
             if (model == nullptr)
                 continue;
@@ -1151,7 +1151,7 @@ void HandleLButtonDown(MMDApp* app) {
         SendMessageA(GetDlgItem(hwnd, 0x1A1), 0xC2u /*WM_SETTEXT*/, 0,
                      reinterpret_cast<LPARAM>(frameText));
         // per-slot frame apply + active-slot panel sync (0x44A5C8-0x44A606)
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = ModelAtSlot(app, i);
             if (model == nullptr)
                 continue;

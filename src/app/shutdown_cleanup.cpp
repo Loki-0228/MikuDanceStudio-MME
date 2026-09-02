@@ -509,8 +509,8 @@ void ShutdownCleanup(MMDApp* app) {
         }
     }
 
-    // ---- 11: 100 model slots -----------------------------------------------
-    for (int i = 0; i < 100; ++i) {                             // 0x462FD5
+    // ---- 11: model slots (x64 walks 255; x86 twin 0x462FD5 walks 100) ----
+    for (int i = 0; i < kModelSlotCount; ++i) {                // 0x462FD5
         unsigned char*& model = s.ModelSlot(i);
         if (model != nullptr) {                                 // 0x462FE0
             ModelDispose(model);                                // 0x462FE9

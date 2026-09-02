@@ -18,8 +18,9 @@
 //     ("0.0000" when sel < 0), then re-select; when sel < 0 the first
 //     matching record index is stored back into the selIdx field.
 //   combo 434  frame-registration list.  Models whose SJIS name equals
-//              "ミクボーン" (memcmp 13 bytes vs 0x5310A8) get the fixed
-//              list ("All frame"/"disp/IK/OP"/"Sel Bone"/bone01..bone15);
+//              "ダミーボーン" (memcmp 13 bytes vs 0x5310A8, x64 0x5523E0)
+//              get the fixed list ("All frame"/"disp/IK/OP"/"Sel Bone"/
+//              bone01..bone15);
 //              normal models get "All frame", center-bone name (index
 //              m+14592), "disp/IK/OP", "Sel Bone", "Sel facial",
 //              "All facial", facial-display groups (m+9948, 46 B stride,
@@ -58,10 +59,13 @@ const wchar_t* kJpAllBone =
     L"\x5168\x30DC\x30FC\x30F3\xFF8C\xFF9A\xFF70\xFF91";                 // 全ボーンﾌﾚｰﾑ
 const char kJpBoneFmt[] =
     "\xCE\xDE\xB0\xDD" "%02d";                                           // ﾎﾞｰﾝ%02d
-const char kMikuBoneName[13] = {
+const char kDummyBoneName[13] = {
     char(0x83), char(0x5F), char(0x83), char(0x7E), char(0x81), char(0x5B),
     char(0x83), char(0x7B), char(0x81), char(0x5B), char(0x83), char(0x93),
-    '\0'};                                                               // ミクボーン
+    '\0'};                                        // ダミーボーン (0x5310A8 =
+                                                  // x64 0x5523E0; the SJIS was
+                                                  // previously misread as
+                                                  // ミクボーン - 0x835F is ダ)
 
 HWND Dlg(unsigned char* m, int id) {
     return GetDlgItem(*reinterpret_cast<HWND*>(m), id);
@@ -174,8 +178,8 @@ void PostLoadInit(unsigned char* m) {
     HWND frameCombo = Dlg(m, 434);
     SendMessage(frameCombo, CB_RESETCONTENT, 0, 0);
     char buf[256];
-    if (std::memcmp(model->name, kMikuBoneName, 13) == 0) {
-        // bundled "ミクボーン" model: fixed registration list
+    if (std::memcmp(model->name, kDummyBoneName, 13) == 0) {
+        // bundled "ダミーボーン" dummy-bone model: fixed registration list
         if (useEnglishNames) {
             SendMessageA(frameCombo, CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("All frame"));

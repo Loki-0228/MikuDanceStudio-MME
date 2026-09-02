@@ -303,7 +303,11 @@ void SaveSceneFile(MMDApp* app) {
     }
 
     // ---- 2. per-model block (0x41B355..0x41C981) ------------------------
-    for (unsigned char slot = 0; slot < 100; ++slot) {         // loc_41B360
+    // Not a file-format cap: the x64 save twin sub_7FF7CB4950A0 writes the
+    // slot id byte for every occupied slot of the full array (inc dl /
+    // cmp dl, 0FFh / jb at 0x7FF7CB496C11..0x7FF7CB496C1A), so the on-disk
+    // bound is the slot capacity (0..254 on x64).
+    for (unsigned char slot = 0; slot < kModelSlotCount; ++slot) {  // loc_41B360
         if (slots[slot] == 0) continue;
         W(fd, &slot, 1);                                       // 0x41B381
         unsigned char* const model = slots[slot];
@@ -956,7 +960,8 @@ void SaveSceneFile(MMDApp* app) {
     }
 
     // ---- 11. per-model tail (0x41E70D) -----------------------------------
-    for (unsigned char slot = 0; slot < 100; ++slot) {         // loc_41E6F0
+    // x64 twin walks slots 0..254 (cmp dl, 0FFh / jb at 0x7FF7CB498DC2).
+    for (unsigned char slot = 0; slot < kModelSlotCount; ++slot) {  // loc_41E6F0
         if (slots[slot] == 0) continue;
         W(fd, &slot, 1);
         W(fd, slots[slot] + 0x4CCF0, 4);                       // 0x41E72C

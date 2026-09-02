@@ -6,6 +6,8 @@
 // VA 0x004C2960 - WaveStreamRead     (original: sub_4C2960)
 // VA 0x004C2C90 - WaveStreamFeed     (original: sub_4C2C90)
 // VA 0x004C2F70 - WaveLoadFile       (original: sub_4C2F70)
+// Playback runtime trio, NOT in this TU (see the note below the field map):
+// 0x4C2CE0 WaveFeedThread / 0x4C34A0 Sub4C34A0 / 0x4C3530 Sub4C3530.
 // ===========================================================================
 // The WAV open/play chain behind menu 0xCE ("load WAV file").
 //
@@ -38,10 +40,30 @@
 // app+0xD0 (kWcsWavpath), so this overload supersedes the old path-taking
 // stub declaration (kept in stubs.cpp untouched, no longer referenced).
 //
-// Not ported (playback runtime, separate subsystem): 0x4C2CE0 (feed-thread
-// proc: Lock/ReadFile/unlock with DSERR_BUFFERLOST handling), 0x4C34A0
-// (SetFilePointer + _beginthread(0x4C2CE0) spawn) and 0x4C3530 (restart:
-// KillTimer/CloseDataFile/WaveStartPlayback/SetCurrentPosition/SetTimer).
+// Playback runtime trio - PORTED, but in src/app/subsystem_init.cpp (phase
+// scaffolding cleanup TU), not here; do not re-port in this file or the link
+// will see duplicate Sub4C34A0/Sub4C3530 symbols:
+//   0x4C2CE0  WaveFeedThread(void*) - the _beginthread proc: per-half Lock/
+//             WaveStreamFeed/Unlock loop (half = 1 s = nAvgBytesPerSec) with
+//             DSERR_BUFFERLOST -> Restore -> single Lock retry, a play-cursor
+//             chase (GetCurrentPosition + Sleep(10) x10), stop-flag checks
+//             and the Stop/Release/ctx+0x14=0/stopFlag=2/_endthread epilogue.
+//   0x4C34A0  Sub4C34A0(this, double t) - guard on the streaming buffer,
+//             stopFlag/failureCount = 0, SetFilePointer(fileHandle,
+//             dataOffset + (int)(avg*t) - (int)(avg*t)%nBlockAlign,
+//             FILE_BEGIN), _beginthread(WaveFeedThread, 0, this) -> +0x234.
+//   0x4C3530  Sub4C3530(this, double t) - KillTimer(hwnd, 100),
+//             CloseDataFile, WaveStartPlayback, buffer->SetVolume(ctx+0x258)
+//             [IDirectSoundBuffer vtable slot 15; the 2026-09 audit note
+//             "SetCurrentPosition" was wrong - confirmed against both the
+//             x86 vtable offset 0x3C and the x64 twin slot +120], then
+//             Sub4C34A0(this, t), SetTimer(hwnd, 100, 33 ms, null).
+// x64 twins (behavior basis): 0x7FF7CB4FAD40 / 0x7FF7CB4FAB80 /
+// 0x7FF7CB4FAC20.  Call sites (already wired): Sub4C34A0 from
+// src/app/playback_catchup.cpp and src/window/command_control_400.cpp
+// (x86 0x46F383 / 0x4876CA, time = the +0x9E654 start-seconds float);
+// Sub4C3530 from ui_frame_step.cpp StepFrame (covers x86 0x431296/0x431666),
+// ui_editor_click.cpp (0x44A834) and ui_mouse_misc.cpp (0x44AEA8).
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -367,7 +389,9 @@ bool WaveLoadFile(void* obj, const wchar_t* path,
 // ---------------------------------------------------------------------------
 // VA 0x004C2760 - WaveStartPlayback(this): re-parse the header from the
 // path at ctx+0x30 and (re)create the 2-second streaming DirectSound
-// buffer.  The feed thread itself is spawned by 0x4C34A0 (not ported).
+// buffer.  The feed thread itself is spawned by Sub4C34A0 (real body in
+// src/app/subsystem_init.cpp); neither the x86 original (ret at 0x4C2955)
+// nor the x64 twin 0x7FF7CB4FA930 spawns it from here.
 // ---------------------------------------------------------------------------
 bool WaveStartPlayback(void* obj) {
     auto* audio = static_cast<WaveAudioContext*>(obj);

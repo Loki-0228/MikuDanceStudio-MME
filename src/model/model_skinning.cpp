@@ -68,7 +68,8 @@ void DumpModelVertexBuffers(MMDApp* app, unsigned char* model,
         return;
 
     int slot = -1;
-    for (int i = 0; i < 100; ++i) {
+    // port diagnostic: bound = model-slot capacity (kModelSlotCount)
+    for (int i = 0; i < kModelSlotCount; ++i) {
         if (app->ModelSlot(i) == model) {
             slot = i;
             break;
@@ -77,7 +78,9 @@ void DumpModelVertexBuffers(MMDApp* app, unsigned char* model,
     if (slot < 0)
         return;
 
-    static LONG dumped[100]{};
+    // sized to the slot capacity: the old [100] let a slot >= 100 index past
+    // the array (out-of-bounds InterlockedCompareExchange write)
+    static LONG dumped[kModelSlotCount]{};
     if (InterlockedCompareExchange(&dumped[slot], 1, 0) != 0)
         return;
 

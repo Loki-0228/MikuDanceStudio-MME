@@ -38,7 +38,9 @@ unsigned char* ModelAt(MMDApp* app, int slot) {
 }
 
 int FindModelSlotByComboId(MMDApp* app, int comboId) {
-    for (int slot = 0; slot < 100; ++slot) {
+    // x64 twin sub_7FF7CB486B0: both comboSelIndex (model+0x3108) scans run
+    // to 255 (cmp ecx, 0FFh at 0x7FF7CB48724D and 0x7FF7CB48735A).
+    for (int slot = 0; slot < kModelSlotCount; ++slot) {
         unsigned char* model = ModelAt(app, slot);
         if (model != nullptr && model[11644] == comboId)
             return slot;

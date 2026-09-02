@@ -187,7 +187,8 @@ inline void DumpFrameEntryState(MMDApp* app,
     std::fputs("\n  },\n  \"models\": [", stream);
 
     bool firstModel = true;
-    for (unsigned slot = 0; slot < 100; ++slot) {
+    for (unsigned slot = 0; slot < static_cast<unsigned>(kModelSlotCount);
+         ++slot) {
         unsigned char* model = app->ModelSlot(slot);
         if (model == nullptr)
             continue;

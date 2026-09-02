@@ -29,7 +29,9 @@ void Sub4C3530(void* subsystem, double time);
 namespace {
 
 void SnapshotAndClearBoneSelection(MMDApp* app) {
-    for (int slot = 0; slot < 100; ++slot) {
+    // x64 twins sub_7FF7CB4840E0 (0x430F20) / sub_7FF7CB484600 (0x4312E0)
+    // sweep all 255 slots (count-down from 0xFF at 0x7FF7CB484121).
+    for (int slot = 0; slot < kModelSlotCount; ++slot) {
         unsigned char* model = app->ModelSlot(slot);
         if (model == nullptr)
             continue;
@@ -59,7 +61,8 @@ void SetFrameEditText(MMDApp* app) {
 }
 
 void ApplyFrameToModels(MMDApp* app) {
-    for (int slot = 0; slot < 100; ++slot) {
+    // x64 twins run the apply walk as v16 < 255 (0x7FF7CB48424B..290).
+    for (int slot = 0; slot < kModelSlotCount; ++slot) {
         unsigned char* model = app->ModelSlot(slot);
         if (model == nullptr)
             continue;

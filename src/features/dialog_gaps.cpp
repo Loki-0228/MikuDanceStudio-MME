@@ -83,8 +83,8 @@ inline const T& At(const unsigned char* p, std::size_t offset) {
 // VA 0x004999E0 - sign-corrected quaternion lerp + normalize ("nlerp").
 // __stdcall(float out[4], float q0x, float q0y, float q0z, float q0w,
 //           float q1x, float q1y, float q1z, float q1w, float t) -> out.
-// Callers (unported skinning workers): 0x4A9400, 0x4AAB90, 0x4AC360,
-// 0x4ADB70, 0x4AF3C0.  All arithmetic runs on the x87 stack: products and
+// Callers: the 0x4A9400-family OpenMP skinning workers (ported in
+// src/model/model_skinning.cpp behind the 0x4B0C50 dispatcher).  All arithmetic runs on the x87 stack: products and
 // differences are computed in double and truncated only at each float store,
 // which the explicit double temporaries below reproduce.
 // ---------------------------------------------------------------------------
@@ -521,7 +521,7 @@ namespace {
 const unsigned char kCenter[9] =                                 // 0x531184
     {0x83, 0x5A, 0x83, 0x93, 0x83, 0x5E, 0x81, 0x5B, 0x00};      // センター
 const unsigned char kUpperBody[7] =                              // 0x53117C
-    {0x8F, 0xE3, 0x94, 0xBC, 0x90, 0xA7, 0x00};                  // 上半身
+    {0x8F, 0xE3, 0x94, 0xBC, 0x90, 0x67, 0x00};                  // 上半身
 const unsigned char kNeck[3] =                                   // 0x531178
     {0x8E, 0xF1, 0x00};                                          // 首
 const unsigned char kArmL[5] =                                   // 0x52B81C
@@ -533,7 +533,7 @@ const unsigned char kArmR[5] =                                   // 0x52B804
 const unsigned char kElbowR[7] =                                 // 0x52B7FC
     {0x89, 0x45, 0x82, 0xD0, 0x82, 0xB6, 0x00};                  // 右ひじ
 const unsigned char kLowerBody[7] =                              // 0x531170
-    {0x89, 0xBA, 0x94, 0xBC, 0x90, 0xA7, 0x00};                  // 下半身
+    {0x89, 0xBA, 0x94, 0xBC, 0x90, 0x67, 0x00};                  // 下半身
 const unsigned char kLegL[5] =                                   // 0x531168
     {0x8D, 0xB6, 0x91, 0xAB, 0x00};                              // 左足
 const unsigned char kLegR[5] =                                   // 0x531160

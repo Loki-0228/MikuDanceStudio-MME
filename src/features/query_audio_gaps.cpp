@@ -190,37 +190,37 @@ const unsigned char kNameCenter[] =     // 0x531184 "センター" (9)
     {0x83, 0x5A, 0x83, 0x93, 0x83, 0x5E, 0x81, 0x5B, 0x00};
 const unsigned char kNameUpper[] =      // 0x53117C "上半身" (7)
     {0x8F, 0xE3, 0x94, 0xBC, 0x90, 0x67, 0x00};
-const unsigned char kNameElbow[] =      // 0x531178 "肘" (3)
+const unsigned char kNameNeck[] =      // 0x531178 "首" (3)
     {0x8E, 0xF1, 0x00};
-const unsigned char kNameLShoulder[] =  // 0x52B81C "左肩" (5)
+const unsigned char kNameLArm[] =  // 0x52B81C "左腕" (5)
     {0x8D, 0xB6, 0x98, 0x72, 0x00};
 const unsigned char kNameLElbow[] =     // 0x52B814 "左ひじ" (7)
     {0x8D, 0xB6, 0x82, 0xD0, 0x82, 0xB6, 0x00};
-const unsigned char kNameRShoulder[] =  // 0x52B804 "右肩" (5)
+const unsigned char kNameRArm[] =  // 0x52B804 "右腕" (5)
     {0x89, 0x45, 0x98, 0x72, 0x00};
 const unsigned char kNameRElbow[] =     // 0x52B7FC "右ひじ" (7)
     {0x89, 0x45, 0x82, 0xD0, 0x82, 0xB6, 0x00};
 const unsigned char kNameLower[] =      // 0x531170 "下半身" (7)
     {0x89, 0xBA, 0x94, 0xBC, 0x90, 0x67, 0x00};
-const unsigned char kNameLHand[] =      // 0x531168 "左手" (5)
+const unsigned char kNameLLeg[] =      // 0x531168 "左足" (5)
     {0x8D, 0xB6, 0x91, 0xAB, 0x00};
-const unsigned char kNameRHand[] =      // 0x531160 "右手" (5)
+const unsigned char kNameRLeg[] =      // 0x531160 "右足" (5)
     {0x89, 0x45, 0x91, 0xAB, 0x00};
-const unsigned char kNameLWrist[] =     // 0x531154 "左手首" (9)
+const unsigned char kNameLLegIk[] =     // 0x531154 "左足ＩＫ" (9)
     {0x8D, 0xB6, 0x91, 0xAB, 0x82, 0x68, 0x82, 0x6A, 0x00};
-const unsigned char kNameRWrist[] =     // 0x531148 "右手首" (9)
+const unsigned char kNameRLegIk[] =     // 0x531148 "右足ＩＫ" (9)
     {0x89, 0x45, 0x91, 0xAB, 0x82, 0x68, 0x82, 0x6A, 0x00};
 const unsigned char kNameLKnee[] =      // 0x530F60 "左ひざ" (7)
     {0x8D, 0xB6, 0x82, 0xD0, 0x82, 0xB4, 0x00};
 const unsigned char kNameRKnee[] =      // 0x530F58 "右ひざ" (7)
     {0x89, 0x45, 0x82, 0xD0, 0x82, 0xB4, 0x00};
-const unsigned char kNameLArmElbow[] =  // 0x52B80C "左腕ひじ" (7)
+const unsigned char kNameLWrist[] =  // 0x52B80C "左手首" (7)
     {0x8D, 0xB6, 0x8E, 0xE8, 0x8E, 0xF1, 0x00};
-const unsigned char kNameRArmElbow[] =  // 0x52B7F4 "右腕ひじ" (7)
+const unsigned char kNameRWrist[] =  // 0x52B7F4 "右手首" (7)
     {0x89, 0x45, 0x8E, 0xE8, 0x8E, 0xF1, 0x00};
-const unsigned char kNameLFoot[] =      // 0x531140 "左足" (5)
+const unsigned char kNameLShoulder[] =      // 0x531140 "左肩" (5)
     {0x8D, 0xB6, 0x8C, 0xA8, 0x00};
-const unsigned char kNameRFoot[] =      // 0x531138 "右足" (5)
+const unsigned char kNameRShoulder[] =      // 0x531138 "右肩" (5)
     {0x89, 0x45, 0x8C, 0xA8, 0x00};
 
 int FindBoneByName(unsigned char* m, const void* name, std::size_t cb) {
@@ -442,22 +442,22 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
     i = FindBoneByName(m, kNameUpper, 7);                          // 0x4A5A53
     if (i != -1 && !Sub4A4A50(m, i, 3, 1, frame)) return;          // 0x4A5A80
     if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {        // 0x4A5A8D
-        i = FindBoneByName(m, kNameElbow, 3);                      // 0x4A5AB0
+        i = FindBoneByName(m, kNameNeck, 3);                      // 0x4A5AB0
         if (i != -1 && !Sub4A4A50(m, i, 7, 1, frame)) return;      // 0x4A5ADD
     }
-    i = FindBoneByName(m, kNameLShoulder, 5);                      // 0x4A5B03
+    i = FindBoneByName(m, kNameLArm, 5);                      // 0x4A5B03
     if (i != -1 && !Sub4A4A50(m, i, 11, 1, frame)) return;         // 0x4A5B30
     i = FindBoneByName(m, kNameLElbow, 7);                         // 0x4A5B60
     if (i != -1 && !Sub4A4A50(m, i, 15, 1, frame)) return;         // 0x4A5B8D
-    i = FindBoneByName(m, kNameRShoulder, 5);                      // 0x4A5BB3
+    i = FindBoneByName(m, kNameRArm, 5);                      // 0x4A5BB3
     if (i != -1 && !Sub4A4A50(m, i, 19, 1, frame)) return;         // 0x4A5BE0
     i = FindBoneByName(m, kNameRElbow, 7);                         // 0x4A5C10
     if (i != -1 && !Sub4A4A50(m, i, 23, 1, frame)) return;         // 0x4A5C3D
     i = FindBoneByName(m, kNameLower, 7);                          // 0x4A5C63
     if (i != -1 && !Sub4A4A50(m, i, 27, 1, frame)) return;         // 0x4A5C90
-    i = FindBoneByName(m, kNameLHand, 5);                          // 0x4A5CC0
+    i = FindBoneByName(m, kNameLLeg, 5);                          // 0x4A5CC0
     if (i != -1 && !Sub4A4A50(m, i, 31, 1, frame)) return;         // 0x4A5CED
-    i = FindBoneByName(m, kNameRHand, 5);                          // 0x4A5D13
+    i = FindBoneByName(m, kNameRLeg, 5);                          // 0x4A5D13
     if (i != -1 && !Sub4A4A50(m, i, 35, 1, frame)) return;         // 0x4A5D40
 
     // wrist IK chains (model+9920, 24-byte structs: +0 root bone idx,
@@ -469,11 +469,11 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
         int chain = -1;
         for (int c = 0; c < ikCnt; ++c) {                          // 0x4A5D80
             const mikudancestudio::mdl::BoneRecord* root = &bones[chains[c].boneIndex];
-            if (std::memcmp(kNameLWrist, root->name, 9) == 0) { chain = c; break; }
+            if (std::memcmp(kNameLLegIk, root->name, 9) == 0) { chain = c; break; }
         }
         if (chain >= 0) {
             if (chains[chain].enabled != 0) {                      // 0x4A5A9D
-                i = FindBoneByName(m, kNameLWrist, 9);             // 0x4A5DD0
+                i = FindBoneByName(m, kNameLLegIk, 9);             // 0x4A5DD0
                 if (i != -1 && !Sub4A4A50(m, i, 47, 2, frame)) return; // 0x4A5DF3
             } else {
                 i = FindBoneByName(m, kNameLKnee, 7);              // 0x4A5E14
@@ -488,11 +488,11 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
         int chain = -1;
         for (int c = 0; c < ikCnt; ++c) {                          // 0x4A5E80
             const mikudancestudio::mdl::BoneRecord* root = &bones[chains[c].boneIndex];
-            if (std::memcmp(kNameRWrist, root->name, 9) == 0) { chain = c; break; }
+            if (std::memcmp(kNameRLegIk, root->name, 9) == 0) { chain = c; break; }
         }
         if (chain >= 0) {
             if (chains[chain].enabled != 0) {                      // 0x4A5E9D
-                i = FindBoneByName(m, kNameRWrist, 9);             // 0x4A5ED0
+                i = FindBoneByName(m, kNameRLegIk, 9);             // 0x4A5ED0
                 if (i != -1 && !Sub4A4A50(m, i, 54, 2, frame)) return; // 0x4A5EF3
             } else {
                 i = FindBoneByName(m, kNameRKnee, 7);              // 0x4A5F14
@@ -502,21 +502,21 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
     }
 
     if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {        // 0x4A5F4E
-        i = FindBoneByName(m, kNameLArmElbow, 7);                  // 0x4A5F74
+        i = FindBoneByName(m, kNameLWrist, 7);                  // 0x4A5F74
         if (i != -1 && !Sub4A4A50(m, i, 61, 1, frame)) return;     // 0x4A5FA1
         if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {    // 0x4A5FAE
-            i = FindBoneByName(m, kNameRArmElbow, 7);              // 0x4A5FD0
+            i = FindBoneByName(m, kNameRWrist, 7);              // 0x4A5FD0
             if (i != -1 && !Sub4A4A50(m, i, 65, 1, frame)) return; // 0x4A5FFD
         }
     }
     if (*reinterpret_cast<signed char*>(m + 14589) >= 15) {        // 0x4A600A
-        i = FindBoneByName(m, kNameLFoot, 5);                      // 0x4A6030
+        i = FindBoneByName(m, kNameLShoulder, 5);                      // 0x4A6030
         // 0x4A6056/0x4A60B6: like every other probe, a LFoot/RFoot
         // failure is a PLAIN return in the original - no cleanup.
         if (i != -1 && !Sub4A4A50(m, i, 69, 1, frame))             // 0x4A6056
             return;
         if (*reinterpret_cast<signed char*>(m + 14589) >= 15) {    // 0x4A606A
-            i = FindBoneByName(m, kNameRFoot, 5);                  // 0x4A6090
+            i = FindBoneByName(m, kNameRShoulder, 5);                  // 0x4A6090
             if (i != -1 && !Sub4A4A50(m, i, 73, 1, frame))         // 0x4A60B6
                 return;
         }

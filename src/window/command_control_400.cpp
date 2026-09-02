@@ -310,11 +310,9 @@ void* Sub401150(void* block, std::uint32_t size, std::uint32_t count,
 // Newly-required unported dependencies - file-local stub bodies so the
 // call sites below link (stubs.cpp must not be modified).  TODO(port):
 // move each body to src/unported/stubs.cpp when the function is ported.
+// Real body: src/model/key_registrars.cpp (name-based frame mark).
 int Sub4A27F0(unsigned char* model, std::uint32_t from, std::uint32_t to,
-              const char* name) {
-    (void)model; (void)from; (void)to; (void)name;
-    return 1;                                    // VA 0x004A27F0 name-based
-}                                                // frame mark
+              const char* name);                 // VA 0x004A27F0
 int Sub410AA0(MMDApp* app, const void* rec);      // VA 0x00410AA0 0x374 paste
 int Sub411900(MMDApp* app, const void* rec);      // VA 0x00411900 0x378 paste
 int Sub4120B0(MMDApp* app, const void* rec);      // VA 0x004120B0 0x37C paste

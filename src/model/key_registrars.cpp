@@ -1,7 +1,8 @@
 // ===========================================================================
 // VA 0x0049D880 / 0x0049E310 / 0x0049F190 / 0x0049F8C0 /
-//    0x004A4940 / 0x004A49A0
-// - key registrars + allocator resets for the VMD load path
+//    0x004A4940 / 0x004A49A0 / 0x004A27F0
+// - key registrars + allocator resets for the VMD load path, plus the
+//   name-based key-track frame marker of the frame-range editor
 // ===========================================================================
 // The three registrars insert one key each into the per-track sorted
 // doubly-linked lists inside the shared record arrays, allocating fresh
@@ -52,6 +53,27 @@
 //     occupied (frame != 0) 60-byte records (cap 300000).
 //   Sub4A49A0(model)  reseeds model+8768 to the morph count and skips
 //     occupied 20-byte records (cap 20000).
+//
+//   Sub4A27F0(model, from, to, name)   name-based key-track frame mark:
+//     resolves the scope text of the frame-range editor (command 415:
+//     the 0x1B2 text / the "Sel Bone" and "Sel facial" per-item loops)
+//     to ONE key track and sets the mark byte (+56 bone / +16 morph /
+//     +20 display) of every record with from <= frame <= to (unsigned).
+//     Resolution order (first match wins, misses fall through):
+//       1. facial display-frame group name (displayFrames, SJIS name
+//          ONLY - an English-mode group text never matches, original
+//          quirk) -> morph-key track rooted at targetIndex;
+//       2. 表示･IK･外親 (13-byte memcmp) / "disp/IK/OP" -> display-key
+//          track (record 0);
+//       3. the root bone's own name, bones[0] SJIS or English (combo
+//          434's center-bone entry) -> bone-key record 0;
+//       4. ﾎﾞｰﾝ01 (7-byte memcmp) / "bone01" - the bundled ダミーボーン
+//          model's combo entries (0x531118/0x531110, x64 0x5524D8/
+//          0x5524E0) -> bone-key record 0;
+//       5. bone display-frame group name (rbGroups, SJIS or English) ->
+//          bone-key track rooted at targetIndex.
+//     Callers ignore the return value; it carries the last record index
+//     marked (0 = nothing), mirroring the original's leftover eax.
 //
 // Reference: IDA live disassembly of MikuMikuDance.exe v932 (sole source of
 // truth; ../translated/ reference files deviate).
@@ -163,6 +185,46 @@ int FindMirroredBone(unsigned char* model, const unsigned char* rec) {
             return i;
     }
     return -1;
+}
+
+// Name probes of Sub4A27F0 (SJIS byte-exact, compare lengths as in the
+// binary, NUL included; x86 0x531120 / 0x531118 = x64 0x552048 /
+// 0x5524D8).
+const unsigned char kJpDispIkOp[] =   // 表示･IK･外親 (13)
+    {0x95, 0x5C, 0x8E, 0xA6, 0xA5, 0x49, 0x4B,
+     0xA5, 0x8A, 0x4F, 0x90, 0x65, 0x00};
+const unsigned char kJpBone01[] =     // ﾎﾞｰﾝ01 (7)
+    {0xCE, 0xDE, 0xB0, 0xDD, 0x30, 0x31, 0x00};
+
+// Track walk + mark shared by every branch of Sub4A27F0: `root` is the
+// track's head record (record i of the bone/morph arrays, 0 for the
+// display array).  Advance while frame < from (a chain that ends before
+// `from` marks nothing - 0x4A2B15/0x4A2955/0x4A28B5), then set the mark
+// byte of every record with frame <= to.  Returns the last record index
+// marked, 0 when nothing was in range.
+template <typename Key>
+int MarkTrackRange(Key* keys, int root, std::uint32_t from,
+                   std::uint32_t to) {
+    int cur = root;
+    if (keys[cur].frame < from) {
+        for (;;) {
+            const int next = static_cast<int>(keys[cur].next);
+            if (next == 0) return 0;
+            cur = next;
+            if (keys[cur].frame >= from) break;
+        }
+    }
+    if (keys[cur].frame > to) return 0;                    // 0x4A2B3C
+    int last = 0;
+    for (;;) {
+        keys[cur].allocated = 1;                           // 0x4A2B50
+        last = cur;
+        const int next = static_cast<int>(keys[cur].next);
+        if (next == 0) break;                              // 0x4A2B60
+        if (keys[next].frame > to) break;                  // 0x4A2B79
+        cur = next;
+    }
+    return last;
 }
 
 }  // namespace
@@ -821,6 +883,64 @@ void Sub49F480(unsigned char* model, int frameArg) {
     fill(freeIndex);
     if (frame > mdl::Mdl(m)->maxFrame)
         mdl::Mdl(m)->maxFrame = frame;
+}
+
+// ---- VA 0x004A27F0 --------------------------------------------------------
+// Name-based key-track frame marker (x64 sub_7FF7CB4EFED0).  See the file
+// header for the resolution chain.  Walks are unsigned frame compares over
+// the per-track next-linked chains, exactly like the registrar family
+// above; the first branch that matches owns the walk and returns.
+int Sub4A27F0(unsigned char* model, std::uint32_t from, std::uint32_t to,
+              const char* name) {
+    mdl::ModelRecord& record = *mdl::Mdl(model);
+
+    // 1. facial display-frame groups (0x4A2806..0x4A2855): SJIS name only
+    //    (0x4A2820 inline strcmp), targetIndex roots the morph track.
+    const int facialCount = record.facialFrameCount;
+    if (facialCount > 0) {
+        mdl::FrameGroup* const groups = mdl::DisplayFrames(model);
+        for (int g = 0; g < facialCount; ++g) {
+            if (std::strcmp(name, groups[g].name) == 0)
+                return MarkTrackRange(mdl::MorphKeys(model),
+                                      groups[g].targetIndex, from, to);
+        }
+    }
+
+    // 2. 表示･IK･外親 / "disp/IK/OP" (0x4A285F..0x4A2892): display track.
+    if (std::memcmp(name, kJpDispIkOp, 13) == 0 ||
+        std::strcmp(name, "disp/IK/OP") == 0) {
+        return MarkTrackRange(mdl::DisplayKeys(model), 0, from, to);
+    }
+
+    // 3. the root bone's own name, SJIS or English (0x4A29B2..0x4A2A25) -
+    //    combo 434's center-bone entry -> bone-key record 0.
+    const mdl::BoneRecord* const rootBone = mdl::Bones(model);
+    if (std::strcmp(name, rootBone->name) == 0 ||
+        std::strcmp(name, rootBone->nameEn) == 0) {
+        return MarkTrackRange(mdl::BoneKeys(model), 0, from, to);
+    }
+
+    // 4. ﾎﾞｰﾝ01 / "bone01" (0x4A2AB8..0x4A2AEB): the bundled ダミーボーン
+    //    model's combo entries -> bone-key record 0.
+    if (std::memcmp(name, kJpBone01, 7) == 0 ||
+        std::strcmp(name, "bone01") == 0) {
+        return MarkTrackRange(mdl::BoneKeys(model), 0, from, to);
+    }
+
+    // 5. bone display-frame groups (0x4A2B88..0x4A2C25): SJIS or English
+    //    name, targetIndex roots the bone track.
+    const std::int32_t groupCount =
+        static_cast<std::int32_t>(record.rigidBodyCount);
+    if (groupCount > 0) {
+        mdl::FrameGroup* const groups = mdl::RigidGroups(model);
+        for (std::int32_t g = 0; g < groupCount; ++g) {
+            if (std::strcmp(name, groups[g].name) == 0 ||
+                std::strcmp(name, groups[g].nameEn) == 0)
+                return MarkTrackRange(mdl::BoneKeys(model),
+                                      groups[g].targetIndex, from, to);
+        }
+    }
+    return 0;
 }
 
 }  // namespace mikudancestudio

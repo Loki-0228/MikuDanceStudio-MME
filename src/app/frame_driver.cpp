@@ -1,9 +1,9 @@
 // ===========================================================================
 // VA 0x0046B090 - FrameDriver  (original: sub_46B090, 0xED01 = 60KB)
 // ===========================================================================
-// PHASE A port: the verified frame flow skeleton with the interaction-mode
-// dispatch table.  Per-mode manipulation bodies (modes 1..0x12) are stubbed
-// and recorded; everything below is field-exact against the decompilation.
+// The verified frame flow skeleton with the interaction-mode dispatch
+// table; the per-mode manipulation bodies (modes 1..0x12) live in
+// frame_modes_bone.cpp and are field-exact against the decompilation.
 //
 // Flow (verified):
 //   1. mouse-delta snapshot reset

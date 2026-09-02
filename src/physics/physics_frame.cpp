@@ -408,7 +408,9 @@ void DumpRigidBodyState(MMDApp* app, const char* fileName) {
 
     std::fputs("{\n  \"schema\": 1,\n  \"models\": [", stream);
     bool firstModel = true;
-    for (unsigned slot = 0; slot < 100; ++slot) {
+    // port diagnostic: bound = model-slot capacity (kModelSlotCount)
+    for (unsigned slot = 0; slot < static_cast<unsigned>(kModelSlotCount);
+         ++slot) {
         // Model slots are pointers.  The old x86 address expression used a
         // four-byte stride and silently walked through the middle of entries
         // in the x64 build, making diagnostic output (and any future caller
@@ -1021,8 +1023,11 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     const int a4 = s.PhysicsResetPending() != 0
                        ? 0
                        : count;
-    for (int order = 0; order < 100; ++order) {
-        for (int j = 0; j < 100; ++j) {
+    // x64 pump sub_7FF7CB4474F0: both pose passes run order and slot walks
+    // to 255 (pass 1: cmp rbx/edi, 0FFh at 0x7FF7CB44C69A/0x7FF7CB44C6DD;
+    // pass 2: 0x7FF7CB44C89A/0x7FF7CB44C8CE; comboSelIndex2 = model+0x3109).
+    for (int order = 0; order < kModelSlotCount; ++order) {
+        for (int j = 0; j < kModelSlotCount; ++j) {
             unsigned char* mdl = models[j];
             if (mdl != nullptr && mdl::Mdl(mdl)->comboSelIndex2 == order) {
                 ModelApplyMorphs(mdl);                            // 0x46FCB1
@@ -1053,7 +1058,8 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // !windRan here, that freezes physics while the noise mode is active.
     if (runWorldPass && !idleNoStep &&
         s.state.frameCopyDialog == 0) {
-        for (int j = 0; j < 100; ++j)
+        // x64 twin: 255 count-down walk (mov edi, 0FFh at 0x7FF7CB44C74B).
+        for (int j = 0; j < kModelSlotCount; ++j)
             if (models[j] != nullptr)
                 ModelKinematicSync(models[j]);              // 0x46FD4D
         if (captureStages)
@@ -1079,7 +1085,8 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
 
         if (settle) {
             for (int iter = 3; iter >= 1; --iter) {
-                for (int j = 0; j < 100; ++j)
+                // x64 twin: 255 count-down walk (mov edi, 0FFh at 0x7FF7CB44C7E8).
+                for (int j = 0; j < kModelSlotCount; ++j)
                     if (models[j] != nullptr)
                         ModelDynamicReseat(models[j]);      // 0x46FDF7
                 if (captureStages) {
@@ -1106,7 +1113,8 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // 0x46FE34..0x46FE58: the readback loop and the 0xA066C clear sit
     // AFTER the world-pass gate (label 0x46FE34) - they run even when the
     // gate skipped every step (including A0CC4 == 0, physics off).
-    for (int j = 0; j < 100; ++j)
+    // x64 twin: 255 count-down walk (mov edi, 0FFh at 0x7FF7CB44C83C).
+    for (int j = 0; j < kModelSlotCount; ++j)
         if (models[j] != nullptr)
             ModelPhysicsReadback(models[j]);                // 0x46FE49
     if (captureStages)
@@ -1126,8 +1134,8 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
 
     // Second pose pass with a2 = 1 and a4 = model count (0x46FE5F; morph
     // call at 0x46FE93, SetPhysicsMode pushes 1 at 0x46FEAD).
-    for (int order = 0; order < 100; ++order) {
-        for (int j = 0; j < 100; ++j) {
+    for (int order = 0; order < kModelSlotCount; ++order) {
+        for (int j = 0; j < kModelSlotCount; ++j) {
             unsigned char* mdl = models[j];
             if (mdl != nullptr && mdl::Mdl(mdl)->comboSelIndex2 == order) {
                 ModelApplyMorphs(mdl);                            // 0x46FE93

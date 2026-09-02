@@ -258,7 +258,7 @@ void PlaybackPoseAdvance(MMDApp* app, int advance) {
 
     // ---- 1. per-model keyframe application (0x4175A8) --------------------
     unsigned char** models = s.ModelSlots();
-    for (int j = 0; j < 100; ++j)
+    for (int j = 0; j < kModelSlotCount; ++j)
         if (models[j] != nullptr)
             Sub4A31D0(models[j], s.PlaybackCursorSeconds(),
                       s.PlaybackPhysicsMode());

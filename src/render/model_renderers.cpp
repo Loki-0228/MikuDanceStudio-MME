@@ -113,7 +113,8 @@ void DumpMaterialState(MMDApp* app, IDirect3DDevice9* device,
         return;
 
     int slot = -1;
-    for (int i = 0; i < 100; ++i) {
+    // port diagnostic: bound = model-slot capacity (kModelSlotCount)
+    for (int i = 0; i < kModelSlotCount; ++i) {
         if (app->ModelSlot(i) == model) {
             slot = i;
             break;

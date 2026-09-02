@@ -667,7 +667,10 @@ void Sub41E7B0(MMDApp* app, int count) {
     std::int32_t* order =
         static_cast<std::int32_t*>(app->AccessoryOrderArray());
     for (int ord = 1; ord < count; ++ord) {
-        for (int i = 0; i < 100; ++i) {
+        // x64: no exact twin pinned for 0x41E7B0, but every slot/order scan
+        // verified on the x64 binary so far runs the full 255-slot array
+        // (family evidence; see app_layout.hpp kModelSlotCount).
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model != nullptr &&
                 static_cast<unsigned char>(model[kModelOrder2D7C]) == ord) {
@@ -1944,7 +1947,9 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         CheckMenuItem(GetMenu(hwnd), 0x109, MF_CHECKED);
         CheckMenuItem(GetMenu(hwnd), 0x10E, MF_UNCHECKED);
         CheckMenuItem(GetMenu(hwnd), 0x110, MF_UNCHECKED);
-        for (int i = 0; i < 100; ++i) {
+        // x64 dispatcher sub_7FF7CB45F550 case 265 twin walks all 255 slots
+        // (mov r13d, 0FFh ... dec r13 at 0x7FF7CB46F309..0x7FF7CB46F32D).
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model != nullptr) {
                 ModelKinematicSync(model);  // orig: thiscall(model, 0xA0CC4)
@@ -1960,7 +1965,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         CheckMenuItem(GetMenu(hwnd), 0x109, MF_UNCHECKED);
         CheckMenuItem(GetMenu(hwnd), 0x10E, MF_UNCHECKED);
         CheckMenuItem(GetMenu(hwnd), 0x110, MF_UNCHECKED);
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model != nullptr) {
                 ModelKinematicSync(model);
@@ -1976,7 +1981,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         CheckMenuItem(GetMenu(hwnd), 0x109, MF_UNCHECKED);
         CheckMenuItem(GetMenu(hwnd), 0x10E, MF_CHECKED);
         CheckMenuItem(GetMenu(hwnd), 0x110, MF_UNCHECKED);
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model != nullptr) {
                 ModelKinematicSync(model);
@@ -1992,7 +1997,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         CheckMenuItem(GetMenu(hwnd), 0x109, MF_UNCHECKED);
         CheckMenuItem(GetMenu(hwnd), 0x10E, MF_UNCHECKED);
         CheckMenuItem(GetMenu(hwnd), 0x110, MF_CHECKED);
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model != nullptr) {
                 ModelKinematicSync(model);
@@ -2444,7 +2449,9 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->state.modelOutlineColorRed = nr;
         app->state.modelOutlineColorGreen = ng;
         app->state.modelOutlineColorBlue = nb;
-        for (int i = 0; i < 100; ++i) {
+        // x64 dispatcher twin (0x7FF7CB4701EF..0x7FF7CB470228) walks all
+        // 255 slots before each Sub4A4850 (sub_7FF7CB4F2240) call.
+        for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model != nullptr) {
                 Sub4A4850(reinterpret_cast<MMDApp*>(model), nr, ng, nb);
@@ -2526,7 +2533,9 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
             app->state.autoRepeat = 1;
             SetTimer(hwnd, 0x65, 0x5DC, nullptr);
             app->PhysicsResetPending() = 1;
-            for (int i = 0; i < 100; ++i) {
+            // x64 dispatcher twin (0x7FF7CB470326..0x7FF7CB47034F) walks all
+            // 255 slots (model+0x3CA5 <- app+0xA137E on x64).
+            for (int i = 0; i < kModelSlotCount; ++i) {
                 unsigned char* model = app->ModelSlot(i);
                 if (model != nullptr) {
                     model[0x38FD] =

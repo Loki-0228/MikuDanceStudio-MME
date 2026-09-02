@@ -232,10 +232,12 @@ void Sub466630(MMDApp* app, HWND hDlg) {
 
     char Buffer[256];                                                // 0x466906
     int nOrder = 0;
-    for (int ord = 0; ord < 100; ++ord) {                            // 0x4669DE
+    // x64 twin sub_7FF7CB4BA7B0: order and slot walks both run to 255
+    // (cmp esi, 0FFh at 0x7FF7CB4BABB2 / cmp edi, 0FFh at 0x7FF7CB4BAB0D).
+    for (int ord = 0; ord < kModelSlotCount; ++ord) {                // 0x4669DE
         int slot = 0;
         unsigned char* m = nullptr;
-        for (; slot < 100; ++slot) {                                 // 0x466911
+        for (; slot < kModelSlotCount; ++slot) {                     // 0x466911
             unsigned char* cand = ModelAt(app, slot);
             if (cand != nullptr &&
                 *reinterpret_cast<unsigned char*>(cand + kMdlOrder) ==

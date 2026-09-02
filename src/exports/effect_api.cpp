@@ -72,9 +72,9 @@ using mikudancestudio::MMDApp;
 // Occupied-slot counter: index counts only non-null slots, matching the
 // original `cmp (%esi); je skip / inc edi; cmp edi, arg` loops.
 
-unsigned char* ModelByIndex(MMDApp* app, int index) {  // 0x780, 100 slots
+unsigned char* ModelByIndex(MMDApp* app, int index) {  // 0x780/x64 0xBE8
     int occupied = -1;
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
         if (slot != nullptr && ++occupied == index)
             return slot;
@@ -232,7 +232,7 @@ __declspec(dllexport) int ExpGetPmdOrder(int index) {
     if (pre < base)
         base = pre;
     int occupied = -1;
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
         if (slot != nullptr && ++occupied == index)
             return static_cast<unsigned char>(slot[0x2D7C]) + base;
@@ -516,7 +516,7 @@ __declspec(dllexport) int ExpGetCurrentObject() {
     const int pre = app->state.accessoryRenderSplitOrder;
     if (pre < base)
         base = pre;
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
         if (slot == cur)
             return static_cast<unsigned char>(cur[0x2D7C]) + base;
@@ -536,7 +536,7 @@ __declspec(dllexport) int ExpGetCurrentMaterial() {
         if (slot == reinterpret_cast<mikudancestudio::mdl::AccessoryRecord*>(cur))
             return slot->currentMaterial;
     }
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
         if (slot == cur)
             return Fld<std::int32_t>(cur, 0x37C4);

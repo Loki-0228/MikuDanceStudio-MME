@@ -1380,7 +1380,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
     if (Rd(fd, &s->state.accessoryRenderSplitOrder, 4) > 0) {  // 0x45D278
         Rd(fd, &s->ProjectedShadowAmbientIntensity(), 4);       // 0x45D296
         s->SetProjectedShadowAmbient(s->ProjectedShadowAmbientIntensity());
-        for (int i = 0; i < 100; ++i) {
+        // x64 load twin sub_7FF7CB498E30: every post-read slot walk runs to
+        // 255 (0xFF counters at 0x7FF7CB49D33A..0x7FF7CB4A2A3A in the tail).
+        for (int i = 0; i < kModelSlotCount; ++i) {
             if (slots[i] != nullptr) {
                 unsigned char b = 0;
                 Rd(fd, &b, 1);                                   // 0x45D2EA
@@ -1409,7 +1411,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         }
         std::int32_t v31C0 = 0;
         if (Rd(fd, &v31C0, 4) > 0) {                             // 0x45D40F
-            for (int i = 0; i < 100; ++i)
+            for (int i = 0; i < kModelSlotCount; ++i)
                 if (slots[i] != nullptr) M32(slots[i], 0x31C0) = v31C0;
             unsigned char b = 0;
             Rd(fd, &b, 1);                                       // 0x45D44E
@@ -1424,7 +1426,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 // per-model 0x31C0 re-read pass (0x45D4B0..0x45D4FB):
                 // ONE float dword per occupied slot, unlike the broadcast
                 // sweep of the first dword above.
-                for (int i = 0; i < 100; ++i) {
+                for (int i = 0; i < kModelSlotCount; ++i) {
                     if (slots[i] != nullptr)
                         Rd(fd, slots[i] + 0x31C0, 4);            // 0x45D4D3
                 }
@@ -1485,7 +1487,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                 s->state.selfShadowMode);
                         selfShadowKeys[0].distance =
                             s->state.physicsInterval;
-                        for (int i = 0; i < 100; ++i) {
+                        for (int i = 0; i < kModelSlotCount; ++i) {
                             if (slots[i] != nullptr) {
                                 unsigned char b = 0;
                                 Rd(fd, &b, 1);                   // 0x45D7BB
@@ -1529,7 +1531,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                 if (s->state.modelOutlineColorRed != 0 ||
                                     s->state.modelOutlineColorGreen != 0 ||
                                     s->state.modelOutlineColorBlue != 0) {
-                                    for (int i = 0; i < 100; ++i)
+                                    for (int i = 0; i < kModelSlotCount; ++i)
                                         if (slots[i] != nullptr)
                                             Sub4A4850(
                                                 reinterpret_cast<MMDApp*>(
@@ -1690,7 +1692,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                                 Rd(fd, &bfin, 1); // 0x45E0BC
                                             if (bfin == 1 && got0BC > 0) {
                                                 for (int i = 0;
-                                                     i < 100; ++i)
+                                                     i < kModelSlotCount;
+                                                     ++i)
                                                     if (slots[i] !=
                                                         nullptr)
                                                         Rd(fd,
@@ -1766,7 +1769,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
 
     // physics key-chain integrity (0x26E8 array, 0x1C stride)
     // (0x45E2C2..0x45E3C0)
-    for (int mi = 0; mi < 100; ++mi) {
+    for (int mi = 0; mi < kModelSlotCount; ++mi) {
         unsigned char* m = slots[mi];
         if (m == nullptr) continue;
         mdl::DisplayKey* keys = mdl::DisplayKeys(m);
@@ -1796,7 +1799,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     // each bone chain uses the bone index itself as the expected prev
     // value (0x45E52C reloads ECX from the loop counter before the
     // advance), so a root's first sparse key points back to b.
-    for (int mi = 0; mi < 100; ++mi) {
+    for (int mi = 0; mi < kModelSlotCount; ++mi) {
         unsigned char* m = slots[mi];
         if (m == nullptr) continue;
         if (M32(m, 0x2D84) <= 0) continue;
@@ -1864,12 +1867,12 @@ void LoadSceneV1(MMDApp* app, int fd) {
             SendMessageA(GetDlgItem(main, 0x1B2), CB_SETCURSEL, 0, 0);
         } else {
             int found = 0;                                       // 0x45E794
-            while (found < 100 &&
+            while (found < kModelSlotCount &&
                    (slots[found] == nullptr ||
                     M8(slots[found], 0x2D7C) !=
                         static_cast<unsigned char>(sel)))
                 ++found;
-            if (found < 100) {
+            if (found < kModelSlotCount) {
                 s->SetSelectedModelSlot(static_cast<unsigned char>(found));
                 PostLoadInit(slots[found]);
             }

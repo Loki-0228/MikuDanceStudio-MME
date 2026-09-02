@@ -1564,9 +1564,11 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
         SendMessageW(GetDlgItem(main, 449), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kWNashi));
     SendMessageA(GetDlgItem(main, 450), CB_RESETCONTENT, 0, 0);
-    for (int j = 0; j < 100; ++j) {                             // 0x454766
+    // x64 load twin sub_7FF7CB498E30: every post-read slot walk runs to 255
+    // (0xFF counters at 0x7FF7CB49D33A..0x7FF7CB4A2A3A in the load tail).
+    for (int j = 0; j < kModelSlotCount; ++j) {                 // 0x454766
         int found = 0;
-        while (found < 100 &&
+        while (found < kModelSlotCount &&
                (slots[found] == nullptr ||
                 mdl::Mdl(slots[found])->comboSelIndex != j))
             ++found;
@@ -1574,7 +1576,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
         // the next value; it does not terminate the rebuild.  PMM model IDs
         // normally start at one because combo item zero is camera mode, so
         // breaking here discarded every loaded model at the very first pass.
-        if (found >= 100) continue;
+        if (found >= kModelSlotCount) continue;
         const char* name =
             s->EnglishUI() != 0
                 ? mdl::Mdl(slots[found])->nameEn
@@ -1969,7 +1971,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
             SendMessageA(GetDlgItem(main, 0x1D7), CB_SETCURSEL,
                          accessory.order, 0);
             const std::int32_t parentSlot = accessory.parentModel;
-            if (parentSlot >= 0 && parentSlot < 100 &&
+            if (parentSlot >= 0 && parentSlot < kModelSlotCount &&
                 slots[parentSlot] != nullptr &&
                 mdl::Mdl(slots[parentSlot])->boneCount > 0) {
                 for (std::int32_t b = 0;
@@ -2313,7 +2315,8 @@ label_708:
                 CheckMenuItem(GetMenu(main), 0x110, 0);
                 break;
         }
-        for (int i = 0; i < 100; ++i)                           // 0x4576C7
+        // x64 twin: 255-slot walk (0xFF counter at 0x7FF7CB4A1131).
+        for (int i = 0; i < kModelSlotCount; ++i)               // 0x4576C7
             if (slots[i] != nullptr) ModelKinematicSync(slots[i]);
         // physics reads (0x457713..0x45776E)
         Rd(fd, &s->state.gravityMagnitude, 4);
@@ -2398,7 +2401,8 @@ label_708:
     if (s->state.modelOutlineColorRed != 0 ||
         s->state.modelOutlineColorGreen != 0 ||
         s->state.modelOutlineColorBlue != 0) {
-        for (int i = 0; i < 100; ++i)
+        // x64 twin: 255-slot color sweep (0xFF counter at 0x7FF7CB4A1792).
+        for (int i = 0; i < kModelSlotCount; ++i)
             if (slots[i] != nullptr)
                 Sub4A4850(reinterpret_cast<MMDApp*>(slots[i]),
                           s->state.modelOutlineColorRed,
@@ -2543,7 +2547,7 @@ label_708:
                 return mapped < 0 ? 0 : mapped;
             };
             // remap display indices through the translation arrays
-            for (int mi = 0; mi < 100; ++mi) {
+            for (int mi = 0; mi < kModelSlotCount; ++mi) {
                 unsigned char* m = slots[mi];
                 if (m == nullptr) continue;
                 mdl::BoneOrderEntry* const selectors = mdl::BoneOrder(m);
@@ -2612,7 +2616,7 @@ label_708:
             // skipped model: gray menus + reference removal sweep
             EnableMenuItem(GetMenu(main), 0x120, 1);            // 0x45833E
             EnableMenuItem(GetMenu(main), 0x121, 1);
-            for (int mi = 0; mi < 100; ++mi) {
+            for (int mi = 0; mi < kModelSlotCount; ++mi) {
                 unsigned char* m = slots[mi];
                 if (m == nullptr) continue;
                 EnableMenuItem(GetMenu(main), 0x120, 0);
@@ -2678,7 +2682,7 @@ label_708:
         }
     }
     // key-chain integrity checks (0x458996..0x458BB8)
-    for (int mi = 0; mi < 100; ++mi) {
+    for (int mi = 0; mi < kModelSlotCount; ++mi) {
         unsigned char* m = slots[mi];
         if (m == nullptr) continue;
         mdl::DisplayKey* keys = mdl::DisplayKeys(m);
@@ -2706,7 +2710,7 @@ label_708:
             }
         }
     }
-    for (int mi = 0; mi < 100; ++mi) {
+    for (int mi = 0; mi < kModelSlotCount; ++mi) {
         unsigned char* m = slots[mi];
         if (m == nullptr) continue;
         if (mdl::Mdl(m)->boneCount == 0) continue;
@@ -2788,12 +2792,12 @@ label_708:
             SendMessageA(GetDlgItem(main, 434), CB_SETCURSEL, 0, 0);
         } else {
             int found = 0;
-        while (found < 100 &&
+        while (found < kModelSlotCount &&
                (slots[found] == nullptr ||
                     mdl::Mdl(slots[found])->comboSelIndex !=
                         static_cast<unsigned char>(sel)))
                 ++found;
-            if (found < 100) {
+            if (found < kModelSlotCount) {
                 s->SetSelectedModelSlot(static_cast<unsigned char>(found));
                 PostLoadInit(slots[found]);                      // 0x49C850
             }

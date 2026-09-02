@@ -306,7 +306,7 @@ void UpdateBoneFrames(MMDApp* app) {
     if (app->state.a066D != 0)
         app->PlaybackPhysicsMode() = 2;
 
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < kModelSlotCount; ++i) {
         unsigned char* model = app->ModelSlot(i);
         if (model != nullptr)
             Sub4A2CD0(model, cursor,
@@ -408,7 +408,7 @@ void Sub4341E0(MMDApp* app) {
     }
 
     const int frame = app->state.currentFrame;
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < kModelSlotCount; ++i) {
         unsigned char* model = app->ModelSlot(i);
         if (model != nullptr)
             Sub4B4260(model, frame, app->PlaybackPhysicsMode());
