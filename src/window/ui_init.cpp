@@ -296,9 +296,9 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
                           app->EnglishUI() != 0));
 
     SetCurrentDirectoryW(app->ExeDir());                              // 0x4672F1
-    s.raw<HBITMAP>(offsets::kPtrBmp752) = LoadBitmapA(
+    s.state.bmpRes101 = LoadBitmapA(
         static_cast<HMODULE>(s.HInstance()), MAKEINTRESOURCEA(0x65)); // 0x467303
-    s.raw<HBITMAP>(offsets::kPtrBmp756) = LoadBitmapA(
+    s.state.bmpRes119 = LoadBitmapA(
         static_cast<HMODULE>(s.HInstance()), MAKEINTRESOURCEA(0x77)); // 0x467311
 
     // 0x467320: DirectShowInit (sub_408EF0, this = the 0x6C AVI-codec
@@ -318,10 +318,11 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     s.RecordingCompletionFlag() = new unsigned char(0);
 
     // 0x46733C..0x467375: material used for projected accessory shadows.
-    // The byte pattern is a zeroed D3DMATERIAL9 with a half-transparent
-    // diffuse term, white ambient term, and the original unused specular
-    // alpha seed retained.
-    std::memset(s.at(offsets::kStructA0ce0), 0, sizeof(D3DMATERIAL9));
+    // The original memsets the whole D3DMATERIAL9 at 0xA0CE0 and then
+    // seeds a half-transparent diffuse term, white ambient term, and a
+    // specular alpha; only those promoted fields are ever read back
+    // (ProjectedShadowMaterial() rebuilds the struct from them), so the
+    // setters alone are observably identical to the memset + setters.
     s.SetProjectedShadowAmbient(1.0f);
     s.ProjectedShadowDiffuseAlpha() = 0.5f;
     s.ProjectedShadowSpecularAlpha() = 1.0f;
@@ -359,7 +360,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
                                    &s.PictureOverlayVertices(), nullptr);
         device->CreateVertexBuffer(
             0x445C0, D3DUSAGE_WRITEONLY, 0x144, D3DPOOL_MANAGED,
-            &s.raw<IDirect3DVertexBuffer9*>(offsets::kDword9EE0C), nullptr);
+            &s.SpriteOverlayVertices(), nullptr);
         device->CreateVertexBuffer(
             0x30D40, D3DUSAGE_WRITEONLY, 0x44, D3DPOOL_MANAGED,
             &wrap->lineVertexBuffer,
@@ -370,7 +371,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         LoadPngTexture(app, device, 0x66,
             &s.OverlayTexture());
         LoadPngTexture(app, device, 0x72,
-            &s.raw<IDirect3DTexture9*>(offsets::kDword9F130));
+            &s.ProjectedShadowRestoreTexture());
     }
 
     // ---- 0x467637..0x467674: default-checked menu items -------------------
@@ -389,13 +390,13 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     // it reads the first model-slot pointer there, gated off by its zero
     // active flag in a fresh app).
     unsigned char* cam = NewZeroed(0xCD140);                    // 840000
-    s.raw<unsigned char*>(884) = cam;                           // 0x374
+    s.state.cameraKeyTrack = cam;                               // 0x374
     unsigned char* trkLight = NewZeroed(0x61A80);               // 400000
-    s.raw<unsigned char*>(888) = trkLight;                      // 0x378
+    s.state.lightKeyTrack = trkLight;                           // 0x378
     unsigned char* trkShadow = NewZeroed(0x3A980);              // 240000
-    s.raw<unsigned char*>(892) = trkShadow;                     // 0x37C
+    s.state.selfShadowKeyTrack = trkShadow;                     // 0x37C
     unsigned char* trkPhys = NewZeroed(0x57E40);                // 360000
-    s.raw<unsigned char*>(896) = trkPhys;                       // 0x380
+    s.state.gravityKeyTrack = trkPhys;                          // 0x380
     for (int i = 0; i < 255; ++i) {                             // 0x467705
         unsigned char* acc = NewZeroed(0x927C0);                // 600000
         s.AccessoryKeys(i) = reinterpret_cast<mdl::AccessoryKey*>(acc);
@@ -403,7 +404,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         *reinterpret_cast<std::int32_t*>(acc + 16) = -1;
         *reinterpret_cast<float*>(acc + 52) = 1.0f;             // scale x
         *reinterpret_cast<float*>(acc + 56) = 1.0f;             // scale y
-        s.raw<void*>(646512 + 4 * i) = nullptr;                 // 0x9DD70[i]
+        s.ObjectSlot(i) = nullptr;                              // 0x9DD70[i]
     }
     TraceInitialAccessoryTrack(s);
     if (std::getenv("MIKUDANCESTUDIO_PMM_GUARD_ACCESSORY_TRACKS") != nullptr) {
@@ -597,12 +598,12 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 
     if (w->postProcessEnabled == 0) {
         EnableMenuItem(menu, 0x117, MF_BYCOMMAND | MF_GRAYED);
-        s.raw<std::int32_t>(0xA0D30) = 0;
-        s.raw<std::uint8_t>(0xA0188) = 0;
+        s.SelfShadowMode() = 0;
+        s.state.selfShadowCfgOrUint32 = 0;
     } else {
         CheckMenuItem(menu, 0x117, MF_BYCOMMAND | MF_CHECKED);
-        s.raw<std::int32_t>(0xA0D30) = 1;
-        s.raw<std::uint8_t>(0xA0188) = 1;
+        s.SelfShadowMode() = 1;
+        s.state.selfShadowCfgOrUint32 = 1;
     }
 
     if (s.FrameVolumeControlEnabled() != 0) {

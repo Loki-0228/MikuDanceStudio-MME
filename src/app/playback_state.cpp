@@ -174,8 +174,8 @@ static const Key* SeekTypedTrackEnd(Key* keys, std::uint32_t& cursor,
 }
 
 void InitGlobalTracks(MMDApp* app, float frame) {
-    app->raw<float>(776) = 0.0f;
-    app->raw<float>(780) = 0.0f;
+    app->ViewOffsetX() = 0.0f;
+    app->ViewOffsetY() = 0.0f;
 
     bool ended = false;
     app->CameraTrackActive() = 1;
@@ -304,7 +304,7 @@ void SavePlaybackUndoSnapshot(MMDApp* app, unsigned char* model) {
 void UpdateBoneFrames(MMDApp* app) {
     const float cursor = app->PlaybackCursorSeconds();
     app->SavedPlaybackPhysicsMode() = app->PlaybackPhysicsMode();
-    if (app->raw<std::uint8_t>(offsets::kByteA066D) != 0)
+    if (app->state.a066D != 0)
         app->PlaybackPhysicsMode() = 2;
 
     for (int i = 0; i < 100; ++i) {
@@ -354,19 +354,27 @@ void Sub4341E0(MMDApp* app) {
     HWND overlay = app->FloatingWindow();
     EnableRange(overlay != nullptr ? overlay : hwnd, 536, 550, TRUE);
 
-    const std::size_t saved = 650103;
-    EnableWindow(GetDlgItem(hwnd, 497), app->raw<std::uint8_t>(saved + 0));
-    EnableWindow(GetDlgItem(hwnd, 498), app->raw<std::uint8_t>(saved + 1));
-    EnableWindow(GetDlgItem(hwnd, 431), app->raw<std::uint8_t>(saved + 4));
-    EnableWindow(GetDlgItem(hwnd, 421), app->raw<std::uint8_t>(saved + 2));
-    EnableWindow(GetDlgItem(hwnd, 422), app->raw<std::uint8_t>(saved + 3));
-    EnableWindow(GetDlgItem(hwnd, 400), app->raw<std::uint8_t>(saved + 5));
-    EnableWindow(GetDlgItem(hwnd, 401), app->raw<std::uint8_t>(saved + 6));
+    // snapshot bytes saved at playback start (command_control_400.cpp):
+    // [0]=497 [1]=498 [2]=421 [3]=422 [4]=431 [5]=400 [6]=401
+    EnableWindow(GetDlgItem(hwnd, 497),
+                 app->state.playbackEnabledSnapshot[0]);
+    EnableWindow(GetDlgItem(hwnd, 498),
+                 app->state.playbackEnabledSnapshot[1]);
+    EnableWindow(GetDlgItem(hwnd, 431),
+                 app->state.playbackEnabledSnapshot[4]);
+    EnableWindow(GetDlgItem(hwnd, 421),
+                 app->state.playbackEnabledSnapshot[2]);
+    EnableWindow(GetDlgItem(hwnd, 422),
+                 app->state.playbackEnabledSnapshot[3]);
+    EnableWindow(GetDlgItem(hwnd, 400),
+                 app->state.playbackEnabledSnapshot[5]);
+    EnableWindow(GetDlgItem(hwnd, 401),
+                 app->state.playbackEnabledSnapshot[6]);
 
     const bool enable250 =
-        (app->raw<std::uint32_t>(645672) == 0 ||
+        (app->ClipboardCounts().bones == 0 ||
          app->state.optflag[0] != 0) &&
-        !(app->raw<std::uint32_t>(645700) != 0 &&
+        !(app->ClipboardCounts().accessories != 0 &&
           app->state.optflag[0] != 0);
     EnableMenuItem(GetMenu(hwnd), 250,
                    enable250 ? MF_ENABLED : MF_GRAYED);
@@ -434,7 +442,7 @@ void Sub4341E0(MMDApp* app) {
         Sub412330(app);
         app->CameraAttachmentTransformSuppressed() = 0;
         PostModelReload(app);
-        app->raw<std::uint8_t>(offsets::kByteA04B8) = 1;
+        app->state.a04B8 = 1;
     }
 
     for (int i = 0; i < 255; ++i)

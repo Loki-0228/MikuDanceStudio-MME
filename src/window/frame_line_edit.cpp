@@ -49,10 +49,6 @@ namespace mikudancestudio {
 namespace {
 
 // App-field offsets (file-local; several already in offsets.hpp).
-constexpr std::size_t kAppEditState = 0x2F8;     // kByteOptflag0
-constexpr std::size_t kAppCamKeys = 0x374;       // 84B records x 10000
-constexpr std::size_t kAppLightKeys = 0x378;     // 40B records x 10000
-constexpr std::size_t kAppFrame = 0x980;         // current frame
 
 unsigned char* ActiveModel(MMDApp* app) {
     return app->SelectedModel();
@@ -183,10 +179,9 @@ void ClearCameraKeyRecord(mdl::CameraKey& key) {
 
 // ---- VA 0x00439E40: insert frame line (bone / camera) ---------------------
 void Sub439E40(MMDApp* app) {
-    const std::uint32_t cur =
-        app->raw<std::uint32_t>(kAppFrame);
+    const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
-    if (app->raw<unsigned char>(kAppEditState) == 0) {
+    if (app->state.optflag[0] == 0) {
         // ---- bone mode: shift every non-head key at frame >= cur up one
         unsigned char* model = ActiveModel(app);
         const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
@@ -233,7 +228,7 @@ void Sub439E40(MMDApp* app) {
 
     // ---- camera mode: shift every camera key at frame >= cur up one
     // (0x439FBB..0x439FAA; only the 0x374 table moves)
-    auto* keys = *reinterpret_cast<mdl::CameraKey**>(app->at(kAppCamKeys));
+    auto* keys = app->CameraKeys();
     for (int r = 0; r < 10000; ++r) {
         mdl::CameraKey& key = keys[r];
         const std::uint32_t f = key.frame;
@@ -250,10 +245,9 @@ void Sub439E40(MMDApp* app) {
 
 // ---- VA 0x0043A650: delete frame line (bone / camera) ---------------------
 void Sub43A650(MMDApp* app) {
-    const std::uint32_t cur =
-        app->raw<std::uint32_t>(kAppFrame);
+    const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
-    if (app->raw<unsigned char>(kAppEditState) == 0) {
+    if (app->state.optflag[0] == 0) {
         // ---- bone mode
         unsigned char* model = ActiveModel(app);
         const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
@@ -360,7 +354,7 @@ void Sub43A650(MMDApp* app) {
     }
 
     // ---- camera mode (0x43A905..0x43A9B6)
-    auto* keys = *reinterpret_cast<mdl::CameraKey**>(app->at(kAppCamKeys));
+    auto* keys = app->CameraKeys();
     for (int r = 0; r < 10000; ++r) {
         mdl::CameraKey& key = keys[r];
         const std::uint32_t f = key.frame;
@@ -399,14 +393,12 @@ void Sub43A650(MMDApp* app) {
 
 // ---- VA 0x0043B720: insert frame line (facial / light) --------------------
 void Sub43B720(MMDApp* app) {
-    const std::uint32_t cur =
-        app->raw<std::uint32_t>(kAppFrame);
+    const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
-    if (app->raw<unsigned char>(kAppEditState) != 0) {
+    if (app->state.optflag[0] != 0) {
         // ---- light mode: shift every light key at frame >= cur up one
         // (0x43B72D..0x43B878; only the 0x378 table moves; no undo)
-        auto* keys = *reinterpret_cast<mdl::LightKey**>(
-            app->at(kAppLightKeys));
+        auto* keys = app->LightKeys();
         for (int r = 0; r < 10000; ++r) {
             mdl::LightKey& key = keys[r];
             const std::uint32_t f = key.frame;
@@ -446,10 +438,9 @@ void Sub43B720(MMDApp* app) {
 
 // ---- VA 0x0043BB30: delete frame line (facial / light) --------------------
 void Sub43BB30(MMDApp* app) {
-    const std::uint32_t cur =
-        app->raw<std::uint32_t>(kAppFrame);
+    const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
-    if (app->raw<unsigned char>(kAppEditState) == 0) {
+    if (app->state.optflag[0] == 0) {
         // ---- facial mode: morph keys, 0x14 stride x 20000
         unsigned char* model = ActiveModel(app);
         const std::int32_t morphCount = mdl::Mdl(model)->morphCount;
@@ -501,8 +492,7 @@ void Sub43BB30(MMDApp* app) {
     }
 
     // ---- light mode: 40B records x 10000 (0x43BC64..0x43BC88)
-    auto* keys = *reinterpret_cast<mdl::LightKey**>(
-        app->at(kAppLightKeys));
+    auto* keys = app->LightKeys();
     for (int r = 0; r < 10000; ++r) {
         mdl::LightKey& key = keys[r];
         const std::uint32_t f = key.frame;

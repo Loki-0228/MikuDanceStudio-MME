@@ -79,17 +79,23 @@ inline void DumpFrameEntryState(MMDApp* app,
         std::fprintf(stream, "    \"%06X.f32_bits\": \"%08X\"",
                      unsigned(offset), bits(offset));
     }
-    const std::int32_t* rect = &app->raw<std::int32_t>(0xA0D40);
+    const std::int32_t* rect =
+        reinterpret_cast<const std::int32_t*>(&app->ViewportRect());
     comma();
     std::fprintf(stream, "    \"0A0D40.rect\": [%d, %d, %d, %d]",
                  rect[0], rect[1], rect[2], rect[3]);
     comma();
     std::fprintf(stream, "    \"0A0D38.hwnd\": \"%08X\"",
-                 bits(0xA0D38));
+                 static_cast<unsigned>(reinterpret_cast<std::uintptr_t>(
+                     app->FloatingWindow())));
     comma();
-    std::fprintf(stream, "    \"0A06B8.hwnd\": \"%08X\"", bits(0xA06B8));
-    const auto* modelDisplayClipboard = app->raw<unsigned char*>(0x35C);
-    const int modelDisplayClipboardCount = i32(0x9DA30);
+    std::fprintf(stream, "    \"0A06B8.hwnd\": \"%08X\"",
+                 static_cast<unsigned>(reinterpret_cast<std::uintptr_t>(
+                     app->Hwnd())));
+    const auto* modelDisplayClipboard =
+        reinterpret_cast<const unsigned char*>(app->DisplayClipboard());
+    const int modelDisplayClipboardCount =
+        static_cast<int>(app->ClipboardCounts().displays);
     comma();
     std::fprintf(stream,
                  "    \"clipboard.model_display.ptr\": \"%08X\"",
@@ -120,7 +126,7 @@ inline void DumpFrameEntryState(MMDApp* app,
     std::fputc(']', stream);
     RECT mainClient{};
     RECT mainWindow{};
-    const HWND mainHwnd = app->raw<HWND>(0xA06B8);
+    const HWND mainHwnd = static_cast<HWND>(app->Hwnd());
     GetClientRect(mainHwnd, &mainClient);
     GetWindowRect(mainHwnd, &mainWindow);
     comma();
@@ -175,7 +181,7 @@ inline void DumpFrameEntryState(MMDApp* app,
 
     bool firstModel = true;
     for (unsigned slot = 0; slot < 100; ++slot) {
-        auto* model = app->raw<unsigned char*>(0x780 + 4 * slot);
+        unsigned char* model = app->ModelSlot(slot);
         if (model == nullptr)
             continue;
         if (!firstModel) std::fputc(',', stream);

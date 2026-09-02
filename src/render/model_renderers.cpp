@@ -1287,8 +1287,8 @@ void DrawPreModelQuads(MMDApp* app, IDirect3DDevice9* device) {
 bool EffectRenderEnabled(const MMDApp* app) {
     const bool cameraGate = app->PlaybackActive() != 0 ||
         app->UsesViewportTool();
-    return cameraGate && app->raw<std::int32_t>(0xA0D30) > 0 &&
-           app->raw<std::uint8_t>(0xA0188) != 0;
+    return cameraGate && app->state.selfShadowMode > 0 &&    // 0xA0D30
+           app->state.selfShadowCfgOrUint32 != 0;            // 0xA0188
 }
 
 void RestoreTextureStages(IDirect3DDevice9* device) {
@@ -1404,7 +1404,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     d3dx::Get().vec3Normalize(light, light);
     light[3] = 1.0f;
     Matrix inverse;
-    float target[3] = {app->raw<float>(776), app->raw<float>(780),
+    float target[3] = {app->ViewOffsetX(), app->ViewOffsetY(),
                        app->CameraDistance()};
     float place[4] = {};
     d3dx::Get().inverse(&inverse, nullptr, &frame);
@@ -1417,7 +1417,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
                 reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
     FxSetMatrix(effect, "matRotate",
                 reinterpret_cast<const Matrix*>(app->at(657012)));
-    FxSetInt(effect, "transp", app->raw<std::uint8_t>(650110) != 0);
+    FxSetInt(effect, "transp", app->state.v9eb7e != 0);
     device->SetTexture(0, sub->hdrTexture);
     device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     device->SetRenderState(D3DRS_FILLMODE,
@@ -1525,7 +1525,7 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
     D3DVIEWPORT9 shadowViewport{0, 0, width, height, 0.0f, 1.0f};
     device->SetViewport(&shadowViewport);
 
-    float target[3] = {app->raw<float>(776), app->raw<float>(780),
+    float target[3] = {app->ViewOffsetX(), app->ViewOffsetY(),
                        app->CameraDistance()};
     const D3DVECTOR& lightDirection = app->SceneLight().Direction;
     float eye[3] = {

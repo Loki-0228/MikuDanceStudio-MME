@@ -400,26 +400,26 @@ void HandleWindowPaint(MMDApp* app) {
         FrameDriver(app);                                         // 0x46B090
 
     // bone-list scrollbar refresh (SCROLLINFO embedded at this+2372)
-    app->raw<std::int32_t>(offsets::kDwordScrollCb) = 28;
-    app->raw<std::int32_t>(offsets::kDwordScrollFmask) = 7;        // SIF_ALL
-    app->raw<std::int32_t>(offsets::kDwordScrollNmin) = 0;
+    app->state.scrollCbSize = 28;
+    app->state.scrollFMask = 7;        // SIF_ALL
+    app->state.scrollNMin = 0;
     if (app->state.optflag[0] == 0) {
         unsigned char* model = app->SelectedModel();
-        app->raw<std::int32_t>(offsets::kDwordScrollNmax) =
+        app->state.scrollNMax =
             mikudancestudio::mdl::Mdl(model)->boneListRows - 3;
-        app->raw<std::int32_t>(offsets::kDwordScrollNpos) =
+        app->state.scrollNPos =
             mikudancestudio::mdl::Mdl(model)->boneListPos;
     } else {
-        app->raw<std::int32_t>(offsets::kDwordScrollNmax) =
+        app->state.scrollNMax =
             app->DisplayObjectListMatchCount() - 2;
-        app->raw<std::int32_t>(offsets::kDwordScrollNpos) =
+        app->state.scrollNPos =
             app->DisplayObjectListScrollPosition();
     }
     const int page = (rc.bottom - 398) / 14 - 1;
-    app->raw<std::int32_t>(offsets::kDwordScrollNmax) += page;
-    app->raw<std::int32_t>(offsets::kDwordScrollNpage) = page;
+    app->state.scrollNMax += page;
+    app->state.scrollNPage = page;
     SetScrollInfo(GetDlgItem(hwnd, 427), SB_CTL,
-                  reinterpret_cast<SCROLLINFO*>(app->at(2372)), TRUE);
+                  reinterpret_cast<SCROLLINFO*>(&app->state.scrollCbSize), TRUE);
 }
 
 }  // namespace mikudancestudio

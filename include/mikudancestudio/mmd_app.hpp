@@ -1309,6 +1309,13 @@ public:
         default: return state.a03D8;
         }
     }
+    std::int32_t& FrameRangeStartFrame() {
+#if defined(_M_X64)
+        return m_frameRangeStartFrame;
+#else
+        return state.frameRangeStartFrame;  // 0xA08F0
+#endif
+    }
     WINDOWPLACEMENT& SavedPlacement() {
 #if defined(_M_X64)
         return m_savedPlacement;
@@ -1396,6 +1403,7 @@ private:
     void* m_oniExportSlot2 = nullptr;
     void* m_oniExportSlot4 = nullptr;
     WINDOWPLACEMENT m_savedPlacement{};
+    std::int32_t m_frameRangeStartFrame = 0;
 
     // This scratch workspace is 3,536 bytes in the original x86 state.  The
     // provisional x64 blob reserves only 3,240 bytes before the next live

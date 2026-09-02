@@ -16,7 +16,6 @@
 #include <cmath>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 
@@ -85,7 +84,7 @@ void TraceSceneLightState(MMDApp* app, const char* stage) {
 void Sub411070(MMDApp* app) {
     if (app == nullptr)
         return;
-    std::uint32_t* keys = app->raw<std::uint32_t*>(0x378);
+    std::uint32_t* keys = reinterpret_cast<std::uint32_t*>(app->LightKeys());
     if (keys == nullptr)
         return;
 
@@ -155,7 +154,7 @@ void Sub411070(MMDApp* app) {
 void Sub411B90(MMDApp* app) {
     if (app == nullptr)
         return;
-    std::uint32_t* keys = app->raw<std::uint32_t*>(0x37C);
+    std::uint32_t* keys = reinterpret_cast<std::uint32_t*>(app->ShadowKeys());
     if (keys == nullptr)
         return;
 
@@ -165,13 +164,13 @@ void Sub411B90(MMDApp* app) {
     if (record[0] != frame)
         record = keys + record[1] * 6;
 
-    app->raw<std::int32_t>(0xA0D30) =
+    app->SelfShadowMode() =
         static_cast<std::int8_t>(reinterpret_cast<const std::uint8_t*>(record)[12]);
-    app->raw<float>(0xA0D2C) =
+    app->state.physicsInterval =
         *reinterpret_cast<const float*>(record + 4);
 
     const double rawRange =
-        10000.0 - static_cast<double>(app->raw<float>(0xA0D2C)) * 100000.0;
+        10000.0 - static_cast<double>(app->state.physicsInterval) * 100000.0;
     int range = static_cast<int>(rawRange);
     if (rawRange - static_cast<double>(range) >= 0.5)
         ++range;
@@ -182,7 +181,7 @@ void Sub411B90(MMDApp* app) {
     sprintf_s(text, sizeof(text), "%d", range);
     SetWindowTextA(GetDlgItem(main, 561), text);
 
-    const int mode = app->raw<std::int32_t>(0xA0D30);
+    const int mode = app->SelfShadowMode();
     SendMessageA(GetDlgItem(main, 562), BM_SETCHECK,
                  mode == 0 ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageA(GetDlgItem(main, 563), BM_SETCHECK,
@@ -194,7 +193,7 @@ void Sub411B90(MMDApp* app) {
 void Sub4134E0(MMDApp* app) {
     if (app == nullptr)
         return;
-    const std::uint8_t selected = app->raw<std::uint8_t>(0x9E170);
+    const std::uint8_t selected = app->state.selLightAccSlotOrUint32;
     mdl::AccessoryRecord* accessory = app->AccessorySlot(selected);
     if (accessory == nullptr)
         return;
@@ -286,7 +285,7 @@ void Sub4134E0(MMDApp* app) {
 void Sub411DF0(MMDApp* app, int frameValue) {
     if (app == nullptr || frameValue < 0)
         return;
-    std::uint32_t* keys = app->raw<std::uint32_t*>(0x37C);
+    std::uint32_t* keys = reinterpret_cast<std::uint32_t*>(app->ShadowKeys());
     if (keys == nullptr)
         return;
     const std::uint32_t frame = static_cast<std::uint32_t>(frameValue);
@@ -295,9 +294,9 @@ void Sub411DF0(MMDApp* app, int frameValue) {
 
     if (currentRecord[0] == frame) {
         reinterpret_cast<std::uint8_t*>(currentRecord)[12] =
-            static_cast<std::uint8_t>(app->raw<std::int32_t>(0xA0D30));
+            static_cast<std::uint8_t>(app->SelfShadowMode());
         *reinterpret_cast<float*>(currentRecord + 4) =
-            app->raw<float>(0xA0D2C);
+            app->state.physicsInterval;
         reinterpret_cast<std::uint8_t*>(currentRecord)[20] = 1;
         return;
     }
@@ -328,8 +327,8 @@ void Sub411DF0(MMDApp* app, int frameValue) {
     }
     added[0] = frame;
     reinterpret_cast<std::uint8_t*>(added)[12] =
-        static_cast<std::uint8_t>(app->raw<std::int32_t>(0xA0D30));
-    *reinterpret_cast<float*>(added + 4) = app->raw<float>(0xA0D2C);
+        static_cast<std::uint8_t>(app->SelfShadowMode());
+    *reinterpret_cast<float*>(added + 4) = app->state.physicsInterval;
     reinterpret_cast<std::uint8_t*>(added)[20] = 1;
     if (frame > app->state.lastRegisteredFrame)
         app->state.lastRegisteredFrame = frame;

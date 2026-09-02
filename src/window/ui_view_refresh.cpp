@@ -227,12 +227,12 @@ void PostViewRefresh(MMDApp* app) {
 
     float rz = static_cast<float>(std::atan2(static_cast<double>(m12),
                                              static_cast<double>(m22)));
-    app->raw<float>(0xA04C8) = rz;                      // 0x40D658 (0xA04C8)
+    app->BoneRotationEditDegreesZ() = rz;               // 0x40D658 (0xA04C8)
     float rx = static_cast<float>(std::asin(-static_cast<double>(m32)));
-    app->raw<float>(0xA04C0) = rx;                      // 0x40D671 (0xA04C0)
+    app->BoneRotationEditDegreesX() = rx;               // 0x40D671 (0xA04C0)
     float ry = static_cast<float>(std::atan2(static_cast<double>(m31),
                                              static_cast<double>(m33)));
-    app->raw<float>(0xA04C4) = ry;                      // 0x40D68C (0xA04C4)
+    app->BoneRotationEditDegreesY() = ry;               // 0x40D68C (0xA04C4)
     float c = static_cast<float>(std::cos(static_cast<double>(rx)));
 
     if (std::fabs(static_cast<double>(c)) < 1e-6f) {    // 0x40D6AD flt_52B740
@@ -257,22 +257,22 @@ void PostViewRefresh(MMDApp* app) {
     rx = static_cast<float>(static_cast<double>(rx) / 3.141592f * 180.0f);
     ry = static_cast<float>(-static_cast<double>(ry) / 3.141592f * 180.0f);
     rz = static_cast<float>(180.0f * (-static_cast<double>(rz) / 3.141592f));
-    app->raw<float>(0xA04C0) = rx;                      // 0x40D797 (fst)
-    app->raw<float>(0xA04C4) = ry;                      // 0x40D7A9
-    app->raw<float>(0xA04C8) = rz;                      // 0x40D7BF
+    app->BoneRotationEditDegreesX() = rx;               // 0x40D797 (fst)
+    app->BoneRotationEditDegreesY() = ry;               // 0x40D7A9
+    app->BoneRotationEditDegreesZ() = rz;               // 0x40D7BF
 
     // Readouts; the original reloads this+0xA04C4/0xA04C8 from the object.
-    float d = app->raw<float>(0xA04C0);
+    float d = app->BoneRotationEditDegreesX();
     if (std::fabs(static_cast<double>(d)) < 1e-7f)      // 0x40D7D7 dbl_52B758
         d = 0.0f;
     sprintf_s(text, 0x100, "%1.1f", static_cast<double>(d));
     SetWindowTextA(GetDlgItem(hwnd, 0x223), text);
-    d = app->raw<float>(0xA04C4);
+    d = app->BoneRotationEditDegreesY();
     if (std::fabs(static_cast<double>(d)) < 1e-7f)
         d = 0.0f;
     sprintf_s(text, 0x100, "%1.1f", static_cast<double>(d));
     SetWindowTextA(GetDlgItem(hwnd, 0x224), text);
-    d = app->raw<float>(0xA04C8);
+    d = app->BoneRotationEditDegreesZ();
     if (std::fabs(static_cast<double>(d)) < 1e-7f)
         d = 0.0f;
     sprintf_s(text, 0x100, "%1.1f", static_cast<double>(d));

@@ -286,7 +286,11 @@ struct MMDAppState {
     std::int32_t rowHitBand2[200];  // x64 pin 486804
     std::int32_t rowHitBand3[200];  // x64 pin 487604
     std::int32_t rowHitAcc[800];  // x64 pin 488404
-    RawPad<156805> pad95;
+    RawPad<156800> pad95;
+    // 0x9DA04..0x9DA0A: interp-curve editor panel state (uniform-curve
+    // found flag + the cached control-point pair, y as 127-complement)
+    unsigned char interpCurveUniformFound;     // +0x9DA04
+    unsigned char interpCurveControlCache[4];  // +0x9DA05..09
     unsigned char pendingTimelineSelectionRow;
     unsigned char lightA[6];
     unsigned char lightB[6];
@@ -693,7 +697,7 @@ struct MMDAppState {
     float modelOffsetY;
     float modelOffsetZ;
 #ifndef _M_X64
-    RawPad<4> pad342;
+    std::int32_t frameRangeStartFrame;  // +0xA08F0 frame-range dialog start
     std::int32_t morphFrameShift;  // menu 225 morph-frame cleanup shift
     std::int32_t blinkStartFrame;  // menu 227 blink register range start
     std::int32_t blinkEndFrame;    // menu 227 blink register range end
@@ -1133,6 +1137,10 @@ static_assert(offsetof(MMDAppState, rowHitBand3) == 484836,
               "rowHitBand3 x86");
 static_assert(offsetof(MMDAppState, rowHitAcc) == 485636,
               "rowHitAcc x86");
+static_assert(offsetof(MMDAppState, interpCurveUniformFound) == 645636,
+              "interpCurveUniformFound x86");
+static_assert(offsetof(MMDAppState, interpCurveControlCache) == 645637,
+              "interpCurveControlCache x86");
 static_assert(offsetof(MMDAppState, pendingTimelineSelectionRow) == 645641,
               "pendingTimelineSelectionRow x86");
 static_assert(offsetof(MMDAppState, lightA) == 645642,

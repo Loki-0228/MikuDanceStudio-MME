@@ -104,14 +104,9 @@ inline void FreeField(unsigned char* base, std::size_t off) {
     }
 }
 
-inline void ReleaseAppField(MMDApp& app, std::size_t x86Offset) {
-    void*& field = app.raw<void*>(x86Offset);
-    if (field != nullptr) {
-        reinterpret_cast<IUnknown*>(field)->Release();
-        field = nullptr;
-    }
-}
-
+// The one remaining offset-only teardown slot (0x350 / state.v350, a
+// 4-byte blob member with no x64-safe pointer accessor yet) still goes
+// through raw<T>() here; every other field below uses named accessors.
 inline void FreeAppField(MMDApp& app, std::size_t x86Offset) {
     void*& field = app.raw<void*>(x86Offset);
     if (field != nullptr) {
@@ -150,16 +145,6 @@ void ReleaseRecorderCom(ComSlot& slot) {
         slot = nullptr;
     }
 }
-
-// ---- app-field offsets not yet registered in offsets.hpp ------------------
-// (reusing the offsets.hpp decimal naming so they can be moved verbatim)
-constexpr std::size_t kDword354 = 852;      // 0x354 // 0 free slot (ShutdownCleanup)
-constexpr std::size_t kDword358 = 856;      // 0x358 // 0 free slot
-constexpr std::size_t kDword360 = 864;      // 0x360 // 0 free slot
-constexpr std::size_t kDword364 = 868;      // 0x364 // 0 free slot
-constexpr std::size_t kDword368 = 872;      // 0x368 // 0 free slot
-constexpr std::size_t kDword36C = 876;      // 0x36C // 0 free slot
-constexpr std::size_t kDword370 = 880;      // 0x370 // 0 free slot
 
 // ===========================================================================
 // VA 0x00409320 - TeardownDShowGraph and 0x004096C0 -
@@ -444,12 +429,12 @@ void ShutdownCleanup(MMDApp* app) {
     // ---- 1/2: flag-gated callback + module unload ------------------------
     if (s.state.depthDeviceEnabled != 0) {        // 0x462C6F
         reinterpret_cast<void(*)()>(
-            s.raw<void*>(offsets::kDwordA03C4))();              // 0x462C81
+            s.state.a03C4)();                                   // 0x462C81
         s.state.depthDeviceEnabled = 0;
     }
-    if (HMODULE mod = s.raw<HMODULE>(offsets::kDwordA03BC)) {   // 0x462C89
+    if (HMODULE mod = s.state.a03BC) {                          // 0x462C89
         FreeLibrary(mod);                                       // 0x462C94
-        s.raw<HMODULE>(offsets::kDwordA03BC) = nullptr;
+        s.state.a03BC = nullptr;
     }
 
     // ---- 3/4: capture graph + separate ("Mic") window --------------------
@@ -469,17 +454,17 @@ void ShutdownCleanup(MMDApp* app) {
         AVIFileRelease(                                         // 0x462CED
             static_cast<PAVIFILE>(s.AviFile()));
     AVIFileExit();                                              // 0x462CF2
-    DrawDibClose(s.raw<HDRAWDIB>(offsets::kDword9e3ec));        // 0x462CFE
+    DrawDibClose(static_cast<HDRAWDIB>(s.AviDrawDib()));        // 0x462CFE
 
     // ---- 6: toon texture slots and the first Release() run ---------------
     ::operator delete(s.CaptureReadbackPixels());               // 0x462D0E
     s.CaptureReadbackPixels() = nullptr;
     ReleaseSlot(s.LeftViewportVertices());                     // 0x462D2C
     ReleaseSlot(s.RightViewportVertices());                    // 0x462D44
-    ReleaseAppField(s, offsets::kDword9F128);                   // 0x462D5C
+    ReleaseSlot(s.GroundPlaneVertices());                       // 0x462D5C
     for (int i = 0; i < 11; ++i)                                // 0x462D64
         ReleaseSlot(s.ToonTexture(i));                          // 0x462D7C
-    ReleaseAppField(s, offsets::kDword9F130);                   // 0x462D98
+    ReleaseSlot(s.ProjectedShadowRestoreTexture());             // 0x462D98
 
     // ---- 7: accessory-record base + misc frees ----------------------------
     delete s.RecordingCompletionFlag();                         // 0x462DAB
@@ -490,10 +475,10 @@ void ShutdownCleanup(MMDApp* app) {
     }
 
     // ---- 8: render-side and AVI-config Release() run ----------------------
-    ReleaseAppField(s, offsets::kDword304);                     // 0x462DE2
-    ReleaseAppField(s, offsets::kDword300);                     // 0x462DFA
+    ReleaseSlot(s.GroundGridIndices());                         // 0x462DE2
+    ReleaseSlot(s.GroundGridVertices());                        // 0x462DFA
     ReleaseSlot(s.OverlayVertices());                           // 0x462E12
-    ReleaseAppField(s, offsets::kDword9EE0C);                   // 0x462E2A
+    ReleaseSlot(s.SpriteOverlayVertices());                     // 0x462E2A
     ReleaseSlot(s.SceneFontTexture());                          // 0x462E42
     ReleaseSlot(s.OverlayTexture());                            // 0x462E5A
     ReleaseSlot(s.CaptureRenderTarget());                       // 0x462E72
@@ -546,7 +531,8 @@ void ShutdownCleanup(MMDApp* app) {
     // ---- 12: clipboard arrays and singles ----------------------------------
     mdl::DisplayClipboardRecord*& displayRecords = s.DisplayClipboard();
     if (displayRecords != nullptr) {
-        std::int32_t nRec = s.raw<std::int32_t>(offsets::kDword9DA30);
+        std::int32_t nRec =
+            static_cast<std::int32_t>(s.ClipboardCounts().displays);
         if (nRec > 0) {                                         // 0x46300E
             for (std::int32_t k = 0; k < nRec; ++k) {           // 0x46306E
                 std::free(displayRecords[k].ikStates);          // 0x46302F
@@ -572,6 +558,8 @@ void ShutdownCleanup(MMDApp* app) {
     s.AccessoryClipboard() = nullptr;
     std::free(s.BoneClipboard());                               // 0x46312A
     s.BoneClipboard() = nullptr;
+    // 0x350 is the last blob-only clipboard slot (state.v350): no named
+    // accessor exists, so the raw-offset helper stays for this one call.
     FreeAppField(s, offsets::kDword350);                        // 0x463143
 
     // ---- 13: selection-record buffers -------------------------------------

@@ -122,13 +122,6 @@
 
 namespace mikudancestudio {
 
-// ---------------------------------------------------------------------------
-// App-state offsets used by this family but not yet registered in
-// offsets.hpp (kept file-local until gen_offsets.py catches up).
-// ---------------------------------------------------------------------------
-constexpr std::size_t kOff350 = 0x350;      // bone-copy record array pointer
-constexpr std::size_t kOff9E170 = 0x9E170;  // selected accessory slot index
-
 struct BoneCopyRecord {
     char name[20];
     float position[3];
@@ -548,11 +541,11 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             }
         }
         if (firstFree == 0x100) {
-            app->raw<std::uint8_t>(kOff9E170) = 0;
+            app->state.selLightAccSlotOrUint32 = 0;
             SendMessageA(GetDlgItem(hwnd, 0x1DA), 0x14E /*CB_SETCURSEL*/, -1, 0);
         } else {
             SendMessageA(GetDlgItem(hwnd, 0x1D7), 0x14E /*CB_SETCURSEL*/, 0, 0);
-            app->raw<std::uint8_t>(kOff9E170) =
+            app->state.selLightAccSlotOrUint32 =
                 static_cast<std::uint8_t>(firstFree);
             Sub4134E0(app);
         }
@@ -584,7 +577,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // BM_SETCHECK into checkbox 0x1DC, Refresh(byte 0x9E170).
     // ------------------------------------------------------------------
     case 476: {
-        const std::uint8_t idx = app->raw<std::uint8_t>(kOff9E170);
+        const std::uint8_t idx = app->state.selLightAccSlotOrUint32;
         mdl::AccessoryRecord* acc = app->AccessorySlot(idx);
         if (acc == nullptr) {
             break;
@@ -606,7 +599,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // default note) - equivalent to break here.
     // ------------------------------------------------------------------
     case 477: {
-        const std::uint8_t idx = app->raw<std::uint8_t>(kOff9E170);
+        const std::uint8_t idx = app->state.selLightAccSlotOrUint32;
         mdl::AccessoryRecord* acc = app->AccessorySlot(idx);
         if (acc == nullptr) {
             break;
@@ -620,7 +613,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // BM_SETCHECK into checkbox 0x1E6, Refresh(byte 0x9E170).
     // ------------------------------------------------------------------
     case 486: {
-        const std::uint8_t idx = app->raw<std::uint8_t>(kOff9E170);
+        const std::uint8_t idx = app->state.selLightAccSlotOrUint32;
         mdl::AccessoryRecord* acc = app->AccessorySlot(idx);
         if (acc == nullptr) {
             break;
@@ -646,7 +639,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             Sub463640(app, GetDlgItem(hwnd, ctl));
         }
         app->SceneModified() = 1;
-        const std::uint8_t idx = app->raw<std::uint8_t>(kOff9E170);
+        const std::uint8_t idx = app->state.selLightAccSlotOrUint32;
         if (app->AccessorySlot(idx) == nullptr) {
             break;
         }
@@ -896,9 +889,13 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         EnableWindow(GetDlgItem(hwnd, 0x1F1), TRUE);
         EnableWindow(GetDlgItem(hwnd, 0x1F2), TRUE);
         app->state.v9da24[0] = count;
-        if (app->raw<void*>(kOff350) != nullptr) {
-            free(app->raw<void*>(kOff350));
-            app->raw<void*>(kOff350) = nullptr;
+        // app+0x350 = state.v350: 4-byte blob slot holding the x86
+        // bone-copy record array pointer (0x350..0x380 clipboard/track
+        // pointer cluster - deferred to the final layout flip).
+        auto& records = reinterpret_cast<BoneCopyRecord*&>(app->state.v350);
+        if (records != nullptr) {
+            free(records);
+            records = nullptr;
         }
         auto* block = static_cast<BoneCopyRecord*>(::operator new(
             MulOrMax(static_cast<std::uint32_t>(count),
@@ -908,7 +905,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                       static_cast<std::uint32_t>(count),
                       &Sub4C46F0);
         }
-        app->raw<BoneCopyRecord*>(kOff350) = block;
+        records = block;
         memset(block, 0,
                static_cast<std::size_t>(count) * sizeof(BoneCopyRecord));
         app->state.v9da24[0] = 0;  // fill cursor
@@ -922,7 +919,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             if (sel[i] == 0) {
                 continue;
             }
-            BoneCopyRecord& rec = app->raw<BoneCopyRecord*>(kOff350)[cursor];
+            BoneCopyRecord& rec = records[cursor];
             strcpy_s(rec.name, bones[i].name);
             memcpy(rec.position, bones[i].trans, sizeof rec.position);
             memcpy(rec.rotation, bones[i].rotQuat, sizeof rec.rotation);
@@ -985,6 +982,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             pasteBlob);
         memset(pasteBlob, 0, static_cast<std::size_t>(count) * 0x24u);
 
+        auto& records = reinterpret_cast<BoneCopyRecord*&>(app->state.v350);
         for (std::int32_t j = 0; j < count; ++j) {
             model = ActiveModel(app);
             modelRecord = mikudancestudio::mdl::Mdl(model);
@@ -992,7 +990,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             sel = modelRecord->boneSelection;
             mikudancestudio::mdl::BoneRecord* const bones = modelRecord->boneTable;
             unsigned char* frameFlag = modelRecord->bonePhysicsState;
-            const BoneCopyRecord& src = app->raw<BoneCopyRecord*>(kOff350)[j];
+            const BoneCopyRecord& src = records[j];
             // exact name match (the original's inline 2-byte-step compare
             // is byte-identical to strcmp)
             std::int32_t found = -1;
@@ -1079,6 +1077,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             pasteBlob);
         memset(pasteBlob, 0, static_cast<std::size_t>(count) * 0x24u);
 
+        auto& records = reinterpret_cast<BoneCopyRecord*&>(app->state.v350);
         for (std::int32_t j = 0; j < count; ++j) {
             model = ActiveModel(app);
             modelRecord = mikudancestudio::mdl::Mdl(model);
@@ -1086,7 +1085,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             sel = modelRecord->boneSelection;
             mikudancestudio::mdl::BoneRecord* const bones = modelRecord->boneTable;
             unsigned char* frameFlag = modelRecord->bonePhysicsState;
-            const BoneCopyRecord& src = app->raw<BoneCopyRecord*>(kOff350)[j];
+            const BoneCopyRecord& src = records[j];
             // step 1: exact name match -> k1
             std::int32_t k1 = -1;
             for (std::int32_t k = 0; k < nBones; ++k) {

@@ -65,11 +65,11 @@ void DrawControlPoints(MMDApp* app, const Curve& curve) {  // 0x416090
     HPEN pen = CreatePen(PS_SOLID, 2, 0x000000FFu);
     HGDIOBJ oldPen = SelectObject(dc, pen);
 
-    app->raw<std::uint8_t>(645637) = static_cast<std::uint8_t>(curve.x1);
-    app->raw<std::uint8_t>(645638) =
+    app->state.interpCurveControlCache[0] = static_cast<std::uint8_t>(curve.x1);
+    app->state.interpCurveControlCache[1] =
         static_cast<std::uint8_t>(127 - curve.y1);
-    app->raw<std::uint8_t>(645639) = static_cast<std::uint8_t>(curve.x2);
-    app->raw<std::uint8_t>(645640) =
+    app->state.interpCurveControlCache[2] = static_cast<std::uint8_t>(curve.x2);
+    app->state.interpCurveControlCache[3] =
         static_cast<std::uint8_t>(127 - curve.y2);
 
     MoveToEx(dc, curve.x1 - 3, 124 - curve.y1, nullptr);
@@ -160,13 +160,14 @@ void Sub416280(MMDApp* app) {
         GetDlgItem(window, 433), CB_GETCURSEL, 0, 0));
 
     if (app->state.optflag[0] != 0) {   // 0x416337
-        unsigned char* records = app->raw<unsigned char*>(0x374);
+        unsigned char* records =
+            reinterpret_cast<unsigned char*>(app->CameraKeys());
         if (records != nullptr) {
             for (int off = 0; off < 840000; off += 84) {
                 if (records[off + 72] == 0)
                     continue;
                 const std::uint8_t mode =
-                    app->raw<std::uint8_t>(645641);
+                    app->state.pendingTimelineSelectionRow;
                 if (mode == 1) {
                     unsigned char* base;
                     if (selected >= 6) {                         // 0x416397
@@ -219,7 +220,7 @@ void Sub416280(MMDApp* app) {
                 if (record.allocated == 0)
                     continue;
                 const std::uint8_t mode =
-                    app->raw<std::uint8_t>(645641);
+                    app->state.pendingTimelineSelectionRow;
                 if (mode == 1) {
                     int channel;
                     if (selected >= 4) {                         // 0x4165C7
@@ -277,7 +278,7 @@ void Sub416280(MMDApp* app) {
 }
 
 void SelectionReeval(MMDApp* app) {  // 0x430510
-    app->raw<std::uint8_t>(645636) = 0;
+    app->state.interpCurveUniformFound = 0;
     HDC dc = app->CurveDC();
     HPEN whitePen = CreatePen(PS_SOLID, 1, 0x00FFFFFFu);
     HBRUSH whiteBrush = CreateSolidBrush(0x00FFFFFFu);
@@ -297,7 +298,8 @@ void SelectionReeval(MMDApp* app) {  // 0x430510
     Curve baseline{};
 
     if (app->state.optflag[0] != 0) {
-        unsigned char* records = app->raw<unsigned char*>(0x374);
+        unsigned char* records =
+            reinterpret_cast<unsigned char*>(app->CameraKeys());
         if (records != nullptr) {
             for (int index = 0; index < 10000; ++index) {
                 const unsigned char* record = records + 84 * index;
@@ -343,13 +345,15 @@ void SelectionReeval(MMDApp* app) {  // 0x430510
     }
 
     if (found && uniform) {
-        app->raw<std::uint8_t>(645636) = 1;
+        app->state.interpCurveUniformFound = 1;
         DrawControlPoints(app, baseline);
     }
     EnableWindow(GetDlgItem(window, 430), uniform ? TRUE : FALSE);
     EnableWindow(GetDlgItem(window, 432), found ? TRUE : FALSE);
     EnableWindow(GetDlgItem(window, 431),
-        found && app->raw<std::int8_t>(645642) >= 0 ? TRUE : FALSE);
+        found &&
+            reinterpret_cast<const std::int8_t&>(app->state.lightA[0]) >= 0
+            ? TRUE : FALSE);
 
     RECT client{};
     GetClientRect(window, &client);

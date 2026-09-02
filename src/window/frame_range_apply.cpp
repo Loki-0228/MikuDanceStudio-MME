@@ -50,11 +50,6 @@ T& At(unsigned char* base, std::size_t offset) {
     return *reinterpret_cast<T*>(base + offset);
 }
 
-unsigned char* ActiveModel(MMDApp* app) {
-    const unsigned slot = app->raw<std::uint8_t>(0x910);
-    return app->raw<unsigned char*>(0x780 + 4 * slot);
-}
-
 std::uint32_t ScaledRelativeFrame(std::uint32_t frame,
                                   std::uint32_t start,
                                   std::uint32_t end,
@@ -152,8 +147,7 @@ void ScaleBoneKeys(MMDApp* app, unsigned char* model, HWND hDlg,
     // snapshot before the registrar starts touching the new records.
     Sub4316B0(app);
     TraceRange("bone.deleted");
-    BeginRangeScaleBoneUndo(model,
-                            app->raw<std::int32_t>(0x980), count);
+    BeginRangeScaleBoneUndo(model, app->CurrentFrame(), count);
     TraceRange("bone.undo_open");
     Sub4A4940(model);
     for (auto& copy : copies) {
@@ -304,7 +298,7 @@ void Sub43E970(HWND hDlg) {
     MMDApp* const app = g_Block;
     if (app == nullptr)
         return;
-    unsigned char* const model = ActiveModel(app);
+    unsigned char* const model = app->SelectedModel();
     if (model == nullptr)
         return;
 
@@ -318,7 +312,8 @@ void Sub43E970(HWND hDlg) {
     if (endSigned - startSigned <= 0)
         return;
 
-    app->raw<std::int32_t>(0xA08F0) = startSigned;
+    // (between modelOffsetZ and morphFrameShift), no state member yet.
+    app->FrameRangeStartFrame() = startSigned;
     GetWindowTextA(GetDlgItem(hDlg, 605), text, 8);
     const double scale = std::atof(text);
     TraceRange("scale_x1000", static_cast<int>(scale * 1000.0));
@@ -334,13 +329,13 @@ void Sub43E970(HWND hDlg) {
     TraceRange("families_done");
 
     const std::uint32_t modelMax = mdl::Mdl(model)->maxFrame;
-    if (app->raw<std::uint32_t>(0x9E16C) < modelMax)
-        app->raw<std::uint32_t>(0x9E16C) = modelMax;
-    Sub4B4260(model, app->raw<std::int32_t>(0x980),
-              app->raw<std::int32_t>(0xA0CC4));
+    if (app->LastRegisteredFrame() < modelMax)
+        app->LastRegisteredFrame() = modelMax;
+    Sub4B4260(model, app->CurrentFrame(),
+              app->PlaybackPhysicsMode());
     PanelPaint(app);
     SelectionReeval(app);
-    app->raw<std::uint8_t>(0xA0B0D) = 1;
+    app->SceneModified() = 1;
     TraceRange("done");
 }
 

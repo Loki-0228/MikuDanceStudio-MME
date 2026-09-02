@@ -116,22 +116,11 @@ constexpr std::size_t kModelBoneLink = 0x2DBC;  // bone link value (int)
 constexpr std::size_t kModelListLen = 0x31B0;   // list length (scroll nMax)
 constexpr std::size_t kModelZeroIk = 0x3900;    // IK index allowed a zero link
 
-// --- app offsets not yet named in offsets.hpp -----------------------------
-constexpr std::size_t kHbitmapPanel = 0x2DC;    // panel back-store bitmap
-constexpr std::size_t kHbitmapSheet = 0x2F0;    // 11x11 icon sheet bitmap
-constexpr std::size_t kPtrBand0List = 0x374;    // 84-byte band list ptr
-constexpr std::size_t kPtrBand1List = 0x378;    // 40-byte band list ptr
-constexpr std::size_t kPtrBand2List = 0x37C;    // 24-byte band list ptr
-constexpr std::size_t kPtrBand3List = 0x380;    // 36-byte band list ptr
-constexpr std::size_t kScrollInfo2 = 0x960;     // SCROLLINFO for control 428
-constexpr std::size_t kIdxAccBands = 0x9DA50;   // accessory band index array
-// (0x414DB1 `lea eax,[esi+9DA50h]`: the SAME 200-int array PostLanguageSweep
-// memsets to -1 before the joint walk - dual use as the accessory band
-// index source.  An earlier revision read 0x9D9D0, which stays zero, so the
-// idx<0 break never fired and the band loop dereferenced a null accessory
-// slot at startup.)
-// (The 0x1D574 render wrapper's "list width/height" reads below are its
-// screenWidth/screenHeight fields, sub+0x1D4E4/0x1D4E8.)
+// (0x374/0x378/0x37C/0x380 are state.cameraKeyTrack / lightKeyTrack /
+// selfShadowKeyTrack / gravityKeyTrack, reached through the
+// CameraKeys()/LightKeys()/ShadowKeys()/GravityKeys() accessors; the panel
+// back-store bitmap and the 11x11 icon sheet are state.bmpPanel /
+// state.bmpRes101.)
 
 // Current model slot for the slot-order index (this+0x910) - 0x414F6F.
 unsigned char* CurrentModel(MMDApp* app) {
@@ -143,7 +132,7 @@ unsigned char* CurrentModel(MMDApp* app) {
 // (0x414E00) keeps its own body because its map is laid out per row.
 template <typename Key>
 void DrawBandList(MMDApp* app, HDC panel, HDC icons, Key* keys,
-                  int bandY, std::size_t mapBase, int rowCount) {
+                  int bandY, std::int32_t (&map)[200], int rowCount) {
     // TEMP(build fix, physics session): the original never sees these
     // four lists null because 0x466D20 (reached via the window proc on
     // WM_CREATE) allocates them before LocalizeUI; that path is not
@@ -163,7 +152,7 @@ void DrawBandList(MMDApp* app, HDC panel, HDC icons, Key* keys,
             BitBlt(panel, x, bandY, kIcon, kIcon, icons, kSheetMaskX, 0, SRCAND);
             BitBlt(panel, x, bandY, kIcon, kIcon, icons,
                    key.selected ? kSheetOnX : kSheetOffX, 0, SRCPAINT);
-            app->raw<std::int32_t>(mapBase + 4 * static_cast<unsigned>(row)) = record;
+            map[row] = record;
         }
         const int next = static_cast<int>(key.next);
         record = next;
@@ -178,6 +167,8 @@ void DrawBandList(MMDApp* app, HDC panel, HDC icons, Key* keys,
 void PanelPaint(MMDApp* app) {
     const std::int32_t sidebar = app->SidebarWidth();
     D3DRenderer* sub = app->Renderer();
+    // (The 0x1D574 render wrapper's "list width/height" reads below are its
+    // screenWidth/screenHeight fields, sub+0x1D4E4/0x1D4E8.)
     const std::int32_t listW = sub->screenWidth;   // sub+0x1D4E4 "list width"
     const std::int32_t listH = sub->screenHeight;  // sub+0x1D4E8 "list height"
     HDC panel = app->PanelDC();
@@ -185,7 +176,7 @@ void PanelPaint(MMDApp* app) {
 
     // --- 1. restore list region from the panel bitmap (0x414638) ----------
     HDC dc = CreateCompatibleDC(nullptr);
-    SelectObject(dc, app->raw<HGDIOBJ>(kHbitmapPanel));
+    SelectObject(dc, reinterpret_cast<HGDIOBJ>(app->state.bmpPanel));
     BitBlt(panel, kListLeft, 0, sidebar, listH, dc, kListLeft, 0, SRCCOPY);
     DeleteDC(dc);
 
@@ -237,10 +228,16 @@ void PanelPaint(MMDApp* app) {
             COLORREF color;
             if (n == app->state.currentFrame) {
                 sprintf_s(sel, sizeof(sel), "%-4d", n);
+                // 0xA0650..+2 are the R/G/B bytes of themeColors[30] (the
+                // selected-row colour); the G/B reads take the byte view of
+                // the COLORREF instead of raw offsets, whose +1/+2 bytes do
+                // not translate on x64.
                 DrawGlyph(app, sel, panel, 12, x - 3, 3,
                           app->state.themeColors[30],
-                          app->raw<std::uint8_t>(offsets::kDwordCol656976 + 1),
-                          app->raw<std::uint8_t>(offsets::kDwordCol656976 + 2), 1);
+                          reinterpret_cast<const unsigned char*>(
+                              &app->state.themeColors[30])[1],
+                          reinterpret_cast<const unsigned char*>(
+                              &app->state.themeColors[30])[2], 1);
                 color = static_cast<COLORREF>(
                     app->state.themeColors[30]);
             } else if (static_cast<std::uint32_t>(n) % 5 != 0) {
@@ -306,7 +303,7 @@ void PanelPaint(MMDApp* app) {
 
     // --- 5. icon DC over the icon sheet (0x414A1F) -------------------------
     HDC icons = CreateCompatibleDC(nullptr);
-    SelectObject(icons, app->raw<HGDIOBJ>(kHbitmapSheet));
+    SelectObject(icons, reinterpret_cast<HGDIOBJ>(app->state.bmpRes101));
 
     // Shared scrollbar + selection-box + refresh tail (0x415C6B..0x415E64).
     // a/b are the two "list length + 20" nMax candidates (second one is the
@@ -371,20 +368,25 @@ void PanelPaint(MMDApp* app) {
         // --- 6a. display mode: four fixed bands + accessory bands ----------
         const std::int32_t limit = scroll + rows;
         DrawBandList(app, panel, icons,
-                     app->raw<mdl::CameraKey*>(kPtrBand0List),
-                     17, kMapBand0, rows);
+                     app->CameraKeys(),
+                     17, app->state.rowHitBand0, rows);
         DrawBandList(app, panel, icons,
-                     app->raw<mdl::LightKey*>(kPtrBand1List),
-                     31, kMapBand1, rows);
+                     app->LightKeys(),
+                     31, app->state.rowHitBand1, rows);
         DrawBandList(app, panel, icons,
-                     app->raw<mdl::SelfShadowKey*>(kPtrBand2List),
-                     45, kMapBand2, rows);
+                     app->ShadowKeys(),
+                     45, app->state.rowHitBand2, rows);
         DrawBandList(app, panel, icons,
-                     app->raw<mdl::GravityKey*>(kPtrBand3List),
-                     59, kMapBand3, rows);
+                     app->GravityKeys(),
+                     59, app->state.rowHitBand3, rows);
         // accessory bands (0x414DC7..0x414F17)
-        const std::int32_t* idxArr =
-            &app->raw<std::int32_t>(kIdxAccBands);
+        // state.jointLineMap is the 0x9DA50 array: 0x414DB1
+        // `lea eax,[esi+9DA50h]` reads the SAME 200-int array
+        // PostLanguageSweep memsets to -1 before the joint walk - dual use as
+        // the accessory band index source.  (An earlier revision read
+        // 0x9D9D0, which stays zero, so the idx<0 break never fired and the
+        // band loop dereferenced a null accessory slot at startup.)
+        const std::int32_t* idxArr = app->state.jointLineMap;
         int band = 0;
         int bandY = kAccY0;
         while (bandY < kAccLastY) {
@@ -406,6 +408,11 @@ void PanelPaint(MMDApp* app) {
                         BitBlt(panel, x, bandY, kIcon, kIcon, icons,
                                key.selected ? kSheetOnX : kSheetOffX,
                                0, SRCPAINT);
+                        // NOTE: kept as raw - the index band+200*row reaches
+                        // beyond state.rowHitAcc[800] into the unnamed pad95
+                        // region (the x86 blob reserves 200 rows of 200 ints
+                        // here), and the x64 xlate carries element entries
+                        // only for the first 800 ints.
                         app->raw<std::int32_t>(
                             kMapAcc + 4 * static_cast<unsigned>(band + 200 * row)) =
                             record;
