@@ -823,18 +823,18 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     bool windRan = false;
     if (count > 0 && s.state.a0CD4 != 0) {
         const double timer = static_cast<double>(
-                                 s.raw<float>(0x9EDCC)) +
+                                 s.state.v9edcc) +
                              static_cast<double>(
-                                 s.raw<float>(offsets::kFloatDeltatime));
-        s.raw<float>(0x9EDCC) = static_cast<float>(timer);
+                                 s.DeltaTime());
+        s.state.v9edcc = static_cast<float>(timer);
         if (timer >= 0.5) {                                   // flt_52960C
 #if defined(_MSC_VER) && defined(_M_IX86)
             // x87 transcription of 0x46F5BA..0x46F66E: every intermediate
             // stays extended; strength is stored to a FLOAT slot at
             // 0x46F5DF and reloaded for each component multiply.
             const int strengthInt =
-                s.raw<std::int32_t>(0x9EDC8);          // fimul (integer)
-            const float gravmag = s.raw<float>(0x9EDC4);
+                s.GravityNoise();          // fimul (integer)
+            const float gravmag = s.GravityMagnitude();
             static const double kTen = 10.0;            // dbl_52C170
             static const double kRandMax = 32767.0;     // dbl_52E9F8
             static const double kNoise = 0.20000000298023224;   // 52E9F0
@@ -842,9 +842,9 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             int rStrength = std::rand(), rX = std::rand(),
                 rY = std::rand(), rZ = std::rand();
             float strengthF, e0, e1, e2;
-            const float dirX = s.raw<float>(0x9EDB8),
-                        dirY = s.raw<float>(0x9EDBC),
-                        dirZ = s.raw<float>(0x9EDC0);
+            const float dirX = s.GravityX(),
+                        dirY = s.GravityY(),
+                        dirZ = s.GravityZ();
             __asm {
                 fild        rStrength
                 fmul        qword ptr [kTen]
@@ -875,33 +875,33 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
                 fstp        e2
             }
             world->setGravity(btVector3(e0, e1, e2));
-            s.raw<float>(0x9EDCC) = 0.0f;                     // 0x46F6AC
+            s.state.v9edcc = 0.0f;                     // 0x46F6AC
 #else
             // portable fallback (double chains, float strength round-trip)
             const float strengthF = static_cast<float>(
                 static_cast<double>(std::rand()) * 10.0 / 32767.0 *
                     static_cast<double>(
-                        s.raw<std::int32_t>(0x9EDC8)) +
-                static_cast<double>(s.raw<float>(0x9EDC4)));
+                        s.GravityNoise()) +
+                static_cast<double>(s.GravityMagnitude()));
             const double kNoise = 0.20000000298023224;   // dbl_52E9F0
             const double kOffset = 0.10000000149011612;  // dbl_52BEA8
             const double strength = static_cast<double>(strengthF);
             const double e0 =
                 (static_cast<double>(std::rand()) * kNoise / 32767.0 -
-                 kOffset + static_cast<double>(s.raw<float>(0x9EDB8))) *
+                 kOffset + static_cast<double>(s.GravityX())) *
                 strength;
             const double e1 =
                 (static_cast<double>(std::rand()) * kNoise / 32767.0 -
-                 kOffset + static_cast<double>(s.raw<float>(0x9EDBC))) *
+                 kOffset + static_cast<double>(s.GravityY())) *
                 strength;
             const double e2 =
                 (static_cast<double>(std::rand()) * kNoise / 32767.0 -
-                 kOffset + static_cast<double>(s.raw<float>(0x9EDC0))) *
+                 kOffset + static_cast<double>(s.GravityZ())) *
                 strength;
             world->setGravity(btVector3(static_cast<float>(e0),
                                         static_cast<float>(e1),
                                         static_cast<float>(e2)));
-            s.raw<float>(0x9EDCC) = 0.0f;                     // 0x46F6AC
+            s.state.v9edcc = 0.0f;                     // 0x46F6AC
 #endif
         }
         windRan = true;  // -> 0x46F7DB: jump past the normal gravity apply
@@ -966,10 +966,10 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // body-3 origin write-watch: original alternates proceed/sync, the
     // port emitted two proceedToTransform writes per sync).
     if (selActive != 0 &&
-        s.raw<std::uint8_t>(760) == 0 &&        // 0x2F8 model-mode flag
-        s.raw<std::uint8_t>(650640) == 0) {     // 0x9ED90 frame-step flag
+        s.state.optflag[0] == 0 &&        // 0x2F8 model-mode flag
+        s.state.v9ed90 == 0) {     // 0x9ED90 frame-step flag
         // 0x46F7FF: while not playing, request the settle pass.
-        if (s.raw<std::uint8_t>(offsets::kByteA03E8) == 0)
+        if (s.state.a03E8 == 0)
             s.PhysicsResetPending() = 1;
     }
 
@@ -1035,7 +1035,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
 
     // Settle section gate (0x46FCEF): moved | settle | frame advanced,
     // model count 1..3, no seek pending.
-    const bool moved = s.raw<std::uint8_t>(offsets::kByteA066C) != 0;
+    const bool moved = s.state.a066C != 0;
     const bool settle = s.PhysicsResetPending() != 0;
     const bool frameAdv = s.PlaybackActive() != 0;           // 0x330
     const bool runWorldPass = count == 1 || count == 2 ||
@@ -1113,7 +1113,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         DumpRigidBodyState(app, "physics_readback.rigids.json");
     if (captureStages)
         DumpFrameEntryState(app, "physics_readback.json", false);
-    s.raw<std::uint8_t>(offsets::kByteA066C) = 0;
+    s.state.a066C = 0;
 
     if (traceSteps && stepCount > 0) {
         fprintf(stderr, "PHYSFRAME steps=%d settle=%d moved=%d count=%d labels=",

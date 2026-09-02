@@ -10,7 +10,7 @@
 //            drag origin->previous and origin->current mouse vectors,
 //            wrapped to +-6.28 rad
 //   modes 4/5/6 : around the selected bone's local axes (columns of the
-//            bone matrix at +0xB4 in "direct" mode app+650076==1, else the
+//            bone matrix at +0xB4 in "direct" mode app+650676==1, else the
 //            basis built by 0x40E670)
 // The axis is transformed into the bone's frame by the rows of the bone
 // matrix (+0xB4/+0xC4/+0xD4) and a delta quaternion (sin/cos of the scaled
@@ -26,10 +26,10 @@
 //   mode 3 wrap constants +-6.28       (dbl 0x52E8E0 / 0x52E8E8)
 //   accessory/light drags   *0.01      (dbl 0x52E9C8)
 //
-// When app+657524 != 0 the same modes edit records instead of the bone:
-//   accessory (app+650420==0): records at app+657532, stride 0xAC, fields
+// When app+658292 != 0 the same modes edit records instead of the bone:
+//   accessory (app+650420==0): records at app+658300, stride 0xAC, fields
 //     +0x40/+0x44/+0x48, "%3.2f" echo to edits 715/716/717 (0x2CB..0x2CD);
-//   otherwise: records at app+657968, stride 0x8C, fields +0x30/+0x34/+0x38,
+//   otherwise: records at app+658480, stride 0x8C, fields +0x30/+0x34/+0x38,
 //     echo to edits 754/755/756 (0x2F2..0x2F4).
 // The multi-selection propagation loop is ported below from
 // 0x476E42..0x477257, including its selected-root filter.
@@ -127,8 +127,7 @@ void QuatMultiply(float out[4], const float a[4], const float b[4]) {
 }
 
 unsigned char* CurrentModel(MMDApp* app) {
-    const unsigned slot = app->raw<std::uint8_t>(2320);
-    return app->raw<unsigned char*>(1920 + 4 * slot);
+    return app->ModelSlot(app->state.slotIdx);
 }
 
 bool IsSelectedRoot(unsigned char* model, int index, bool excludeSelected) {
@@ -198,16 +197,17 @@ void EchoRecord(HWND dialog, int id, const char* format, float value) {
 }
 
 bool EditModeRecord(MMDApp* app, int mode) {
-    HWND dialog = app->raw<HWND>(658292);
+    HWND dialog = app->state.frameCopyDialog;
     if (dialog == nullptr)
         return false;
     const int dy = app->MouseY() - app->PreviousMouseY();
 
     if (mode >= 4 && mode <= 6) {
         const int axis = mode - 4;
-        if (app->raw<std::uint8_t>(650676) != 0) {
-            auto* base = app->raw<unsigned char*>(658480);
-            const int index = app->raw<std::int32_t>(658624);
+        if (app->state.a9edb4 != 0) {
+            unsigned char* base =
+                static_cast<unsigned char*>(app->state.boneRecordArray);
+            const int index = app->state.sel8c;
             if (base != nullptr && index >= 0) {
                 float& value = *reinterpret_cast<float*>(
                     base + 140 * index + 48 + 4 * axis);
@@ -217,8 +217,9 @@ bool EditModeRecord(MMDApp* app, int mode) {
                     value / g_ConvB52B768 * g_ConvA52B760);
             }
         } else {
-            auto* base = app->raw<unsigned char*>(658300);
-            const int index = app->raw<std::int32_t>(658476);
+            unsigned char* base =
+                static_cast<unsigned char*>(app->state.cameraRecordArray);
+            const int index = app->state.selAcc;
             if (base != nullptr && index >= 0) {
                 float& value = *reinterpret_cast<float*>(
                     base + 172 * index + 64 + 4 * axis);
@@ -234,9 +235,10 @@ bool EditModeRecord(MMDApp* app, int mode) {
     if (mode >= 10 && mode <= 12) {
         const int axis = mode - 10;
         constexpr double kStep = 0.05000000074505806;
-        if (app->raw<std::uint8_t>(650676) != 0) {
-            auto* base = app->raw<unsigned char*>(658480);
-            const int index = app->raw<std::int32_t>(658624);
+        if (app->state.a9edb4 != 0) {
+            unsigned char* base =
+                static_cast<unsigned char*>(app->state.boneRecordArray);
+            const int index = app->state.sel8c;
             if (base != nullptr && index >= 0) {
                 float& value = *reinterpret_cast<float*>(
                     base + 140 * index + 36 + 4 * axis);
@@ -244,8 +246,9 @@ bool EditModeRecord(MMDApp* app, int mode) {
                 EchoRecord(dialog, 744 + axis, "%5.4f", value);
             }
         } else {
-            auto* base = app->raw<unsigned char*>(658300);
-            const int index = app->raw<std::int32_t>(658476);
+            unsigned char* base =
+                static_cast<unsigned char*>(app->state.cameraRecordArray);
+            const int index = app->state.selAcc;
             if (base != nullptr && index >= 0) {
                 const bool scale = app->ShiftModifierActive();
                 const std::size_t field = (scale ? 40u : 52u) + 4u * axis;
@@ -283,7 +286,7 @@ void ApplyScreenPlaneBoneMove(MMDApp* app, unsigned char* model, int mode) {
         overlayScale == 0.0f)
         return;
 
-    const double mouseScale = app->raw<float>(2344);
+    const double mouseScale = app->state.selectedClipW;
     float delta[3]{};
     if (mode == 7 || mode == 9) {
         double amount = static_cast<double>(
@@ -339,7 +342,7 @@ void ApplyLocalAxisBoneMove(MMDApp* app, unsigned char* model, int mode) {
 
     float delta[3]{};
     delta[mode - 10] = static_cast<float>(mouseDelta * step);
-    if (app->raw<std::int32_t>(650652) != 1) {
+    if (app->state.v9ed9c != 1) {
         float basis[16]{};
         BoneLocalAxes(app, basis);
         const int axis = mode - 10;
@@ -435,7 +438,7 @@ void BoneEditModes(MMDApp* app) {
     if (mode <= 0 || mode > 12)
         return;
 
-    if ((mode <= 6 || mode >= 10) && app->raw<HWND>(658292) != nullptr) {
+    if ((mode <= 6 || mode >= 10) && app->state.frameCopyDialog != nullptr) {
         EditModeRecord(app, mode);
         return;
     }

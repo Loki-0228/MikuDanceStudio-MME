@@ -613,7 +613,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                 spriteCountBeforeBone;
             app->ViewportToolCenterX() = boneResult.selectedX;
             app->ViewportToolCenterY() = boneResult.selectedY;
-            app->raw<float>(2344) = boneResult.selectedClipW;
+            app->state.selectedClipW = boneResult.selectedClipW;
         }
     }
 

@@ -9,9 +9,9 @@
 //   this+0x308/30C/310 camera translate X/Y/Z
 //   this+0x314/318  camera rotation angles
 //   this+0x9EDD1 (650705) drag-active flag
-//   this+0x9ED98 (650136) select-state gate
-//   this+0x910 (2320) frame index  this+0xA0430 (657456) frame cursor
-//   this+0xA05D1 (658257) view-dirty  this+0xA442C (672812) view-lock
+//   this+0x9ED98 (650648) select-state gate
+//   this+0x910 (2320) frame index  this+0xA0430 (656432) frame cursor
+//   this+0xA05D1 (656849) view-dirty  this+0xA442C (672812) view-lock
 //
 // Camera-translate block ported verbatim from the raw listing at 4638..4686:
 //   gate: dragActive & (this+0x8C == 3) & !modelMode
@@ -55,17 +55,26 @@ constexpr double kRotateScale = 0.009999999776482582;  // VA 0x52E9C8
 constexpr double kRightModifiedScale = 0.10000000149011612; // 0x52BEA8
 
 static void ViewRefreshGate(MMDApp* s) {
-    auto raw = [&s](std::size_t off) -> std::int32_t& {
-        return *reinterpret_cast<std::int32_t*>(s->at(off));
-    };
+    // Original dword gates (Ghidra: this+0x9ED98 select-state gate,
+    // this+0xA0430 frame cursor).  The old literals 650136/657456 were
+    // decimal slips - 650136 landed inside aviOutputPath and 657456 inside
+    // exeDir.  0x9ED98 is a dword over v9ed98 and the two shadow bytes;
+    // 0x2F8 is a dword over the first four radio flags.
     const bool frameGate =
-        raw(650136) != 0 && raw(2320) == raw(657456) &&
-        raw(760) == 0 && raw(657456) >= 0 && raw(816) == 0;
+        (s->state.v9ed98 | s->state.playbackStartsAtCurrentFrame |
+         s->state.projectedShadowBlendEnabled) != 0 &&
+        s->state.slotIdx == s->state.cameraParentModel &&
+        (s->state.optflag[0] | s->state.optflag[1] |
+         s->state.optflag[2] | s->state.optflag[3]) == 0 &&
+        s->state.cameraParentModel >= 0 &&
+        s->state.playbackActive == 0;
     if (frameGate) {
-        s->raw<unsigned char>(658257) = 1;                       // 0xA05D1
-        s->raw<unsigned char>(672812) = 0;
+        // 0xA05D1 = b6568481 view-dirty byte (the old literal 658257 was a
+        // decimal slip that landed on the frame-range dialog HWND's byte 1)
+        s->state.b6568481 = 1;                                   // 0xA05D1
+        s->state.windowLayoutReady = 0;
         PostLanguageSweep2(s);                                    // 0x40D070
-        s->raw<unsigned char>(672812) = 1;
+        s->state.windowLayoutReady = 1;
     }
     PostViewRefresh(s);                                           // 0x40D130
 }
@@ -135,7 +144,7 @@ void PanSelectedCameraKey(MMDApp* app, int dx, int dy) {
         ? 10.0f
         : std::max(depth, 1.0f);
     const double scale = pixelScale * static_cast<double>(depthFactor) *
-        static_cast<double>(app->raw<float>(0x9E1E8));
+        static_cast<double>(app->CameraFov());
     app->CameraPositionX() = static_cast<float>(
         app->CameraPositionX() - static_cast<double>(dx) * scale);
     app->CameraPositionY() = static_cast<float>(
@@ -195,7 +204,7 @@ int ViewportToolAtPoint(MMDApp* app) {
             const bool modelPanel =
                 app->state.optflag[0] != 0;
             const std::uint32_t axisMode =
-                app->raw<std::uint32_t>(offsets::kDword32C);
+                app->state.v32c;
             if (fy > upperTop && fy < upperBottom) {
                 if (modelPanel)
                     operation = 18 + column;
@@ -291,7 +300,7 @@ void BeginCenteredDrag(MMDApp* app, int operation) {
     app->PreviousMouseY() = point.y;
     app->ViewToolDragOperation() =
         static_cast<ViewportToolAction>(operation);
-    app->raw<std::uint8_t>(offsets::kByteB6568483) = 0;
+    app->state.b6568483 = 0;
     WarpCursor(app, point);
     while (ShowCursor(FALSE) >= 0) {}
 }
@@ -323,8 +332,7 @@ void RestoreViewportToolCursor(MMDApp* app, int operation) {
 }
 
 unsigned char* ActiveBoneModel(MMDApp* app) {
-    return app->raw<unsigned char*>(1920 +
-        4u * app->raw<std::uint8_t>(2320));
+    return app->ModelSlot(app->state.slotIdx);
 }
 
 bool BoneCanBePicked(MMDApp* app, const unsigned char* bone) {
@@ -449,13 +457,13 @@ void BeginOrEndViewportToolDrag(MMDApp* app, int operation) {
                 Sub42D6E0(app);
                 app->state.a06B5 = 1;
             } else {
-                const int target = app->raw<std::int32_t>(650652);
+                const int target = app->state.v9ed9c;
                 RefreshRequest(target == 2
-                    ? app->raw<std::uint8_t>(647536) : -1);
+                    ? app->state.selLightAccSlotOrUint32 : -1);
                 app->state.a06B5 = 1;
             }
         } else if (operation == 21) {
-            int& target = app->raw<std::int32_t>(650652);
+            int& target = app->state.v9ed9c;
             const int limit = app->state.optflag[0] != 0 ? 3 : 2;
             if (++target >= limit)
                 target = 0;
@@ -478,7 +486,7 @@ void BeginOrEndViewportToolDrag(MMDApp* app, int operation) {
             }
         }
     } else if (leftState == 2) {
-        app->raw<std::uint8_t>(645641) = 0;
+        app->PendingTimelineSelectionRow() = TimelineSelectionRow::None;;
         const int viewOperation =
             static_cast<int>(app->ViewToolDragOperation());
         const int mode = static_cast<int>(app->InteractionDragMode());
@@ -507,26 +515,43 @@ void BeginOrEndViewportToolDrag(MMDApp* app, int operation) {
 void MouseInteractionBegin(MMDApp* app) {
     // 0x46FF02 -> 0x42D3A0 -> 0x40E3D0.  State values are exactly
     // 0 idle, 1 pressed, 2 released, 3 held.
-    struct KeySlot { int key; std::size_t offset; };
+    struct KeySlot { int key; std::int32_t MMDAppState::* state; };
     static constexpr KeySlot kKeySlots[] = {
-        {38, 20}, {40, 24}, {37, 28}, {39, 32},
-        {32, 40}, {46, 184}, {27, 44}, {9, 128},
-        {120, 48}, {88, 48}, {122, 52}, {90, 52},
-        {99, 56}, {67, 56}, {118, 60}, {86, 60},
-        {100, 64}, {68, 64}, {97, 68}, {65, 68},
-        {98, 72}, {66, 72}, {115, 80}, {83, 80},
-        {103, 76}, {71, 76}, {104, 88}, {72, 88},
-        {105, 84}, {73, 84}, {107, 92}, {75, 92},
-        {112, 96}, {80, 96}, {117, 100}, {85, 100},
-        {106, 104}, {74, 104}, {102, 108}, {70, 108},
-        {114, 112}, {82, 112}, {108, 116}, {76, 116},
-        {VK_RETURN, 188}, {VK_MENU, 196},
-        {96, 144}, {97, 148}, {98, 152}, {99, 156}, {100, 160},
-        {101, 164}, {102, 168}, {103, 172}, {104, 176}, {105, 180},
-        {221, 120}, {226, 124},
+        {VK_UP, &MMDAppState::upKeyState},
+        {VK_DOWN, &MMDAppState::downKeyState},
+        {VK_LEFT, &MMDAppState::leftKeyState},
+        {VK_RIGHT, &MMDAppState::rightKeyState},
+        {VK_SPACE, &MMDAppState::spaceKeyState},
+        {VK_DELETE, &MMDAppState::deleteKeyState},
+        {VK_ESCAPE, &MMDAppState::escKeyState},
+        {VK_TAB, &MMDAppState::tabKeyState},
+        {VK_RETURN, &MMDAppState::bC},
+        {VK_MENU, &MMDAppState::menuKeyState},
+        {221, &MMDAppState::keyState221},
+        {226, &MMDAppState::keyState226},
     };
     for (const KeySlot& slot : kKeySlots)
-        PollKey(app, app->raw<std::int32_t>(slot.offset), slot.key);
+        PollKey(app, app->state.*slot.state, slot.key);
+
+    // Letter hotkeys share the dialog re-entry guard ints (see
+    // MMDAppState::dialogFlags): lowercase and uppercase VK pairs fold
+    // onto the same slot.
+    static constexpr struct { int key; int flagIndex; } kLetterKeys[] = {
+        {'x', 0}, {'X', 0}, {'z', 1}, {'Z', 1},
+        {'c', 2}, {'C', 2}, {'v', 3}, {'V', 3},
+        {'d', 4}, {'D', 4}, {'a', 5}, {'A', 5},
+        {'b', 6}, {'B', 6}, {'g', 7}, {'G', 7},
+        {'s', 8}, {'S', 8}, {'i', 9}, {'I', 9},
+        {'h', 10}, {'H', 10}, {'k', 11}, {'K', 11},
+        {'p', 12}, {'P', 12}, {'u', 13}, {'U', 13},
+        {'j', 14}, {'J', 14}, {'f', 15}, {'F', 15},
+        {'r', 16}, {'R', 16}, {'l', 17}, {'L', 17},
+    };
+    for (const auto& slot : kLetterKeys)
+        PollKey(app, app->state.dialogFlags[slot.flagIndex], slot.key);
+
+    for (int i = 0; i < 10; ++i)
+        PollKey(app, app->state.numpadKeyState[i], VK_NUMPAD0 + i);
 
     PollKey(app, app->ShiftModifierState(), VK_SHIFT);
     PollKey(app, app->CtrlModifierState(), VK_CONTROL);
@@ -605,7 +630,7 @@ void MouseInteractionBegin(MMDApp* app) {
 
     if (app->MiddleMouseButtonHeld()) {
         bool selectedCameraKey = false;
-        if (app->raw<std::uint8_t>(0x2F8) == 0) {
+        if (app->state.optflag[0] == 0) {
             const double scale = app->ShiftModifierActive()
                 ? g_MouseScaleA
                 : (app->CtrlModifierActive()
@@ -656,13 +681,12 @@ bool SelA3(MMDApp* s) { return s->ShiftModifierActive(); }
 bool SelB3(MMDApp* s) { return s->CtrlModifierActive(); }
 
 unsigned char* RegSlotOf(MMDApp* s) {
-    unsigned idx = s->raw<std::uint32_t>(0x9E170);
-    return *reinterpret_cast<unsigned char**>(
-        s->at(0x9DD70 + 4 * idx));
+    const unsigned idx = s->state.selLightAccSlotOrUint32;
+    return reinterpret_cast<unsigned char*>(s->AccessorySlot(idx));
 }
 
 void EchoEdit(MMDApp* s, int dlgItem, const char* text) {
-    HWND window = s->raw<HWND>(657080);
+    HWND window = static_cast<HWND>(s->Hwnd());
     if (window == nullptr)
         window = static_cast<HWND>(s->Hwnd());
     SetWindowTextA(GetDlgItem(window, dlgItem), text);
@@ -673,11 +697,10 @@ void EchoEdit(MMDApp* s, int dlgItem, const char* text) {
 void ModeCameraAdjust(MMDApp* app, int axis) {
     // 0x4786FB..0x4790DF, modes 13..15.  The same operation widgets edit
     // either the camera target or the selected accessory position.
-    static const std::size_t kAxisOff[3] = {0x334, 0x338, 0x33C};
     static const std::size_t kSlotOff[3] = {0x214, 0x218, 0x21C};
     static const int kEdit[3] = {0x1DE, 0x1DF, 0x1E0};
     if (axis < 0 || axis > 2) { ViewRefreshGate(app); return; }
-    const int target = app->raw<std::int32_t>(0x9ED9C);
+    const int target = app->state.v9ed9c;
     const int dy = DyOf(app);
     double scale;
     if (SelA3(app)) scale = g_MouseScaleA;            // 0x52B8F0
@@ -695,9 +718,9 @@ void ModeCameraAdjust(MMDApp* app, int axis) {
                       *reinterpret_cast<float*>(slot + kSlotOff[axis]));
             EchoEdit(app, kEdit[axis], buf);
         }
-    } else if (app->raw<std::int32_t>(656432) >= 0 || target == 1) {
-        app->raw<float>(kAxisOff[axis]) = static_cast<float>(
-            static_cast<double>(app->raw<float>(kAxisOff[axis])) +
+    } else if (app->state.cameraParentModel >= 0 || target == 1) {
+        app->CameraPosition()[axis] = static_cast<float>(
+            static_cast<double>(app->CameraPosition()[axis]) +
             static_cast<double>(dy) * scale);
     } else {
         auto& api = d3dx::Get();
@@ -718,8 +741,8 @@ void ModeCameraAdjust(MMDApp* app, int axis) {
             app->CameraPositionY() += world[1];
             app->CameraPositionZ() += world[2];
         } else {
-            app->raw<float>(kAxisOff[axis]) = static_cast<float>(
-                static_cast<double>(app->raw<float>(kAxisOff[axis])) +
+            app->CameraPosition()[axis] = static_cast<float>(
+                static_cast<double>(app->CameraPosition()[axis]) +
                 static_cast<double>(dy) * scale);
         }
     }
@@ -729,11 +752,10 @@ void ModeCameraAdjust(MMDApp* app, int axis) {
 void ModeAngleAdjust(MMDApp* app, int axis) {
     // 0x4790E0..0x4798xx, modes 16..18.  Stored angles are radians;
     // accessory edit controls display degrees.
-    static const std::size_t kAxisOff[3] = {0x310, 0x314, 0x318};
     static const std::size_t kSlotOff[3] = {0x220, 0x224, 0x228};
     static const int kEdit[3] = {0x1E1, 0x1E2, 0x1E3};
     if (axis < 0 || axis > 2) { ViewRefreshGate(app); return; }
-    const int target = app->raw<std::int32_t>(0x9ED9C);
+    const int target = app->state.v9ed9c;
     const int dy = DyOf(app);
     double scale;
     if (SelA3(app)) scale = g_Scale52E9F0;            // 0.2
@@ -753,8 +775,8 @@ void ModeAngleAdjust(MMDApp* app, int axis) {
             EchoEdit(app, kEdit[axis], buf);
         }
     } else {
-        app->raw<float>(kAxisOff[axis]) = static_cast<float>(
-            static_cast<double>(app->raw<float>(kAxisOff[axis])) +
+        app->CameraRotation()[axis] = static_cast<float>(
+            static_cast<double>(app->CameraRotation()[axis]) +
             static_cast<double>(dy) * scale);
     }
     ViewRefreshGate(app);

@@ -62,7 +62,7 @@ void AdvanceFrameRenderGate(MMDApp* app) {
     auto& state = app->state.messageSeen;
     if (app->PlaybackActive() != 0)
         state = 1;
-    if (app->raw<std::uint8_t>(offsets::kByteFlag672800) == 0)
+    if (app->state.flag672800 == 0)
         state = 1;
     if (app->FrameRangeDialog() != nullptr)
         state = 1;
@@ -91,8 +91,8 @@ void TraceOperationInput(MMDApp* app, const char* phase) {
     if (fopen_s(&stream, path, "ab") != 0 || stream == nullptr)
         return;
     std::uint32_t quaternion[4]{};
-    const unsigned slot = app->raw<std::uint8_t>(0x910);
-    auto* model = app->raw<unsigned char*>(0x780 + 4 * slot);
+    const unsigned slot = app->state.slotIdx;
+    auto* model = app->ModelSlot(slot);
     if (model != nullptr) {
         const int selected = mikudancestudio::mdl::Mdl(model)->selectedBone;
         auto* bones = mikudancestudio::mdl::Bones(model);
@@ -245,8 +245,8 @@ void TimelineAdvance(MMDApp* app) {
 
     IDirect3DSurface9* surf = nullptr;                            // 0x46016A
     if (FAILED(device->CreateRenderTarget(
-            app->raw<std::uint32_t>(0xA08D4),
-            app->raw<std::uint32_t>(0xA08D8),
+            app->RenderWidth(),
+            app->RenderHeight(),
             r->backbufferFormat,  // wrapper+0x1D540
             D3DMULTISAMPLE_NONE, 0, FALSE, &surf, nullptr))) {
         DestroyWindow(app->RecordingWindow());                    // 0x460177
@@ -262,8 +262,8 @@ void TimelineAdvance(MMDApp* app) {
     RECT rect;                                                    // 0x4601B7
     rect.left = 0;
     rect.top = 0;
-    rect.right = app->raw<LONG>(0xA08D4);
-    rect.bottom = app->raw<LONG>(0xA08D8);
+    rect.right = app->RenderWidth();
+    rect.bottom = app->RenderHeight();
 
     HRESULT hr = device->StretchRect(*backBuffer, &rect, surf, &rect,
                                      D3DTEXF_LINEAR);             // 0x460200
@@ -317,8 +317,8 @@ void TimelineAdvance(MMDApp* app) {
 
     // window-vs-device size check (0x4603B2..0x460410): when either device
     // dimension is larger than the window's, adopt the window size and reset.
-    const std::int32_t winW = app->raw<std::int32_t>(0xA02AC);
-    const std::int32_t winH = app->raw<std::int32_t>(0xA02B0);
+    const std::int32_t winW = app->state.recRTW;
+    const std::int32_t winH = app->state.recRTH;
     const bool tooWide = r->screenHeight > winH;   // wrapper+0x1D4E8
     const bool tooHigh = r->screenWidth > winW;    // wrapper+0x1D4E4
     if (tooWide || tooHigh) {
@@ -442,9 +442,11 @@ void FrameDriver(MMDApp* app) {
 
     // ---- 4. selection callback (0x46DCA4..0x46DCCD) ---------------------
     unsigned char selActive = 0;
-    if (s.raw<std::uint8_t>(650640) == 0 &&                  // 0x9ED90
-        s.raw<std::uint8_t>(656312) != 0) {                  // 0xA03B8
-        auto cb = s.raw<void*>(656468);                      // 0xA03D4
+    if (s.state.v9ed90 == 0 &&                  // 0x9ED90
+        s.state.depthDeviceEnabled != 0) {                  // 0xA03B8
+        // 0xA03D4 = the OpenNI is-tracking callback slot (literal was a
+        // +0x80 decimal slip that landed mid-cameraAttachmentBasis)
+        auto cb = s.OpenniTrackingCallback();                // 0xA03D4
         if (cb != nullptr)
             reinterpret_cast<void (__thiscall*)(void*, unsigned char*)>(cb)(
                 &selActive, &selActive);
@@ -492,7 +494,7 @@ void FrameDriver(MMDApp* app) {
     // the frame-step byte 0x9ED90 set (AVI recording / manual stepping)
     // the readback+push pass runs before the catch-up; a failure inside
     // it runs the recording epilogue and returns from the whole driver.
-    if (s.raw<std::uint8_t>(650640) != 0) {                   // 0x9ED90
+    if (s.state.v9ed90 != 0) {                   // 0x9ED90
         if (!RecordingReadbackPass(app))
             return;
     }
@@ -508,18 +510,18 @@ void FrameDriver(MMDApp* app) {
     PrepareFrameLineOverlay(app);
 
     // ---- 7. timeline flag handoff (0x479864..0x479896) -------------------
-    if (s.raw<std::uint8_t>(off::kByteF9edd0) != 0) {
+    if (s.state.v9edd0 != 0) {
         TimelineAdvance(app);                                     // 0x460130
-        s.raw<std::uint8_t>(off::kByteF9edd0) = 0;
+        s.state.v9edd0 = 0;
         s.state.a03B7 = 0;
     }
     if (s.state.a03B7 != 0) {
-        s.raw<std::uint8_t>(off::kByteF9edd0) = 1;
+        s.state.v9edd0 = 1;
         s.state.a03B7 = 0;
     }
 
     // ---- 8. reload path (0x47989D..0x4798CB) ----------------------------
-    if (s.raw<std::uint8_t>(off::kByteFa04b8) != 0) {
+    if (s.state.a04B8 != 0) {
         if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
             FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
             if (tf) { fputs("frame section8 reload path\n", tf); fclose(tf); }
@@ -529,7 +531,7 @@ void FrameDriver(MMDApp* app) {
         s.ViewOffsetY() = 0.0f;
         ReloadModels(app);                                        // 0x42E640
         PostModelReload(app);                                     // 0x41A650
-        s.raw<std::uint8_t>(off::kByteFa04b8) = 0;
+        s.state.a04B8 = 0;
     }
 
     // ---- 9. Present + device-lost recovery (0x479B23..0x479CB9) ----------
@@ -559,8 +561,10 @@ void FrameDriver(MMDApp* app) {
                 RECT r;
                 r.left = 0;
                 r.top = 0;
-                r.right = static_cast<LONG>(s.raw<std::int32_t>(658908));
-                r.bottom = static_cast<LONG>(s.raw<std::int32_t>(658912));
+                // 0xA08D4/0xA08D8 = render size (literals were decimal
+                // slips landing inside the dirModel path buffer)
+                r.right = static_cast<LONG>(s.RenderWidth());
+                r.bottom = static_cast<LONG>(s.RenderHeight());
                 hr = device->Present(&r, &r,
                                      s.RecordingWindow(), nullptr);
             } else if (s.FloatingWindow() != nullptr) {
@@ -600,41 +604,40 @@ void FrameDriver(MMDApp* app) {
     // Byte compare at 0x479CB9; 0xA0B00/0xA0B04 are INTEGER frame fields
     // (fild + 2^32 fixup on negative, i.e. unsigned load) divided by the
     // constant 30.0 (dbl_52BA68); EnableWindow pushes 0 (0x479D58).
-    if (s.raw<std::uint8_t>(off::kByteF9edd8) != 0) {       // 0x9EDD8
-        s.raw<std::uint32_t>(0x980) =
-            s.raw<std::uint32_t>(off::kDwordF9eddc);        // 0x9EDDC
-        s.raw<unsigned char>(off::kByte9ED90) = 1;          // 0x9ED90
+    if (s.state.v9edd8 != 0) {       // 0x9EDD8
+        s.CurrentFrame() =
+            s.state.f9eddc;        // 0x9EDDC
+        s.state.v9ed90 = 1;          // 0x9ED90
         // (was a raw 650128 literal = 0x9EB90, one of the +/-0x100
         // decimal slips; 0x9ED90 = 650640)
 
-        const std::int32_t fa = s.raw<std::int32_t>(off::kDwordFa0b00D);
-        s.raw<float>(off::kFloatF9e654) =
+        const std::int32_t fa = s.state.aviRecordStartFrame;
+        s.state.f9e654 =
             static_cast<float>((fa < 0
                                     ? static_cast<double>(fa) + g_Wrap32
                                     : static_cast<double>(fa)) /
                                g_FrameScale);
 
-        const std::int32_t fb = s.raw<std::int32_t>(off::kDwordFa0b04D);
-        s.raw<float>(off::kFloatF9e658) =
+        const std::int32_t fb = s.state.aviRecordEndFrame;
+        s.state.f9e658 =
             static_cast<float>((fb < 0
                                     ? static_cast<double>(fb) + g_Wrap32
                                     : static_cast<double>(fb)) /
                                g_FrameScale);
 
-        s.raw<std::uint32_t>(off::kDwordF9e648) =
-            s.raw<std::uint32_t>(off::kDwordFa0b00D);
+        s.state.f9e648 = s.state.aviRecordStartFrame;
         s.PlaybackCursorSeconds() = s.PlaybackStartSeconds();
 
-        if (s.raw<std::int32_t>(off::kDwordFa0b00D) ==
-            s.raw<std::int32_t>(0x980))
-            s.raw<unsigned char>(off::kByteB9edb6) = 1;
+        if (s.state.aviRecordStartFrame ==
+            s.CurrentFrame())
+            s.state.playbackFrameChanged = 1;
 
         s.state.playbackActive = 1;
         UpdateBoneFrames(app);                                    // 0x433A40
-        s.raw<std::uint32_t>(off::kDwordF9ed94) = 0;
+        s.state.f9ed94 = 0;
         EnableWindow(GetDlgItem(static_cast<HWND>(s.Hwnd()), 0x198),
                      FALSE);
-        s.raw<std::uint8_t>(off::kByteF9edd8) = 0;
+        s.state.v9edd8 = 0;
     }
 
 }

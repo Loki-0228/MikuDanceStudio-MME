@@ -40,7 +40,7 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
     while (app->ModelSlot(slot) != nullptr) {
         ++slot;
         if (slot >= 100) {
-            app->raw<std::uint32_t>(188) = 1;
+            app->state.bC = 1;
             char text[256];
             if (app->EnglishUI() == 0) {
                 sprintf_s(text, 0x100, kMsgModelLimitJp, 100);

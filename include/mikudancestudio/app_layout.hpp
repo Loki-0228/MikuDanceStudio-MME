@@ -36,13 +36,41 @@ struct RawPad { unsigned char b[N]; };
 struct EmptyPad {};
 
 struct MMDAppState {
-    RawPad<48> pad0;
-    // dialog-open flags (0x30..0x77): nonzero while the matching dialog
-    // is up; the menu command switch reads them to reject re-entry
+#if defined(_M_X64)
+    RawPad<4> pad0inst;  // x86 keeps the instance handle at +0; on x64 it
+                         // lives in the MMDApp mirror m_hInstance instead
+#else
+    void* hInstance;
+#endif
+    std::int32_t mouseX;               // +0x04
+    std::int32_t mouseY;               // +0x08
+    std::int32_t previousMouseX;       // +0x0C
+    std::int32_t previousMouseY;       // +0x10
+    std::int32_t upKeyState;           // +0x14 (VK_UP)
+    std::int32_t downKeyState;         // +0x18 (VK_DOWN)
+    std::int32_t leftKeyState;         // +0x1C (VK_LEFT)
+    std::int32_t rightKeyState;        // +0x20 (VK_RIGHT)
+    std::int32_t shiftModifierState;   // +0x24 (VK_SHIFT)
+    std::int32_t spaceKeyState;        // +0x28 (VK_SPACE)
+    std::int32_t escKeyState;          // +0x2C (VK_ESCAPE)
+    // 0x30..0x78: dialog re-entry guards - nonzero while the matching
+    // dialog is up; the menu command switch reads them to reject
+    // re-entry.  The same ints double as letter key-down counters for
+    // PollKey ('z x c v a b s g h i k' fill 0x30..0x60, 'p u j f r l'
+    // fill 0x60..0x78); modal dialog pumps never run PollKey, so the
+    // two roles never collide.
     std::int32_t dialogFlags[18];
-    RawPad<68> pad0b;
-    std::uint32_t bC;
-    RawPad<8> pad1;
+    std::int32_t keyState221;               // +0x78 (GetKeyState(221))
+    std::int32_t keyState226;               // +0x7C (GetKeyState(226))
+    std::int32_t tabKeyState;               // +0x80 (VK_TAB)
+    std::int32_t leftMouseButtonState;      // +0x84
+    std::int32_t rightMouseButtonState;     // +0x88
+    std::int32_t middleMouseButtonState;    // +0x8C
+    std::int32_t numpadKeyState[10];        // +0x90..0xB8 (VK_NUMPAD0..9)
+    std::int32_t deleteKeyState;            // +0xB8 (VK_DELETE)
+    std::int32_t bC;                        // +0xBC (VK_RETURN state)
+    std::int32_t ctrlModifierState;         // +0xC0 (VK_CONTROL)
+    std::int32_t menuKeyState;              // +0xC4 (VK_MENU)
     unsigned char sidebarResizeDragging;
 #if defined(_M_X64)
     RawPad<7> pad2;
@@ -142,11 +170,15 @@ struct MMDAppState {
     unsigned char groundShadowEnabled;
     RawPad<3> pad56;
     std::uint32_t aviBackgroundEnabled;
-    RawPad<12> pad57;
+    std::int32_t viewportToolCenterX;   // +0x920
+    std::int32_t viewportToolCenterY;   // +0x924
+    float selectedClipW;                // +0x928 (selected bone's clip-space
+                                        //  depth; scales mouse drags)
     std::uint32_t viewportToolOperation;
     std::int32_t dragOriginX;
     std::int32_t dragOriginY;
-    RawPad<8> pad60;
+    std::int32_t boneBoxStartX;         // +0x938
+    std::int32_t boneBoxStartY;         // +0x93C
     std::int32_t boneBoxSelectionActive;
     std::int32_t scrollCbSize;
     std::int32_t scrollFMask;
@@ -327,10 +359,30 @@ struct MMDAppState {
     float v9e650;
     float f9e654;
     float f9e658;
+    // Track-key cursors (0x9E65C..): the camera/light/self-shadow/gravity
+    // play-cursor dwords with their active bytes, then the 55 accessory
+    // track cursors.  In-blob on both arches; only the accessory active
+    // byte array (0x9EA78) needs an x64 MMDApp mirror - the x64 region
+    // here ends 42 bytes short of it.
+    std::uint32_t cameraTrackCursor;      // +0x9E65C
+    std::uint8_t cameraTrackActive;       // +0x9E660
+    RawPad<3> pad153a;
+    std::uint32_t lightTrackCursor;       // +0x9E664
+    std::uint8_t lightTrackActive;        // +0x9E668
+    RawPad<3> pad153b;
+    std::uint32_t shadowTrackCursor;      // +0x9E66C
+    std::uint8_t shadowTrackActive;       // +0x9E670
+    RawPad<3> pad153c;
+    std::uint32_t gravityTrackCursor;     // +0x9E674
+    std::uint8_t gravityTrackActive;      // +0x9E678
+    RawPad<3> pad153d;
+    std::uint32_t accessoryTrackCursor[55];  // +0x9E67C..0x9E938
 #if defined(_M_X64)
-    RawPad<1065> pad153;
+    RawPad<813> pad153;
 #else
-    RawPad<1307> pad153;
+    RawPad<800> pad153e;                     // 0x9E938..0x9EA78
+    std::uint8_t accessoryTrackActive[55];   // +0x9EA78
+    RawPad<200> pad153;                      // ..0x9ED97
 #endif
     // IsWindowEnabled snapshots of the 7 main-window playback controls
     // (0x1F1/0x1F2/0x1AF/0x1A5/0x1A6/0x190/0x191), restored after playback
@@ -443,7 +495,9 @@ struct MMDAppState {
     unsigned char selfShadowCfgOrUint32;
     unsigned char selectionBoxDragging;
 #ifndef _M_X64
-    RawPad<10> pad204;
+    RawPad<2> pad204;
+    std::int32_t selectionBoxAnchorX;   // +0xA018C
+    std::int32_t selectionBoxAnchorY;   // +0xA0190
 #endif
     unsigned char a0194;
     unsigned char modelOutlineRenderingSuppressed;
@@ -458,9 +512,16 @@ struct MMDAppState {
     unsigned char buf655780[64];
     unsigned char a01E4;
 #if defined(_M_X64)
-    RawPad<99> pad213;
+    RawPad<99> pad213;  // the two projection matrices live in MMDApp
+                        // mirrors here - the x64 blob region ends 32
+                        // bytes short of the second matrix
 #else
-    RawPad<131> pad213;
+    RawPad<3> pad213a;
+    // 0xA01E8/0xA0228: the fixed-function light and world view-projection
+    // matrices (column-major, 16 floats each).  Kept as float[16] so this
+    // header stays free of d3d9 includes; MMDApp reinterprets to D3DMATRIX.
+    float lightViewProjectionMatrix[16];   // +0xA01E8
+    float worldViewProjectionMatrix[16];   // +0xA0228
 #endif
     void* activeRenderObject;
     std::int32_t activeRenderPass;
@@ -502,7 +563,14 @@ struct MMDAppState {
 #endif
     void* depthTextureCallback;
     std::uint32_t a03D0;
-    std::uint32_t a03D4;
+#if defined(_M_X64)
+    std::uint32_t a03D4;  // blob slot unused; x64 uses the MMDApp mirror
+                          // m_openniTrackingCallback (needs 8 bytes)
+#else
+    void* openniTrackingCallback;  // ?OpenNIIsTracking@@YGXPA_N@Z (registered
+                                   // by the OpenNI plugin; read by the frame
+                                   // driver's selection-callback branch)
+#endif
     void* a03D8;
     unsigned char a03DC;
     unsigned char a03DD;
@@ -546,9 +614,15 @@ struct MMDAppState {
     std::uint32_t brushes[11];
     unsigned char buf656632[64];
 #if defined(_M_X64)
-    RawPad<111> pad277;
+    RawPad<111> pad277;  // timeline range lives in MMDApp mirrors here
 #else
-    RawPad<152> pad277;
+    RawPad<136> pad277a;
+    // 0xA05C0..0xA05D0: the frame-range selection anchors (menu 262's
+    // first/last offset+base pairs)
+    std::int32_t timelineRangeFirstOffset;   // +0xA05C0
+    std::int32_t timelineRangeFirstBase;     // +0xA05C4
+    std::int32_t timelineRangeLastOffset;    // +0xA05C8
+    std::int32_t timelineRangeLastBase;      // +0xA05CC
 #endif
     unsigned char b6568480;
     unsigned char b6568481;
@@ -792,14 +866,60 @@ static_assert(sizeof(MMDAppState) <= 0xA55E0 + 2048 &&
 
 #ifndef _M_X64
 // every field pinned to its x86 offsets.hpp position
+static_assert(offsetof(MMDAppState, hInstance) == 0,
+              "hInstance x86");
+static_assert(offsetof(MMDAppState, mouseX) == 4,
+              "mouseX x86");
+static_assert(offsetof(MMDAppState, mouseY) == 8,
+              "mouseY x86");
+static_assert(offsetof(MMDAppState, previousMouseX) == 12,
+              "previousMouseX x86");
+static_assert(offsetof(MMDAppState, previousMouseY) == 16,
+              "previousMouseY x86");
+static_assert(offsetof(MMDAppState, upKeyState) == 20,
+              "upKeyState x86");
+static_assert(offsetof(MMDAppState, downKeyState) == 24,
+              "downKeyState x86");
+static_assert(offsetof(MMDAppState, leftKeyState) == 28,
+              "leftKeyState x86");
+static_assert(offsetof(MMDAppState, rightKeyState) == 32,
+              "rightKeyState x86");
+static_assert(offsetof(MMDAppState, shiftModifierState) == 36,
+              "shiftModifierState x86");
+static_assert(offsetof(MMDAppState, spaceKeyState) == 40,
+              "spaceKeyState x86");
+static_assert(offsetof(MMDAppState, escKeyState) == 44,
+              "escKeyState x86");
 static_assert(offsetof(MMDAppState, dialogFlags) == 48,
               "dialogFlags x86");
 static_assert(offsetof(MMDAppState, dialogFlags[16]) == 112,
               "dialogFlags[16] x86");
 static_assert(offsetof(MMDAppState, dialogFlags[17]) == 116,
               "dialogFlags[17] x86");
+static_assert(offsetof(MMDAppState, keyState221) == 120,
+              "keyState221 x86");
+static_assert(offsetof(MMDAppState, keyState226) == 124,
+              "keyState226 x86");
+static_assert(offsetof(MMDAppState, tabKeyState) == 128,
+              "tabKeyState x86");
+static_assert(offsetof(MMDAppState, leftMouseButtonState) == 132,
+              "leftMouseButtonState x86");
+static_assert(offsetof(MMDAppState, rightMouseButtonState) == 136,
+              "rightMouseButtonState x86");
+static_assert(offsetof(MMDAppState, middleMouseButtonState) == 140,
+              "middleMouseButtonState x86");
+static_assert(offsetof(MMDAppState, numpadKeyState) == 144,
+              "numpadKeyState x86");
+static_assert(offsetof(MMDAppState, numpadKeyState[9]) == 180,
+              "numpadKeyState[9] x86");
+static_assert(offsetof(MMDAppState, deleteKeyState) == 184,
+              "deleteKeyState x86");
 static_assert(offsetof(MMDAppState, bC) == 188,
               "bC x86");
+static_assert(offsetof(MMDAppState, ctrlModifierState) == 192,
+              "ctrlModifierState x86");
+static_assert(offsetof(MMDAppState, menuKeyState) == 196,
+              "menuKeyState x86");
 static_assert(offsetof(MMDAppState, optflag) == 760,
               "optflag x86");
 static_assert(offsetof(MMDAppState, optflag[6]) == 766,
@@ -908,6 +1028,38 @@ static_assert(offsetof(MMDAppState, dragOriginX) == 2352,
               "dragOriginX x86");
 static_assert(offsetof(MMDAppState, dragOriginY) == 2356,
               "dragOriginY x86");
+static_assert(offsetof(MMDAppState, viewportToolCenterX) == 2336,
+              "viewportToolCenterX x86");
+static_assert(offsetof(MMDAppState, viewportToolCenterY) == 2340,
+              "viewportToolCenterY x86");
+static_assert(offsetof(MMDAppState, selectedClipW) == 2344,
+              "selectedClipW x86");
+static_assert(offsetof(MMDAppState, boneBoxStartX) == 2360,
+              "boneBoxStartX x86");
+static_assert(offsetof(MMDAppState, boneBoxStartY) == 2364,
+              "boneBoxStartY x86");
+static_assert(offsetof(MMDAppState, cameraTrackCursor) == 648796,
+              "cameraTrackCursor x86");
+static_assert(offsetof(MMDAppState, cameraTrackActive) == 648800,
+              "cameraTrackActive x86");
+static_assert(offsetof(MMDAppState, lightTrackCursor) == 648804,
+              "lightTrackCursor x86");
+static_assert(offsetof(MMDAppState, lightTrackActive) == 648808,
+              "lightTrackActive x86");
+static_assert(offsetof(MMDAppState, shadowTrackCursor) == 648812,
+              "shadowTrackCursor x86");
+static_assert(offsetof(MMDAppState, shadowTrackActive) == 648816,
+              "shadowTrackActive x86");
+static_assert(offsetof(MMDAppState, gravityTrackCursor) == 648820,
+              "gravityTrackCursor x86");
+static_assert(offsetof(MMDAppState, gravityTrackActive) == 648824,
+              "gravityTrackActive x86");
+static_assert(offsetof(MMDAppState, accessoryTrackCursor) == 648828,
+              "accessoryTrackCursor x86");
+static_assert(offsetof(MMDAppState, accessoryTrackCursor[54]) == 649044,
+              "accessoryTrackCursor[54] x86");
+static_assert(offsetof(MMDAppState, accessoryTrackActive) == 649848,
+              "accessoryTrackActive x86");
 static_assert(offsetof(MMDAppState, boneBoxSelectionActive) == 2368,
               "boneBoxSelectionActive x86");
 static_assert(offsetof(MMDAppState, scrollCbSize) == 2372,
@@ -1193,6 +1345,10 @@ static_assert(offsetof(MMDAppState, selfShadowCfgOrUint32) == 655752,
               "selfShadowCfgOrUint32 x86");
 static_assert(offsetof(MMDAppState, selectionBoxDragging) == 655753,
               "selectionBoxDragging x86");
+static_assert(offsetof(MMDAppState, selectionBoxAnchorX) == 655756,
+              "selectionBoxAnchorX x86");
+static_assert(offsetof(MMDAppState, selectionBoxAnchorY) == 655760,
+              "selectionBoxAnchorY x86");
 static_assert(offsetof(MMDAppState, a0194) == 655764,
               "a0194 x86");
 static_assert(offsetof(MMDAppState, modelOutlineRenderingSuppressed) == 655765,
@@ -1211,6 +1367,10 @@ static_assert(offsetof(MMDAppState, buf655780) == 655780,
               "buf655780 x86");
 static_assert(offsetof(MMDAppState, a01E4) == 655844,
               "a01E4 x86");
+static_assert(offsetof(MMDAppState, lightViewProjectionMatrix) == 655848,
+              "lightViewProjectionMatrix x86");
+static_assert(offsetof(MMDAppState, worldViewProjectionMatrix) == 655912,
+              "worldViewProjectionMatrix x86");
 static_assert(offsetof(MMDAppState, activeRenderObject) == 655976,
               "activeRenderObject x86");
 static_assert(offsetof(MMDAppState, activeRenderPass) == 655980,
@@ -1253,8 +1413,8 @@ static_assert(offsetof(MMDAppState, depthTextureCallback) == 656332,
               "depthTextureCallback x86");
 static_assert(offsetof(MMDAppState, a03D0) == 656336,
               "a03D0 x86");
-static_assert(offsetof(MMDAppState, a03D4) == 656340,
-              "a03D4 x86");
+static_assert(offsetof(MMDAppState, openniTrackingCallback) == 656340,
+              "openniTrackingCallback x86");
 static_assert(offsetof(MMDAppState, a03D8) == 656344,
               "a03D8 x86");
 static_assert(offsetof(MMDAppState, a03DC) == 656348,
@@ -1311,6 +1471,10 @@ static_assert(offsetof(MMDAppState, brushes) == 656588,
               "brushes x86");
 static_assert(offsetof(MMDAppState, buf656632) == 656632,
               "buf656632 x86");
+static_assert(offsetof(MMDAppState, timelineRangeFirstOffset) == 656832,
+              "timelineRangeFirstOffset x86");
+static_assert(offsetof(MMDAppState, timelineRangeLastBase) == 656844,
+              "timelineRangeLastBase x86");
 static_assert(offsetof(MMDAppState, b6568480) == 656848,
               "b6568480 x86");
 static_assert(offsetof(MMDAppState, b6568481) == 656849,

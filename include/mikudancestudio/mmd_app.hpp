@@ -528,36 +528,72 @@ public:
         return static_cast<TimelineSelectionRow>(state.pendingTimelineSelectionRow);
     }
     std::uint8_t& SelectionBoxDragging() { return state.selectionBoxDragging; }
-    std::int32_t& MouseX() { return raw<std::int32_t>(0x4); }
-    std::int32_t& MouseY() { return raw<std::int32_t>(0x8); }
-    std::int32_t& PreviousMouseX() { return raw<std::int32_t>(0xC); }
-    std::int32_t& PreviousMouseY() { return raw<std::int32_t>(0x10); }
+    std::int32_t& MouseX() { return state.mouseX; }
+    std::int32_t& MouseY() { return state.mouseY; }
+    std::int32_t& PreviousMouseX() { return state.previousMouseX; }
+    std::int32_t& PreviousMouseY() { return state.previousMouseY; }
     std::uint8_t& ViewportInputActive() {
         return state.viewportInputActive;
     }
-    std::int32_t& ShiftModifierState() { return raw<std::int32_t>(0x24); }
-    std::int32_t& CtrlModifierState() { return raw<std::int32_t>(0xC0); }
+    std::int32_t& ShiftModifierState() { return state.shiftModifierState; }
+    std::int32_t& CtrlModifierState() { return state.ctrlModifierState; }
     bool ShiftModifierActive() const {
-        return raw<std::int32_t>(0x24) == 3;
+        return state.shiftModifierState == 3;
     }
     bool CtrlModifierActive() const {
-        return raw<std::int32_t>(0xC0) == 3;
+        return state.ctrlModifierState == 3;
     }
     std::uint8_t& SidebarResizeDragging() {
         return state.sidebarResizeDragging;
     }
-    std::int32_t& LeftMouseButtonState() { return raw<std::int32_t>(0x84); }
-    std::int32_t& RightMouseButtonState() { return raw<std::int32_t>(0x88); }
-    std::int32_t& MiddleMouseButtonState() { return raw<std::int32_t>(0x8C); }
-    bool LeftMouseButtonHeld() const { return raw<std::int32_t>(0x84) == 3; }
-    bool RightMouseButtonHeld() const { return raw<std::int32_t>(0x88) == 3; }
-    bool MiddleMouseButtonHeld() const { return raw<std::int32_t>(0x8C) == 3; }
-    std::int32_t& SelectionBoxAnchorX() { return raw<std::int32_t>(0xA018C); }
-    std::int32_t& SelectionBoxAnchorY() { return raw<std::int32_t>(0xA0190); }
-    std::int32_t& TimelineRangeFirstOffset() { return raw<std::int32_t>(0xA05C0); }
-    std::int32_t& TimelineRangeFirstBase() { return raw<std::int32_t>(0xA05C4); }
-    std::int32_t& TimelineRangeLastOffset() { return raw<std::int32_t>(0xA05C8); }
-    std::int32_t& TimelineRangeLastBase() { return raw<std::int32_t>(0xA05CC); }
+    std::int32_t& LeftMouseButtonState() { return state.leftMouseButtonState; }
+    std::int32_t& RightMouseButtonState() { return state.rightMouseButtonState; }
+    std::int32_t& MiddleMouseButtonState() { return state.middleMouseButtonState; }
+    bool LeftMouseButtonHeld() const { return state.leftMouseButtonState == 3; }
+    bool RightMouseButtonHeld() const { return state.rightMouseButtonState == 3; }
+    bool MiddleMouseButtonHeld() const { return state.middleMouseButtonState == 3; }
+    std::int32_t& SelectionBoxAnchorX() {
+#if defined(_M_X64)
+        return m_selectionBoxAnchorX;
+#else
+        return state.selectionBoxAnchorX;  // 0xA018C
+#endif
+    }
+    std::int32_t& SelectionBoxAnchorY() {
+#if defined(_M_X64)
+        return m_selectionBoxAnchorY;
+#else
+        return state.selectionBoxAnchorY;  // 0xA0190
+#endif
+    }
+    std::int32_t& TimelineRangeFirstOffset() {
+#if defined(_M_X64)
+        return m_timelineRangeFirstOffset;
+#else
+        return state.timelineRangeFirstOffset;  // 0xA05C0
+#endif
+    }
+    std::int32_t& TimelineRangeFirstBase() {
+#if defined(_M_X64)
+        return m_timelineRangeFirstBase;
+#else
+        return state.timelineRangeFirstBase;  // 0xA05C4
+#endif
+    }
+    std::int32_t& TimelineRangeLastOffset() {
+#if defined(_M_X64)
+        return m_timelineRangeLastOffset;
+#else
+        return state.timelineRangeLastOffset;  // 0xA05C8
+#endif
+    }
+    std::int32_t& TimelineRangeLastBase() {
+#if defined(_M_X64)
+        return m_timelineRangeLastBase;
+#else
+        return state.timelineRangeLastBase;  // 0xA05CC
+#endif
+    }
     std::uint8_t& TimelineRangeApplyEnabled() {
         return state.b6568480;
     }
@@ -604,14 +640,16 @@ public:
 #if defined(_M_X64)
         return m_sceneLight;
 #else
-        return raw<D3DLIGHT9>(647552);  // original state block +0x9E180
+        // The device light overlays the PMM scalars: it starts one float
+        // past v9e17c (0x9E180) and covers lightColor et al. below.
+        return reinterpret_cast<D3DLIGHT9&>(*(&state.v9e17c + 1));
 #endif
     }
     const D3DLIGHT9& SceneLight() const {
 #if defined(_M_X64)
         return m_sceneLight;
 #else
-        return raw<D3DLIGHT9>(647552);
+        return reinterpret_cast<const D3DLIGHT9&>(*(&state.v9e17c + 1));
 #endif
     }
     // The PMM light track stores only RGB and direction.  Its target is the
@@ -652,8 +690,8 @@ public:
         return static_cast<std::int32_t>(EditMode()) >=
                static_cast<std::int32_t>(ViewportEditMode::None);
     }
-    std::int32_t& ViewportToolCenterX() { return raw<std::int32_t>(2336); }
-    std::int32_t& ViewportToolCenterY() { return raw<std::int32_t>(2340); }
+    std::int32_t& ViewportToolCenterX() { return state.viewportToolCenterX; }
+    std::int32_t& ViewportToolCenterY() { return state.viewportToolCenterY; }
     std::uint32_t& ViewportToolHovered() {
         return state.viewportToolHovered;
     }
@@ -673,22 +711,40 @@ public:
     std::int32_t& ViewportToolDragOriginY() {
         return state.dragOriginY;
     }
-    std::int32_t& BoneBoxStartX() { return raw<std::int32_t>(2360); }
-    std::int32_t& BoneBoxStartY() { return raw<std::int32_t>(2364); }
+    std::int32_t& BoneBoxStartX() { return state.boneBoxStartX; }
+    std::int32_t& BoneBoxStartY() { return state.boneBoxStartY; }
     std::int32_t& BoneBoxSelectionActive() {
         return state.boneBoxSelectionActive;
     }
     D3DMATRIX& LightViewProjection() {
-        return raw<D3DMATRIX>(655848);  // 0xA0188
+#if defined(_M_X64)
+        return m_lightViewProjectionMatrix;
+#else
+        return reinterpret_cast<D3DMATRIX&>(state.lightViewProjectionMatrix);
+#endif
     }
     const D3DMATRIX& LightViewProjection() const {
-        return raw<D3DMATRIX>(655848);
+#if defined(_M_X64)
+        return m_lightViewProjectionMatrix;
+#else
+        return reinterpret_cast<const D3DMATRIX&>(
+            state.lightViewProjectionMatrix);
+#endif
     }
     D3DMATRIX& WorldViewProjection() {
-        return raw<D3DMATRIX>(655912);  // 0xA01C8
+#if defined(_M_X64)
+        return m_worldViewProjectionMatrix;
+#else
+        return reinterpret_cast<D3DMATRIX&>(state.worldViewProjectionMatrix);
+#endif
     }
     const D3DMATRIX& WorldViewProjection() const {
-        return raw<D3DMATRIX>(655912);
+#if defined(_M_X64)
+        return m_worldViewProjectionMatrix;
+#else
+        return reinterpret_cast<const D3DMATRIX&>(
+            state.worldViewProjectionMatrix);
+#endif
     }
     IDirect3DTexture9*& AviBackgroundTexture() {
         return reinterpret_cast<IDirect3DTexture9*&>(state.aviBackgroundTexture);
@@ -1128,19 +1184,23 @@ public:
     WNDPROC& OriginalTrackbarProc() {
         return reinterpret_cast<WNDPROC&>(state.origTrackProc);
     }
-    std::uint32_t& CameraTrackCursor() { return raw<std::uint32_t>(648796); }
-    std::uint8_t& CameraTrackActive() { return raw<std::uint8_t>(648800); }
-    std::uint32_t& LightTrackCursor() { return raw<std::uint32_t>(648804); }
-    std::uint8_t& LightTrackActive() { return raw<std::uint8_t>(648808); }
-    std::uint32_t& ShadowTrackCursor() { return raw<std::uint32_t>(648812); }
-    std::uint8_t& ShadowTrackActive() { return raw<std::uint8_t>(648816); }
-    std::uint32_t& GravityTrackCursor() { return raw<std::uint32_t>(648820); }
-    std::uint8_t& GravityTrackActive() { return raw<std::uint8_t>(648824); }
+    std::uint32_t& CameraTrackCursor() { return state.cameraTrackCursor; }
+    std::uint8_t& CameraTrackActive() { return state.cameraTrackActive; }
+    std::uint32_t& LightTrackCursor() { return state.lightTrackCursor; }
+    std::uint8_t& LightTrackActive() { return state.lightTrackActive; }
+    std::uint32_t& ShadowTrackCursor() { return state.shadowTrackCursor; }
+    std::uint8_t& ShadowTrackActive() { return state.shadowTrackActive; }
+    std::uint32_t& GravityTrackCursor() { return state.gravityTrackCursor; }
+    std::uint8_t& GravityTrackActive() { return state.gravityTrackActive; }
     std::uint32_t& AccessoryTrackCursor(int slot) {
-        return raw<std::uint32_t>(648828 + 4 * slot);
+        return state.accessoryTrackCursor[slot];
     }
     std::uint8_t& AccessoryTrackActive(int slot) {
-        return raw<std::uint8_t>(649848 + slot);
+#if defined(_M_X64)
+        return m_accessoryTrackActive[slot];
+#else
+        return state.accessoryTrackActive[slot];
+#endif
     }
     float* CameraPosition() { return &state.cameraPosX; }
     float* CameraRotation() { return &state.cameraPitch; }
@@ -1213,7 +1273,20 @@ public:
 
     // Main window (0x0047A5B0)
     void*& Hwnd()                   { return reinterpret_cast<void*&>(state.hwnd); }        // 657080
-    void*& HInstance()              { return raw<void*>(0); }                        // this+0
+    void*& HInstance() {
+#if defined(_M_X64)
+        return m_hInstance;
+#else
+        return state.hInstance;  // this+0
+#endif
+    }
+    void*& OpenniTrackingCallback() {
+#if defined(_M_X64)
+        return m_openniTrackingCallback;
+#else
+        return state.openniTrackingCallback;  // 0xA03D4
+#endif
+    }
     // Render/locale subsystem ("0x1D574 object"), allocated in
     // InitMainWindowAndD3D; layout restored in d3d_wrapper.hpp.
     D3DRenderer*& Renderer()        { return reinterpret_cast<D3DRenderer*&>(state.rendererOrLocaleTable); }
@@ -1270,6 +1343,27 @@ private:
     // outside the serialized blob; LightDirection/LightColor remain the
     // PMM-facing scalar state and ApplyTimelineLightState synchronizes both.
     D3DLIGHT9 m_sceneLight{};
+
+    // x86 keeps the Win32 instance handle in the state blob at +0; the x64
+    // blob slot stays reserved (RawPad) and the live handle lives here.
+    void* m_hInstance = nullptr;
+
+    // x86 stores the OpenNI is-tracking callback (?OpenNIIsTracking@@YGXPA_N@Z)
+    // at state+0xA03D4; the x64 blob slot stays reserved and the pointer,
+    // which needs 8 bytes, lives here.
+    void* m_openniTrackingCallback = nullptr;
+
+    // x64 mirrors for blob regions that ended short of their x86 span
+    // (see app_layout.hpp pad204/pad213/pad277/pad153 notes):
+    std::int32_t m_selectionBoxAnchorX = 0;
+    std::int32_t m_selectionBoxAnchorY = 0;
+    std::int32_t m_timelineRangeFirstOffset = 0;
+    std::int32_t m_timelineRangeFirstBase = 0;
+    std::int32_t m_timelineRangeLastOffset = 0;
+    std::int32_t m_timelineRangeLastBase = 0;
+    D3DMATRIX m_lightViewProjectionMatrix{};
+    D3DMATRIX m_worldViewProjectionMatrix{};
+    std::uint8_t m_accessoryTrackActive[55] = {};
 
     // This scratch workspace is 3,536 bytes in the original x86 state.  The
     // provisional x64 blob reserves only 3,240 bytes before the next live

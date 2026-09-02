@@ -273,9 +273,9 @@ void MorphStep(MMDApp* app, HWND hwnd, std::size_t lane, int comboId,
 // app float (0x334/0x338/0x33C) and refreshes; edit mode registers the
 // keyframe (sub_42D6E0), zeroes the selected bone's local position component
 // and marks its per-frame edit flag.
-void BonePosEdit(MMDApp* app, std::size_t dispOff, std::size_t axis) {
+void BonePosEdit(MMDApp* app, float* vec, std::size_t axis) {
     if (app->state.optflag[0] != 0) {
-        app->raw<float>(dispOff) = 0.0f;
+        vec[axis] = 0.0f;
         RefreshRequest(-1);
         PostViewRefresh(app);
         return;
@@ -299,9 +299,9 @@ void BonePosEdit(MMDApp* app, std::size_t dispOff, std::size_t axis) {
 // Rz(a04C8)*Rx(a04C0)*Ry(a04C4) (D3DXMatrixRotationZ/X/Y + Multiply) and
 // stores the rotation quaternion into the bone record (+0x14C) via
 // D3DXQuaternionRotationMatrix, marking the bone flag 0x2D98.
-void BoneRotEdit(MMDApp* app, std::size_t dispOff, int axis) {
+void BoneRotEdit(MMDApp* app, float* vec, int axis) {
     if (app->state.optflag[0] != 0) {
-        app->raw<float>(dispOff) = 0.0f;
+        vec[axis] = 0.0f;
         RefreshRequest(-1);
         PostViewRefresh(app);
         return;
@@ -314,41 +314,41 @@ void BoneRotEdit(MMDApp* app, std::size_t dispOff, int axis) {
     Sub42D6E0(app);   // 0x42D6E0 bone-edit keyframe register
     // capture the pre-edit Euler values (the original keeps them on the x87
     // stack across the stores)
-    const float rX = app->raw<float>(0xA04C0);
-    const float rY = app->raw<float>(0xA04C4);
-    const float rZ = app->raw<float>(0xA04C8);
+    const float rX = app->BoneRotationEditDegreesX();   // 0xA04C0
+    const float rY = app->BoneRotationEditDegreesY();   // 0xA04C4
+    const float rZ = app->BoneRotationEditDegreesZ();   // 0xA04C8
     constexpr double kPi = 3.1415926535897931;    // dbl_52B768
     constexpr double kPiF = 3.1415927410125732;   // dbl_52E678 (float pi)
     switch (axis) {
     case 0:  // 540: edited axis = X
-        app->raw<float>(0xA04C0) = 0.0f;
-        app->raw<float>(0xA04C4) =
+        app->BoneRotationEditDegreesX() = 0.0f;
+        app->BoneRotationEditDegreesY() =
             static_cast<float>(-(double)rY * kPi / 180.0);
-        app->raw<float>(0xA04C8) =
+        app->BoneRotationEditDegreesZ() =
             static_cast<float>(180.0 / (-(double)rZ * kPi));
         break;
     case 1:  // 541: edited axis = Y
-        app->raw<float>(0xA04C0) =
+        app->BoneRotationEditDegreesX() =
             static_cast<float>((double)rX * kPiF / 180.0);
-        app->raw<float>(0xA04C4) = 0.0f;
-        app->raw<float>(0xA04C8) =
+        app->BoneRotationEditDegreesY() = 0.0f;
+        app->BoneRotationEditDegreesZ() =
             static_cast<float>(180.0 / (-(double)rZ * kPi));
         break;
     default:  // 542: edited axis = Z
-        app->raw<float>(0xA04C0) =
+        app->BoneRotationEditDegreesX() =
             static_cast<float>((double)rX * kPiF / 180.0);
-        app->raw<float>(0xA04C4) =
+        app->BoneRotationEditDegreesY() =
             static_cast<float>(180.0 / (-(double)rY * kPi));
-        app->raw<float>(0xA04C8) = 0.0f;
+        app->BoneRotationEditDegreesZ() = 0.0f;
         break;
     }
     auto* d3dx = &d3dx::Get();
     if (d3dx->Load()) {
         d3dx::D3DXMATRIXF m, m2;
-        d3dx->rotZ(&m, app->raw<float>(0xA04C8));
-        d3dx->rotX(&m2, app->raw<float>(0xA04C0));
+        d3dx->rotZ(&m, app->BoneRotationEditDegreesZ());
+        d3dx->rotX(&m2, app->BoneRotationEditDegreesX());
         d3dx->multiply(&m, &m, &m2);
-        d3dx->rotY(&m2, app->raw<float>(0xA04C4));
+        d3dx->rotY(&m2, app->BoneRotationEditDegreesY());
         d3dx->multiply(&m, &m, &m2);
         unsigned char* model = ActiveModel(app);
         d3dx->quatFromMatrix(mdl::Mdl(model)->boneTable[sel].rotQuat, &m);
@@ -634,24 +634,24 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 537..539: bone position edit boxes 0x219..0x21B ----------------
     case 537:  // 0x48BFF7 (pos X: app 0x334, record +0x140)
-        BonePosEdit(app, offsets::kFloatPosx, 0);
+        BonePosEdit(app, app->CameraPosition(), 0);
         break;
     case 538:  // 0x48C081 (pos Y: app 0x338, record +0x144)
-        BonePosEdit(app, offsets::kFloatPosy, 1);
+        BonePosEdit(app, app->CameraPosition(), 1);
         break;
     case 539:  // 0x48C10B (pos Z: app 0x33C, record +0x148)
-        BonePosEdit(app, offsets::kFloatPosz, 2);
+        BonePosEdit(app, app->CameraPosition(), 2);
         break;
 
     // ---- 540..542: bone rotation edit boxes 0x21C..0x21E ----------------
     case 540:  // 0x48C195 (rot X: app 0x310, edited axis X)
-        BoneRotEdit(app, offsets::kFloatCam2, 0);
+        BoneRotEdit(app, app->CameraRotation(), 0);
         break;
     case 541:  // 0x48C2E4 (rot Y: app 0x314, edited axis Y)
-        BoneRotEdit(app, offsets::kFloatCam3, 1);
+        BoneRotEdit(app, app->CameraRotation(), 1);
         break;
     case 542:  // 0x48C435 (rot Z: app 0x318, edited axis Z)
-        BoneRotEdit(app, offsets::kFloatCam4, 2);
+        BoneRotEdit(app, app->CameraRotation(), 2);
         break;
 
     // ---- 543: camera-angle edit box 0x21F -------------------------------
@@ -756,7 +756,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         SendMessageA(GetDlgItem(hwnd, 0x232), BM_SETCHECK, 1, 0);
         SendMessageA(GetDlgItem(hwnd, 0x233), BM_SETCHECK, 0, 0);
         SendMessageA(GetDlgItem(hwnd, 0x234), BM_SETCHECK, 0, 0);
-        app->raw<std::int32_t>(0xA0D30) = 0;
+        app->SelfShadowMode() = 0;
         RefreshRequest(-3);
         break;
     }
@@ -764,7 +764,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         SendMessageA(GetDlgItem(hwnd, 0x232), BM_SETCHECK, 0, 0);
         SendMessageA(GetDlgItem(hwnd, 0x233), BM_SETCHECK, 1, 0);
         SendMessageA(GetDlgItem(hwnd, 0x234), BM_SETCHECK, 0, 0);
-        app->raw<std::int32_t>(0xA0D30) = 1;
+        app->SelfShadowMode() = 1;
         RefreshRequest(-3);
         break;
     }
@@ -772,7 +772,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         SendMessageA(GetDlgItem(hwnd, 0x232), BM_SETCHECK, 0, 0);
         SendMessageA(GetDlgItem(hwnd, 0x233), BM_SETCHECK, 0, 0);
         SendMessageA(GetDlgItem(hwnd, 0x234), BM_SETCHECK, 1, 0);
-        app->raw<std::int32_t>(0xA0D30) = 2;
+        app->SelfShadowMode() = 2;
         RefreshRequest(-3);
         break;
     }
@@ -821,8 +821,8 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             CheckMenuItem(GetMenu(hwnd), 0xD3, MF_UNCHECKED);
         } else {
             app->state.fpsOverlayEnabled = 1;
-            app->raw<float>(0x320) = 0.0f;
-            app->raw<std::int32_t>(0x324) = 0;
+            app->state.fpsOverlayElapsedSeconds = 0.0f;
+            app->state.fpsOverlayFrameCount = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD3, MF_CHECKED);
         }
         break;

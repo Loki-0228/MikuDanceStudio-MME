@@ -195,7 +195,7 @@ void MMDApp::InitDefaults() {
     state.a03C8 = 0;
     state.depthTextureCallback = nullptr;
     state.a03D0 = 0;
-    state.a03D4 = 0;
+    s.OpenniTrackingCallback() = nullptr;
     state.a03DC = 1;
     state.a03DD = 0;
     state.depthTextureCompositionEnabled = 1;

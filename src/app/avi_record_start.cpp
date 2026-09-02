@@ -276,7 +276,7 @@ void StartAviRecordWindow(MMDApp* app) {
     AdjustWindowRect(&rc, 0x80C00000, FALSE);                  // 0x45E95F
     char title[0x32];
     strcpy_s(title, 0x32, s.EnglishUI() != 0 ? kRecTitleEn : kRecTitleJp);
-    HINSTANCE hInst = static_cast<HINSTANCE>(s.raw<void*>(0));  // this+0
+    HINSTANCE hInst = static_cast<HINSTANCE>(s.HInstance());  // this+0
     HWND recWnd = CreateWindowExA(                             // 0x45E9C6
         0, "RecWindow", title, 0x80CA0000, 100, 100,
         rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInst,
