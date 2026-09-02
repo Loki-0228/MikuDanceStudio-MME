@@ -107,10 +107,10 @@ void ResetAppState(MMDApp* app) {
     if (w292 != nullptr)
         DestroyWindow(w292);
     reinterpret_cast<HWND&>(app->state.a0b74OrInt32) = nullptr;
-    HWND w256 = reinterpret_cast<HWND&>(app->state.a0B50OrPtr);
+    HWND w256 = app->FrameRangeDialog();
     if (w256 != nullptr)
         DestroyWindow(w256);
-    reinterpret_cast<HWND&>(app->state.a0B50OrPtr) = nullptr;
+    app->FrameRangeDialog() = nullptr;
     HWND w244 = app->state.a0B44OrInt32;
     if (w244 != nullptr)
         DestroyWindow(w244);

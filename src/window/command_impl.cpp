@@ -186,7 +186,7 @@ void CmdOpenWave(MMDApp* app) {
 
 // 0xCF / 0xD3 - Play: play/pause toggle
 void CmdPlayPause(MMDApp* app) {
-    app->raw<unsigned char>(offsets::kByteBa0d2c) ^= 1;            // 658348
+    reinterpret_cast<unsigned char&>(app->state.physicsInterval) ^= 1;  // 658348
 }
 
 // 0xD0 - File: save PMM scene
@@ -318,7 +318,7 @@ void CmdToggleMorphDisplay(MMDApp* app) {
     app->raw<unsigned char>(offsets::kByteB9ed99) ^= 1;            // 650137
 }
 void CmdTogglePhysicsDisplay(MMDApp* app) {
-    app->raw<unsigned char>(offsets::kByteB9ed9a) ^= 1;            // 650138
+    app->state.projectedShadowBlendEnabled ^= 1;            // 650138
 }
 
 // 0xD9/0xDA/0xDC - select-all frame groups

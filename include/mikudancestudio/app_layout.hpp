@@ -289,7 +289,7 @@ struct MMDAppState {
 #endif
     std::uint32_t v9e1cc;
     RawPad<24> pad122;
-    float fovW4;
+    float cameraFov;
     wchar_t wcs9e1ec[256];
     void* drawDib;
     void* aviBackgroundTexture;
@@ -447,9 +447,9 @@ struct MMDAppState {
 #if defined(_M_X64)
     RawPad<2> pad208;
 #endif
-    std::uint32_t modelOutlineColorRed;
-    std::uint32_t modelOutlineColorGreen;
-    std::uint32_t modelOutlineColorBlue;
+    std::int32_t modelOutlineColorRed;
+    std::int32_t modelOutlineColorGreen;
+    std::int32_t modelOutlineColorBlue;
     unsigned char buf655780[64];
     unsigned char a01E4;
 #if defined(_M_X64)
@@ -509,7 +509,7 @@ struct MMDAppState {
     unsigned char a03E6;
     unsigned char a03E7;
     unsigned char a03E8;
-    unsigned char a03E9;
+    unsigned char automaticFrameAdvanceEnabled;
     unsigned char openniVersion;
     unsigned char timelineSelectionChanged;
 #if defined(_M_X64)
@@ -631,7 +631,12 @@ struct MMDAppState {
 #endif
     unsigned char englishUI;
     RawPad<3> pad353;
+#if defined(_M_X64)
+    // x64: the frame-range dialog HWND lives outside the blob (MMDApp)
     std::int32_t a0B50OrPtr;
+#else
+    HWND frameRangeDialog;
+#endif
 #ifndef _M_X64
     RawPad<16> pad354;
 #endif
@@ -705,7 +710,7 @@ struct MMDAppState {
     HWND recordingWindow;
     unsigned char selfShadowCompositionEnabled;
     RawPad<3> pad378;
-    float ba0d2cOrByte;  // aka kFloatPhysicsint
+    float physicsInterval;  // aka kFloatPhysicsint
     std::int32_t selfShadowMode;
     RawPad<4> pad380;
     HWND floatingWindow;  // aka kDwordA0d38
@@ -987,8 +992,8 @@ static_assert(offsetof(MMDAppState, v9e1ac) == 647596,
               "v9e1ac x86");
 static_assert(offsetof(MMDAppState, v9e1cc) == 647628,
               "v9e1cc x86");
-static_assert(offsetof(MMDAppState, fovW4) == 647656,
-              "fovW4 x86");
+static_assert(offsetof(MMDAppState, cameraFov) == 647656,
+              "cameraFov x86");
 static_assert(offsetof(MMDAppState, wcs9e1ec) == 647660,
               "wcs9e1ec x86");
 static_assert(offsetof(MMDAppState, drawDib) == 648172,
@@ -1242,8 +1247,8 @@ static_assert(offsetof(MMDAppState, a03E7) == 656359,
               "a03E7 x86");
 static_assert(offsetof(MMDAppState, a03E8) == 656360,
               "a03E8 x86");
-static_assert(offsetof(MMDAppState, a03E9) == 656361,
-              "a03E9 x86");
+static_assert(offsetof(MMDAppState, automaticFrameAdvanceEnabled) == 656361,
+              "automaticFrameAdvanceEnabled x86");
 static_assert(offsetof(MMDAppState, openniVersion) == 656362,
               "openniVersion x86");
 static_assert(offsetof(MMDAppState, timelineSelectionChanged) == 656363,
@@ -1360,6 +1365,10 @@ static_assert(offsetof(MMDAppState, accessoryRenderSplitOrder) == 658208,
               "accessoryRenderSplitOrder x86");
 static_assert(offsetof(MMDAppState, a0B44OrInt32) == 658244,
               "a0B44OrInt32 x86");
+#ifndef _M_X64
+static_assert(offsetof(MMDAppState, frameRangeDialog) == 658256,
+              "frameRangeDialog x86");
+#endif
 static_assert(offsetof(MMDAppState, englishUI) == 658252,
               "englishUI x86");
 static_assert(offsetof(MMDAppState, a0B50OrPtr) == 658256,
@@ -1420,8 +1429,8 @@ static_assert(offsetof(MMDAppState, recordingWindow) == 658724,
               "recordingWindow x86");
 static_assert(offsetof(MMDAppState, selfShadowCompositionEnabled) == 658728,
               "selfShadowCompositionEnabled x86");
-static_assert(offsetof(MMDAppState, ba0d2cOrByte) == 658732,
-              "ba0d2cOrByte x86");
+static_assert(offsetof(MMDAppState, physicsInterval) == 658732,
+              "physicsInterval x86");
 static_assert(offsetof(MMDAppState, selfShadowMode) == 658736,
               "selfShadowMode x86");
 static_assert(offsetof(MMDAppState, floatingWindow) == 658744,

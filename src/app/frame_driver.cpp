@@ -64,7 +64,7 @@ void AdvanceFrameRenderGate(MMDApp* app) {
         state = 1;
     if (app->raw<std::uint8_t>(offsets::kByteFlag672800) == 0)
         state = 1;
-    if (app->raw<std::uint32_t>(offsets::kDwordA0B50) != 0)
+    if (app->state.a0B50OrPtr != 0)
         state = 1;
 
     if (state == 1)
@@ -332,7 +332,11 @@ void TimelineAdvance(MMDApp* app) {
     Sub42C810(app);                                               // 0x460417
 }
 
+// TEMP(debug, keyframe-drag crash) - defined in ui_editor_click.cpp
+void TimelineCanaryCheck(MMDApp* app);
+
 void FrameDriver(MMDApp* app) {
+    TimelineCanaryCheck(app);
     // DIAGNOSTIC ONLY: append a tick per pass to prove liveness of the
     // frame driver in real-time runs (stderr is unavailable in the GUI
     // subsystem).

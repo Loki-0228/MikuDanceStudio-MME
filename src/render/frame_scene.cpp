@@ -371,7 +371,7 @@ void RenderFrameScene(MMDApp* app) {
     if (sub->d3dInitialized != 0)
         clearFlags |= D3DCLEAR_STENCIL;
     const D3DCOLOR clearColor =
-        app->raw<std::uint8_t>(offsets::kByteA0194) != 0
+        app->state.a0194 != 0
             ? D3DCOLOR_XRGB(0, 0, 0)
             : D3DCOLOR_XRGB(255, 255, 255);
     device->Clear(0, nullptr, clearFlags, clearColor, 1.0f, 0);

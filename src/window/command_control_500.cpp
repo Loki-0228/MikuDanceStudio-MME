@@ -787,7 +787,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         char buf[0x100];
         GetWindowTextA(GetDlgItem(hwnd, 0x231), buf, 8);
         const float v = static_cast<float>(atof(buf));
-        app->raw<float>(offsets::kFloatPhysicsint) =
+        app->state.physicsInterval =
             static_cast<float>((10000.0 - (double)v) / 100000.0);
         SendMessageA(GetDlgItem(hwnd, 0x230), TBM_SETPOS, 1,
                      static_cast<LPARAM>(static_cast<std::int32_t>(v)));

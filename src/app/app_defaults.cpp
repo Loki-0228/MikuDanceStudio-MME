@@ -205,7 +205,7 @@ void MMDApp::InitDefaults() {
     state.a03E6 = 0;
     state.a03E7 = 0;
     state.a03E8 = 0;
-    state.a03E9 = 0;
+    state.automaticFrameAdvanceEnabled = 0;
     state.messageSeen = 1;
     s.TimelineSelectionChanged() = 0;
     s.ViewModeComboSelection() = 0;

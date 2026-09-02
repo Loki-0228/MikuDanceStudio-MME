@@ -649,7 +649,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     // ---- 0x46AFD4..0x46B06E: self-shadow mode/range mirrors ---------------
     SendMessageA(GetDlgItem(hwnd, 0x233), BM_SETCHECK, BST_CHECKED, 0);
     const double rangeValue =
-        10000.0 - static_cast<double>(s.raw<float>(offsets::kFloatPhysicsint)) *
+        10000.0 - static_cast<double>(s.state.physicsInterval) *
                       100000.0;
     const int rangePos = static_cast<int>(rangeValue + 0.5);
     setTrack(0x230, rangePos);

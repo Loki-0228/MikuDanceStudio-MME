@@ -389,7 +389,7 @@ void Sub450000(MMDApp* app, int fd) {
     s->raw<float>(off::kDwordA043c14) = 1.0f;                   // 0xA0474
     s->raw<float>(off::kDwordA043c9) = 1.0f;                    // 0xA0460
     s->raw<float>(off::kDwordA043c3 + 4) = 1.0f;                // 0xA044C
-    s->raw<float>(off::kFloatColor16) = 1.0f;                   // 0xA0438
+    s->state.cameraAttachmentBasis[0] = 1.0f;                   // 0xA0438
     s->state.v9ed98 = 0;               // 0x9ED98
 
     HWND const main = reinterpret_cast<HWND>(s->Hwnd());
@@ -414,7 +414,7 @@ void Sub450000(MMDApp* app, int fd) {
     SendMessageA(GetDlgItem(main, 0x217), BM_SETCHECK, 0, 0);
 
     s->state.selfShadowMode = 0;                // 0x450161
-    s->raw<std::uint32_t>(off::kByteBa0d2c) = 0x3C3851ECu;      // flt_52A1D8
+    s->state.physicsInterval = 0x3C3851ECu;      // flt_52A1D8
 
     // ---- AVI teardown trio (0x45016D..0x4501B5) --------------------------
     if (s->AviFrameReader() != nullptr) {
@@ -452,7 +452,7 @@ void Sub450000(MMDApp* app, int fd) {
         else
             s->raw<std::uint32_t>(off::kDwordV658748) = editFlag;   // A0D3C
     }
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloat9e1e8), 4);        // fov
+    Rd(fd, &s->state.cameraFov, 4);        // fov
     for (int f = 0; f < 7; ++f) {
         unsigned char b = 0;
         Rd(fd, &b, 1);
@@ -476,7 +476,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
     EnableMenuItem(GetMenu(main), 0x121, 1);                    // 0x45044C
 
     // ---- model count / record array (0x45044E..0x4504B4) ----------------
-    s->raw<unsigned char>(off::kByte9ED9A) = 0;                 // 0x450458
+    s->state.projectedShadowBlendEnabled = 0;                 // 0x450458
     Rd(fd, &s->SelectedModelSlot(), 1);                         // 0x45045F
     unsigned char modelCount = 0;
     Rd(fd, &modelCount, 1);                                     // 0x45046C
@@ -1679,7 +1679,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
         wrap->postProcessEnabled ? 1 : 0;                        // 0x454D0D
     selfShadowKeys[0].distance = 0.01125f;                       // flt_52A1D8
     s->state.selfShadowMode = 1;                // 0x454D3B
-    s->raw<std::uint32_t>(off::kByteA0188) = 0;
+    s->state.selfShadowCfgOrUint32 = 0;
     gravityKeys[0].noise = 10;
     gravityKeys[0].acceleration = 9.8000002f;
     gravityKeys[0].direction[1] = -1.0f;
@@ -1743,7 +1743,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
     // frame UI (0x4551AD..0x455276)
     {
         const int frame =
-            static_cast<int>(s->raw<float>(off::kFloat9e1e8));    // 0x9E1E8
+            static_cast<int>(s->state.cameraFov);    // 0x9E1E8
         // 0x405 = TBM_SETPOS (0x4551B0: wParam 1 = redraw, lParam frame).
         SendMessageA(GetDlgItem(main, 447), 0x405 /*TBM_SETPOS*/, 1,
                      frame);
@@ -2256,9 +2256,9 @@ label_708:
         s->state.gravityX = 0.0f;
         s->state.gravityY = -1.0f;
         s->state.gravityZ = 0.0f;
-        s->raw<std::uint32_t>(off::kDwordA0198) = 0;
-        s->raw<std::uint32_t>(off::kDwordA019C) = 0;
-        s->raw<std::uint32_t>(off::kDwordA01A0) = 0;
+        s->state.modelOutlineColorRed = 0;
+        s->state.modelOutlineColorGreen = 0;
+        s->state.modelOutlineColorBlue = 0;
         SendMessageA(GetDlgItem(main, 449), CB_SETCURSEL, 0, 0);
         SendMessageA(GetDlgItem(main, 450), CB_SETCURSEL, 0, 0);
         // 0xA0B20 + shadow distance copies (0x45740E..0x457443)
@@ -2279,10 +2279,10 @@ label_708:
         }
         Rd(fd, &b, 1);                                          // 0x4574DF
         if (b == 1) {
-            s->raw<unsigned char>(off::kByte9ED9A) = 1;
+            s->state.projectedShadowBlendEnabled = 1;
             CheckMenuItem(GetMenu(main), 0xFE, 8);
         } else {
-            s->raw<unsigned char>(off::kByte9ED9A) = 0;
+            s->state.projectedShadowBlendEnabled = 0;
         }
         unsigned char pmode = 0;
         Rd(fd, &pmode, 1);                                      // 0x457523
@@ -2367,12 +2367,12 @@ label_708:
         unsigned char b = 0;                                    // 0x4579FA
         Rd(fd, &b, 1);
         s->state.selfShadowMode = b;
-        s->raw<unsigned char>(off::kByteA0188) = (b != 0) ? 1 : 0;
+        s->state.selfShadowCfgOrUint32 = (b != 0) ? 1 : 0;
     }
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatPhysicsint), 4);   // 0x457A22
+    Rd(fd, &s->state.physicsInterval, 4);   // 0x457A22
     selfShadowKeys[0].mode =
         static_cast<unsigned char>(s->state.selfShadowMode);
-    selfShadowKeys[0].distance = s->raw<float>(off::kFloatPhysicsint);
+    selfShadowKeys[0].distance = s->state.physicsInterval;
     // self-shadow track read (0x457A4F..0x457BDE), 24-byte app+0x37C.
     {
         const auto readShadowRecord = [&](mdl::SelfShadowKey& key) {
@@ -2395,23 +2395,23 @@ label_708:
         }
     }
     // model color sweep (0x457BEE..0x457C76)
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordA0198), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordA019C), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordA01A0), 4);
-    if (s->raw<std::uint32_t>(off::kDwordA0198) != 0 ||
-        s->raw<std::uint32_t>(off::kDwordA019C) != 0 ||
-        s->raw<std::uint32_t>(off::kDwordA01A0) != 0) {
+    Rd(fd, &s->state.modelOutlineColorRed, 4);
+    Rd(fd, &s->state.modelOutlineColorGreen, 4);
+    Rd(fd, &s->state.modelOutlineColorBlue, 4);
+    if (s->state.modelOutlineColorRed != 0 ||
+        s->state.modelOutlineColorGreen != 0 ||
+        s->state.modelOutlineColorBlue != 0) {
         for (int i = 0; i < 100; ++i)
             if (slots[i] != nullptr)
                 Sub4A4850(reinterpret_cast<MMDApp*>(slots[i]),
-                          s->raw<std::int32_t>(off::kDwordA0198),
-                          s->raw<std::int32_t>(off::kDwordA019C),
-                          s->raw<std::int32_t>(off::kDwordA01A0));
+                          s->state.modelOutlineColorRed,
+                          s->state.modelOutlineColorGreen,
+                          s->state.modelOutlineColorBlue);
     }
     {
         unsigned char b = 0;
         Rd(fd, &b, 1);                                          // 0x457C80
-        s->raw<unsigned char>(off::kByteA0194) = b ? 1 : 0;
+        s->state.a0194 = b ? 1 : 0;
         CheckMenuItem(GetMenu(main), 0x11A, b ? 8 : 0);
     }
     Rd(fd, &s->state.cameraParentModel, 4);        // 0x457CD2
@@ -2439,7 +2439,7 @@ label_708:
         }
     }
     // 16 config dwords (0x457E79..0x457F60)
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatColor16), 4);      // 0xA0438
+    Rd(fd, &s->state.cameraAttachmentBasis, 4);      // 0xA0438
     for (int i = 0; i < 15; ++i)
         Rd(fd, &s->raw<std::uint32_t>(656444 + 4 * i), 4);      // 0xA043C..
     {
@@ -2460,11 +2460,11 @@ label_708:
         btRigidBody* const groundBody = s->Physics()->groundBody;
         if (b == 1) {
             CheckMenuItem(GetMenu(main), 0x11D, 8);
-            s->raw<unsigned char>(off::kByteA0197) = 1;
+            s->state.a0197 = 1;
             groundBody->setDeactivationTime(1.0f);
         } else {
             CheckMenuItem(GetMenu(main), 0x11D, 0);
-            s->raw<unsigned char>(off::kByteA0197) = 0;
+            s->state.a0197 = 0;
             groundBody->setDeactivationTime(-1.0f);
         }
     }
@@ -2490,11 +2490,11 @@ label_708:
     if (wrap->postProcessEnabled != 0) {
         Sub411B90(s);                                           // 0x45813E
     } else {
-        s->raw<unsigned char>(off::kByteA0188) = 0;
+        s->state.selfShadowCfgOrUint32 = 0;
         s->state.selfShadowMode = 0;
     }
     CheckMenuItem(GetMenu(main), 0x117,
-                  s->raw<unsigned char>(off::kByteA0188) != 0 ? 8 : 0);
+                  s->state.selfShadowCfgOrUint32 != 0 ? 8 : 0);
     {
         unsigned char* m = slots[s->SelectedModelSlot()];
         if (m != nullptr && s->raw<unsigned char>(760) == 0 &&

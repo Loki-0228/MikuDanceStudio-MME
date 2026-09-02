@@ -283,7 +283,7 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
     else if (ctrl == GetDlgItem(hwnd, 560)) {
         const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 560),
                                          0x400 /*TBM_GETPOS*/, 0, 0);
-        app->raw<float>(offsets::kFloatPhysicsint) = static_cast<float>(
+        app->state.physicsInterval = static_cast<float>(
             static_cast<double>(10000 - static_cast<int>(pos)) / 100000.0);
         char buf[256];
         sprintf_s(buf, 0x100, "%d", static_cast<int>(pos));

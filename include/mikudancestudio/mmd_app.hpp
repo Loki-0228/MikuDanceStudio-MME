@@ -177,6 +177,15 @@ public:
     // like the original's `this-><field>`.
     MMDAppState state;
 
+    // Frame-range output dialog HWND (x86 blob slot 0xA0B50).
+    HWND& FrameRangeDialog() {
+#if defined(_M_X64)
+        return m_frameRangeDialog;
+#else
+        return state.frameRangeDialog;
+#endif
+    }
+
     // Sub-window torn down on scene reset (x86 blob slot 0xA0A6C).
     HWND& SceneResetSubWindow() {
 #if defined(_M_X64)
@@ -629,7 +638,7 @@ public:
         return raw<IDirect3DTexture9*>(offsets::kDword9F130);
     }
     std::uint8_t& ProjectedShadowBlendEnabled() {
-        return raw<std::uint8_t>(offsets::kByte9ED9A);
+        return state.projectedShadowBlendEnabled;
     }
     void*& ActiveRenderObject() {
         return raw<void*>(offsets::kDwordA0268);
@@ -638,16 +647,16 @@ public:
         return raw<AccessoryRenderPass>(offsets::kDwordA026C);
     }
     std::uint8_t& ModelOutlineRenderingSuppressed() {
-        return raw<std::uint8_t>(offsets::kByteA0195);
+        return state.modelOutlineRenderingSuppressed;
     }
     std::int32_t& ModelOutlineColorRed() {
-        return raw<std::int32_t>(offsets::kDwordA0198);
+        return state.modelOutlineColorRed;
     }
     std::int32_t& ModelOutlineColorGreen() {
-        return raw<std::int32_t>(offsets::kDwordA019C);
+        return state.modelOutlineColorGreen;
     }
     std::int32_t& ModelOutlineColorBlue() {
-        return raw<std::int32_t>(offsets::kDwordA01A0);
+        return state.modelOutlineColorBlue;
     }
     std::uint8_t& WireframeRenderingEnabled() {
         return raw<std::uint8_t>(0xA01D4);
@@ -713,7 +722,7 @@ public:
         return raw<std::uint8_t>(offsets::kByteA03DE);
     }
     std::uint8_t& DepthDeviceEnabled() {
-        return raw<std::uint8_t>(offsets::kByteA03B8);
+        return state.depthDeviceEnabled;
     }
     DepthTextureProvider& DepthTextureCallback() {
         return reinterpret_cast<DepthTextureProvider&>(state.depthTextureCallback);
@@ -929,19 +938,19 @@ public:
     std::int32_t& FpsOverlayFrameCount() { return raw<std::int32_t>(804); }
     std::int32_t& FramesPerSecond() { return raw<std::int32_t>(808); }
     float& BoneRotationEditDegreesX() {
-        return raw<float>(offsets::kFloatEulerx);
+        return state.eulerX;
     }
     float& BoneRotationEditDegreesY() {
-        return raw<float>(offsets::kFloatEulery);
+        return state.eulerY;
     }
     float& BoneRotationEditDegreesZ() {
-        return raw<float>(offsets::kFloatEulerz);
+        return state.eulerZ;
     }
     std::uint8_t& AudioSeekReady() {
         return raw<std::uint8_t>(offsets::kByteA02B6);
     }
     std::uint8_t& AutomaticFrameAdvanceEnabled() {
-        return raw<std::uint8_t>(offsets::kByteA03E9);
+        return state.automaticFrameAdvanceEnabled;
     }
     WNDPROC& OriginalEditProc() {
         return reinterpret_cast<WNDPROC&>(state.origEditProc);
@@ -974,7 +983,7 @@ public:
     float& ViewOffsetX() { return state.viewOffsetX; }
     float& ViewOffsetY() { return state.viewOffsetY; }
     float& CameraDistance() { return state.cameraDistance; }
-    float& CameraFov() { return raw<float>(offsets::kFloat9e1e8); }
+    float& CameraFov() { return state.cameraFov; }
     std::uint8_t& CameraPerspective() {
         return state.cameraPerspective;
     }
@@ -990,10 +999,10 @@ public:
             state.cameraReferenceMode);
     }
     D3DMATRIX& CameraAttachmentBasis() {
-        return raw<D3DMATRIX>(offsets::kFloatColor16);
+        return reinterpret_cast<D3DMATRIX&>(state.cameraAttachmentBasis);
     }
     const D3DMATRIX& CameraAttachmentBasis() const {
-        return raw<D3DMATRIX>(offsets::kFloatColor16);
+        return reinterpret_cast<const D3DMATRIX&>(state.cameraAttachmentBasis);
     }
     std::uint8_t& CameraAttachmentTransformSuppressed() {
         return raw<std::uint8_t>(offsets::kByteA0478);
@@ -1008,7 +1017,7 @@ public:
         return state.selfShadowMode;
     }
     float& ShadowDistance() {
-        return raw<float>(offsets::kFloatPhysicsint);
+        return state.physicsInterval;
     }
     float* GravityDirection() { return &GravityX(); }
     std::int32_t& GravityNoise() {
@@ -1067,7 +1076,7 @@ public:
     float& GravityY()               { return state.gravityY; }
     float& GravityZ()               { return state.gravityZ; }
     float& GravityMagnitude()       { return state.gravityMagnitude; }
-    float& PhysicsInterval()        { return raw<float>(offsets::kFloatPhysicsint); }  // 0.01125
+    float& PhysicsInterval()        { return state.physicsInterval; }  // 0.01125
 
     // Recent-file ANSI buffers (char[256] each)
     char* RecentFile(int index) {
@@ -1117,6 +1126,7 @@ private:
     wchar_t m_aviOutputPath[256]{};
     std::int32_t m_aviCodecSelection{};
     HWND m_hwndA0A6C = nullptr;
+    HWND m_frameRangeDialog = nullptr;
 #endif
 };
 

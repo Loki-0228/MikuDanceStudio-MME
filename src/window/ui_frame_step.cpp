@@ -130,7 +130,7 @@ void RefreshTimeline(MMDApp* app, bool forward) {
         RECT rect{6, 95,
                   app->SidebarWidth() - 3, 146};
         InvalidateRect(static_cast<HWND>(app->Hwnd()), &rect, FALSE);
-        if (app->raw<std::uint8_t>(offsets::kByteA0196) != 0) {
+        if (app->state.a0196 != 0) {
             const bool seek =
                 app->AutomaticFrameAdvanceEnabled() == 0;
             app->AudioSeekReady() = 1;

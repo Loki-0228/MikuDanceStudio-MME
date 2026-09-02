@@ -442,10 +442,10 @@ void ShutdownCleanup(MMDApp* app) {
     auto& s = *app;
 
     // ---- 1/2: flag-gated callback + module unload ------------------------
-    if (s.raw<std::uint8_t>(offsets::kByteA03B8) != 0) {        // 0x462C6F
+    if (s.state.depthDeviceEnabled != 0) {        // 0x462C6F
         reinterpret_cast<void(*)()>(
             s.raw<void*>(offsets::kDwordA03C4))();              // 0x462C81
-        s.raw<std::uint8_t>(offsets::kByteA03B8) = 0;
+        s.state.depthDeviceEnabled = 0;
     }
     if (HMODULE mod = s.raw<HMODULE>(offsets::kDwordA03BC)) {   // 0x462C89
         FreeLibrary(mod);                                       // 0x462C94

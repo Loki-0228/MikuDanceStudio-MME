@@ -507,7 +507,7 @@ void Sub410560(MMDApp* app, int frame) {
     std::memcpy(source.eye, app->at(0x334), sizeof(source.eye));
     std::memcpy(source.target, app->at(0x310), sizeof(source.target));
     source.fov = static_cast<std::int32_t>(
-        app->raw<float>(offsets::kFloat9e1e8));
+        app->state.cameraFov);
     source.perspective = app->CameraPerspective();
     source.distance = app->CameraDistance();
     source.parentModel = app->CameraParentModel();
@@ -1570,7 +1570,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 436:
         if (notify == CBN_SELCHANGE &&
-            app->raw<std::int32_t>(offsets::kDwordA0B50) == 0) {
+            app->state.a0B50OrPtr == 0) {
             Sub44D940(app);
         }
         break;
@@ -1595,7 +1595,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // blob +0x10/+0x0C); Sub44D940.
     // ------------------------------------------------------------------
     case 437: {
-        if (app->raw<std::int32_t>(offsets::kDwordA0B50) != 0) {
+        if (app->state.a0B50OrPtr != 0) {
             break;
         }
         const LRESULT sel =

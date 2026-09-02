@@ -278,7 +278,7 @@ void WarpCursor(MMDApp* app, POINT point) {
         return;
     ClientToScreen(window, &point);
     SetCursorPos(point.x, point.y);
-    app->raw<std::uint8_t>(offsets::kByte9F12C) = 1;
+    app->state.v9f12c = 1;
 }
 
 void BeginCenteredDrag(MMDApp* app, int operation) {

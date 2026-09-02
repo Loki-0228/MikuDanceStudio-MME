@@ -46,7 +46,7 @@ int Sub428FF0(MMDApp* app, unsigned short x, unsigned short y) {
         s.raw<std::uint8_t>(offsets::kByteA06B4) = 0;              // 0x429050
     }
     if (s.MouseX() != x || s.MouseY() != y) {                      // 0x42906F
-        const bool first = s.raw<std::uint8_t>(offsets::kByte9F12C) == 0;
+        const bool first = s.state.v9f12c == 0;
         s.MouseX() = x;                                             // 0x429077
         s.MouseY() = y;                                             // 0x42907A
         if (!first) {
@@ -58,7 +58,7 @@ int Sub428FF0(MMDApp* app, unsigned short x, unsigned short y) {
                 s.raw<std::uint8_t>(offsets::kByteB6568483) = 1;   // 0x4290AC
             s.PreviousMouseX() = x;                                // 0x4290B4
             s.PreviousMouseY() = y;                                // 0x4290B7
-            s.raw<std::uint8_t>(offsets::kByte9F12C) = 0;          // 0x4290BA
+            s.state.v9f12c = 0;          // 0x4290BA
         }
         if (s.ViewportToolHovered() == 1) {                      // 0x4290C6
             SetCursor(LoadCursorA(nullptr,

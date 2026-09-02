@@ -225,7 +225,7 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     }
 
     CheckMenuItem(GetMenu(hwnd), 0x123, MF_CHECKED);                // 0x429f61
-    s.raw<std::uint8_t>(offsets::kByteA03B8) = 1;                   // 0x429f85
+    s.state.depthDeviceEnabled = 1;                   // 0x429f85
 
     if (s.state.optflag0 == 0) {         // 0x429f8b
         unsigned char* model = s.SelectedModel();
@@ -257,7 +257,7 @@ void DisableKinect(MMDApp* app) {
         s.raw<void*>(offsets::kDwordA03C4));
     clean();                                                        // 0x42a074
 
-    s.raw<std::uint8_t>(offsets::kByteA03B8) = 0;                   // 0x42a084
+    s.state.depthDeviceEnabled = 0;                   // 0x42a084
     s.raw<std::uint8_t>(offsets::kByteAutorep) = 0;                   // 0x42a08b
 
     unsigned char* model = s.SelectedModel();

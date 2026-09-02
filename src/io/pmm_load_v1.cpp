@@ -326,7 +326,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     s->raw<float>(off::kDwordA043c14) = 1.0f;                    // 0xA0474
     s->raw<float>(off::kDwordA043c9) = 1.0f;                     // 0xA0460
     s->raw<float>(off::kDwordA043c3 + 4) = 1.0f;                 // 0xA044C
-    s->raw<float>(off::kFloatColor16) = 1.0f;                    // 0xA0438
+    s->state.cameraAttachmentBasis[0] = 1.0f;                    // 0xA0438
     s->state.v9ed98 = 0;                // 0x9ED98
 
     HWND const main = reinterpret_cast<HWND>(s->Hwnd());
@@ -350,7 +350,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     CheckMenuItem(GetMenu(main), 0xF7, 0);                       // 0x459316
     SendMessageA(GetDlgItem(main, 0x217), BM_SETCHECK, 0, 0);    // 0x45933A
 
-    s->raw<std::uint32_t>(off::kByteBa0d2c) = 0x3C3851ECu;       // 0x45934D
+    s->state.physicsInterval = 0x3C3851ECu;       // 0x45934D
     s->state.selfShadowMode = 0;                 // 0x45935C
 
     // ---- AVI teardown trio (0x459369..0x45939D) --------------------------
@@ -386,7 +386,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         if (s->state.floatingWindow == 0)
             s->state.sidebarWidth = editFlag;   // 0xA06C8
     }
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloat9e1e8), 4);          // 0x459449
+    Rd(fd, &s->state.cameraFov, 4);          // 0x459449
     // v1 reads SIX option bytes (0x2F8..0x2FD), one less than v2; the
     // Ghidra merge of the 5th/6th read hides one (calls 0x459455..0x4594FC).
     for (int f = 0; f < 6; ++f) {
@@ -412,7 +412,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     EnableMenuItem(GetMenu(main), 0x121, 1);                     // 0x459629
 
     // ---- model count / combo resets (0x45964A..0x45979E) ----------------
-    s->raw<unsigned char>(off::kByte9ED9A) = 0;                   // 0x459640
+    s->state.projectedShadowBlendEnabled = 0;                   // 0x459640
     Rd(fd, &s->SelectedModelSlot(), 1);                            // 0x45964A
     unsigned char modelCount = 0;
     Rd(fd, &modelCount, 1);                                      // 0x45965B
@@ -808,7 +808,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     selfShadowKeys[0].mode = wrap->postProcessEnabled ? 1 : 0;   // 0x45AB29
     selfShadowKeys[0].distance = 0.0112500004f;                   // flt_52A1D8
     s->state.selfShadowMode = 1;                 // 0x45AB46
-    s->raw<std::uint32_t>(off::kByteA0188) = 0;
+    s->state.selfShadowCfgOrUint32 = 0;
     gravityKeys[0].noise = 10;
     gravityKeys[0].acceleration = 9.8000002f;                    // 0x52A1DC
     gravityKeys[0].direction[1] = -1.0f;                         // 0x5295E8
@@ -877,7 +877,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     // with __ftol for both the range and the "%3d" text.
     {
         const int frame =
-            static_cast<int>(s->raw<float>(off::kFloat9e1e8));    // 0x9E1E8
+            static_cast<int>(s->state.cameraFov);    // 0x9E1E8
         // 0x405 = TBM_SETPOS (WM_USER+5, trackbar): wParam 1 = redraw,
         // lParam = position (0x45AFBF..0x45AFCE).
         SendMessageA(GetDlgItem(main, 0x1BF), 0x405 /*TBM_SETPOS*/, 1,
@@ -1370,9 +1370,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
     s->state.gravityNoise = 10;
     s->state.gravityZ = 0.0f;
     s->raw<std::uint32_t>(off::kByteA0CC8) = 0;
-    s->raw<std::uint32_t>(off::kDwordA0198) = 0;
-    s->raw<std::uint32_t>(off::kDwordA019C) = 0;
-    s->raw<std::uint32_t>(off::kDwordA01A0) = 0;
+    s->state.modelOutlineColorRed = 0;
+    s->state.modelOutlineColorGreen = 0;
+    s->state.modelOutlineColorBlue = 0;
     SendMessageA(GetDlgItem(main, 0x1C1), CB_SETCURSEL, 0, 0);   // 0x45D248
     SendMessageA(GetDlgItem(main, 0x1C2), CB_SETCURSEL, 0, 0);   // 0x45D262
 
@@ -1417,10 +1417,10 @@ void LoadSceneV1(MMDApp* app, int fd) {
             unsigned char b = 0;
             Rd(fd, &b, 1);                                       // 0x45D44E
             if (b == 1) {
-                s->raw<unsigned char>(off::kByte9ED9A) = 1;
+                s->state.projectedShadowBlendEnabled = 1;
                 CheckMenuItem(GetMenu(main), 0xFE, 8);           // 0x45D47A
             } else {
-                s->raw<unsigned char>(off::kByte9ED9A) = 0;
+                s->state.projectedShadowBlendEnabled = 0;
             }
             const int got48F = Rd(fd, &b, 1);                    // 0x45D48F
             if (b == 1 && got48F > 0) {
@@ -1479,15 +1479,15 @@ void LoadSceneV1(MMDApp* app, int fd) {
                         unsigned char be = 0;
                         Rd(fd, &be, 1);                          // 0x45D743
                         s->state.selfShadowMode = be;
-                        s->raw<unsigned char>(off::kByteA0188) =
+                        s->state.selfShadowCfgOrUint32 =
                             (be != 0) ? 1 : 0;
-                        Rd(fd, &s->raw<std::uint32_t>(off::kByteBa0d2c),
+                        Rd(fd, &s->state.physicsInterval,
                            4);                                   // 0x45D76E
                         selfShadowKeys[0].mode =
                             static_cast<unsigned char>(
                                 s->state.selfShadowMode);
                         selfShadowKeys[0].distance =
-                            s->raw<float>(off::kFloatPhysicsint);
+                            s->state.physicsInterval;
                         for (int i = 0; i < 100; ++i) {
                             if (slots[i] != nullptr) {
                                 unsigned char b = 0;
@@ -1748,11 +1748,11 @@ void LoadSceneV1(MMDApp* app, int fd) {
     if (wrap->postProcessEnabled != 0) {
         Sub411B90(s);                                             // 0x45E149
     } else {
-        s->raw<unsigned char>(off::kByteA0188) = 0;
+        s->state.selfShadowCfgOrUint32 = 0;
         s->state.selfShadowMode = 0;
     }
     CheckMenuItem(GetMenu(main), 0x117,
-                  s->raw<unsigned char>(off::kByteA0188) != 0 ? 8 : 0);
+                  s->state.selfShadowCfgOrUint32 != 0 ? 8 : 0);
     if (slots[s->SelectedModelSlot()] != nullptr &&
         M8(slots[s->SelectedModelSlot()], 0x37C0) != 0 &&
         s->raw<unsigned char>(760) == 0)

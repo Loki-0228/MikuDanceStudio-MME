@@ -317,7 +317,7 @@ void HandleDropFiles(HDROP hDrop) {
                                     MessageBoxA(MainHwnd(app), kJpOniText, "oni",
                                                 MB_OK);
                             } else {
-                                if (app->raw<unsigned char>(offsets::kByteA03B8) != 0)
+                                if (app->state.depthDeviceEnabled != 0)
                                     DisableKinect(app);                // 0x42A020
                                 char sjisPath[256];
                                 WideToSjisPath(sjisPath, szFile, 256);  // 0x407910

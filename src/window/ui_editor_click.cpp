@@ -45,6 +45,10 @@
 #include "mikudancestudio/model.hpp"
 
 namespace mikudancestudio {
+// TEMP(debug, keyframe-drag crash) - canary helpers, defined below
+void TimelineCanaryArm(MMDApp* app);
+void TimelineCanaryCheck(MMDApp* app);
+void TimelineCanaryDisarm();
 
 // Forward declarations for functions ported in this wave whose bodies live
 // in other translation units (not yet registered in ported_funcs.hpp;
@@ -73,6 +77,10 @@ void Sub41A650(MMDApp* app);                                    // VA 0x0041A650
 void Sub49D410(unsigned char* model, int idx);                 // VA 0x0049D410
 void Sub40D070(MMDApp* app);                                    // VA 0x0040D070
 void SelectionReeval(MMDApp* app);                              // VA 0x00430510 (stubs.cpp)
+
+// TEMP(debug, keyframe-drag crash) - canary for the 0xA03EC slot
+// region, defined below SelectionStats.
+void TimelineCanaryArm(MMDApp* app);
 
 // qsort comparator of the selection-stat records - original VA 0x0040EC70:
 //   v2 = a1[3]; v3 = a2[3]; return (v2 >= v3) ? (v2 > v3) : -1;
@@ -282,6 +290,16 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
         }
         // count/ptr pairs: rigid 0xA03EC/0xA03F0, joint 0xA03F4/0xA03F8,
         // IK 0xA03FC/0xA0400, morph 0xA0404/0xA0408
+        // TEMP(debug, keyframe-drag crash)
+        std::fprintf(stderr,
+                     "COUNT cam=%d lig=%d shd=%d grv=%d acc=%p\n",
+                     app->TimelineSelectionCount(TimelineSelectionBand::Camera),
+                     app->TimelineSelectionCount(TimelineSelectionBand::Light),
+                     app->TimelineSelectionCount(TimelineSelectionBand::SelfShadow),
+                     app->TimelineSelectionCount(TimelineSelectionBand::Gravity),
+                     static_cast<void*>(reinterpret_cast<unsigned char*>(
+                         app->AccessoryKeys(0))));
+        std::fflush(stderr);
         FillSelectionRecords(app, rarr, 0x1A4, 0x48, 0x54,
                              TimelineSelectionBand::Camera);
         FillSelectionRecords(app, jarr, 0xC8, 0x24, 0x28,
@@ -467,7 +485,45 @@ L_repaint:;                                        // loc_44A437
     PanelPaint(app);                               // 0x414610
     app->ClearTimelineRange();
     SelectionReeval(app);                          // 0x430510
+    TimelineCanaryArm(app);  // TEMP(debug, keyframe-drag crash)
 }
+
+// ---- TEMP(debug, keyframe-drag crash) -------------------------------------
+// Snapshot the eight timeline-selection count/ptr slots (0xA03EC..0xA042B)
+// after a click re-evaluation; FrameDriver checks them every pass and logs
+// the first external modification.
+std::int64_t g_tlCanary[8];
+bool g_tlCanaryArmed = false;
+void TimelineCanaryArm(MMDApp* app) {
+    std::memcpy(g_tlCanary, app->at(0xA03EC), 0x40);
+    g_tlCanaryArmed = true;
+}
+void TimelineCanaryCheck(MMDApp* app) {
+    if (!g_tlCanaryArmed)
+        return;
+    if (std::memcmp(g_tlCanary, app->at(0xA03EC), 0x40) != 0) {
+        for (int i = 0; i < 8; ++i) {
+            const std::int64_t now =
+                reinterpret_cast<const std::int64_t*>(app->at(0xA03EC))[i];
+            if (now != g_tlCanary[i])
+                std::fprintf(stderr,
+                             "CANARY slot[%d] (app+0x%zX): %016llX -> %016llX"
+                             "  [cnt=%d ptr=0x%llX]\n",
+                             i, 0xA03EC + 8 * i,
+                             static_cast<unsigned long long>(g_tlCanary[i]),
+                             static_cast<unsigned long long>(now),
+                             static_cast<std::int32_t>(now),
+                             static_cast<unsigned long long>(
+                                 now >> 32));
+        }
+        std::fflush(stderr);
+        g_tlCanaryArmed = false;
+    }
+}
+void TimelineCanaryDisarm() {
+    g_tlCanaryArmed = false;
+}
+// ---------------------------------------------------------------------------
 
 void HandleLButtonDown(MMDApp* app) {
     // ---- S1: guard 0xA0274 + client rect + early-out gate ------------
@@ -1158,10 +1214,10 @@ void HandleLButtonDown(MMDApp* app) {
             rc2.right = sidebar - 3;
             rc2.bottom = 146;
             InvalidateRect(hwnd, &rc2, 0);
-            if (app->raw<std::uint8_t>(offsets::kByteA0196) != 0) {  // 655766 (0xA0196)
+            if (app->state.a0196 != 0) {  // 655766 (0xA0196)
                 // gate flag read BEFORE the 0xA02B6 store (asm zf capture)
                 const bool gate =
-                    app->raw<std::uint8_t>(offsets::kByteA03E9) == 0;  // 656361 (0xA03E9)
+                    app->state.automaticFrameAdvanceEnabled == 0;  // 656361 (0xA03E9)
                 app->raw<std::uint8_t>(offsets::kByteA02B6) = 1;  // 656054 (0xA02B6)
                 if (gate) {
                     SetFrameNormalized(app->FrameNormalization()); // 0x4C2B80

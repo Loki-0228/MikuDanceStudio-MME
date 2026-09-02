@@ -39,6 +39,7 @@
 #include <Windows.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 
 #include "mikudancestudio/mmd_app.hpp"
@@ -46,6 +47,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
+void TimelineCanaryDisarm();  // TEMP(debug, keyframe-drag crash)
 namespace {
 
 // Free-if-non-null then null the slot - mirrors the exact asm block
@@ -67,6 +69,9 @@ void FreeTimelineSelectionRecords(MMDApp* app, TimelineSelectionBand band) {
 // registers them centrally in the finishing phase.
 void PanelPaint(MMDApp* app);       // VA 0x00414610
 void SelectionReeval(MMDApp* app);  // VA 0x00430510
+
+// TEMP(debug, keyframe-drag crash) - defined in ui_editor_click.cpp
+void TimelineCanaryDisarm();
 
 LRESULT HandleCtlColor(HWND control, HDC dc) {
     // The original does not use the device context.
@@ -147,11 +152,15 @@ LRESULT HandleCtlColor(HWND control, HDC dc) {
 // Reference: ../translated/MikuMikuDance/fcn_0044a9a0.cpp
 // =========================================================================//
 void HandleLButtonUp(MMDApp* app) {
+    TimelineCanaryDisarm();  // TEMP(debug, keyframe-drag crash)
     const bool dragActive = app->SelectionBoxDragging() != 0;
     app->SidebarResizeDragging() = 0;
     app->WindowLayoutReady() = 1;
 
     if (dragActive) {
+        // TEMP(debug, keyframe-drag crash)
+        std::fprintf(stderr, "LBTNUP freeing recs\n");
+        std::fflush(stderr);
         FreeTimelineSelectionRecords(app, TimelineSelectionBand::Accessory);
         FreeTimelineSelectionRecords(app, TimelineSelectionBand::ModelIk);
         FreeTimelineSelectionRecords(app, TimelineSelectionBand::Camera);

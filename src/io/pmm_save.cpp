@@ -289,7 +289,7 @@ void SaveSceneFile(MMDApp* app) {
         else
             W(fd, &s->raw<std::uint32_t>(off::kDwordV658748), 4);
     }
-    W(fd, &s->raw<std::uint32_t>(off::kFloat9e1e8), 4);        // 0x41B22E
+    W(fd, &s->state.cameraFov, 4);        // 0x41B22E
 
     for (int f = 0; f < 7; ++f) {                              // 0x41B22E..0x41B303
         const unsigned char b =
@@ -809,7 +809,7 @@ void SaveSceneFile(MMDApp* app) {
     W(fd, &s->state.accessoryRenderSplitOrder, 4);
     W(fd, &s->ProjectedShadowAmbientIntensity(), 4);
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByteB9ed9a) != 0;
+        const unsigned char b = s->state.projectedShadowBlendEnabled != 0;
         W(fd, &b, 1);
     }
     W(fd, reinterpret_cast<const unsigned char*>(
@@ -877,10 +877,10 @@ void SaveSceneFile(MMDApp* app) {
     }
 
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByteA0188) != 0;
+        const unsigned char b = s->state.selfShadowCfgOrUint32 != 0;
         W(fd, &b, 1);                                          // 0x41E25E
     }
-    W(fd, &s->raw<std::uint32_t>(off::kByteBa0d2c), 4);        // 0xA0D2C
+    W(fd, &s->state.physicsInterval, 4);        // 0xA0D2C
 
     // ---- 9. self-shadow track (0x41E284..0x41E46F) ----------------------
     unsigned char* const shadow =
@@ -921,16 +921,16 @@ void SaveSceneFile(MMDApp* app) {
     }
 
     // ---- 10. config2 (0x41E46F..0x41E6E5) --------------------------------
-    W(fd, &s->raw<std::uint32_t>(off::kDwordA0198), 4);
-    W(fd, &s->raw<std::uint32_t>(off::kDwordA019C), 4);
-    W(fd, &s->raw<std::uint32_t>(off::kDwordA01A0), 4);
+    W(fd, &s->state.modelOutlineColorRed, 4);
+    W(fd, &s->state.modelOutlineColorGreen, 4);
+    W(fd, &s->state.modelOutlineColorBlue, 4);
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByteA0194) != 0;
+        const unsigned char b = s->state.a0194 != 0;
         W(fd, &b, 1);
     }
     W(fd, &s->state.cameraParentModel, 4);
     W(fd, &s->state.cameraParentBone, 4);
-    W(fd, &s->raw<std::uint32_t>(off::kFloatColor16), 4);      // 0xA0438
+    W(fd, &s->state.cameraAttachmentBasis, 4);      // 0xA0438
     for (int i = 0; i < 15; ++i)                               // 0xA043C..A0474
         W(fd, &s->raw<std::uint32_t>(offsets::kDwordA043c0 +
                                      static_cast<std::size_t>(i) * 4),
@@ -944,7 +944,7 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &b, 1);                                          // 0xA0478
     }
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByteA0197) != 0;
+        const unsigned char b = s->state.a0197 != 0;
         W(fd, &b, 1);
     }
     {  // 0x22A edit readback on the alt dialog when present (0x41E69E)

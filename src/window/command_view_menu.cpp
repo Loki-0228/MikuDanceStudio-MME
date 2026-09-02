@@ -545,7 +545,7 @@ LRESULT CALLBACK Sub45ECC0(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     if (msg == WM_KEYDOWN && wParam == VK_RETURN) {
         app->state.messageSeen = 1;
-        const HWND dlg = app->raw<HWND>(offsets::kDwordA0B50);
+        const HWND dlg = app->FrameRangeDialog();
         if (hwnd == GetDlgItem(dlg, 0x29B)) {
             Sub43BED0(app, hwnd, 0);                        // 0x43BED0
             return 0;
@@ -1049,7 +1049,7 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     case 2:
         Sub45F240(hDlg);  // 0x45F240
         DestroyWindow(hDlg);
-        app->raw<std::int32_t>(offsets::kDwordA0B50) = 0;
+        app->state.a0B50OrPtr = 0;
         EnableWindow(GetDlgItem(app->raw<HWND>(kDwordA06B8), 0x1B4), TRUE);
         if (LOWORD(wParam) == 1) {
             if (app->state.englishUI != 0) {
@@ -2176,11 +2176,11 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // item 0xFE (same flag as menu 0xD8 / CmdTogglePhysicsDisplay).
     // ------------------------------------------------------------------
     case 254: {
-        if (app->raw<std::uint8_t>(offsets::kByteB9ed9a) != 0) {
-            app->raw<std::uint8_t>(offsets::kByteB9ed9a) = 0;
+        if (app->state.projectedShadowBlendEnabled != 0) {
+            app->state.projectedShadowBlendEnabled = 0;
             CheckMenuItem(GetMenu(hwnd), 0xFE, MF_UNCHECKED);
         } else {
-            app->raw<std::uint8_t>(offsets::kByteB9ed9a) = 1;
+            app->state.projectedShadowBlendEnabled = 1;
             CheckMenuItem(GetMenu(hwnd), 0xFE, MF_CHECKED);
         }
         break;
@@ -2220,7 +2220,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // sub_464BD0) at app+0xA0B50.
     // ------------------------------------------------------------------
     case 259: {
-        if (app->raw<std::int32_t>(offsets::kDwordA0B50) != 0) {
+        if (app->state.a0B50OrPtr != 0) {
             break;
         }
         if (app->state.optflag0 != 0) {
@@ -2229,7 +2229,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         HWND dlg = CreateDialogParamA(
             hInst, MAKEINTRESOURCEA(english ? 0x29A : 0x299),
             hwnd, Sub464BD0, 0);
-        app->raw<HWND>(offsets::kDwordA0B50) = dlg;
+        app->FrameRangeDialog() = dlg;
         ShowWindow(dlg, SW_SHOW);
         UpdateWindow(dlg);
         return;
@@ -2793,11 +2793,11 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 282: {
         app->raw<std::int32_t>(kOff40) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteA0194) != 0) {
-            app->raw<std::uint8_t>(offsets::kByteA0194) = 0;
+        if (app->state.a0194 != 0) {
+            app->state.a0194 = 0;
             CheckMenuItem(GetMenu(hwnd), 0x11A, MF_UNCHECKED);
         } else {
-            app->raw<std::uint8_t>(offsets::kByteA0194) = 1;
+            app->state.a0194 = 1;
             CheckMenuItem(GetMenu(hwnd), 0x11A, MF_CHECKED);
         }
         return;
@@ -2805,11 +2805,11 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
 
     case 283: {
         app->raw<std::int32_t>(kOff44) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteA0195) != 0) {
-            app->raw<std::uint8_t>(offsets::kByteA0195) = 0;
+        if (app->state.modelOutlineRenderingSuppressed != 0) {
+            app->state.modelOutlineRenderingSuppressed = 0;
             CheckMenuItem(GetMenu(hwnd), 0x11B, MF_UNCHECKED);
         } else {
-            app->raw<std::uint8_t>(offsets::kByteA0195) = 1;
+            app->state.modelOutlineRenderingSuppressed = 1;
             CheckMenuItem(GetMenu(hwnd), 0x11B, MF_CHECKED);
         }
         return;
@@ -2817,11 +2817,11 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
 
     case 284: {
         app->raw<std::int32_t>(kOff6C) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteA0196) != 0) {
-            app->raw<std::uint8_t>(offsets::kByteA0196) = 0;
+        if (app->state.a0196 != 0) {
+            app->state.a0196 = 0;
             CheckMenuItem(GetMenu(hwnd), 0x11C, MF_UNCHECKED);
         } else {
-            app->raw<std::uint8_t>(offsets::kByteA0196) = 1;
+            app->state.a0196 = 1;
             CheckMenuItem(GetMenu(hwnd), 0x11C, MF_CHECKED);
         }
         return;
@@ -2831,12 +2831,12 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->raw<std::int32_t>(kOff6C) = 1;
         unsigned char* target = reinterpret_cast<unsigned char*>(
             app->Physics()->groundBody);   // scene slot 0x44
-        if (app->raw<std::uint8_t>(offsets::kByteA0197) != 0) {
-            app->raw<std::uint8_t>(offsets::kByteA0197) = 0;
+        if (app->state.a0197 != 0) {
+            app->state.a0197 = 0;
             CheckMenuItem(GetMenu(hwnd), 0x11D, MF_UNCHECKED);
             *reinterpret_cast<std::int32_t*>(target + 0xD4) = -1;
         } else {
-            app->raw<std::uint8_t>(offsets::kByteA0197) = 1;
+            app->state.a0197 = 1;
             CheckMenuItem(GetMenu(hwnd), 0x11D, MF_CHECKED);
             *reinterpret_cast<std::int32_t*>(target + 0xD4) = 1;
         }
@@ -2857,11 +2857,11 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         cc.lStructSize = 0x24;
         cc.hwndOwner = hwnd;
         const std::uint8_t r =
-            app->raw<std::uint8_t>(offsets::kDwordA0198);
+            app->state.modelOutlineColorRed;
         const std::uint16_t g =
-            app->raw<std::uint16_t>(offsets::kDwordA019C);
+            app->state.modelOutlineColorGreen;
         const std::uint8_t b =
-            app->raw<std::uint8_t>(offsets::kDwordA01A0);
+            app->state.modelOutlineColorBlue;
         cc.rgbResult = (static_cast<COLORREF>(b) << 16) |
                        (static_cast<COLORREF>(g) << 8) | r;
         cc.lpCustColors =
@@ -2873,9 +2873,9 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         const std::uint8_t nr = cc.rgbResult & 0xFF;
         const std::uint8_t ng = (cc.rgbResult >> 8) & 0xFF;
         const std::uint8_t nb = (cc.rgbResult >> 16) & 0xFF;
-        app->raw<std::uint8_t>(offsets::kDwordA0198) = nr;
-        app->raw<std::uint8_t>(offsets::kDwordA019C) = ng;
-        app->raw<std::uint8_t>(offsets::kDwordA01A0) = nb;
+        app->state.modelOutlineColorRed = nr;
+        app->state.modelOutlineColorGreen = ng;
+        app->state.modelOutlineColorBlue = nb;
         for (int i = 0; i < 100; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model != nullptr) {
@@ -2938,7 +2938,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 291:
         app->raw<std::int32_t>(kOff5C) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteA03B8) != 0) {
+        if (app->state.depthDeviceEnabled != 0) {
             DisableKinect(app);  // 0x42A020
         } else {
             OpenNiInit(app, nullptr);  // 0x429CB0
@@ -3057,7 +3057,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (!GetOpenFileNameW(&ofn)) {
             return;
         }
-        if (app->raw<std::uint8_t>(offsets::kByteA03B8) != 0) {
+        if (app->state.depthDeviceEnabled != 0) {
             DisableKinect(app);  // 0x42A020
         }
         char sjisPath[0x100];

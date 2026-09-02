@@ -99,10 +99,10 @@ void ComposeEulerToBone(MMDApp* app, unsigned char* model, int sel) {
     auto* d3dx = &d3dx::Get();
     if (!d3dx->Load())
         return;
-    d3dx->rotZ(&rot, app->raw<float>(offsets::kFloatEulerz));
-    d3dx->rotX(&tmp, app->raw<float>(offsets::kFloatEulerx));
+    d3dx->rotZ(&rot, app->state.eulerZ);
+    d3dx->rotX(&tmp, app->state.eulerX);
     d3dx->multiply(&rot, &rot, &tmp);
-    d3dx->rotY(&tmp, app->raw<float>(offsets::kFloatEulery));
+    d3dx->rotY(&tmp, app->state.eulerY);
     d3dx->multiply(&rot, &rot, &tmp);
     mikudancestudio::mdl::BoneRecord* bones = mikudancestudio::mdl::Bones(model);
     d3dx->quatFromMatrix(reinterpret_cast<float*>(&bones[sel].rotQuat[0]),
@@ -192,14 +192,14 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
             const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
             if (sel >= 0) {
                 Sub42D6E0(app);
-                app->raw<float>(offsets::kFloatEulerx) =
+                app->state.eulerX =
                     static_cast<float>(v * kPiLit / 180.0);
-                app->raw<float>(offsets::kFloatEulery) =
+                app->state.eulerY =
                     static_cast<float>(-static_cast<double>(
                                            app->raw<float>(
                                                offsets::kFloatEulery)) *
                                        kPiLit / 180.0);
-                app->raw<float>(offsets::kFloatEulerz) =
+                app->state.eulerZ =
                     static_cast<float>(kPiLit *
                                        -static_cast<double>(
                                            app->raw<float>(
@@ -229,14 +229,14 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
         if (sel >= 0) {
             Sub42D6E0(app);
-            app->raw<float>(offsets::kFloatEulerx) =      // re-convert stored
+            app->state.eulerX =      // re-convert stored
                 static_cast<float>(                        // degrees
                     static_cast<double>(
-                        app->raw<float>(offsets::kFloatEulerx)) *
+                        app->state.eulerX) *
                     kPiLit / 180.0);
-            app->raw<float>(offsets::kFloatEulery) =
+            app->state.eulerY =
                 static_cast<float>(-v * kPiLit / 180.0);
-            app->raw<float>(offsets::kFloatEulerz) =
+            app->state.eulerZ =
                 static_cast<float>(kPiLit *
                                    -static_cast<double>(
                                        app->raw<float>(
@@ -261,17 +261,17 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
         if (sel >= 0) {
             Sub42D6E0(app);
-            app->raw<float>(offsets::kFloatEulerx) =
+            app->state.eulerX =
                 static_cast<float>(
                     static_cast<double>(
-                        app->raw<float>(offsets::kFloatEulerx)) *
+                        app->state.eulerX) *
                     kPiLit / 180.0);
-            app->raw<float>(offsets::kFloatEulery) =
+            app->state.eulerY =
                 static_cast<float>(-static_cast<double>(
                                        app->raw<float>(
                                            offsets::kFloatEulery)) *
                                    kPiLit / 180.0);
-            app->raw<float>(offsets::kFloatEulerz) =
+            app->state.eulerZ =
                 static_cast<float>(kPiLit * -v / 180.0);
             ComposeEulerToBone(app, model, sel);
         }
@@ -415,7 +415,7 @@ void Sub463640(MMDApp* app, HWND edit) {
         char text[256];
         GetWindowTextA(edit, text, 8);
         const double v = atof(text);
-        s.raw<float>(offsets::kFloatPhysicsint) =   // 0xA0D2C
+        s.state.physicsInterval =   // 0xA0D2C
             static_cast<float>((10000.0 - v) / 100000.0);
         SendMessageA(GetDlgItem(main, 560), 0x405, 1,
                      static_cast<LPARAM>(static_cast<int>(v)));

@@ -238,22 +238,22 @@ void PanelPaint(MMDApp* app) {
             if (n == app->state.currentFrame) {
                 sprintf_s(sel, sizeof(sel), "%-4d", n);
                 DrawGlyph(app, sel, panel, 12, x - 3, 3,
-                          app->raw<std::uint8_t>(offsets::kDwordCol656976),
+                          app->state.themeColors[30],
                           app->raw<std::uint8_t>(offsets::kDwordCol656976 + 1),
                           app->raw<std::uint8_t>(offsets::kDwordCol656976 + 2), 1);
                 color = static_cast<COLORREF>(
-                    app->raw<std::uint32_t>(offsets::kDwordCol656976));
+                    app->state.themeColors[30]);
             } else if (static_cast<std::uint32_t>(n) % 5 != 0) {
                 color = static_cast<COLORREF>(
-                    app->raw<std::uint32_t>(offsets::kDwordCol656984));
+                    app->state.themeColors[32]);
             } else {
                 sprintf_s(label, sizeof(label), "%-4d", n);
                 DrawGlyph(app, label, panel, 12, x - 3, 3,
-                          app->raw<std::uint8_t>(offsets::kDwordCol656988),
-                          app->raw<std::uint8_t>(offsets::kDwordCol656988 + 1),
-                          app->raw<std::uint8_t>(offsets::kDwordCol656988 + 2), 1);
+                          app->state.themeColors[33],
+                          reinterpret_cast<const unsigned char*>(&app->state.themeColors[33])[1],
+                          reinterpret_cast<const unsigned char*>(&app->state.themeColors[33])[2], 1);
                 color = static_cast<COLORREF>(
-                    app->raw<std::uint32_t>(offsets::kDwordCol656980));
+                    app->state.themeColors[31]);
             }
             HPEN line = CreatePen(PS_SOLID, 1, color);
             SelectObject(panel, line);

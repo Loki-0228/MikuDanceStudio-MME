@@ -218,10 +218,10 @@ void HandleLButtonDblClk(MMDApp* app) {
             rc.right = app->SidebarWidth() - 3;
             rc.bottom = 146;
             InvalidateRect(hwnd, &rc, 0);
-            if (app->raw<std::uint8_t>(offsets::kByteA0196) != 0) {  // 655766 (0xA0196)
+            if (app->state.a0196 != 0) {  // 655766 (0xA0196)
                 // gate flag read BEFORE the 0xA02B6 store (asm zf capture)
                 const bool gate =
-                    app->raw<std::uint8_t>(offsets::kByteA03E9) == 0;  // 656361 (0xA03E9)
+                    app->state.automaticFrameAdvanceEnabled == 0;  // 656361 (0xA03E9)
                 app->raw<std::uint8_t>(offsets::kByteA02B6) = 1;  // 656054 (0xA02B6)
                 if (gate) {
                     SetFrameNormalized(app->FrameNormalization());  // 0x4C2B80
@@ -340,7 +340,7 @@ void HandleMouseActivate(MMDApp* app) {
             pt.y = 150;                                           // 0x96
             ClientToScreen(hwnd, &pt);
             SetCursorPos(pt.x, pt.y);
-            app->raw<std::uint8_t>(offsets::kByte9F12C) = 1;      // 651564 (0x9F12C)
+            app->state.v9f12c = 1;      // 651564 (0x9F12C)
             SetForegroundWindow(hwnd);
         }
     } else {
@@ -366,7 +366,7 @@ void HandleMouseActivate(MMDApp* app) {
             ClientToScreen(hwnd, &pt);
         }
         SetCursorPos(pt.x, pt.y);
-        app->raw<std::uint8_t>(offsets::kByte9F12C) = 1;          // 651564 (0x9F12C)
+        app->state.v9f12c = 1;          // 651564 (0x9F12C)
     }
 }
 
