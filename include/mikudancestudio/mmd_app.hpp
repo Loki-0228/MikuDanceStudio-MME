@@ -171,6 +171,21 @@ public:
     MMDApp();                                // VA 0x0042AE60
     void InitDefaults();                     // VA 0x0040A730
 
+    // The restored application state.  Public by design: the original was
+    // one giant class whose fields every subsystem touched directly; free
+    // functions taking MMDApp* read and write `app->state.<field>` exactly
+    // like the original's `this-><field>`.
+    MMDAppState state;
+
+    // Sub-window torn down on scene reset (x86 blob slot 0xA0A6C).
+    HWND& SceneResetSubWindow() {
+#if defined(_M_X64)
+        return m_hwndA0A6C;
+#else
+        return state.hwndA0A6C;
+#endif
+    }
+
     // -- raw field access, byte offsets as in the decompilation ----------
     // On x64 the state blob uses the original x64 layout: the x86 offsets
     // from the decompilation are translated through offsets_xlate.hpp
@@ -241,10 +256,10 @@ public:
         return ModelSlots()[index];
     }
     unsigned char** ModelSlots() {
-        return reinterpret_cast<unsigned char**>(m_state.modelSlots);
+        return reinterpret_cast<unsigned char**>(state.modelSlots);
     }
     unsigned char* const* ModelSlots() const {
-        return reinterpret_cast<unsigned char* const*>(m_state.modelSlots);
+        return reinterpret_cast<unsigned char* const*>(state.modelSlots);
     }
     void ClearModelSlots() {
         for (int index = 0; index < 100; ++index)
@@ -330,22 +345,22 @@ public:
             raw<std::uint8_t>(offsets::kByteA03E4 + index) = 0;
     }
     std::uint8_t& TimelineSelectionChanged() {
-        return m_state.timelineSelectionChanged;
+        return state.timelineSelectionChanged;
     }
     std::uint8_t TimelineSelectionChanged() const {
-        return m_state.timelineSelectionChanged;
+        return state.timelineSelectionChanged;
     }
     std::uint8_t& SceneModified() {
-        return m_state.sceneModified;
+        return state.sceneModified;
     }
     std::uint8_t SceneModified() const {
-        return m_state.sceneModified;
+        return state.sceneModified;
     }
     TimelineSelectionRow& PendingTimelineSelectionRow() {
-        return reinterpret_cast<TimelineSelectionRow&>(m_state.pendingTimelineSelectionRow);
+        return reinterpret_cast<TimelineSelectionRow&>(state.pendingTimelineSelectionRow);
     }
     TimelineSelectionRow PendingTimelineSelectionRow() const {
-        return static_cast<TimelineSelectionRow>(m_state.pendingTimelineSelectionRow);
+        return static_cast<TimelineSelectionRow>(state.pendingTimelineSelectionRow);
     }
     std::uint8_t& SelectionBoxDragging() { return raw<std::uint8_t>(0xA0189); }
     std::int32_t& MouseX() { return raw<std::int32_t>(0x4); }
@@ -353,7 +368,7 @@ public:
     std::int32_t& PreviousMouseX() { return raw<std::int32_t>(0xC); }
     std::int32_t& PreviousMouseY() { return raw<std::int32_t>(0x10); }
     std::uint8_t& ViewportInputActive() {
-        return m_state.viewportInputActive;
+        return state.viewportInputActive;
     }
     std::int32_t& ShiftModifierState() { return raw<std::int32_t>(0x24); }
     std::int32_t& CtrlModifierState() { return raw<std::int32_t>(0xC0); }
@@ -364,7 +379,7 @@ public:
         return raw<std::int32_t>(0xC0) == 3;
     }
     std::uint8_t& SidebarResizeDragging() {
-        return m_state.sidebarResizeDragging;
+        return state.sidebarResizeDragging;
     }
     std::int32_t& LeftMouseButtonState() { return raw<std::int32_t>(0x84); }
     std::int32_t& RightMouseButtonState() { return raw<std::int32_t>(0x88); }
@@ -410,10 +425,10 @@ public:
         return raw<HWND>(offsets::kPtrHwnd);
     }
     float* LightDirection() {
-        return &m_state.lightDirection;
+        return &state.lightDirection;
     }
     float* LightColor() {
-        return &m_state.lightColor;
+        return &state.lightColor;
     }
     D3DLIGHT9& SceneLight() {
 #if defined(_M_X64)
@@ -455,11 +470,11 @@ public:
         return raw<IDirect3DIndexBuffer9*>(772);
     }
     ViewportEditMode& EditMode() {
-        return reinterpret_cast<ViewportEditMode&>(m_state.editMode);
+        return reinterpret_cast<ViewportEditMode&>(state.editMode);
     }
     const ViewportEditMode& EditMode() const {
         return const_cast<const ViewportEditMode&>(
-            reinterpret_cast<const ViewportEditMode&>(m_state.editMode));
+            reinterpret_cast<const ViewportEditMode&>(state.editMode));
     }
     bool UsesViewportTool() const {
         return static_cast<std::int32_t>(EditMode()) >=
@@ -471,7 +486,7 @@ public:
         return raw<std::uint32_t>(offsets::kDwordToolhover);
     }
     ViewportToolAction& ViewportToolOperation() {
-        return reinterpret_cast<ViewportToolAction&>(m_state.viewportToolOperation);
+        return reinterpret_cast<ViewportToolAction&>(state.viewportToolOperation);
     }
     ViewportToolAction& ViewToolDragOperation() {
         return raw<ViewportToolAction>(offsets::kDwordViewdragmode);
@@ -480,15 +495,15 @@ public:
         return raw<ViewportDragMode>(offsets::kDwordInteractionmode);
     }
     std::int32_t& ViewportToolDragOriginX() {
-        return m_state.dragOriginX;
+        return state.dragOriginX;
     }
     std::int32_t& ViewportToolDragOriginY() {
-        return m_state.dragOriginY;
+        return state.dragOriginY;
     }
     std::int32_t& BoneBoxStartX() { return raw<std::int32_t>(2360); }
     std::int32_t& BoneBoxStartY() { return raw<std::int32_t>(2364); }
     std::int32_t& BoneBoxSelectionActive() {
-        return m_state.boneBoxSelectionActive;
+        return state.boneBoxSelectionActive;
     }
     D3DMATRIX& LightViewProjection() {
         return raw<D3DMATRIX>(655848);  // 0xA0188
@@ -503,28 +518,28 @@ public:
         return raw<D3DMATRIX>(655912);
     }
     IDirect3DTexture9*& AviBackgroundTexture() {
-        return reinterpret_cast<IDirect3DTexture9*&>(m_state.aviBackgroundTexture);
+        return reinterpret_cast<IDirect3DTexture9*&>(state.aviBackgroundTexture);
     }
     IDirect3DSurface9*& AviBackgroundSurface() {
-        return reinterpret_cast<IDirect3DSurface9*&>(m_state.aviBackgroundSurface);
+        return reinterpret_cast<IDirect3DSurface9*&>(state.aviBackgroundSurface);
     }
     void*& AviDrawDib() {
         return raw<void*>(offsets::kDword9e3ec);
     }
     void*& AviFile() {
-        return m_state.aviFile;
+        return state.aviFile;
     }
     void*& AviStream() {
         return raw<void*>(offsets::kDword9E400);
     }
     void*& AviFrameReader() {
-        return m_state.aviFrameReader;
+        return state.aviFrameReader;
     }
     HWND& FloatingWindow() {
         return raw<HWND>(offsets::kDwordA0D38);
     }
     HWND& RecordingWindow() {
-        return m_state.recordingWindow;
+        return state.recordingWindow;
     }
     IDirect3DTexture9*& ToonTexture(int index) {
         return raw<IDirect3DTexture9*>(offsets::kPtrToontex + 4 * index);
@@ -536,7 +551,7 @@ public:
 #if defined(_M_X64)
         return m_overlayVertexBuffers.avi;
 #else
-        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.v9e3f8OrPtr);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.v9e3f8OrPtr);
 #endif
     }
     IDirect3DTexture9*& PictureBackgroundTexture() {
@@ -546,45 +561,45 @@ public:
 #if defined(_M_X64)
         return m_overlayVertexBuffers.picture;
 #else
-        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.v9e430OrPtr);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.v9e430OrPtr);
 #endif
     }
     wchar_t* AviBackgroundPath() {
         return reinterpret_cast<wchar_t*>(at(offsets::kWcs9e1ec));
     }
     wchar_t* PictureBackgroundPath() {
-        return m_state.pictureBackgroundPath;
+        return state.pictureBackgroundPath;
     }
     std::int32_t& AviStreamStartFrame() {
-        return m_state.aviStreamStart;
+        return state.aviStreamStart;
     }
     std::int32_t& AviStreamEndFrame() {
-        return m_state.aviStreamEnd;
+        return state.aviStreamEnd;
     }
     std::uint8_t& AviUsesThirtyFpsTiming() {
-        return m_state.aviUsesThirtyFpsTiming;
+        return state.aviUsesThirtyFpsTiming;
     }
-    std::int32_t& AviOffsetX() { return m_state.aviOffsetX; }
-    std::int32_t& AviOffsetY() { return m_state.aviOffsetY; }
-    float& AviScale() { return m_state.aviScale; }
-    std::int32_t& AviFrameWidth() { return m_state.aviFrameWidth; }
-    std::int32_t& AviFrameHeight() { return m_state.aviFrameHeight; }
+    std::int32_t& AviOffsetX() { return state.aviOffsetX; }
+    std::int32_t& AviOffsetY() { return state.aviOffsetY; }
+    float& AviScale() { return state.aviScale; }
+    std::int32_t& AviFrameWidth() { return state.aviFrameWidth; }
+    std::int32_t& AviFrameHeight() { return state.aviFrameHeight; }
     std::uint8_t& PictureBackgroundEnabled() {
         return raw<std::uint8_t>(offsets::kByte9E428);
     }
-    std::int32_t& PictureOffsetX() { return m_state.pictureOffsetX; }
-    std::int32_t& PictureOffsetY() { return m_state.pictureOffsetY; }
-    float& PictureScale() { return m_state.pictureScale; }
-    std::int32_t& PictureWidth() { return m_state.pictureWidth; }
-    std::int32_t& PictureHeight() { return m_state.pictureHeight; }
+    std::int32_t& PictureOffsetX() { return state.pictureOffsetX; }
+    std::int32_t& PictureOffsetY() { return state.pictureOffsetY; }
+    float& PictureScale() { return state.pictureScale; }
+    std::int32_t& PictureWidth() { return state.pictureWidth; }
+    std::int32_t& PictureHeight() { return state.pictureHeight; }
     std::uint32_t& AviBackgroundEnabled() {
         return raw<std::uint32_t>(offsets::kDword91C);
     }
     IDirect3DTexture9*& CaptureTexture() {
-        return reinterpret_cast<IDirect3DTexture9*&>(m_state.captureTexture);
+        return reinterpret_cast<IDirect3DTexture9*&>(state.captureTexture);
     }
     IDirect3DSurface9*& CaptureRenderTarget() {
-        return reinterpret_cast<IDirect3DSurface9*&>(m_state.captureRenderTarget);
+        return reinterpret_cast<IDirect3DSurface9*&>(state.captureRenderTarget);
     }
     IDirect3DSurface9*& CaptureSystemSurface() {
         return raw<IDirect3DSurface9*>(650124);  // original +0x9EB8C
@@ -593,19 +608,19 @@ public:
         return raw<ScreenCaptureMode>(offsets::kDword9EB84);
     }
     void*& CaptureReadbackPixels() {
-        return m_state.captureReadbackPixels;
+        return state.captureReadbackPixels;
     }
     std::uint8_t*& RecordingCompletionFlag() {
-        return reinterpret_cast<std::uint8_t*&>(m_state.recordingCompletionFlag);
+        return reinterpret_cast<std::uint8_t*&>(state.recordingCompletionFlag);
     }
     IDirect3DTexture9*& OverlayTexture() {
-        return reinterpret_cast<IDirect3DTexture9*&>(m_state.overlayTexture);
+        return reinterpret_cast<IDirect3DTexture9*&>(state.overlayTexture);
     }
     IDirect3DVertexBuffer9*& SpriteOverlayVertices() {
         return raw<IDirect3DVertexBuffer9*>(offsets::kDword9EE0C);
     }
     std::uint32_t& SpriteOverlayPrimitiveCount() {
-        return m_state.spriteOverlayPrimitiveCount;
+        return state.spriteOverlayPrimitiveCount;
     }
     IDirect3DTexture9*& ProjectedShadowRestoreTexture() {
         return raw<IDirect3DTexture9*>(offsets::kDword9F130);
@@ -649,43 +664,43 @@ public:
         return raw<std::uint8_t>(offsets::kByte9e170);
     }
     std::int32_t& DisplayObjectListScrollPosition() {
-        return m_state.displayObjectListScrollPosition;
+        return state.displayObjectListScrollPosition;
     }
     std::int32_t DisplayObjectListScrollPosition() const {
-        return m_state.displayObjectListScrollPosition;
+        return state.displayObjectListScrollPosition;
     }
     std::int32_t& DisplayObjectListMatchCount() {
-        return m_state.displayObjectListMatchCount;
+        return state.displayObjectListMatchCount;
     }
     std::int32_t DisplayObjectListMatchCount() const {
-        return m_state.displayObjectListMatchCount;
+        return state.displayObjectListMatchCount;
     }
     std::uint32_t& LastRegisteredFrame() {
         return raw<std::uint32_t>(offsets::kDword9E16C);
     }
     IDirect3DVertexBuffer9*& OverlayVertices() {
-        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.overlayVertices);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.overlayVertices);
     }
     std::uint32_t& TextOverlayPrimitiveCount() {
-        return m_state.textOverlayPrimitiveCount;
+        return state.textOverlayPrimitiveCount;
     }
     IDirect3DTexture9*& TextOverlayTexture() {
-        return reinterpret_cast<IDirect3DTexture9*&>(m_state.sceneFontTexture);
+        return reinterpret_cast<IDirect3DTexture9*&>(state.sceneFontTexture);
     }
     std::uint32_t& LineOverlayPrimitiveCount() {
-        return m_state.lineOverlayPrimitiveCount;
+        return state.lineOverlayPrimitiveCount;
     }
     IDirect3DVertexBuffer9*& GroundPlaneVertices() {
         return raw<IDirect3DVertexBuffer9*>(offsets::kDword9F128);
     }
     IDirect3DVertexBuffer9*& LeftViewportVertices() {
-        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.leftViewportVertices);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.leftViewportVertices);
     }
     IDirect3DVertexBuffer9*& RightViewportVertices() {
-        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.rightViewportVertices);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.rightViewportVertices);
     }
     std::uint8_t& SelfShadowCompositionEnabled() {
-        return m_state.selfShadowCompositionEnabled;
+        return state.selfShadowCompositionEnabled;
     }
     std::int32_t& SelfShadowMode() {
         return raw<std::int32_t>(offsets::kDwordA0d30);
@@ -697,41 +712,41 @@ public:
         return raw<std::uint8_t>(offsets::kByteA03B8);
     }
     DepthTextureProvider& DepthTextureCallback() {
-        return reinterpret_cast<DepthTextureProvider&>(m_state.depthTextureCallback);
+        return reinterpret_cast<DepthTextureProvider&>(state.depthTextureCallback);
     }
-    HDC& PanelDC() { return m_state.hdcMainPanel; }
-    HDC& TimelineDC() { return m_state.hdcTimeline; }
-    HDC& CurveDC() { return m_state.hdcInterpCurve; }
-    HBITMAP& PanelBitmap() { return reinterpret_cast<HBITMAP&>(m_state.bmpPanel); }
-    HBITMAP& PanelSpareBitmap() { return reinterpret_cast<HBITMAP&>(m_state.bmpPanelSpare); }
-    HBITMAP& TimelineBitmap() { return reinterpret_cast<HBITMAP&>(m_state.bmpTimelineStrip); }
-    HBITMAP& CurveBitmap() { return reinterpret_cast<HBITMAP&>(m_state.bmpInterpCurve); }
+    HDC& PanelDC() { return state.hdcMainPanel; }
+    HDC& TimelineDC() { return state.hdcTimeline; }
+    HDC& CurveDC() { return state.hdcInterpCurve; }
+    HBITMAP& PanelBitmap() { return reinterpret_cast<HBITMAP&>(state.bmpPanel); }
+    HBITMAP& PanelSpareBitmap() { return reinterpret_cast<HBITMAP&>(state.bmpPanelSpare); }
+    HBITMAP& TimelineBitmap() { return reinterpret_cast<HBITMAP&>(state.bmpTimelineStrip); }
+    HBITMAP& CurveBitmap() { return reinterpret_cast<HBITMAP&>(state.bmpInterpCurve); }
     HBRUSH UiBrush(int index) const {
         // brush handles are kept in 32-bit slots, as in the original state
         return reinterpret_cast<HBRUSH>(
-            static_cast<std::uintptr_t>(m_state.brushes[index]));
+            static_cast<std::uintptr_t>(state.brushes[index]));
     }
     void SetUiBrush(int index, HBRUSH brush) {
-        m_state.brushes[index] =
+        state.brushes[index] =
             static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(brush));
     }
     COLORREF& ThemeColor(UiThemeColor color) {
         return reinterpret_cast<COLORREF&>(
-            m_state.themeColors[static_cast<int>(color)]);
+            state.themeColors[static_cast<int>(color)]);
     }
     const COLORREF& ThemeColor(UiThemeColor color) const {
         return reinterpret_cast<const COLORREF&>(
-            m_state.themeColors[static_cast<int>(color)]);
+            state.themeColors[static_cast<int>(color)]);
     }
     COLORREF& ThemeColorAt(int index) {
-        return reinterpret_cast<COLORREF&>(m_state.themeColors[index]);
+        return reinterpret_cast<COLORREF&>(state.themeColors[index]);
     }
     const COLORREF& ThemeColorAt(int index) const {
-        return reinterpret_cast<const COLORREF&>(m_state.themeColors[index]);
+        return reinterpret_cast<const COLORREF&>(state.themeColors[index]);
     }
-    std::uint8_t& UiTextRed() { return m_state.uiTextRed; }
-    std::uint8_t& UiTextGreen() { return m_state.uiTextGreen; }
-    std::uint8_t& UiTextBlue() { return m_state.uiTextBlue; }
+    std::uint8_t& UiTextRed() { return state.uiTextRed; }
+    std::uint8_t& UiTextGreen() { return state.uiTextGreen; }
+    std::uint8_t& UiTextBlue() { return state.uiTextBlue; }
     wchar_t* WavePath() {
         return reinterpret_cast<wchar_t*>(at(offsets::kWcsWavpath));
     }
@@ -743,62 +758,62 @@ public:
 #if defined(_M_X64)
         return m_aviOutputPath;
 #else
-        return m_state.aviOutputPath;
+        return state.aviOutputPath;
 #endif
     }
     std::int32_t& AviRecordStartFrame() {
-        return m_state.aviRecordStartFrame;
+        return state.aviRecordStartFrame;
     }
     std::int32_t& AviRecordEndFrame() {
-        return m_state.aviRecordEndFrame;
+        return state.aviRecordEndFrame;
     }
-    float& AviRecordFps() { return m_state.aviRecordFps; }
+    float& AviRecordFps() { return state.aviRecordFps; }
     std::uint8_t& AviIncludeWave() {
-        return m_state.aviIncludeWave;
+        return state.aviIncludeWave;
     }
     std::int32_t& AviCodecSelection() {
 #if defined(_M_X64)
         return m_aviCodecSelection;
 #else
-        return m_state.aviCodecSelection;
+        return state.aviCodecSelection;
 #endif
     }
     std::uint8_t& AviStereoOutput() {
-        return m_state.aviStereoOutput;
+        return state.aviStereoOutput;
     }
     std::int32_t& AviStereoWidthMultiplier() {
-        return m_state.aviStereoWidthMultiplier;
+        return state.aviStereoWidthMultiplier;
     }
     float& ProjectedShadowDiffuseAlpha() {
-        return m_state.projectedShadowDiffuseAlpha;
+        return state.projectedShadowDiffuseAlpha;
     }
     float& ProjectedShadowAmbientIntensity() {
-        return m_state.projectedShadowAmbientIntensity;
+        return state.projectedShadowAmbientIntensity;
     }
     void SetProjectedShadowAmbientRgb(float intensity) {
         ProjectedShadowAmbientIntensity() = intensity;
-        m_state.projectedShadowAmbientG = intensity;
-        m_state.projectedShadowAmbientB = intensity;
+        state.projectedShadowAmbientG = intensity;
+        state.projectedShadowAmbientB = intensity;
     }
     void SetProjectedShadowAmbient(float intensity) {
         SetProjectedShadowAmbientRgb(intensity);
-        m_state.projectedShadowAmbientA = intensity;
+        state.projectedShadowAmbientA = intensity;
     }
     float& ProjectedShadowSpecularAlpha() {
-        return m_state.projectedShadowSpecularAlpha;
+        return state.projectedShadowSpecularAlpha;
     }
     D3DMATERIAL9 ProjectedShadowMaterial() const {
         D3DMATERIAL9 material{};
-        material.Diffuse.a = m_state.projectedShadowDiffuseAlpha;
-        material.Ambient = {m_state.projectedShadowAmbientIntensity,
-                            m_state.projectedShadowAmbientG,
-                            m_state.projectedShadowAmbientB,
-                            m_state.projectedShadowAmbientA};
-        material.Specular.a = m_state.projectedShadowSpecularAlpha;
+        material.Diffuse.a = state.projectedShadowDiffuseAlpha;
+        material.Ambient = {state.projectedShadowAmbientIntensity,
+                            state.projectedShadowAmbientG,
+                            state.projectedShadowAmbientB,
+                            state.projectedShadowAmbientA};
+        material.Specular.a = state.projectedShadowSpecularAlpha;
         return material;
     }
     std::uint8_t& DirectSoundAvailable() {
-        return m_state.directSoundAvailable;
+        return state.directSoundAvailable;
     }
     std::int32_t& TimelineStartFrame() {
         return raw<std::int32_t>(offsets::kDword97C);
@@ -831,28 +846,28 @@ public:
         return raw<float>(offsets::kFloatF9e658);
     }
     std::uint32_t& PlaybackClockAnchorLow() {
-        return m_state.playbackClockAnchorLow;
+        return state.playbackClockAnchorLow;
     }
     std::uint32_t& PlaybackClockAnchorHigh() {
-        return m_state.playbackClockAnchorHigh;
+        return state.playbackClockAnchorHigh;
     }
     std::int32_t& SavedPlaybackPhysicsMode() {
-        return m_state.savedPlaybackPhysicsMode;
+        return state.savedPlaybackPhysicsMode;
     }
     std::uint8_t& PlaybackStartsAtCurrentFrame() {
         return raw<std::uint8_t>(offsets::kByte9ED99);
     }
     std::uint8_t& PlaybackFrameChanged() {
-        return m_state.playbackFrameChanged;
+        return state.playbackFrameChanged;
     }
     std::uint8_t& PhysicsResetPending() {
-        return m_state.physicsResetPending;
+        return state.physicsResetPending;
     }
     std::uint8_t PhysicsResetPending() const {
-        return m_state.physicsResetPending;
+        return state.physicsResetPending;
     }
     std::int32_t& PlaybackPhysicsMode() {
-        return m_state.playbackPhysicsMode;
+        return state.playbackPhysicsMode;
     }
     std::int32_t& SidebarWidth() {
         return raw<std::int32_t>(offsets::kDwordSidebar);
@@ -862,17 +877,17 @@ public:
     std::int32_t& SeparateWindowSidebarWidth() {
         return raw<std::int32_t>(offsets::kDwordV658748);
     }
-    std::int32_t& SeparateWindowX() { return m_state.separateWindowX; }
-    std::int32_t& SeparateWindowY() { return m_state.separateWindowY; }
-    std::int32_t& SeparateWindowWidth() { return m_state.separateWindowWidth; }
-    std::int32_t& SeparateWindowHeight() { return m_state.separateWindowHeight; }
+    std::int32_t& SeparateWindowX() { return state.separateWindowX; }
+    std::int32_t& SeparateWindowY() { return state.separateWindowY; }
+    std::int32_t& SeparateWindowWidth() { return state.separateWindowWidth; }
+    std::int32_t& SeparateWindowHeight() { return state.separateWindowHeight; }
     std::uint8_t& SeparateWindowMaximized() {
-        return m_state.separateWindowMaximized;
+        return state.separateWindowMaximized;
     }
     std::uint8_t& FrameVolumeControlEnabled() {
         return raw<std::uint8_t>(offsets::kByteFlag672800);
     }
-    float& SidebarRatio() { return m_state.sidebarRatio; }
+    float& SidebarRatio() { return state.sidebarRatio; }
     std::int32_t& FrameNormalization() {
         return raw<std::int32_t>(offsets::kDwordVal672804);
     }
@@ -883,7 +898,7 @@ public:
         return raw<RECT>(offsets::kDwordHideRight);
     }
     std::uint8_t& FullscreenMode() {
-        return m_state.fullscreenMode;
+        return state.fullscreenMode;
     }
     std::uint32_t& MessageSeen() {
         return raw<std::uint32_t>(offsets::kDwordMsgseen);
@@ -925,10 +940,10 @@ public:
         return raw<std::uint8_t>(offsets::kByteA03E9);
     }
     WNDPROC& OriginalEditProc() {
-        return reinterpret_cast<WNDPROC&>(m_state.origEditProc);
+        return reinterpret_cast<WNDPROC&>(state.origEditProc);
     }
     WNDPROC& OriginalTrackbarProc() {
-        return reinterpret_cast<WNDPROC&>(m_state.origTrackProc);
+        return reinterpret_cast<WNDPROC&>(state.origTrackProc);
     }
     std::uint32_t& CameraTrackCursor() { return raw<std::uint32_t>(648796); }
     std::uint8_t& CameraTrackActive() { return raw<std::uint8_t>(648800); }
@@ -1003,7 +1018,7 @@ public:
     float& DeltaTime()              { return raw<float>(offsets::kFloatDeltatime); }  // 657084
     std::uint32_t& TimeNowLow()     { return raw<std::uint32_t>(offsets::kDwordTimenowlo); }
     std::uint32_t& TimeNowHigh()    { return raw<std::uint32_t>(offsets::kDwordTimenowhi); }
-    float& MilliToSec()             { return m_state.milliToSec; }  // 0.001
+    float& MilliToSec()             { return state.milliToSec; }  // 0.001
 
     // Environment / startup scene file (wchar_t[256] @ 657664)
     wchar_t* EnvFileName()          { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsEnvfile); }
@@ -1033,13 +1048,13 @@ public:
     unsigned char& EnglishUI()      { return raw<unsigned char>(offsets::kByteEnglish); }  // 658252
 
     // User directory names (wchar_t[1000] each, 0x0047A5B0)
-    wchar_t* DirModel()   { return m_state.dirModel; }
-    wchar_t* DirUser()    { return m_state.dirUser; }
-    wchar_t* DirAccs()    { return m_state.dirAccs; }
-    wchar_t* DirMotion()  { return m_state.dirMotion; }
-    wchar_t* DirPose()    { return m_state.dirPose; }
-    wchar_t* DirWave()    { return m_state.dirWave; }
-    wchar_t* DirBg()      { return m_state.dirBg; }
+    wchar_t* DirModel()   { return state.dirModel; }
+    wchar_t* DirUser()    { return state.dirUser; }
+    wchar_t* DirAccs()    { return state.dirAccs; }
+    wchar_t* DirMotion()  { return state.dirMotion; }
+    wchar_t* DirPose()    { return state.dirPose; }
+    wchar_t* DirWave()    { return state.dirWave; }
+    wchar_t* DirBg()      { return state.dirBg; }
 
     // Physics gravity (defaults 0.0 / -1.0 / 0.0, magnitude 9.8)
     float& GravityX()               { return raw<float>(offsets::kFloatGravx); }
@@ -1050,21 +1065,17 @@ public:
 
     // Recent-file ANSI buffers (char[256] each)
     char* RecentFile(int index) {
-        return index == 0 ? reinterpret_cast<char*>(m_state.recentFile0)
-             : index == 1 ? reinterpret_cast<char*>(m_state.recentFile1)
-                          : reinterpret_cast<char*>(m_state.recentFile2);
+        return index == 0 ? reinterpret_cast<char*>(state.recentFile0)
+             : index == 1 ? reinterpret_cast<char*>(state.recentFile1)
+                          : reinterpret_cast<char*>(state.recentFile2);
     }
 
-    unsigned char* storage() { return reinterpret_cast<unsigned char*>(&m_state); }
+    unsigned char* storage() { return reinterpret_cast<unsigned char*>(&state); }
     const unsigned char* storage() const {
-        return reinterpret_cast<const unsigned char*>(&m_state);
+        return reinterpret_cast<const unsigned char*>(&state);
     }
 
 private:
-    // The restored application state (include/mikudancestudio/app_layout.hpp):
-    // every field pinned to its original x86 offset by static_assert;
-    // the x64 interior is provisional until the contested anchors return.
-    MMDAppState m_state;
 
 #if defined(_M_X64)
     // In the original x86 blob, 0x9E180 is a D3DLIGHT9 overlay spanning
@@ -1099,6 +1110,7 @@ private:
     // so these dialog-local values live outside the compat blob on x64.
     wchar_t m_aviOutputPath[256]{};
     std::int32_t m_aviCodecSelection{};
+    HWND m_hwndA0A6C = nullptr;
 #endif
 };
 

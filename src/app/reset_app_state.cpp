@@ -76,11 +76,11 @@ void ResetAppState(MMDApp* app) {
     app->GravityMagnitude() = 9.8000002f;
     PhysicsScene* scene = app->Physics();       // +650672 (kPtrSub048)
     app->PlaybackPhysicsMode() = 2;
-    app->raw<float>(offsets::kFloat9EDCC) = 0.0f;
+    app->state.v9edcc = 0.0f;
     app->GravityNoiseEnabled() = 0;
     app->GravityDirection()[0] = 0.0f;
     app->GravityNoise() = 10;
-    app->raw<std::uint8_t>(offsets::kByteA0CC8) = 0;
+    app->state.a0CC8OrUint32 = 0;
     app->GravityDirection()[1] = -1.0f;
     app->GravityDirection()[2] = 0.0f;
     {
@@ -91,35 +91,32 @@ void ResetAppState(MMDApp* app) {
     app->SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
     app->CameraParentModel() = -1;
     app->CameraParentBone() = 0;
-    static const std::size_t kZeroFloats[] = {
-        656496, 656492, 656488, 656484, 656476, 656472, 656468,
-        656464, 656456, 656452, 656448, 656444};
-    for (std::size_t off : kZeroFloats)
-        app->raw<float>(off) = 0.0f;
-    app->raw<float>(offsets::kFloatColor16 + 4 * 15) = 1.0f;
-    app->raw<float>(offsets::kFloatColor16 + 4 * 10) = 1.0f;
-    app->raw<float>(offsets::kFloatColor16 + 4 * 5) = 1.0f;
-    app->raw<float>(offsets::kFloatColor16) = 1.0f;
-    std::memset(app->at(offsets::kBufBuf656632), 0, 0xC8);
+    for (float& v : app->state.cameraAttachmentBasis)
+        v = 0.0f;
+    app->state.cameraAttachmentBasis[15] = 1.0f;
+    app->state.cameraAttachmentBasis[10] = 1.0f;
+    app->state.cameraAttachmentBasis[5] = 1.0f;
+    app->state.cameraAttachmentBasis[0] = 1.0f;
+    std::memset(app->state.buf656632, 0, 0xC8);
 
     // ---- sub-window teardown ----------------------------------------------
-    if (app->raw<HWND>(658636) != nullptr)
-        DestroyWindow(app->raw<HWND>(658636));                   // 0x44E719
-    HWND w292 = app->raw<HWND>(offsets::kDwordA0B74);
-    app->raw<HWND>(658636) = nullptr;
+    if (app->SceneResetSubWindow() != nullptr)
+        DestroyWindow(app->SceneResetSubWindow());               // 0x44E719
+    HWND w292 = reinterpret_cast<HWND&>(app->state.a0b74OrInt32);
+    app->SceneResetSubWindow() = nullptr;
     if (w292 != nullptr)
         DestroyWindow(w292);
-    app->raw<HWND>(offsets::kDwordA0B74) = nullptr;
-    HWND w256 = app->raw<HWND>(offsets::kDwordA0B50);
+    reinterpret_cast<HWND&>(app->state.a0b74OrInt32) = nullptr;
+    HWND w256 = reinterpret_cast<HWND&>(app->state.a0B50OrPtr);
     if (w256 != nullptr)
         DestroyWindow(w256);
-    app->raw<HWND>(offsets::kDwordA0B50) = nullptr;
-    HWND w244 = app->raw<HWND>(offsets::kDwordA0B44);
+    reinterpret_cast<HWND&>(app->state.a0B50OrPtr) = nullptr;
+    HWND w244 = app->state.a0B44OrInt32;
     if (w244 != nullptr)
         DestroyWindow(w244);
-    app->raw<HWND>(offsets::kDwordA0B44) = nullptr;
+    app->state.a0B44OrInt32 = nullptr;
     app->EnhancedModelDirty() = 0;
-    app->raw<std::int32_t>(offsets::kDwordA042C) = 0;
+    app->state.a042C = 0;
     HWND parent = app->FloatingWindow();
     if (parent == nullptr)
         parent = hwnd;
@@ -129,9 +126,9 @@ void ResetAppState(MMDApp* app) {
     PGETFRAME getFrame = static_cast<PGETFRAME>(app->AviFrameReader());
     app->ShadowDistance() = 0.01125f;
     app->ShadowMode() = 1;
-    app->raw<std::int32_t>(offsets::kDwordA0198) = 0;
-    app->raw<std::int32_t>(offsets::kDwordA019C) = 0;
-    app->raw<std::int32_t>(offsets::kDwordA01A0) = 0;
+    app->state.modelOutlineColorRed = 0;
+    app->state.modelOutlineColorGreen = 0;
+    app->state.modelOutlineColorBlue = 0;
     if (getFrame != nullptr) {
         AVIStreamGetFrameClose(getFrame);                        // 0x44E7C3
         app->AviFrameReader() = nullptr;
@@ -144,20 +141,19 @@ void ResetAppState(MMDApp* app) {
         AVIFileRelease(static_cast<PAVIFILE>(app->AviFile()));
         app->AviFile() = nullptr;
     }
-    app->raw<std::int32_t>(offsets::kDword91C) = 0;
-    swprintf_s(reinterpret_cast<wchar_t*>(app->at(offsets::kWcs9e1ec)),
-               0x100, L"");
+    app->state.aviBackgroundEnabled = 0;
+    swprintf_s(app->state.wcs9e1ec, 0x100, L"");
     if (app->AviBackgroundTexture() != nullptr) {
         app->AviBackgroundTexture()->Release();
         app->AviBackgroundTexture() = nullptr;
     }
 
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+    if (app->state.optflag0 == 0) {
         SendMessageA(GetDlgItem(hwnd, 443), CB_RESETCONTENT, 0, 0);
         SendMessageA(GetDlgItem(hwnd, 434), CB_RESETCONTENT, 0, 0);
         SendMessageA(GetDlgItem(hwnd, 439), BM_CLICK, 0, 0);
         Sub44D780(app);                                          // 0x44E88F
-        app->raw<std::uint8_t>(offsets::kByteOptflag0) = 1;
+        app->state.optflag0 = 1;
         PostModelReload2(app);                                   // 0x40D940
         HandleWindowSize(app);                                   // 0x443300
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -166,7 +162,7 @@ void ResetAppState(MMDApp* app) {
     // ---- camera/accessory edit state --------------------------------------
     app->ViewOffsetX() = 0.0f;
     app->ViewOffsetY() = 0.0f;
-    app->raw<std::int32_t>(offsets::kDwordA0B20) = 1;
+    app->state.a0B20 = 1;
     app->CurrentFrame() = 0;
     app->CameraDistance() = -45.0f;
     app->ViewToolDragOperation() = ViewportToolAction::None;
@@ -175,13 +171,13 @@ void ResetAppState(MMDApp* app) {
     app->CameraRotation()[0] = 0.0f;
     app->BoneBoxSelectionActive() = 0;
     app->CameraRotation()[1] = 0.0f;
-    app->raw<std::int32_t>(offsets::kDword9DA24) = 0;
+    app->state.v9da24[0] = 0;
     app->CameraRotation()[2] = 0.0f;
-    app->raw<std::int32_t>(offsets::kDword97C) = 0;
+    app->state.v97c = 0;
     app->LastRegisteredFrame() = 0;
-    app->raw<std::int32_t>(offsets::kDword9DA28) = 0;
+    app->state.v9da24[1] = 0;
     app->CaptureMode() = ScreenCaptureMode::Disabled;
-    app->raw<std::uint8_t>(offsets::kByte9ED9A) = 1;
+    app->state.projectedShadowBlendEnabled = 1;
 
     // ---- models + global/accessory track arrays ---------------------------
     ReleaseSceneModels(*app);                                    // 0x44E95A
@@ -191,7 +187,7 @@ void ResetAppState(MMDApp* app) {
     // ---- combo refills ------------------------------------------------------
     SendMessageA(GetDlgItem(hwnd, 443), CB_RESETCONTENT, 0, 0);
     SendMessageA(GetDlgItem(hwnd, 434), CB_RESETCONTENT, 0, 0);
-    if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+    if (app->state.englishUI != 0) {
         SendMessageA(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("camera"));
         SendMessageA(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
@@ -212,7 +208,7 @@ void ResetAppState(MMDApp* app) {
     }
     SendMessageA(GetDlgItem(hwnd, 434), CB_SETCURSEL, 0, 0);
     SendMessageA(GetDlgItem(hwnd, 436), CB_RESETCONTENT, 0, 0);
-    if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0)
+    if (app->state.englishUI != 0)
         SendMessageA(GetDlgItem(hwnd, 436), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("camera/light/accessory"));
     else
@@ -221,7 +217,7 @@ void ResetAppState(MMDApp* app) {
     SendMessageA(GetDlgItem(hwnd, 436), CB_SETCURSEL, 0, 0);
     SendMessageA(GetDlgItem(hwnd, 474), CB_RESETCONTENT, 0, 0);
     SendMessageA(GetDlgItem(hwnd, 449), CB_RESETCONTENT, 0, 0);
-    if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+    if (app->state.englishUI != 0) {
         SendMessageA(GetDlgItem(hwnd, 474), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("ground"));
         SendMessageA(GetDlgItem(hwnd, 449), CB_ADDSTRING, 0,
@@ -236,7 +232,7 @@ void ResetAppState(MMDApp* app) {
                                        433};
     for (int id : kResetCombos)
         SendMessageA(GetDlgItem(hwnd, id), CB_RESETCONTENT, 0, 0);
-    if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+    if (app->state.englishUI != 0) {
         static const char* kChannels[] = {"x axis move", "y axis move",
                                           "z axis move", "rotation",
                                           "distance", "view angle", "all"};
@@ -286,7 +282,7 @@ void ResetAppState(MMDApp* app) {
 
     // ---- second AVI sweep + light/shadow menu defaults --------------------
     getFrame = static_cast<PGETFRAME>(app->AviFrameReader());
-    app->raw<std::uint8_t>(offsets::kByteA06CC) = 0;
+    app->state.a06CC = 0;
     if (getFrame != nullptr) {
         AVIStreamGetFrameClose(getFrame);                         // 0x44F4A2
         app->AviFrameReader() = nullptr;
@@ -299,17 +295,17 @@ void ResetAppState(MMDApp* app) {
         AVIFileRelease(static_cast<PAVIFILE>(app->AviFile()));
         app->AviFile() = nullptr;
     }
-    app->raw<std::uint8_t>(offsets::kByte31E) = 0;
+    app->state.v31e = 0;
     CheckMenuItem(GetMenu(hwnd), 0xD3, 0u);
     SendMessageA(GetDlgItem(app->FloatingWindow() != nullptr
                                 ? app->FloatingWindow() : hwnd, 551),
                  BM_CLICK, 0, 0);
-    app->raw<std::uint8_t>(offsets::kByte31D) = 1;
+    app->state.v31d = 1;
     CheckMenuItem(GetMenu(hwnd), 0xD7, 8u);
     SendMessageA(GetDlgItem(app->FloatingWindow() != nullptr
                                 ? app->FloatingWindow() : hwnd, 557),
                  BM_CLICK, 1, 0);
-    app->raw<std::int32_t>(offsets::kByte918) = 1;
+    app->state.groundShadowEnabled = 1;
     CheckMenuItem(GetMenu(hwnd), 0xDD, 8u);
 
     // ---- rebuild the global track arrays ----------------------------------
@@ -403,9 +399,9 @@ void ResetAppState(MMDApp* app) {
     DrawMenuBar(hwnd);
 
     // ---- frame/title state --------------------------------------------------
-    app->raw<std::int32_t>(offsets::kDword91C) = 0;
-    app->raw<std::uint8_t>(offsets::kByte9E428) = 0;
-    app->raw<std::uint8_t>(offsets::kByte9EB7E) = 0;
+    app->state.aviBackgroundEnabled = 0;
+    app->state.v9e428 = 0;
+    app->state.v9eb7e = 0;
     CheckMenuItem(GetMenu(hwnd), 0xD6, 0u);
     CheckMenuItem(GetMenu(hwnd), 0xD8, 0u);
     CheckMenuItem(GetMenu(hwnd), 0xE9, 0u);
@@ -414,27 +410,27 @@ void ResetAppState(MMDApp* app) {
         sprintf_s(title, 0x100, "MikuMikuDance");
         SetWindowTextA(hwnd, title);
     }
-    app->raw<std::uint16_t>(offsets::kWcsEnvfile) = 0;
-    app->raw<std::uint8_t>(offsets::kByteOptflag1) = 1;
-    app->raw<std::uint8_t>(offsets::kByteOptflag2) = 1;
-    app->raw<std::uint8_t>(offsets::kByteOptflag3) = 1;
-    app->raw<std::uint8_t>(offsets::kByteOptflag4) = 1;
-    app->raw<std::uint8_t>(offsets::kByteOptflag5) = 1;
-    app->raw<std::uint8_t>(offsets::kByteOptflag6) = 1;
+    app->state.envFileName[0] = 0;
+    app->state.optflag1 = 1;
+    app->state.optflag2 = 1;
+    app->state.optflag3 = 1;
+    app->state.optflag4 = 1;
+    app->state.optflag5 = 1;
+    app->state.optflag6 = 1;
     app->CameraPerspective() = 0;
     SendMessageA(GetDlgItem(hwnd, 446), BM_CLICK, 1, 0);
     app->CameraPosition()[0] = 0.0f;
     app->CameraPosition()[1] = 10.0f;
     app->CameraPosition()[2] = 0.0f;
-    app->raw<std::int32_t>(offsets::kDword32C) = 0;
+    app->state.v32c = 0;
     app->CameraReferenceMode() = CameraAttachmentReference::None;
     SendMessageA(GetDlgItem(hwnd, 412), BM_CLICK, 0, 0);
     SendMessageA(GetDlgItem(hwnd, 531), BM_CLICK, 0, 0);
     app->PlaybackLoopEnabled() = 0;
     SendMessageA(GetDlgItem(hwnd, 411), BM_CLICK, 0, 0);
-    app->raw<std::uint8_t>(offsets::kByte342) = 0;
+    app->state.v342 = 0;
     SendMessageA(GetDlgItem(hwnd, 413), BM_CLICK, 0, 0);
-    app->raw<std::int32_t>(offsets::kDword344) = 0;
+    app->state.viewportToolHovered = 0;
     app->CameraFov() = 45.0f;
     SendMessageA(GetDlgItem(hwnd, 486), BM_CLICK, 0, 0);
     SendMessageA(GetDlgItem(hwnd, 476), BM_CLICK, 0, 0);

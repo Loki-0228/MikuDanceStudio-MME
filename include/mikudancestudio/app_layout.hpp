@@ -668,9 +668,12 @@ struct MMDAppState {
     std::int32_t playbackPhysicsMode;
     unsigned char a0CC8OrUint32;
 #if defined(_M_X64)
+    // x64: HWND slot kept outside the compat blob (MMDApp::m_hwndA0A6C)
     RawPad<9> pad367;
 #else
-    RawPad<11> pad367;
+    RawPad<3> pad367;
+    HWND hwndA0A6C;  // sub-window torn down on scene reset
+    RawPad<4> pad367b;
 #endif
     unsigned char a0CD4;
 #if defined(_M_X64)
@@ -1389,6 +1392,10 @@ static_assert(offsetof(MMDAppState, a0CC8OrUint32) == 658632,
               "a0CC8OrUint32 x86");
 static_assert(offsetof(MMDAppState, a0CD4) == 658644,
               "a0CD4 x86");
+#ifndef _M_X64
+static_assert(offsetof(MMDAppState, hwndA0A6C) == 658636,
+              "hwndA0A6C x86");
+#endif
 #ifndef _M_X64
 static_assert(offsetof(MMDAppState, aviCodecSelection) == 658648,
               "aviCodecSelection x86");

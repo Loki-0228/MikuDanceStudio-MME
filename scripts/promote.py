@@ -90,8 +90,8 @@ def cmd_report():
     total_raw = total_at = 0
     for path in iter_sources():
         text = read(path)
-        n_raw = len(re.findall(r"\.raw<|->raw<", text))
-        n_at = len(re.findall(r"->at\(|\.at\(", text))
+        n_raw = len(re.findall(r"\braw<", text))
+        n_at = len(re.findall(r"->at\(|\.at\(|\bat\(", text))
         if n_raw or n_at:
             per_file.append((n_raw + n_at, n_raw, n_at,
                              os.path.relpath(path, ROOT)))

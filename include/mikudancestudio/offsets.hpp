@@ -37,7 +37,6 @@ constexpr std::size_t kFloatPosz = 828; // 0x33C // 0.0
 constexpr std::size_t kByte340 = 832; // 0x340 // 0
 constexpr std::size_t kByte341 = 833; // 0x341 // 0
 constexpr std::size_t kByte342 = 834; // 0x342 // 0
-constexpr std::size_t kDword344 = 836; // 0x344 // 0
 constexpr std::size_t kDword350 = 848; // 0x350 // 0
 constexpr std::size_t kDword374 = 884; // 0x374 // 0
 constexpr std::size_t kDword378 = 888; // 0x378 // 0

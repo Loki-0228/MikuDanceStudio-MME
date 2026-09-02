@@ -33,3 +33,7 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 CMakeUserPresets.json
+
+# Local reverse-engineering tooling / crash-iteration artifacts
+.mcp.json
+crashdump/
