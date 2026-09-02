@@ -3,19 +3,24 @@
 
 Sources of truth (all committed to the repo, no original exe needed):
   res/assets/      native-format leaf resources (png / bmp / ico / fx / x)
-  res/templates/   binary Win32 templates (DIALOG / MENU) - kept verbatim
-                   as build input; the human-editable .rc source form
-                   lives alongside (dialogs.rc / menus.rc, regenerated and
-                   byte-verified against rc.exe by scripts/dialog_rc.py)
+  res/templates/   dialogs.rc / menus.rc - the .rc source text for the 48
+                   RT_DIALOG (600..817) and 2 RT_MENU (SAMPLE02[E])
+                   templates; compiled with rc.exe (Windows SDK) at gen /
+                   verify time, re-emitting the original template bytes
+                   verbatim (scripts/dialog_rc.py verifies that round-trip)
   res/mmd_manifest.xml / res/mmd_manifest_x64.xml
 
-The .res files are COFF object resources written directly (no rc.exe), in the
-exact record order of the original MikuMikuDance.exe .rsrc tree so that the
-linked resources stay byte-identical to the original binary:
+The .res files are COFF object resources assembled here directly (only the
+two template .rc files go through rc.exe), in the exact record order of the
+original MikuMikuDance.exe .rsrc tree so that the linked resources stay
+byte-identical to the original binary:
   PNG(string) XFILE(string) BITMAP ICON MENU DIALOG RCDATA GROUP_ICON MANIFEST
 
 Embedding is byte-exact per leaf:
-  .png / .fx / .x / .xml / template .bin   -> file bytes verbatim
+  .png / .fx / .x / .xml                   -> file bytes verbatim
+  dialogs.rc / menus.rc                    -> compiled by rc.exe; the emitted
+                                              template blobs are byte-ident
+                                              ical to the original ones
   .bmp                                     -> file bytes minus the 14-byte
                                               BITMAPFILEHEADER (RT_BITMAP is
                                               a bare DIB)
@@ -24,12 +29,18 @@ Embedding is byte-exact per leaf:
                                               (ICONDIR + first 12 bytes of
                                               each ICONDIRENTRY + WORD id)
 
-Usage:
+Usage (gen/verify need rc.exe from a Windows 10 SDK, or RC_EXE set):
   python scripts/gen_resources.py init    # one-shot: res/rsrc/ -> res/assets/
                                           # (+ extract x64 manifest)
   python scripts/gen_resources.py gen      # rewrite res/gen_resources*.res
   python scripts/gen_resources.py verify   # gen + byte-compare, no writes
 """
+import argparse
+import os
+import struct
+import sys
+
+import dialog_rc  # sibling script: rc.exe location + .rc compile + .res parse
 import argparse
 import os
 import struct
@@ -64,14 +75,38 @@ PNG_MAP = [
 ]
 
 
+_templates = None
+
+
+def templates():
+    """Compile res/templates/**/*.rc once -> {(rt, name): template blob}.
+
+    Lazy so `init` (which never touches templates) runs without an SDK;
+    gen/verify compile through rc.exe - see scripts/dialog_rc.py for why
+    the emitted bytes are the original ones verbatim.
+    """
+    global _templates
+    if _templates is None:
+        rcexe = dialog_rc.find_rcexe()
+        if not rcexe:
+            sys.exit("error: compiling res/templates/**/*.rc needs rc.exe "
+                     "from a Windows 10 SDK (or set RC_EXE)")
+        _templates = {(typ[1], name[1]): blob
+                      for (typ, name), blob
+                      in dialog_rc.compile_templates(rcexe).items()}
+    return _templates
+
+
 def dialog_ids():
-    ddir = os.path.join(RES, "templates", "dialog")
-    return sorted(int(f.split("_")[0]) for f in os.listdir(ddir)
-                  if f.endswith(".bin"))
+    return sorted(n for t, n in templates() if t == RT_DIALOG)
 
 
 def record_specs(manifest):
-    """Yield (type, name, lang, res-relative path) in .rsrc tree order."""
+    """Yield (type, name, lang, res-relative path) in .rsrc tree order.
+
+    A None path marks a template record: its blob comes from compiling the
+    res/templates/**/*.rc sources (see templates()).
+    """
     for rid, fname in PNG_MAP:
         yield ("PNG", rid, LANG_JP, f"assets/{fname}")
     yield ("XFILE", 115, LANG_JP, "assets/axis.x")
@@ -80,9 +115,9 @@ def record_specs(manifest):
     for i in range(1, 7):                     # RT_ICON leaves from app.ico
         yield (RT_ICON, i, LANG_JP, APP_ICON)
     for nm in ("SAMPLE02", "SAMPLE02E"):
-        yield (RT_MENU, nm, LANG_JP, f"templates/menu/{nm}_{LANG_JP:04X}.bin")
+        yield (RT_MENU, nm, LANG_JP, None)
     for did in dialog_ids():
-        yield (RT_DIALOG, did, LANG_JP, f"templates/dialog/{did}_{LANG_JP:04X}.bin")
+        yield (RT_DIALOG, did, LANG_JP, None)
     yield (RT_RCDATA, 117, LANG_JP, "assets/skin_effect_sm2.fx")
     yield (RT_RCDATA, 118, LANG_JP, "assets/skin_effect_sm3.fx")
     yield (RT_GROUP_ICON, 100, LANG_JP, APP_ICON)
@@ -158,17 +193,21 @@ def render_res(records):
 def build_records(manifest):
     ico_images, ico_group = load_ico_images(os.path.join(RES, APP_ICON))
     images = {rid: blob for rid, blob in ico_images}
+    tmpl = templates()
     records = []
     for t, n, lang, rel in record_specs(manifest):
-        path = os.path.join(RES, rel)
-        if t == RT_BITMAP:
-            blob = load_bitmap(path)
-        elif t == RT_ICON:
-            blob = images[n]
-        elif t == RT_GROUP_ICON:
-            blob = ico_group
+        if rel is None:                       # template from the .rc sources
+            blob = tmpl[(t, n)]
         else:
-            blob = open(path, "rb").read()
+            path = os.path.join(RES, rel)
+            if t == RT_BITMAP:
+                blob = load_bitmap(path)
+            elif t == RT_ICON:
+                blob = images[n]
+            elif t == RT_GROUP_ICON:
+                blob = ico_group
+            else:
+                blob = open(path, "rb").read()
         records.append((t, n, lang, blob))
     return records
 

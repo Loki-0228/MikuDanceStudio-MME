@@ -11,7 +11,8 @@
 //   Common-Controls v6 manifest
 //
 // Editable sources live in res/assets/ (native formats: png/bmp/ico/fx/x)
-// and res/templates/ (dialogs.rc / menus.rc - decoded source-text forms of
-// the binary DIALOG/MENU templates; scripts/dialog_rc.py verify proves
-// rc.exe re-emits the original bytes).  See res/README.md.
+// and res/templates/{dialog/dialogs.rc, menu/menus.rc} (the template source
+// of truth; gen_resources.py compiles them with rc.exe and embeds the
+// original bytes verbatim - scripts/dialog_rc.py verifies that round-trip).
+// See res/README.md.
 // =========================================================================//
