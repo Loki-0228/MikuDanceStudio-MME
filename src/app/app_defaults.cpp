@@ -3,8 +3,8 @@
 // ===========================================================================
 // Field-by-field port of the post-construction default initializer called
 // from WinMain right after the object is zeroed.  Write order follows the
-// decompilation exactly (decimal offsets kept in comments for auditing;
-// constants come from scripts/gen_offsets.py - machine-computed hex).
+// decompilation exactly; fields whose semantics are still unrecovered keep
+// their layout placeholder names (vNNN / aNNNN).
 // ===========================================================================
 #include <cstdio>
 #include <cstring>
@@ -15,63 +15,61 @@
 namespace mikudancestudio {
 
 void MMDApp::InitDefaults() {
-    namespace off = offsets;
     auto& s = *this;
 
     s.ViewOffsetX() = 0.0f;
     s.CameraDistance() = -45.0f;
     s.ViewOffsetY() = 0.0f;
-    s.raw<unsigned char>(off::kByteC8) = 0;               // 200
+    m_state.sidebarResizeDragging = 0;
     s.CameraRotation()[0] = 0.0f;
-    s.WaveEnabled() = 0;                                  // 657100
+    s.WaveEnabled() = 0;
     s.CameraRotation()[1] = 0.0f;
-    s.DirectSoundAvailable() = 1;                         // 720
+    s.DirectSoundAvailable() = 1;
     s.CameraRotation()[2] = 0.0f;
-    s.UiOptionFlag(0) = 1;                                // 760
+    s.UiOptionFlag(0) = 1;
     s.CameraPosition()[0] = 0.0f;
-    s.UiOptionFlag(1) = 1;                                // 761
-    s.UiOptionFlag(2) = 1;                                // 762
+    s.UiOptionFlag(1) = 1;
+    s.UiOptionFlag(2) = 1;
     s.CameraPosition()[1] = 10.0f;
-    s.UiOptionFlag(3) = 1;                                // 763
-    s.UiOptionFlag(4) = 1;                                // 764
+    s.UiOptionFlag(3) = 1;
+    s.UiOptionFlag(4) = 1;
     s.CameraPosition()[2] = 0.0f;
-    s.UiOptionFlag(5) = 1;                                // 765
-    s.UiOptionFlag(6) = 1;                                // 766
+    s.UiOptionFlag(5) = 1;
+    s.UiOptionFlag(6) = 1;
     s.CameraPerspective() = 0;
-    s.GroundGridEnabled() = 1;                             // 797
-    s.ViewportInputActive() = 1;                           // 650705
-    s.FpsOverlayEnabled() = 0;                             // 798
-    s.raw<std::uint32_t>(off::kDword32C) = 0;             // 812
-    s.PlaybackActive() = 0;                                // 816
+    s.GroundGridEnabled() = 1;
+    s.ViewportInputActive() = 1;
+    s.FpsOverlayEnabled() = 0;
+    m_state.v32c = 0;
+    s.PlaybackActive() = 0;
     s.CameraReferenceMode() = CameraAttachmentReference::None;
-    s.PlaybackLoopEnabled() = 0;                           // 833
-    s.raw<unsigned char>(off::kByte342) = 0;              // 834
-    s.raw<std::uint32_t>(off::kDword344) = 0;             // 836
-    s.raw<std::uint32_t>(off::kDword348) = 0;             // 840
-    s.raw<std::uint32_t>(off::kDword34C) = 0;             // 844
+    s.PlaybackLoopEnabled() = 0;
+    m_state.v342 = 0;
+    m_state.viewportToolHovered = 0;
+    m_state.viewToolDragOperation = 0;
+    m_state.interactionDragMode = 0;
     s.ClearModelSlots();
-    s.EditMode() = ViewportEditMode::None;                 // 2324
-    s.raw<unsigned char>(off::kByte918) = 1;              // 2328
-    s.raw<std::uint32_t>(off::kDword91C) = 0;             // 2332
-    s.CaptureMode() = ScreenCaptureMode::Disabled;        // 650116
-    s.ViewportToolOperation() = ViewportToolAction::None; // 2348
-    s.BoneBoxSelectionActive() = 0;                       // 2368
-    s.TimelineStartFrame() = 0;                           // 2428
-    s.CurrentFrame() = 0;                                  // 2432
+    s.EditMode() = ViewportEditMode::None;
+    m_state.groundShadowEnabled = 1;
+    m_state.aviBackgroundEnabled = 0;
+    s.CaptureMode() = ScreenCaptureMode::Disabled;
+    s.ViewportToolOperation() = ViewportToolAction::None;
+    s.BoneBoxSelectionActive() = 0;
+    s.TimelineStartFrame() = 0;
+    s.CurrentFrame() = 0;
     s.PendingTimelineSelectionRow() = TimelineSelectionRow::None;
 
-    // 6-iteration light-default loop:
-    //   for i in [0,6): [645642+i]=0xC0 [645648+i]=0 [645654+i]=0x40 [645660+i]=0x7F
+    // 6-iteration light-default loop
     for (int i = 0; i < 6; ++i) {
-        s.raw<unsigned char>(off::kByteLightA + i) = static_cast<unsigned char>(-64);
-        s.raw<unsigned char>(off::kByteLightB + i) = 0;
-        s.raw<unsigned char>(off::kByteLightC + i) = 64;
-        s.raw<unsigned char>(off::kByteLightD + i) = 127;
+        m_state.lightA[i] = static_cast<unsigned char>(-64);
+        m_state.lightB[i] = 0;
+        m_state.lightC[i] = 64;
+        m_state.lightD[i] = 127;
     }
 
-    s.raw<std::uint32_t>(off::kDword350) = 0;             // 848
-    for (std::size_t d = 645668; d <= 645700; d += 4)      // 645668..645700 (9)
-        s.raw<std::uint32_t>(d) = 0;
+    m_state.v350 = 0;
+    for (std::int32_t& v : m_state.v9da24)
+        v = 0;
     s.CameraKeys() = nullptr;
     s.LightKeys() = nullptr;
     s.ShadowKeys() = nullptr;
@@ -80,42 +78,42 @@ void MMDApp::InitDefaults() {
         s.AccessoryKeys(i) = nullptr;
         s.AccessorySlot(i) = nullptr;
     }
-    s.raw<float>(off::kFloat9E650) = 0.0f;                // 648784
-    s.FpsLimit() = 60.0f;                                 // 657632
-    s.raw<float>(off::kFloatFpsa) = 0.0f;                 // 657636
-    s.LastRegisteredFrame() = 0;                           // 647532
-    s.raw<float>(off::kFloatFpsb) = 0.0f;                 // 657640
+    m_state.v9e650 = 0.0f;
+    s.FpsLimit() = 60.0f;
+    m_state.fpsA = 0.0f;
+    s.LastRegisteredFrame() = 0;
+    m_state.fpsB = 0.0f;
     s.AviBackgroundTexture() = nullptr;
-    s.raw<float>(off::kFloatFpsc) = 0.0f;                 // 657644
-    s.AviBackgroundSurface() = nullptr;                   // 648180
+    m_state.fpsC = 0.0f;
+    s.AviBackgroundSurface() = nullptr;
     s.PictureBackgroundTexture() = nullptr;
     s.AviOverlayVertices() = nullptr;
     s.AviFile() = nullptr;
     s.AviStream() = nullptr;
     s.AviFrameReader() = nullptr;
-    s.AviUsesThirtyFpsTiming() = 0;                       // 648208
-    s.PictureBackgroundEnabled() = 0;                     // 648232
-    s.raw<unsigned char>(off::kByte9EB7E) = 0;            // 650110
-    s.raw<unsigned char>(off::kByte9EB7F) = 0;            // 650111
+    s.AviUsesThirtyFpsTiming() = 0;
+    s.PictureBackgroundEnabled() = 0;
+    m_state.v9eb7e = 0;
+    m_state.v9eb7f = 0;
     s.DisplayObjectListMatchCount() = 0;
     s.DisplayObjectListScrollPosition() = 0;
     s.CaptureTexture() = nullptr;
-    s.raw<std::uint32_t>(off::kDword300) = 0;             // 768
+    m_state.groundGridVertices = nullptr;
     s.CaptureRenderTarget() = nullptr;
-    s.FrameStepPlayback() = 0;                             // 650640
+    s.FrameStepPlayback() = 0;
     s.SceneModified() = 0;
-    s.raw<unsigned char>(off::kByte9ED98) = 0;            // 650648
+    m_state.v9ed98 = 0;
     s.PlaybackStartsAtCurrentFrame() = 0;
-    s.raw<std::uint32_t>(off::kDwordA0B10) = 0;           // 658192
-    s.raw<std::uint32_t>(off::kDwordA0B14) = 0;           // 658196
-    s.raw<std::uint32_t>(off::kDwordA0B44) = 0;           // 658244
-    s.raw<unsigned char>(off::kByte9ED9A) = 1;            // 650650
-    s.raw<std::uint32_t>(off::kDword9ED9C) = 0;           // 650652
-    s.raw<unsigned char>(off::kByteEnglish) = 1;          // 658252
-    s.raw<std::uint32_t>(off::kDwordA0B50) = 0;           // 658256
-    s.EnhancedModelDirty() = 0;                            // 658276
-    s.raw<std::uint32_t>(off::kDwordA0B74) = 0;           // 658292
-    s.raw<std::uint32_t>(off::kDwordA0B7C) = 0;           // 658300
+    m_state.a0B10 = 0;
+    m_state.a0B14OrPtr = 0;
+    m_state.a0B44OrInt32 = nullptr;
+    m_state.projectedShadowBlendEnabled = 1;
+    m_state.v9ed9c = 0;
+    m_state.englishUI = 1;
+    m_state.a0B50OrPtr = 0;
+    s.EnhancedModelDirty() = 0;
+    m_state.a0b74OrInt32 = nullptr;
+    m_state.a0B7COrInt32 = nullptr;
     // Frame-config trio 0xA0B00/0xA0B04/0xA0B08 (start frame / end frame /
     // fps).  Original InitDefaults leaves these alone - the ONLY writer in
     // the whole binary is the frame-range dialog OK handler (0x40F3C4:
@@ -127,109 +125,117 @@ void MMDApp::InitDefaults() {
     // HWND 0xA0D24 (a no-op SetWindowTextW).  The phase-15 30.0f seed
     // was reclaimed in phase 19.
     s.PlaybackPhysicsMode() = 2;
-    s.raw<unsigned char>(off::kByteA0CC8) = 0;            // 658632
+    m_state.a0CC8OrUint32 = 0;
     s.PhysicsResetPending() = 0;
     s.PlaybackFrameChanged() = 0;
-    s.raw<unsigned char>(off::kByteA0CD4) = 0;            // 658644
-    s.raw<std::uint32_t>(off::kDword9EDC8) = 10;          // 650696
-    s.raw<std::uint32_t>(off::kDwordA0B20) = 1;           // 658208
-    s.GravityMagnitude() = 9.8000002f;                    // 650692
-    s.raw<float>(off::kFloat9EDCC) = 0.0f;                // 650700
-    s.GravityX() = 0.0f;                                  // 650680
-    s.GravityY() = -1.0f;                                 // 650684
-    s.GravityZ() = 0.0f;                                  // 650688
-    s.raw<unsigned char>(off::kByte9EDD0) = 0;            // 650704
-    s.RecordingCompletionFlag() = nullptr;                // 650708
-    s.raw<unsigned char>(off::kByte9EDD8) = 0;            // 650712
-    s.raw<std::uint32_t>(off::kDword304) = 0;             // 772
-    s.raw<std::uint32_t>(0x9EE10) = 0;                    // 650784
-    s.raw<std::uint32_t>(0x9EE0C) = 0;                    // 650780
-    s.raw<std::uint32_t>(0x9EE08) = 0;                    // 650776
-    sprintf_s(RecentFile(0), 0x100, "%s", g_Locale);      // 650788
-    sprintf_s(RecentFile(1), 0x100, "%s", g_Locale);      // 651044
-    sprintf_s(RecentFile(2), 0x100, "%s", g_Locale);      // 651300
+    m_state.a0CD4 = 0;
+    m_state.gravityNoise = 10;
+    s.AccessoryRenderSplitOrder() = 1;
+    s.GravityMagnitude() = 9.8000002f;
+    m_state.v9edcc = 0.0f;
+    s.GravityX() = 0.0f;
+    s.GravityY() = -1.0f;
+    s.GravityZ() = 0.0f;
+    m_state.v9edd0 = 0;
+    s.RecordingCompletionFlag() = nullptr;
+    m_state.v9edd8 = 0;
+    m_state.groundGridIndices = nullptr;
+    m_state.v9ee10 = 0;
+    m_state.v9ee0cOrUint32 = nullptr;
+    m_state.toonTextures[10] = nullptr;
+    sprintf_s(RecentFile(0), 0x100, "%s", g_Locale);
+    sprintf_s(RecentFile(1), 0x100, "%s", g_Locale);
+    sprintf_s(RecentFile(2), 0x100, "%s", g_Locale);
     s.OverlayTexture() = nullptr;
-    s.raw<std::uint32_t>(0x9EE00) = 0;                    // 650768
-    s.raw<std::uint32_t>(0x9EDFC) = 0;                    // 650764
-    s.raw<std::uint32_t>(off::kDword9F124) = 0;           // 651556
-    s.raw<std::uint32_t>(off::kDword9F128) = 0;           // 651560
+    m_state.toonTextures[8] = nullptr;
+    m_state.toonTextures[7] = nullptr;
+    m_state.lineOverlayPrimitiveCount = 0;
+    m_state.groundPlaneVertices = nullptr;
     s.AviBackgroundTexture() = nullptr;                    // original writes twice
     s.PictureOverlayVertices() = nullptr;
-    s.raw<unsigned char>(off::kByte9F12C) = 0;            // 651564
-    s.RecordingWindow() = nullptr;                        // 658724
-    s.CaptureReadbackPixels() = nullptr;                  // 652084
-    s.raw<std::uint32_t>(off::kDword9F130) = 0;           // 651568
+    m_state.v9f12c = 0;
+    s.RecordingWindow() = nullptr;
+    s.CaptureReadbackPixels() = nullptr;
+    m_state.projectedShadowRestoreTexture = nullptr;
     s.LeftViewportVertices() = nullptr;
     s.RightViewportVertices() = nullptr;
-    s.raw<unsigned char>(off::kByteA0D28) = 0;            // 658728
-    s.PhysicsInterval() = 0.01125f;                       // 658732
+    m_state.selfShadowCompositionEnabled = 0;
+    s.PhysicsInterval() = 0.01125f;
     s.FloatingWindow() = nullptr;
-    s.raw<unsigned char>(off::kByteA0189) = 0;            // 655753
-    s.raw<unsigned char>(655764) = 0;                     // 655764
-    s.raw<unsigned char>(655765) = 0;                     // 655765
-    s.raw<unsigned char>(655766) = 0;                     // 655766
-    s.raw<unsigned char>(655767) = 1;                     // 655767
-    s.raw<std::uint32_t>(off::kDwordA0198) = 0;           // 655768
-    s.raw<std::uint32_t>(off::kDwordA019C) = 0;           // 655772
-    s.raw<std::uint32_t>(off::kDwordA01A0) = 0;           // 655776
-    std::memset(at(655780), 0, 0x40);             // 655780
-    s.raw<unsigned char>(off::kByteA01E4) = 0;            // 655844
-    s.raw<std::uint32_t>(off::kDwordA0268) = 0;           // 655976
-    s.raw<std::uint32_t>(off::kDwordA026C) = 0;           // 655980
-    s.raw<std::uint32_t>(off::kDwordA0270) = 0;           // 655984
-    s.FullscreenMode() = 0;                               // 655988
-    s.raw<std::uint32_t>(off::kDwordA027C) = 44;          // 655996
-    s.raw<unsigned char>(off::kByteA02A8) = 0;            // 656040
-    s.raw<unsigned char>(off::kByteA02B5) = 0;            // 656053
-    s.raw<unsigned char>(off::kByteA02B4) = 0;            // 656052
+    m_state.selectionBoxDragging = 0;
+    m_state.a0194 = 0;
+    m_state.modelOutlineRenderingSuppressed = 0;
+    m_state.a0196 = 0;
+    m_state.a0197 = 1;
+    m_state.modelOutlineColorRed = 0;
+    m_state.modelOutlineColorGreen = 0;
+    m_state.modelOutlineColorBlue = 0;
+    std::memset(m_state.buf655780, 0, 0x40);
+    m_state.a01E4 = 0;
+    m_state.activeRenderObject = nullptr;
+    m_state.activeRenderPass = 0;
+    m_state.a0270 = 0;
+    s.FullscreenMode() = 0;
+    m_state.a027COrBuf_bytes = 44;
+    m_state.a02A8 = 0;
+    m_state.a02B5 = 0;
+    m_state.a02B4 = 0;
     s.AudioSeekReady() = 0;
-    s.AviStereoOutput() = 0;                               // 658785
-    s.raw<unsigned char>(off::kByteA03B7) = 0;            // 656311
-    s.AviStereoWidthMultiplier() = 2;                      // 658788
-    s.raw<unsigned char>(off::kByteA03B8) = 0;            // 656312
-    for (std::size_t d = 656316; d <= 656340; d += 4)      // 656316..340 (7)
-        s.raw<std::uint32_t>(d) = 0;
-    s.raw<unsigned char>(off::kByteA03DC) = 1;            // 656348
-    s.raw<unsigned char>(off::kByteA03DD) = 0;            // 656349
-    s.raw<unsigned char>(off::kByteA03DE) = 1;            // 656350
-    s.raw<unsigned char>(off::kByteA03DF) = 0;            // 656351
+    s.AviStereoOutput() = 0;
+    m_state.a03B7 = 0;
+    s.AviStereoWidthMultiplier() = 2;
+    m_state.depthDeviceEnabled = 0;
+    m_state.a03BC = nullptr;
+    m_state.a03C0 = nullptr;
+    m_state.a03C4 = nullptr;
+    m_state.a03C8 = 0;
+    m_state.a03CC = nullptr;
+    m_state.a03D0 = 0;
+    m_state.a03D4 = 0;
+    m_state.a03DC = 1;
+    m_state.a03DD = 0;
+    m_state.depthTextureCompositionEnabled = 1;
+    m_state.a03DF = 0;
     s.SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
-    for (std::size_t d = 656357; d <= 656361; ++d)         // 656357..361 (5)
-        s.raw<unsigned char>(d) = 0;
-    s.raw<std::uint32_t>(off::kDwordA0D6C) = 1;           // 658796
-    s.TimelineSelectionChanged() = 0;                      // 656363
-    s.ViewModeComboSelection() = 0;                       // 656428
+    m_state.a03E5 = 0;
+    m_state.a03E6 = 0;
+    m_state.a03E7 = 0;
+    m_state.a03E8 = 0;
+    m_state.a03E9 = 0;
+    m_state.messageSeen = 1;
+    s.TimelineSelectionChanged() = 0;
+    s.ViewModeComboSelection() = 0;
     s.CameraParentModel() = -1;
     s.CameraParentBone() = 0;
-    s.raw<std::uint32_t>(off::kDword35C) = 0;             // 860
-    s.FrameVolumeControlEnabled() = 0;                    // 672800
-    s.FrameNormalization() = 100;                         // 672804
-    s.raw<std::uint32_t>(off::kPtrSub04b0) = 0;           // 650656 (subsystem slot)
+    m_state.displayClipboard = nullptr;
+    s.FrameVolumeControlEnabled() = 0;
+    s.FrameNormalization() = 100;
+    m_state.sub04b0OrUint32 = nullptr;
 
-    // 16-float colour cluster (656440..656503): original zeroes the 12
-    // non-one slots then writes 1.0 at 656440/656460/656480/656500.
-    for (int f = 0; f < 16; ++f)
-        s.raw<float>(off::kFloatColor16 + 4 * f) = 0.0f;
-    s.raw<float>(off::kFloatColor16 + 4 * 15) = 1.0f;     // 656500
-    s.raw<float>(off::kFloatColor16 + 4 * 10) = 1.0f;     // 656480
-    s.raw<float>(off::kFloatColor16 + 4 * 5) = 1.0f;      // 656460
-    s.raw<float>(off::kFloatColor16 + 4 * 0) = 1.0f;      // 656440
+    // 16-float colour cluster: zero all, then identity diagonals at
+    // rows 0/2/4/6 (original writes 1.0 at +0/+20/+40/+60).
+    for (float& v : m_state.cameraAttachmentBasis)
+        v = 0.0f;
+    m_state.cameraAttachmentBasis[15] = 1.0f;
+    m_state.cameraAttachmentBasis[10] = 1.0f;
+    m_state.cameraAttachmentBasis[5] = 1.0f;
+    m_state.cameraAttachmentBasis[0] = 1.0f;
 
     s.CameraAttachmentTransformSuppressed() = 0;
-    s.raw<unsigned char>(off::kByteA04B8) = 0;            // 656568
-    s.WindowLayoutReady() = 1;                             // 672812
-    std::memset(at(656632), 0, 0xC8);             // 656632
-    s.raw<unsigned char>(off::kByteB6568480) = 0;            // 656848
-    s.raw<unsigned char>(off::kByteB6568481) = 0;            // 656849
-    s.raw<unsigned char>(off::kByteB6568482) = 0;            // 656850
-    s.raw<unsigned char>(off::kByteB6568483) = 0;            // 656851
-    s.raw<std::uint32_t>(off::kDwordA0668) = 0;           // 657000
-    s.raw<unsigned char>(off::kByteA0665) = 0;            // 656997
-    s.raw<unsigned char>(off::kByteA066C) = 0;            // 657004
-    s.raw<unsigned char>(off::kByteA066D) = 0;            // 657005
-    s.raw<unsigned char>(off::kByteA06B4) = 0;            // 657076
-    s.raw<unsigned char>(off::kByteA06B5) = 0;            // 657077
-    s.raw<unsigned char>(off::kByteA06B6) = 0;            // 657078
+    m_state.a04B8 = 0;
+    s.WindowLayoutReady() = 1;
+    std::memset(m_state.buf656632, 0, 0xC8);
+    m_state.b6568480 = 0;
+    m_state.b6568481 = 0;
+    m_state.b6568482 = 0;
+    m_state.b6568483 = 0;
+    m_state.a0668OrUint32 = 0;
+    m_state.a0665 = 0;
+    m_state.a066C = 0;
+    m_state.a066D = 0;
+    m_state.a06B4 = 0;
+    m_state.a06B5 = 0;
+    m_state.a06B6 = 0;
 }
 
 }  // namespace mikudancestudio
