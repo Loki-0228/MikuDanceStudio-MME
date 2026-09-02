@@ -846,16 +846,16 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
 
     if (s.state.waveEnabled != 0) {
         TimelineDrawTicks(s.state.timelineStartFrame,
-                          s.raw<std::int32_t>(offsets::kDwordSidebar));
+                          s.state.sidebarWidth);
         RECT rc;
         rc.left = 6;
         rc.top = 0x5F;
         rc.right = static_cast<LONG>(
-            s.raw<std::uint32_t>(offsets::kDwordSidebar)) - 3;
+            s.state.sidebarWidth) - 3;
         rc.bottom = 0x92;
         InvalidateRect(hwnd, &rc, 0);                               // 0x529280
     }
-    if (s.raw<std::uint32_t>(offsets::kDword91C) == 1)
+    if (s.state.aviBackgroundEnabled == 1)
         AviBgOverlayRefresh(app);                                   // 0x4168D0
 }
 

@@ -49,7 +49,7 @@ void ApplyGravityRecord(MMDApp* app, const mdl::GravityKey& key) {
     std::uint32_t noiseModeWord;
     std::memcpy(&noiseModeWord, &key.noiseEnabled, sizeof noiseModeWord);
     app->raw<std::uint32_t>(kOffA0CD4) = noiseModeWord;
-    app->raw<std::uint32_t>(offsets::kDword9EDC8) =
+    app->state.gravityNoise =
         static_cast<std::uint32_t>(key.noise);
     app->state.gravityMagnitude = key.acceleration;
     app->state.gravityX = key.direction[0];
@@ -85,7 +85,7 @@ void RefreshPhysicsDialog(MMDApp* app) {
             static_cast<int>(app->state.gravityZ * 100.0)));
     sprintf_s(text, 0x32, "%d",
               static_cast<int>(
-                  app->raw<std::uint32_t>(offsets::kDword9EDC8)));
+                  app->state.gravityNoise));
     SetWindowTextA(GetDlgItem(dlg, 0x2C9), text);             // 0x52B9F4
     const BOOL mode = app->raw<std::uint8_t>(kOffA0CD4) != 0;
     SendMessageA(GetDlgItem(dlg, 0x2DB), BM_SETCHECK, mode, 0);
@@ -138,7 +138,7 @@ void Sub412330(MMDApp* app) {
 
     const int dIter =
         rec.noise - prev.noise;
-    app->raw<std::uint32_t>(offsets::kDword9EDC8) =
+    app->state.gravityNoise =
         static_cast<std::uint32_t>(
             static_cast<int>(t * static_cast<float>(dIter)) + prev.noise);
     app->state.gravityMagnitude =

@@ -1159,7 +1159,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         }
         app->SceneModified() = 1;
         Sub42C810(app);                                 // model init
-        if (app->raw<std::int32_t>(offsets::kDword91C) == 1) {
+        if (app->state.aviBackgroundEnabled == 1) {
             AviBgOverlayRefresh(app);                     // AVI bg overlay
         }
         if (app->raw<std::uint8_t>(offsets::kByte9E428) != 0) {

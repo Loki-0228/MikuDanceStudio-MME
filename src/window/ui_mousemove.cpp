@@ -117,9 +117,6 @@ using offsets::kByteA06B5;
 using offsets::kByteA06B6;
 using offsets::kByteB6568483;
 using offsets::kByteOptflag0;
-using offsets::kDwordHideBottom;
-using offsets::kDwordHideLeft;
-using offsets::kDwordHideRight;
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -323,18 +320,18 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
         D3DRenderer* sub = app->Renderer();
         const int ratio = static_cast<int>(
             sub->viewScale * 200.0);  // viewScale = sub+0x1D4F0 float ratio
-        if (X > static_cast<int>(app->raw<std::int32_t>(kDwordHideLeft)) - ratio)
+        if (X > static_cast<int>(app->raw<std::int32_t>(app->state.hideLeft)) - ratio)
             return;
         app->raw<std::uint8_t>(kByteA06B5) = 0;
     }
     if (app->raw<std::uint8_t>(kByteA06B4) != 0) {
-        if (Y > app->raw<std::int32_t>(kDwordHideBottom))
+        if (Y > app->raw<std::int32_t>(app->state.hideBottom))
             return;
         app->raw<std::uint8_t>(kByteA06B4) = 0;
     }
     if (app->raw<std::uint8_t>(kByteA06B6) != 0) {
-        if (X > app->raw<std::int32_t>(kDwordHideLeft) ||
-            X < app->raw<std::int32_t>(kDwordHideRight))
+        if (X > app->raw<std::int32_t>(app->state.hideLeft) ||
+            X < app->raw<std::int32_t>(app->state.hideRight))
             return;
         // Original stores (X < 0xA0D40), which is false on this path (0x444D55).
         app->raw<std::uint8_t>(kByteA06B6) = 0;

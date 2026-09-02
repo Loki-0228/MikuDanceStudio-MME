@@ -102,17 +102,17 @@ void HandleWindowPaint(MMDApp* app) {
     if (app->FloatingWindow() == nullptr) {
         HBRUSH blk = CreateSolidBrush(0);
         SelectObject(hdc, blk);
-        const int top = app->raw<std::int32_t>(offsets::kDwordHideTop);
+        const int top = app->state.hideTop;
         if (top <= rc.top + 25) {
             Rectangle(hdc, side + 9, 0,
-                      app->raw<std::int32_t>(offsets::kDwordHideRight),
+                      app->state.hideRight,
                       rc.bottom - 160);
-            Rectangle(hdc, app->raw<std::int32_t>(offsets::kDwordHideLeft), 0,
+            Rectangle(hdc, app->state.hideLeft, 0,
                       rc.right, rc.bottom - 160);
         } else {
             Rectangle(hdc, side + 9, 0, rc.right, top - 25);
             Rectangle(hdc, side + 9,
-                      app->raw<std::int32_t>(offsets::kDwordHideBottom) + 32,
+                      app->state.hideBottom + 32,
                       rc.right, rc.bottom - 160);
         }
         SelectObject(hdc, oldBrush);

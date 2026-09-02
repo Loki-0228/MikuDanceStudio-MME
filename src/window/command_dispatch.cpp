@@ -88,14 +88,14 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         CmdSaveMotion(app);
         break;
     case 0xD3: {    // View: information display toggle (0x47EAC7/0x47EB00)
-        auto& flag = s.raw<unsigned char>(offsets::kByte31E);
+        auto& flag = s.state.fpsOverlayEnabled;
         if (flag != 0) {
             flag = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD3, MF_UNCHECKED);
         } else {
             flag = 1;
-            s.raw<float>(offsets::kFloat320) = 0.0f;   // timer cluster reset
-            s.raw<std::uint32_t>(offsets::kDword324) = 0;
+            s.state.fpsOverlayElapsedSeconds = 0.0f;   // timer cluster reset
+            s.state.fpsOverlayFrameCount = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD3, MF_CHECKED);
         }
         // 0x47EB56/0x47EB6F: sync the 0x227 checkbox - owned by the
@@ -103,7 +103,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         HWND owner3 = static_cast<HWND>(s.FloatingWindow());
         if (owner3 == nullptr) owner3 = hwnd;
         SendMessageA(GetDlgItem(owner3, 0x227), 0xF1 /*BM_SETCHECK*/,
-                     s.raw<unsigned char>(offsets::kByte31E), 0);
+                     s.state.fpsOverlayEnabled, 0);
         break;
     }
     case 0xD5:      // Background: load AVI file
@@ -123,7 +123,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         break;
     }
     case 0xD7: {    // View: coordinate axis display (0x47FBF5)
-        auto& flag = s.raw<unsigned char>(offsets::kByte31D);
+        auto& flag = s.state.groundGridEnabled;
         flag = flag ? 0 : 1;
         CheckMenuItem(GetMenu(hwnd), 0xD7, flag ? MF_CHECKED : MF_UNCHECKED);
         // 0x47FC4F/0x47FC8B: sync the 0x22D checkbox - owned by the
@@ -137,7 +137,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
     case 0xD8: {    // Background: AVI display (0x4871F9)
         // Original: clearing is free; setting requires a loaded AVI
         // stream (dword 0x9E400 != 0) - with no AVI the case is a no-op.
-        auto& flag = s.raw<std::uint32_t>(offsets::kDword91C);
+        auto& flag = s.state.aviBackgroundEnabled;
         if (flag == 1) {
             flag = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD8, MF_UNCHECKED);

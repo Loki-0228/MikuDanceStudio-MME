@@ -31,13 +31,13 @@ void Sub40CAC0(MMDApp* app);
 // raises the moved-flag for the frame driver (drag threshold 50px).
 int Sub428FF0(MMDApp* app, unsigned short x, unsigned short y) {
     auto& s = *app;
-    if (s.raw<std::uint8_t>(offsets::kByteA06B5) != 0) {          // 0x428FF6
+    if (s.state.a06B5 != 0) {          // 0x428FF6
         // original: (int)(sub1D574+120048 /*viewScale, render scale*/ *
         // 200.0) via __ftol2_sse
         const int v3 = static_cast<int>(s.Renderer()->viewScale * 200.0f);
         if (x > s.ViewportRect().right - v3)                        // 0x429028
             return v3;
-        s.raw<std::uint8_t>(offsets::kByteA06B5) = 0;              // 0x42902E
+        s.state.a06B5 = 0;              // 0x42902E
     }
     int result = y;
     if (s.raw<std::uint8_t>(offsets::kByteA06B4) != 0) {           // 0x429034

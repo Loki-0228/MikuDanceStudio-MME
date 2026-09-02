@@ -151,10 +151,10 @@ void RefreshTimeline(MMDApp* app, bool forward) {
     if (forward) {
         app->PhysicsResetPending() =
             app->PlaybackPhysicsMode() == 3 ? 1 : 0;
-        if (app->raw<std::int32_t>(offsets::kDword91C) == 1)
+        if (app->state.aviBackgroundEnabled == 1)
             Sub4168D0(app);
     } else {
-        if (app->raw<std::int32_t>(offsets::kDword91C) == 1)
+        if (app->state.aviBackgroundEnabled == 1)
             Sub4168D0(app);
         if (app->PlaybackPhysicsMode() == 3)
             app->PhysicsResetPending() = 1;
@@ -224,7 +224,7 @@ void Sub432FA0(MMDApp* app) {
 
     ApplyFrameToModels(app);
     RefreshFrameContext(app);
-    if (app->raw<std::int32_t>(offsets::kDword91C) == 1)
+    if (app->state.aviBackgroundEnabled == 1)
         Sub4168D0(app);
     app->PhysicsResetPending() = 1;
 }

@@ -75,21 +75,21 @@ struct MMDAppState {
     RawPad<1> pad21;
     void* groundGridVertices;
     void* groundGridIndices;
-    float cam0;
-    float cam1;
-    float cam2;
-    float cam3;
-    float cam4;
-    unsigned char v31c;
-    unsigned char v31d;
-    unsigned char v31e;
+    float viewOffsetX;
+    float viewOffsetY;
+    float cameraPitch;
+    float cameraYaw;
+    float cameraRoll;
+    unsigned char cameraPerspective;
+    unsigned char groundGridEnabled;
+    unsigned char fpsOverlayEnabled;
     RawPad<1> pad31;
-    float v320;
+    float fpsOverlayElapsedSeconds;
 #if defined(_M_X64)
     RawPad<4> pad32;
 #endif
-    std::uint32_t v324;
-    std::uint32_t fps;
+    std::uint32_t fpsOverlayFrameCount;
+    std::uint32_t framesPerSecond;
     std::uint32_t v32c;
 #if defined(_M_X64)
     RawPad<1> pad35;
@@ -100,13 +100,13 @@ struct MMDAppState {
 #else
     RawPad<3> pad36;
 #endif
-    float posX;
-    float posY;
+    float cameraPosX;
+    float cameraPosY;
 #if defined(_M_X64)
     RawPad<4> pad38;
 #endif
-    float posZ;
-    unsigned char v340;
+    float cameraPosZ;
+    unsigned char cameraReferenceMode;
     unsigned char playbackLoopEnabled;
     unsigned char v342;
     RawPad<1> pad42;
@@ -593,7 +593,7 @@ struct MMDAppState {
 #endif
     void* sub06c;
     void* rendererOrLocaleTable;
-    std::int32_t sidebarWidthOrPtr;
+    std::int32_t sidebarWidth;
     unsigned char waveEnabled;
     RawPad<1> pad333;
     wchar_t exeDir[256];
@@ -601,7 +601,7 @@ struct MMDAppState {
     void* origEditProc;
     std::int32_t renderW;
     std::int32_t renderH;
-    float camAngle;
+    float cameraDistance;
     float fpsLimit;
     float fpsA;
     float fpsB;
@@ -710,7 +710,7 @@ struct MMDAppState {
     RawPad<4> pad380;
     HWND floatingWindow;  // aka kDwordA0d38
     std::int32_t cfg658748;
-    std::int32_t hideRightOrBuf_bytes;
+    std::int32_t hideRight;
     std::int32_t hideTop;
     std::int32_t hideLeft;
     std::int32_t hideBottom;
@@ -803,40 +803,40 @@ static_assert(offsetof(MMDAppState, groundGridVertices) == 768,
               "groundGridVertices x86");
 static_assert(offsetof(MMDAppState, groundGridIndices) == 772,
               "groundGridIndices x86");
-static_assert(offsetof(MMDAppState, cam0) == 776,
-              "cam0 x86");
-static_assert(offsetof(MMDAppState, cam1) == 780,
-              "cam1 x86");
-static_assert(offsetof(MMDAppState, cam2) == 784,
-              "cam2 x86");
-static_assert(offsetof(MMDAppState, cam3) == 788,
-              "cam3 x86");
-static_assert(offsetof(MMDAppState, cam4) == 792,
-              "cam4 x86");
-static_assert(offsetof(MMDAppState, v31c) == 796,
-              "v31c x86");
-static_assert(offsetof(MMDAppState, v31d) == 797,
-              "v31d x86");
-static_assert(offsetof(MMDAppState, v31e) == 798,
-              "v31e x86");
-static_assert(offsetof(MMDAppState, v320) == 800,
-              "v320 x86");
-static_assert(offsetof(MMDAppState, v324) == 804,
-              "v324 x86");
-static_assert(offsetof(MMDAppState, fps) == 808,
-              "fps x86");
+static_assert(offsetof(MMDAppState, viewOffsetX) == 776,
+              "viewOffsetX x86");
+static_assert(offsetof(MMDAppState, viewOffsetY) == 780,
+              "viewOffsetY x86");
+static_assert(offsetof(MMDAppState, cameraPitch) == 784,
+              "cameraPitch x86");
+static_assert(offsetof(MMDAppState, cameraYaw) == 788,
+              "cameraYaw x86");
+static_assert(offsetof(MMDAppState, cameraRoll) == 792,
+              "cameraRoll x86");
+static_assert(offsetof(MMDAppState, cameraPerspective) == 796,
+              "cameraPerspective x86");
+static_assert(offsetof(MMDAppState, groundGridEnabled) == 797,
+              "groundGridEnabled x86");
+static_assert(offsetof(MMDAppState, fpsOverlayEnabled) == 798,
+              "fpsOverlayEnabled x86");
+static_assert(offsetof(MMDAppState, fpsOverlayElapsedSeconds) == 800,
+              "fpsOverlayElapsedSeconds x86");
+static_assert(offsetof(MMDAppState, fpsOverlayFrameCount) == 804,
+              "fpsOverlayFrameCount x86");
+static_assert(offsetof(MMDAppState, framesPerSecond) == 808,
+              "framesPerSecond x86");
 static_assert(offsetof(MMDAppState, v32c) == 812,
               "v32c x86");
 static_assert(offsetof(MMDAppState, playbackActive) == 816,
               "playbackActive x86");
-static_assert(offsetof(MMDAppState, posX) == 820,
-              "posX x86");
-static_assert(offsetof(MMDAppState, posY) == 824,
-              "posY x86");
-static_assert(offsetof(MMDAppState, posZ) == 828,
-              "posZ x86");
-static_assert(offsetof(MMDAppState, v340) == 832,
-              "v340 x86");
+static_assert(offsetof(MMDAppState, cameraPosX) == 820,
+              "cameraPosX x86");
+static_assert(offsetof(MMDAppState, cameraPosY) == 824,
+              "cameraPosY x86");
+static_assert(offsetof(MMDAppState, cameraPosZ) == 828,
+              "cameraPosZ x86");
+static_assert(offsetof(MMDAppState, cameraReferenceMode) == 832,
+              "cameraReferenceMode x86");
 static_assert(offsetof(MMDAppState, playbackLoopEnabled) == 833,
               "playbackLoopEnabled x86");
 static_assert(offsetof(MMDAppState, v342) == 834,
@@ -1318,8 +1318,8 @@ static_assert(offsetof(MMDAppState, sub06c) == 657088,
               "sub06c x86");
 static_assert(offsetof(MMDAppState, rendererOrLocaleTable) == 657092,
               "rendererOrLocaleTable x86");
-static_assert(offsetof(MMDAppState, sidebarWidthOrPtr) == 657096,
-              "sidebarWidthOrPtr x86");
+static_assert(offsetof(MMDAppState, sidebarWidth) == 657096,
+              "sidebarWidth x86");
 static_assert(offsetof(MMDAppState, waveEnabled) == 657100,
               "waveEnabled x86");
 static_assert(offsetof(MMDAppState, exeDir) == 657102,
@@ -1330,8 +1330,8 @@ static_assert(offsetof(MMDAppState, renderW) == 657620,
               "renderW x86");
 static_assert(offsetof(MMDAppState, renderH) == 657624,
               "renderH x86");
-static_assert(offsetof(MMDAppState, camAngle) == 657628,
-              "camAngle x86");
+static_assert(offsetof(MMDAppState, cameraDistance) == 657628,
+              "cameraDistance x86");
 static_assert(offsetof(MMDAppState, fpsLimit) == 657632,
               "fpsLimit x86");
 static_assert(offsetof(MMDAppState, fpsA) == 657636,
@@ -1428,8 +1428,8 @@ static_assert(offsetof(MMDAppState, floatingWindow) == 658744,
               "floatingWindow x86");
 static_assert(offsetof(MMDAppState, cfg658748) == 658748,
               "cfg658748 x86");
-static_assert(offsetof(MMDAppState, hideRightOrBuf_bytes) == 658752,
-              "hideRightOrBuf_bytes x86");
+static_assert(offsetof(MMDAppState, hideRight) == 658752,
+              "hideRight x86");
 static_assert(offsetof(MMDAppState, hideTop) == 658756,
               "hideTop x86");
 static_assert(offsetof(MMDAppState, hideLeft) == 658760,

@@ -141,14 +141,18 @@ void MMDApp::InitDefaults() {
     state.v9edd8 = 0;
     state.groundGridIndices = nullptr;
     state.spriteOverlayPrimitiveCount = 0;
-    state.v9ee0cOrUint32 = nullptr;
-    state.toonTextures[10] = nullptr;
+    // fcn_0040a730 lines 161-182: six dwords zeroed in two blocks of three
+    // around the RecentFile sprintf calls - 0x9EE20/0x9EE1C/0x9EE18 first,
+    // then 0x9EE14/0x9EE10/0x9EE0C.
+    state.sceneFontTexture = nullptr;      // 0x9EE20
+    state.textOverlayPrimitiveCount = 0;   // 0x9EE1C
+    state.overlayVertices = nullptr;       // 0x9EE18
     sprintf_s(RecentFile(0), 0x100, "%s", g_Locale);
     sprintf_s(RecentFile(1), 0x100, "%s", g_Locale);
     sprintf_s(RecentFile(2), 0x100, "%s", g_Locale);
-    s.OverlayTexture() = nullptr;
-    state.toonTextures[8] = nullptr;
-    state.toonTextures[7] = nullptr;
+    state.overlayTexture = nullptr;        // 0x9EE14
+    state.spriteOverlayPrimitiveCount = 0; // 0x9EE10
+    state.v9ee0cOrUint32 = nullptr;        // 0x9EE0C
     state.lineOverlayPrimitiveCount = 0;
     state.groundPlaneVertices = nullptr;
     s.AviBackgroundTexture() = nullptr;                    // original writes twice

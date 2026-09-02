@@ -1626,7 +1626,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (MessageBoxA(hwnd, text, kCaptionDelModelJp, flags) != 1) {
             break;
         }
-        if (app->raw<std::int32_t>(offsets::kDwordA0b74) != 0) {
+        if (app->state.a0b74OrInt32 != 0) {
             Sub4220C0(app);
             if (app->raw<void*>(offsets::kPtrA0b7c) != nullptr) {
                 free(app->raw<void*>(offsets::kPtrA0b7c));
@@ -1637,8 +1637,8 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
                 app->raw<void*>(offsets::kPtrA0c30) = nullptr;
             }
             DestroyWindow(reinterpret_cast<HWND>(
-                app->raw<void*>(offsets::kDwordA0b74)));
-            app->raw<void*>(offsets::kDwordA0b74) = nullptr;
+                app->state.a0b74OrInt32));
+            app->state.a0b74OrInt32 = nullptr;
             EnableWindow(GetDlgItem(hwnd, 0x1B4), TRUE);
             EnableWindow(GetDlgItem(hwnd, 0x198), TRUE);
         }
@@ -1649,10 +1649,10 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         }
         app->ModelSlot(found) = nullptr;
         app->SceneModified() = 1;
-        app->raw<std::int32_t>(offsets::kDwordA042C) = 0;
+        app->state.a042C = 0;
         for (std::int32_t i = 0; i < 0x64; ++i) {
             if (app->ModelSlot(i) != nullptr) {
-                app->raw<std::int32_t>(offsets::kDwordA042C) = 1;
+                app->state.a042C = 1;
             }
         }
         // combo rebuild: 0x1B4 / 0x1DA / 0x1C1 reset with the old id as
@@ -1909,9 +1909,9 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             free(app->raw<void*>(kOffA0B24));
             app->raw<void*>(kOffA0B24) = nullptr;
         }
-        if (app->raw<void*>(offsets::kDwordA0668) != nullptr) {
-            free(app->raw<void*>(offsets::kDwordA0668));
-            app->raw<void*>(offsets::kDwordA0668) = nullptr;
+        if (app->state.a0668OrUint32 != nullptr) {
+            free(app->state.a0668OrUint32);
+            app->state.a0668OrUint32 = nullptr;
         }
         if (app->raw<std::uint8_t>(kOffA0664) == 0) {
             break;

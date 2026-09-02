@@ -130,9 +130,9 @@ LRESULT HandleNotify(HWND h, UINT m, WPARAM w, LPARAM l) {
         | (v9 == 491) & (v15 == 1)
         | (v9 == 490) & (v15 == 0)
         | (v9 == 552) & app->FrameVolumeControlEnabled()  // 672800
-        | (v9 == 557) & app->raw<std::uint8_t>(offsets::kByte31D)  // 797
+        | (v9 == 557) & app->state.groundGridEnabled  // 797
         | (v9 == 564) & (v16 == 2)
-        | (v9 == 551) & app->raw<std::uint8_t>(offsets::kByte31E)  // 798
+        | (v9 == 551) & app->state.fpsOverlayEnabled  // 798
         | (v9 == 563) & (v16 == 1)
         | (v9 == 562) & (v16 == 0)
         | (v9 == 535) & app->state.v9ed98  // 650648

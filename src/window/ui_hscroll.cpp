@@ -297,7 +297,7 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
         case 0:  // SB_LINEUP
             if (app->FloatingWindow() != nullptr ||
                 app->MouseX() <=
-                    app->raw<std::int32_t>(offsets::kDwordHideRight)) {
+                    app->state.hideRight) {
                 --app->state.timelineStartFrame;
             } else {
                 app->CameraDistance() = static_cast<float>(
@@ -307,7 +307,7 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
         case 1:  // SB_LINEDOWN
             if (app->FloatingWindow() != nullptr ||
                 app->MouseX() <=
-                    app->raw<std::int32_t>(offsets::kDwordHideRight)) {
+                    app->state.hideRight) {
                 ++app->state.timelineStartFrame;
             } else {
                 app->CameraDistance() = static_cast<float>(

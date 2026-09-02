@@ -373,7 +373,7 @@ void Sub450000(MMDApp* app, int fd) {
     // ---- scene-state reset run (0x450093..0x450121) ----------------------
     s->state.accessoryRenderSplitOrder = 0;
     s->SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
-    s->raw<std::uint32_t>(off::kDwordA042C) = 0;
+    s->state.a042C = 0;
     s->state.cameraParentModel = -1;
     s->state.cameraParentBone = 0;
     s->raw<float>(off::kDwordA043c11) = 0.0f;                   // 0xA0468
@@ -448,7 +448,7 @@ void Sub450000(MMDApp* app, int fd) {
         std::int32_t editFlag = 0;
         Rd(fd, &editFlag, 4);
         if (s->state.floatingWindow == 0)
-            s->raw<std::uint32_t>(off::kDwordSidebar) = editFlag;   // A06C8
+            s->state.sidebarWidth = editFlag;   // A06C8
         else
             s->raw<std::uint32_t>(off::kDwordV658748) = editFlag;   // A0D3C
     }
@@ -1726,19 +1726,19 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
         }
     }
     // camera misc (0x4550F5..0x45518C)
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatPosx), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatPosy), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatPosz), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam0), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam1), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCamangle), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam2), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam3), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam4), 4);
+    Rd(fd, &s->state.cameraPosX, 4);
+    Rd(fd, &s->state.cameraPosY, 4);
+    Rd(fd, &s->state.cameraPosZ, 4);
+    Rd(fd, &s->state.viewOffsetX, 4);
+    Rd(fd, &s->state.viewOffsetY, 4);
+    Rd(fd, &s->state.cameraDistance, 4);
+    Rd(fd, &s->state.cameraPitch, 4);
+    Rd(fd, &s->state.cameraYaw, 4);
+    Rd(fd, &s->state.cameraRoll, 4);
     {
         unsigned char b = 0;
         Rd(fd, &b, 1);
-        s->raw<unsigned char>(off::kByte31C) = (b == 1) ? 1 : 0;
+        s->state.cameraPerspective = (b == 1) ? 1 : 0;
     }
     // frame UI (0x4551AD..0x455276)
     {
@@ -1753,7 +1753,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
         SendMessageA(GetDlgItem(main, 448), EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(text));
         SendMessageA(GetDlgItem(main, 446), BM_SETCHECK,
-                     s->raw<unsigned char>(off::kByte31C) != 0 ? 1 : 0, 0);
+                     s->state.cameraPerspective != 0 ? 1 : 0, 0);
     }
 
     // ---- light track read (0x455286..0x4554D3) ----------------------------
@@ -2249,8 +2249,8 @@ label_708:
                 break;
         }
         // physics defaults + combos (0x45736C..0x4573FE)
-        s->raw<unsigned char>(off::kByteA0CD4) = 0;
-        s->raw<std::uint32_t>(off::kDword9EDC8) = 10;
+        s->state.a0CD4 = 0;
+        s->state.gravityNoise = 10;
         s->state.gravityMagnitude = 9.8000002f;
         s->raw<std::uint32_t>(off::kByteA0CC8) = 0;
         s->state.gravityX = 0.0f;
@@ -2320,7 +2320,7 @@ label_708:
             if (slots[i] != nullptr) ModelKinematicSync(slots[i]);
         // physics reads (0x457713..0x45776E)
         Rd(fd, &s->state.gravityMagnitude, 4);
-        Rd(fd, &s->raw<std::uint32_t>(off::kDword9EDC8), 4);
+        Rd(fd, &s->state.gravityNoise, 4);
         Rd(fd, &s->state.gravityX, 4);
         Rd(fd, &s->state.gravityY, 4);
         Rd(fd, &s->state.gravityZ, 4);
@@ -2328,7 +2328,7 @@ label_708:
         if (std::getenv("MIKUDANCESTUDIO_TRACE_NOISE_OFF") != nullptr)
             std::fprintf(stderr, "noise byte file offset=%ld value=%d\n",
                          static_cast<long>(_tell(fd)), static_cast<int>(b));
-        s->raw<unsigned char>(off::kByteA0CD4) = (b == 1) ? 1 : 0;
+        s->state.a0CD4 = (b == 1) ? 1 : 0;
     }
     // gravity/physics track read (0x45777C..0x4579FA).  This is the
     // 36-byte app+0x380 table; using the 24-byte app+0x37C

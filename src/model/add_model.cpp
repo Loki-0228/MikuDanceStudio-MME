@@ -81,7 +81,7 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
         mdl::Mdl(model)->comboSelIndex2 = mdl::Mdl(model)->comboSelIndex;
         SendMessageA(GetDlgItem(hwnd, 436), CB_SETCURSEL,
                      mdl::Mdl(model)->comboSelIndex, 0);
-        app->raw<std::uint32_t>(offsets::kDwordA042C) =
+        app->state.a042C =
             mdl::Mdl(model)->comboSelIndex;
         app->SetSelectedModelSlot(static_cast<std::uint8_t>(slot));
         mikudancestudio::mdl::Mdl(model)->displayState = app->raw<std::uint8_t>(offsets::kByte9EB7E);

@@ -210,6 +210,9 @@ static void FillSelectionRecords(MMDApp* app, unsigned char* arr, int recStride,
         ::operator new(static_cast<std::size_t>(cnt) * 0x10));
     app->TimelineSelectionRecords(band) =
         reinterpret_cast<TimelineSelectionRecord*>(out);
+    // TEMP(debug, keyframe-drag crash)
+    std::int32_t written = 0;
+    std::int32_t* outBase = out;
     int recIdx = 2;
     // The original advances recIdx by five and stops when recIdx-2 reaches
     // 0x2710.  recStride already spans five timeline records, so this is
@@ -222,10 +225,16 @@ static void FillSelectionRecords(MMDApp* app, unsigned char* arr, int recStride,
                 out[3] = *reinterpret_cast<std::int32_t*>(
                     arr + i * recStride + k * flagStride);
                 out += 4;
+                ++written;  // TEMP(debug, keyframe-drag crash)
             }
         }
         recIdx += 5;
     }
+    // TEMP(debug, keyframe-drag crash)
+    std::fprintf(stderr, "FILL band=%d cnt=%d written=%d arr=%p out=%p\n",
+                 static_cast<int>(band), cnt, written, static_cast<void*>(arr),
+                 static_cast<void*>(outBase));
+    std::fflush(stderr);
     qsort(app->TimelineSelectionRecords(band), static_cast<std::size_t>(cnt), 0x10,
           CompareFunction);
 }
@@ -1168,7 +1177,7 @@ void HandleLButtonDown(MMDApp* app) {
                 }
             }
         }
-        if (app->raw<std::int32_t>(offsets::kDword91C) == 1)  // 2332 (0x91C)
+        if (app->state.aviBackgroundEnabled == 1)  // 2332 (0x91C)
             Sub4168D0(app);                               // 0x4168D0
         app->PhysicsResetPending() = 1;
         goto L_tail;

@@ -447,12 +447,12 @@ void BeginOrEndViewportToolDrag(MMDApp* app, int operation) {
                 Sub42D6E0(app);
             } else if (operation <= 14) {
                 Sub42D6E0(app);
-                app->raw<std::uint8_t>(offsets::kByteA06B5) = 1;
+                app->state.a06B5 = 1;
             } else {
                 const int target = app->raw<std::int32_t>(650652);
                 RefreshRequest(target == 2
                     ? app->raw<std::uint8_t>(647536) : -1);
-                app->raw<std::uint8_t>(offsets::kByteA06B5) = 1;
+                app->state.a06B5 = 1;
             }
         } else if (operation == 21) {
             int& target = app->raw<std::int32_t>(650652);
@@ -497,7 +497,7 @@ void BeginOrEndViewportToolDrag(MMDApp* app, int operation) {
                 app->ViewToolDragOperation() = ViewportToolAction::None;
             }
             app->InteractionDragMode() = ViewportDragMode::None;
-            app->raw<std::uint8_t>(offsets::kByteA06B5) = 0;
+            app->state.a06B5 = 0;
         }
         app->BoneBoxSelectionActive() = 0;
     }

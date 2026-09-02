@@ -618,7 +618,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             // display mode: selected accessory index 0xA042C; when zero the
             // original re-dispatches WM_COMMAND 0x1B3 on the main window.
             const std::int32_t sel =
-                app->raw<std::int32_t>(offsets::kDwordA042C);
+                app->state.a042C;
             if (sel == 0) {
                 SendMessageA(hwnd, WM_COMMAND, 0x1B3, 0);
                 break;
@@ -816,11 +816,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 551: play checkbox 0x227 (byte 0x31E) --------------------------
     case 551: {  // 0x48C5AE
-        if (app->raw<std::uint8_t>(offsets::kByte31E) != 0) {
-            app->raw<std::uint8_t>(offsets::kByte31E) = 0;
+        if (app->state.fpsOverlayEnabled != 0) {
+            app->state.fpsOverlayEnabled = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD3, MF_UNCHECKED);
         } else {
-            app->raw<std::uint8_t>(offsets::kByte31E) = 1;
+            app->state.fpsOverlayEnabled = 1;
             app->raw<float>(0x320) = 0.0f;
             app->raw<std::int32_t>(0x324) = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD3, MF_CHECKED);
@@ -846,11 +846,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 557: morph-display checkbox 0x22D (byte 0x31D) -----------------
     case 557: {  // 0x48C557
-        if (app->raw<std::uint8_t>(offsets::kByte31D) != 0) {
-            app->raw<std::uint8_t>(offsets::kByte31D) = 0;
+        if (app->state.groundGridEnabled != 0) {
+            app->state.groundGridEnabled = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD7, MF_UNCHECKED);
         } else {
-            app->raw<std::uint8_t>(offsets::kByte31D) = 1;
+            app->state.groundGridEnabled = 1;
             CheckMenuItem(GetMenu(hwnd), 0xD7, MF_CHECKED);
         }
         break;

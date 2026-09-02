@@ -263,8 +263,8 @@ void HandlePaletteChanged2(HDC hdc) {
     const LONG right = rc.right;   // ebp
     const LONG blitX = rc.right;   // v26 (BitBlt x base)
 
-    const std::int32_t hideTop = app->raw<std::int32_t>(offsets::kDwordHideTop);      // 0xA0D44
-    const std::int32_t hideBottom = app->raw<std::int32_t>(offsets::kDwordHideBottom);  // 0xA0D4C
+    const std::int32_t hideTop = app->state.hideTop;      // 0xA0D44
+    const std::int32_t hideBottom = app->state.hideBottom;  // 0xA0D4C
 
     FillPanelBottom(hdc, xBase, hideTop - 25, right, hideTop - 1,
                     0x969696u, 0x646464u, 1);                    // 0x42C1C7

@@ -154,7 +154,7 @@ static_assert(sizeof(SelectionTrack140) == 0x8C, "0x8c selection track ABI");
 // Combo-669 selection record for item index i.
 SelectAttachRecord* SelRecord(MMDApp* app, int item) {
     return static_cast<SelectAttachRecord*>(
-               app->raw<void*>(offsets::kDwordA0668)) + item;
+               app->state.a0668OrUint32) + item;
 }
 
 LPARAM StrParam(const void* s) {
@@ -168,16 +168,16 @@ LPARAM StrParam(const void* s) {
 // ===========================================================================
 void Sub466630(MMDApp* app, HWND hDlg) {
     app->raw<unsigned char>(kByteA0664) = 0;                     // 0x46665D
-    if (app->raw<void*>(offsets::kDwordA0668) != nullptr) {      // 0x466664
-        free(app->raw<void*>(offsets::kDwordA0668));             // j_j__free_0
-        app->raw<void*>(offsets::kDwordA0668) = nullptr;
+    if (app->state.a0668OrUint32 != nullptr) {      // 0x466664
+        free(app->state.a0668OrUint32);             // j_j__free_0
+        app->state.a0668OrUint32 = nullptr;
     }
 
     unsigned char* model = ActiveModel(app);
     const int count = *reinterpret_cast<int*>(model + kMdlSelCnt);   // 0x4CCE8
     auto* const records = static_cast<SelectAttachRecord*>(
         operator new(sizeof(SelectAttachRecord) * static_cast<std::size_t>(count)));
-    app->raw<void*>(offsets::kDwordA0668) = records;
+    app->state.a0668OrUint32 = records;
     if (count > 0) {                                                 // 0x4666B4
         memcpy(records, *reinterpret_cast<void**>(model + kMdlSelList),
                sizeof(SelectAttachRecord) * static_cast<std::size_t>(count));
@@ -439,7 +439,7 @@ void Sub4256C0(MMDApp* app) {
     const int count = *reinterpret_cast<int*>(model + kMdlSelCnt);   // 0x4258B2
     if (count > 0) {
         memcpy(*reinterpret_cast<void**>(model + kMdlSelList),
-               app->raw<void*>(offsets::kDwordA0668),
+               app->state.a0668OrUint32,
                sizeof(SelectAttachRecord) * static_cast<std::size_t>(count));
     }
 

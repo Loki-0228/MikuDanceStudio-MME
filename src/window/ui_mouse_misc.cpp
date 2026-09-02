@@ -239,7 +239,7 @@ void HandleLButtonDblClk(MMDApp* app) {
         }
 
         // ---- 7. tail ---------------------------------------------------------
-        if (app->raw<std::int32_t>(offsets::kDword91C) == 1)      // 2332 (0x91C)
+        if (app->state.aviBackgroundEnabled == 1)      // 2332 (0x91C)
             Sub4168D0(app);                                       // 0x4168D0
         app->PhysicsResetPending() = 1;
     }
@@ -322,9 +322,9 @@ void HandleMouseActivate(MMDApp* app) {
         const float scale =
             app->Renderer()->viewScale;  // locale-sub + 0x1D4F0
         const std::int32_t hideLeft =
-            app->raw<std::int32_t>(offsets::kDwordHideLeft);      // 658760 (0xA0D48)
+            app->state.hideLeft;      // 658760 (0xA0D48)
         const std::int32_t hideBottom =
-            app->raw<std::int32_t>(offsets::kDwordHideBottom);    // 658764 (0xA0D4C)
+            app->state.hideBottom;    // 658764 (0xA0D4C)
         const std::int32_t winW = app->MouseX();
         const std::int32_t winH = app->MouseY();
 
@@ -355,9 +355,9 @@ void HandleMouseActivate(MMDApp* app) {
         const float scale =
             app->Renderer()->viewScale;  // locale-sub + 0x1D4F0
         POINT pt;
-        pt.x = app->raw<std::int32_t>(offsets::kDwordHideLeft) -
+        pt.x = app->state.hideLeft -
                static_cast<std::int32_t>(static_cast<double>(scale) * 110.0);
-        pt.y = app->raw<std::int32_t>(offsets::kDwordHideBottom) -
+        pt.y = app->state.hideBottom -
                static_cast<std::int32_t>(static_cast<double>(scale) * 65.0);
         if (cached != nullptr) {
             ClientToScreen(cached, &pt);

@@ -295,12 +295,12 @@ void ResetAppState(MMDApp* app) {
         AVIFileRelease(static_cast<PAVIFILE>(app->AviFile()));
         app->AviFile() = nullptr;
     }
-    app->state.v31e = 0;
+    app->state.fpsOverlayEnabled = 0;
     CheckMenuItem(GetMenu(hwnd), 0xD3, 0u);
     SendMessageA(GetDlgItem(app->FloatingWindow() != nullptr
                                 ? app->FloatingWindow() : hwnd, 551),
                  BM_CLICK, 0, 0);
-    app->state.v31d = 1;
+    app->state.groundGridEnabled = 1;
     CheckMenuItem(GetMenu(hwnd), 0xD7, 8u);
     SendMessageA(GetDlgItem(app->FloatingWindow() != nullptr
                                 ? app->FloatingWindow() : hwnd, 557),

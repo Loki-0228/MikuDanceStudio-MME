@@ -57,12 +57,12 @@ void PostLanguageSweep2(MMDApp* app) {
     } else {                                        // 0x40D089
         hwnd = reinterpret_cast<HWND>(app->state.hwnd);
         GetClientRect(hwnd, &client);
-        x = app->raw<std::int32_t>(offsets::kDwordSidebar) + 9;  // 0xA06C8
+        x = app->state.sidebarWidth + 9;  // 0xA06C8
     }
 
     // Panel strip: (x+10, hideTop-22) .. (client.right-450, hideTop-1).
     const std::int32_t hideTop =
-        app->raw<std::int32_t>(offsets::kDwordHideTop);  // 0xA0D44
+        app->state.hideTop;  // 0xA0D44
     RECT rc;
     rc.left = x + 10;
     rc.bottom = hideTop - 1;
@@ -71,7 +71,7 @@ void PostLanguageSweep2(MMDApp* app) {
     InvalidateRect(hwnd, &rc, FALSE);               // 0x40D0DD
 
     // Value column: (x+68, hideBottom) .. (x+139, hideBottom+30).
-    rc.top = app->raw<std::int32_t>(offsets::kDwordHideBottom);  // 0xA0D4C
+    rc.top = app->state.hideBottom;  // 0xA0D4C
     rc.left = x + 68;
     rc.right = x + 139;
     rc.bottom = rc.top + 30;

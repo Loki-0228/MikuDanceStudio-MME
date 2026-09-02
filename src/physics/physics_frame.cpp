@@ -821,7 +821,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     //                          0x52C170/0x52E9F8/0x52E9F0/0x52BEA8)
     // Vector element order is (0x9EDB8, 0x9EDBC, 0x9EDC0, 0).
     bool windRan = false;
-    if (count > 0 && s.raw<std::uint8_t>(offsets::kByteA0CD4) != 0) {
+    if (count > 0 && s.state.a0CD4 != 0) {
         const double timer = static_cast<double>(
                                  s.raw<float>(0x9EDCC)) +
                              static_cast<double>(
@@ -1052,7 +1052,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // pass itself runs identically with or without wind - do NOT add
     // !windRan here, that freezes physics while the noise mode is active.
     if (runWorldPass && !idleNoStep &&
-        s.raw<std::uint32_t>(offsets::kDwordA0B74) == 0) {
+        s.state.a0b74OrInt32 == 0) {
         for (int j = 0; j < 100; ++j)
             if (models[j] != nullptr)
                 ModelKinematicSync(models[j]);              // 0x46FD4D

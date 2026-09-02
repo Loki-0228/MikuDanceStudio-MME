@@ -704,7 +704,7 @@ void Sub45FD80(MMDApp* app, int idx, float v) {
         break;
     default:
         if (idx == 4)
-            app->raw<std::int32_t>(offsets::kDword9EDC8) =
+            app->state.gravityNoise =
                 static_cast<std::int32_t>(v);
         RefreshRequest(-4);                                 // 0x440AC0
         return;
@@ -2701,7 +2701,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         }
         const bool needRefresh =
             app->CaptureMode() == ScreenCaptureMode::BackgroundRefresh ||
-            app->raw<std::int32_t>(offsets::kDword91C) == 1;
+            app->state.aviBackgroundEnabled == 1;
         if (needRefresh && app->raw<std::int32_t>(offsets::kDword9E400) != 0) {
             AviBgOverlayRefresh(app);  // 0x4168D0
         }

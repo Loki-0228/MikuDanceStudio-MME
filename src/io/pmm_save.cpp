@@ -285,7 +285,7 @@ void SaveSceneFile(MMDApp* app) {
         const std::int32_t v = reinterpret_cast<const std::int32_t&>(
             s->state.floatingWindow);
         if (v == 0)
-            W(fd, &s->raw<std::uint32_t>(off::kDwordSidebar), 4);
+            W(fd, &s->state.sidebarWidth, 4);
         else
             W(fd, &s->raw<std::uint32_t>(off::kDwordV658748), 4);
     }
@@ -598,18 +598,18 @@ void SaveSceneFile(MMDApp* app) {
     }
 
     // camera misc (0x41CE85..0x41CF3E)
-    W(fd, &s->raw<std::uint32_t>(off::kFloatPosx), 4);         // 0x334
-    W(fd, &s->raw<std::uint32_t>(off::kFloatPosy), 4);         // 0x338
-    W(fd, &s->raw<std::uint32_t>(off::kFloatPosz), 4);         // 0x33C
-    W(fd, &s->raw<std::uint32_t>(off::kFloatCam0), 4);         // 0x308
-    W(fd, &s->raw<std::uint32_t>(off::kFloatCam1), 4);         // 0x30C
-    W(fd, &s->raw<std::uint32_t>(off::kFloatCamangle), 4);     // 0xA08DC
-    W(fd, &s->raw<std::uint32_t>(off::kFloatCam2), 4);         // 0x310
-    W(fd, &s->raw<std::uint32_t>(off::kFloatCam3), 4);         // 0x314
-    W(fd, &s->raw<std::uint32_t>(off::kFloatCam4), 4);         // 0x318
+    W(fd, &s->state.cameraPosX, 4);         // 0x334
+    W(fd, &s->state.cameraPosY, 4);         // 0x338
+    W(fd, &s->state.cameraPosZ, 4);         // 0x33C
+    W(fd, &s->state.viewOffsetX, 4);         // 0x308
+    W(fd, &s->state.viewOffsetY, 4);         // 0x30C
+    W(fd, &s->state.cameraDistance, 4);     // 0xA08DC
+    W(fd, &s->state.cameraPitch, 4);         // 0x310
+    W(fd, &s->state.cameraYaw, 4);         // 0x314
+    W(fd, &s->state.cameraRoll, 4);         // 0x318
     {
         const unsigned char b =                                // 0x31C
-            s->raw<unsigned char>(off::kByte31C) != 0;
+            s->state.cameraPerspective != 0;
         W(fd, &b, 1);
     }
 
@@ -739,7 +739,7 @@ void SaveSceneFile(MMDApp* app) {
     W(fd, &s->state.lastRegisteredFrame, 4);
     const std::int32_t savedEditMode = static_cast<std::int32_t>(s->EditMode());
     W(fd, &savedEditMode, 4);
-    W(fd, &s->raw<unsigned char>(off::kByte340), 1);           // raw byte
+    W(fd, &s->state.cameraReferenceMode, 1);           // raw byte
     {
         const unsigned char b = s->state.playbackLoopEnabled != 0;
         W(fd, &b, 1);
@@ -793,11 +793,11 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &b, 1);
     }
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByte31E) != 0;
+        const unsigned char b = s->state.fpsOverlayEnabled != 0;
         W(fd, &b, 1);
     }
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByte31D) != 0;
+        const unsigned char b = s->state.groundGridEnabled != 0;
         W(fd, &b, 1);
     }
     {
@@ -815,12 +815,12 @@ void SaveSceneFile(MMDApp* app) {
     W(fd, reinterpret_cast<const unsigned char*>(
               &s->PlaybackPhysicsMode()), 1);                  // raw byte
     W(fd, &s->state.gravityMagnitude, 4);      // 0x9EDC4
-    W(fd, &s->raw<std::uint32_t>(off::kDword9EDC8), 4);
+    W(fd, &s->state.gravityNoise, 4);
     W(fd, &s->state.gravityX, 4);        // 0x9EDB8
     W(fd, &s->state.gravityY, 4);        // 0x9EDBC
     W(fd, &s->state.gravityZ, 4);        // 0x9EDC0
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByteA0CD4) != 0;
+        const unsigned char b = s->state.a0CD4 != 0;
         W(fd, &b, 1);
     }
 

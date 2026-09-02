@@ -895,7 +895,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         }
         EnableWindow(GetDlgItem(hwnd, 0x1F1), TRUE);
         EnableWindow(GetDlgItem(hwnd, 0x1F2), TRUE);
-        app->raw<std::int32_t>(offsets::kDword9DA24) = count;
+        app->state.v9da24[0] = count;
         if (app->raw<void*>(kOff350) != nullptr) {
             free(app->raw<void*>(kOff350));
             app->raw<void*>(kOff350) = nullptr;
@@ -911,7 +911,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->raw<BoneCopyRecord*>(kOff350) = block;
         memset(block, 0,
                static_cast<std::size_t>(count) * sizeof(BoneCopyRecord));
-        app->raw<std::int32_t>(offsets::kDword9DA24) = 0;  // fill cursor
+        app->state.v9da24[0] = 0;  // fill cursor
         model = ActiveModel(app);
         modelRecord = mikudancestudio::mdl::Mdl(model);
         const std::int32_t nBones = modelRecord->boneCount;
@@ -929,7 +929,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             ++cursor;
             // 0x481B1E updates the shared copy count after every emitted
             // record.  Paste (497/498) gates directly on this field.
-            app->raw<std::int32_t>(offsets::kDword9DA24) = cursor;
+            app->state.v9da24[0] = cursor;
         }
         break;
     }
@@ -943,7 +943,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // flags, current bone = pasted index, then the language sweeps.
     // ------------------------------------------------------------------
     case 497: {
-        if (app->raw<std::int32_t>(offsets::kDword9DA24) == 0) {
+        if (app->state.v9da24[0] == 0) {
             break;  // jz def_47E903 (no-op)
         }
         unsigned char* model = ActiveModel(app);
@@ -966,7 +966,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         auto& undo = modelRecord->undoRings[0].slots[pasteIdx];
         undo.operation = 1;
         // count stored 28*(pasteIdx+0x164) dwords past the undo-table base
-        undo.dirty = app->raw<std::int32_t>(offsets::kDword9DA24);
+        undo.dirty = app->state.v9da24[0];
         unsigned char* pasteBlob =
             reinterpret_cast<unsigned char*>(undo.bonePose);
         if (pasteBlob != nullptr) {
@@ -974,7 +974,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             undo.bonePose = nullptr;
         }
         const std::int32_t count =
-            app->raw<std::int32_t>(offsets::kDword9DA24);
+            app->state.v9da24[0];
         pasteBlob = static_cast<unsigned char*>(::operator new(
             MulOrMax(static_cast<std::uint32_t>(count), 0x24u)));
         if (pasteBlob != nullptr) {
@@ -1038,7 +1038,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // fallback target.
     // ------------------------------------------------------------------
     case 498: {
-        if (app->raw<std::int32_t>(offsets::kDword9DA24) == 0) {
+        if (app->state.v9da24[0] == 0) {
             break;  // jz def_47E903 (no-op)
         }
         unsigned char* model = ActiveModel(app);
@@ -1060,7 +1060,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         modelRecord->undoState[1] = pasteIdx;
         auto& undo = modelRecord->undoRings[0].slots[pasteIdx];
         undo.operation = 1;
-        undo.dirty = app->raw<std::int32_t>(offsets::kDword9DA24);
+        undo.dirty = app->state.v9da24[0];
         unsigned char* pasteBlob =
             reinterpret_cast<unsigned char*>(undo.bonePose);
         if (pasteBlob != nullptr) {
@@ -1068,7 +1068,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             undo.bonePose = nullptr;
         }
         const std::int32_t count =
-            app->raw<std::int32_t>(offsets::kDword9DA24);
+            app->state.v9da24[0];
         pasteBlob = static_cast<unsigned char*>(::operator new(
             MulOrMax(static_cast<std::uint32_t>(count), 0x24u)));
         if (pasteBlob != nullptr) {

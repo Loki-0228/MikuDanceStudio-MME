@@ -110,11 +110,11 @@ void MediaAspect(MMDApp* app, std::int32_t width, std::int32_t height,
                  float& scaleOut, std::int32_t& posOut) {
     auto& s = *app;
     const std::int32_t w =
-        s.raw<std::int32_t>(offsets::kDwordHideLeft) -
-        s.raw<std::int32_t>(offsets::kDwordHideRight);              // 0x4336B7
+        s.state.hideLeft -
+        s.state.hideRight;              // 0x4336B7
     const std::int32_t h =
-        s.raw<std::int32_t>(offsets::kDwordHideBottom) -
-        s.raw<std::int32_t>(offsets::kDwordHideTop);                // 0x4336D4
+        s.state.hideBottom -
+        s.state.hideTop;                // 0x4336D4
     const std::int32_t h2 = h / 2;                                  // 0x4336E9
     const float ratio = s.Renderer()->viewScale;                    // 0x4336E0
     const float scale = static_cast<float>(

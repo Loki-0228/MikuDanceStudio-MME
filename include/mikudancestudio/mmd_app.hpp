@@ -596,7 +596,7 @@ public:
     std::int32_t& PictureWidth() { return state.pictureWidth; }
     std::int32_t& PictureHeight() { return state.pictureHeight; }
     std::uint32_t& AviBackgroundEnabled() {
-        return raw<std::uint32_t>(offsets::kDword91C);
+        return state.aviBackgroundEnabled;
     }
     IDirect3DTexture9*& CaptureTexture() {
         return reinterpret_cast<IDirect3DTexture9*&>(state.captureTexture);
@@ -874,7 +874,7 @@ public:
         return state.playbackPhysicsMode;
     }
     std::int32_t& SidebarWidth() {
-        return raw<std::int32_t>(offsets::kDwordSidebar);
+        return state.sidebarWidth;
     }
     std::int32_t& RenderWidth() { return raw<std::int32_t>(offsets::kDwordRenderw); }
     std::int32_t& RenderHeight() { return raw<std::int32_t>(offsets::kDwordRenderh); }
@@ -896,10 +896,10 @@ public:
         return raw<std::int32_t>(offsets::kDwordVal672804);
     }
     RECT& ViewportRect() {
-        return raw<RECT>(offsets::kDwordHideRight);
+        return reinterpret_cast<RECT&>(state.hideRight);
     }
     const RECT& ViewportRect() const {
-        return raw<RECT>(offsets::kDwordHideRight);
+        return reinterpret_cast<const RECT&>(state.hideRight);
     }
     std::uint8_t& FullscreenMode() {
         return state.fullscreenMode;
@@ -921,7 +921,7 @@ public:
     }
     std::uint8_t& CameraMode() { return UiOptionFlag(0); }
     std::uint32_t& ViewModeComboSelection() {
-        return raw<std::uint32_t>(offsets::kDwordA042C);
+        return state.a042C;
     }
     std::uint8_t& GroundGridEnabled() { return raw<std::uint8_t>(797); }
     std::uint8_t& FpsOverlayEnabled() { return raw<std::uint8_t>(798); }
@@ -963,20 +963,20 @@ public:
     std::uint8_t& AccessoryTrackActive(int slot) {
         return raw<std::uint8_t>(649848 + slot);
     }
-    float* CameraPosition() { return &raw<float>(offsets::kFloatPosx); }
-    float* CameraRotation() { return &raw<float>(offsets::kFloatCam2); }
-    float& CameraPositionX() { return raw<float>(offsets::kFloatPosx); }
-    float& CameraPositionY() { return raw<float>(offsets::kFloatPosy); }
-    float& CameraPositionZ() { return raw<float>(offsets::kFloatPosz); }
-    float& CameraPitch() { return raw<float>(offsets::kFloatCam2); }
-    float& CameraYaw() { return raw<float>(offsets::kFloatCam3); }
-    float& CameraRoll() { return raw<float>(offsets::kFloatCam4); }
-    float& ViewOffsetX() { return raw<float>(offsets::kFloatCam0); }
-    float& ViewOffsetY() { return raw<float>(offsets::kFloatCam1); }
-    float& CameraDistance() { return raw<float>(offsets::kFloatCamangle); }
+    float* CameraPosition() { return &state.cameraPosX; }
+    float* CameraRotation() { return &state.cameraPitch; }
+    float& CameraPositionX() { return state.cameraPosX; }
+    float& CameraPositionY() { return state.cameraPosY; }
+    float& CameraPositionZ() { return state.cameraPosZ; }
+    float& CameraPitch() { return state.cameraPitch; }
+    float& CameraYaw() { return state.cameraYaw; }
+    float& CameraRoll() { return state.cameraRoll; }
+    float& ViewOffsetX() { return state.viewOffsetX; }
+    float& ViewOffsetY() { return state.viewOffsetY; }
+    float& CameraDistance() { return state.cameraDistance; }
     float& CameraFov() { return raw<float>(offsets::kFloat9e1e8); }
     std::uint8_t& CameraPerspective() {
-        return raw<std::uint8_t>(offsets::kByte31C);
+        return state.cameraPerspective;
     }
     std::int32_t& CameraParentModel() {
         // Generated field is uint32_t; preserve the signed accessor view.
@@ -986,7 +986,8 @@ public:
         return state.cameraParentBone;
     }
     CameraAttachmentReference& CameraReferenceMode() {
-        return raw<CameraAttachmentReference>(offsets::kByte340);
+        return reinterpret_cast<CameraAttachmentReference&>(
+            state.cameraReferenceMode);
     }
     D3DMATRIX& CameraAttachmentBasis() {
         return raw<D3DMATRIX>(offsets::kFloatColor16);
@@ -1011,10 +1012,10 @@ public:
     }
     float* GravityDirection() { return &GravityX(); }
     std::int32_t& GravityNoise() {
-        return raw<std::int32_t>(offsets::kDword9EDC8);
+        return reinterpret_cast<std::int32_t&>(state.gravityNoise);
     }
     std::uint8_t& GravityNoiseEnabled() {
-        return raw<std::uint8_t>(offsets::kByteA0CD4);
+        return state.a0CD4;
     }
 
     // -- named fields (semantic names verified so far) -------------------

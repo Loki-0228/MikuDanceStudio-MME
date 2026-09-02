@@ -256,7 +256,7 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     // enables both controls and stores the record count at 0x9DA24.
     if (!cameraMode &&
         app->state.optflag5 != 0 &&
-        app->raw<std::int32_t>(offsets::kDword9DA24) == 0) {
+        app->state.v9da24[0] == 0) {
         EnableWindow(MainControl(app, 497), FALSE);
         EnableWindow(MainControl(app, 498), FALSE);
     }
@@ -477,10 +477,10 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
         EnableWindow(GetDlgItem(hwnd, 422), FALSE);
         SendMessageA(GetDlgItem(hwnd, 440), BM_SETCHECK, BST_UNCHECKED, 0);
         SendMessageA(GetDlgItem(hwnd, 441), BM_SETCHECK, BST_UNCHECKED, 0);
-        HWND optionWindow = app->raw<HWND>(offsets::kDwordA0B44);
+        HWND optionWindow = app->state.a0B44OrInt32;
         if (optionWindow != nullptr) {
             DestroyWindow(optionWindow);
-            app->raw<HWND>(offsets::kDwordA0B44) = nullptr;
+            app->state.a0B44OrInt32 = nullptr;
         }
         SetPhysicsMenuState(hwnd, MFS_DISABLED);
     } else {
@@ -507,7 +507,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
         } else if (app->CameraParentModel() >= 0 &&
                    app->state.v9ed98 != 0) {
             const int oldSelection =
-                app->raw<std::int32_t>(offsets::kDwordA042C);
+                app->state.a042C;
             int oldSlot = 0;
             if (oldSelection != 0) {
                 const int found = FindModelSlotByComboId(app, oldSelection);
@@ -525,7 +525,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
             }
         }
 
-        app->raw<std::int32_t>(offsets::kDwordA042C) = selection;
+        app->state.a042C = selection;
         SendMessageA(GetDlgItem(hwnd, 491), BM_SETCHECK, BST_UNCHECKED, 0);
         SendMessageA(GetDlgItem(hwnd, 492), BM_SETCHECK, BST_UNCHECKED, 0);
         SendMessageA(GetDlgItem(hwnd, 493), BM_SETCHECK, BST_UNCHECKED, 0);
@@ -560,7 +560,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
                      hasMainSelection ? TRUE : FALSE);
 
         unsigned char* model = app->SelectedModel();
-        HWND optionWindow = app->raw<HWND>(offsets::kDwordA0B44);
+        HWND optionWindow = app->state.a0B44OrInt32;
         if (optionWindow != nullptr && model != nullptr) {
             char text[256]{};
             sprintf_s(text, "%3.2f", mikudancestudio::mdl::Mdl(model)->edgeScale);

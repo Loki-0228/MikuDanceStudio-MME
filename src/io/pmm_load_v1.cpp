@@ -308,7 +308,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     // ---- scene-state reset run (0x45922D..0x4592F5) ----------------------
     s->state.accessoryRenderSplitOrder = 0;
     s->SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
-    s->raw<std::uint32_t>(off::kDwordA042C) = 0;
+    s->state.a042C = 0;
     s->state.cameraParentModel = -1;
     s->state.cameraParentBone = 0;
     s->raw<std::uint32_t>(off::kDwordA043c13) = 0;               // 0xA0470
@@ -384,7 +384,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         // v1: no A0D3C variant - the flag lands in A06C8 only when the
         // accessory column is hidden (A0D38 == 0).
         if (s->state.floatingWindow == 0)
-            s->raw<std::uint32_t>(off::kDwordSidebar) = editFlag;   // 0xA06C8
+            s->state.sidebarWidth = editFlag;   // 0xA06C8
     }
     Rd(fd, &s->raw<std::uint32_t>(off::kFloat9e1e8), 4);          // 0x459449
     // v1 reads SIX option bytes (0x2F8..0x2FD), one less than v2; the
@@ -559,7 +559,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             // x64 members instead of indexing the model allocation.
             Rd(fd, &record->comboSelIndex, 1);                   // 0x459BEB
             record->comboSelIndex2 = record->comboSelIndex;
-            s->raw<std::uint32_t>(off::kDwordA042C) =
+            s->state.a042C =
                 record->comboSelIndex;
             {
                 unsigned char b = 0;
@@ -859,19 +859,19 @@ void LoadSceneV1(MMDApp* app, int fd) {
     }
     LogV1Stage("camtrack-done", _tell(fd));
     // camera misc (0x45AEE7..0x45AF93)
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatPosx), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatPosy), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatPosz), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam0), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam1), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCamangle), 4);      // 0xA08DC
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam2), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam3), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatCam4), 4);
+    Rd(fd, &s->state.cameraPosX, 4);
+    Rd(fd, &s->state.cameraPosY, 4);
+    Rd(fd, &s->state.cameraPosZ, 4);
+    Rd(fd, &s->state.viewOffsetX, 4);
+    Rd(fd, &s->state.viewOffsetY, 4);
+    Rd(fd, &s->state.cameraDistance, 4);      // 0xA08DC
+    Rd(fd, &s->state.cameraPitch, 4);
+    Rd(fd, &s->state.cameraYaw, 4);
+    Rd(fd, &s->state.cameraRoll, 4);
     {
         unsigned char b = 0;
         Rd(fd, &b, 1);                                           // 0x45AF93
-        s->raw<unsigned char>(off::kByte31C) = (b == 1) ? 1 : 0;
+        s->state.cameraPerspective = (b == 1) ? 1 : 0;
     }
     // frame UI (0x45AFB8..0x45B07D); the original converts the fov float
     // with __ftol for both the range and the "%3d" text.
@@ -889,7 +889,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                      reinterpret_cast<LPARAM>(text));
         // v1 checks the box when 0x31C == 0 (v2 uses != 0).
         SendMessageA(GetDlgItem(main, 0x1BE), BM_SETCHECK,
-                     s->raw<unsigned char>(off::kByte31C) == 0 ? 1 : 0,
+                     s->state.cameraPerspective == 0 ? 1 : 0,
                      0);                                         // 0x45B07A
     }
 
@@ -1164,7 +1164,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     {
         unsigned char b = 0;
         Rd(fd, &b, 1);                                           // 0x45C779
-        s->raw<unsigned char>(off::kByte340) = b;
+        s->state.cameraReferenceMode = b;
         SendMessageA(GetDlgItem(main, 0x19C), BM_SETCHECK,
                      b == 1 ? 1 : 0, 0);
         SendMessageA(GetDlgItem(main, 0x213), BM_SETCHECK,
@@ -1290,21 +1290,21 @@ void LoadSceneV1(MMDApp* app, int fd) {
         unsigned char b = 0;
         Rd(fd, &b, 1);                                           // 0x45CD95
         if (b != 0) {
-            s->raw<unsigned char>(off::kByte31E) = 1;
+            s->state.fpsOverlayEnabled = 1;
             CheckMenuItem(GetMenu(main), 0xD3, 8);
             SendMessageA(GetDlgItem(owner, 0x227), BM_SETCHECK, 1, 0);
         } else {
-            s->raw<unsigned char>(off::kByte31E) = 0;
+            s->state.fpsOverlayEnabled = 0;
             CheckMenuItem(GetMenu(main), 0xD3, 0);
             SendMessageA(GetDlgItem(owner, 0x227), BM_SETCHECK, 0, 0);
         }
         Rd(fd, &b, 1);                                           // 0x45CE3F
         if (b != 0) {
-            s->raw<unsigned char>(off::kByte31D) = 1;
+            s->state.groundGridEnabled = 1;
             CheckMenuItem(GetMenu(main), 0xD7, 8);
             SendMessageA(GetDlgItem(owner, 0x22D), BM_SETCHECK, 1, 0);
         } else {
-            s->raw<unsigned char>(off::kByte31D) = 0;
+            s->state.groundGridEnabled = 0;
             CheckMenuItem(GetMenu(main), 0xD7, 0);
             SendMessageA(GetDlgItem(owner, 0x22D), BM_SETCHECK, 0, 0);
         }
@@ -1366,8 +1366,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
     s->raw<float>(off::kFloat9EDCC) = 0.0f;
     s->state.gravityX = 0.0f;
     s->state.gravityY = -1.0f;                     // 0x5295E8
-    s->raw<unsigned char>(off::kByteA0CD4) = 0;
-    s->raw<std::uint32_t>(off::kDword9EDC8) = 10;
+    s->state.a0CD4 = 0;
+    s->state.gravityNoise = 10;
     s->state.gravityZ = 0.0f;
     s->raw<std::uint32_t>(off::kByteA0CC8) = 0;
     s->raw<std::uint32_t>(off::kDwordA0198) = 0;
@@ -1464,13 +1464,13 @@ void LoadSceneV1(MMDApp* app, int fd) {
 
                 // physics reads (0x45D697..0x45D6E3)
                 Rd(fd, &s->state.gravityMagnitude, 4);
-                Rd(fd, &s->raw<std::uint32_t>(off::kDword9EDC8), 4);
+                Rd(fd, &s->state.gravityNoise, 4);
                 Rd(fd, &s->state.gravityX, 4);
                 Rd(fd, &s->state.gravityY, 4);
                 Rd(fd, &s->state.gravityZ, 4);
                 unsigned char bc = 0;
                 Rd(fd, &bc, 1);                                  // 0x45D6F4
-                s->raw<unsigned char>(off::kByteA0CD4) =
+                s->state.a0CD4 =
                     (bc == 1) ? 1 : 0;
                 {
                     unsigned char bd = 0;

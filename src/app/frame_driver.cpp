@@ -372,21 +372,21 @@ void FrameDriver(MMDApp* app) {
 
     // 0x46B118..0x46B17B: one-second render-frame counter.  The original
     // snaps the two common cap-adjacent values to their nominal rates.
-    float& fpsElapsed = s.raw<float>(off::kFloat320);
-    std::uint32_t& fpsFrames = s.raw<std::uint32_t>(off::kDword324);
+    float& fpsElapsed = s.state.fpsOverlayElapsedSeconds;
+    std::uint32_t& fpsFrames = s.state.fpsOverlayFrameCount;
     fpsElapsed += s.DeltaTime();
     // 0x46B132: fld1/fcompp + test $0x05/jp - reset only when elapsed is
     // STRICTLY greater than 1.0 (equal or unordered skips).
     if (fpsElapsed > 1.0f) {
-        s.raw<std::uint32_t>(off::kDwordFps) = fpsFrames - 1;
+        s.state.framesPerSecond = fpsFrames - 1;
         fpsElapsed = 0.0f;
         fpsFrames = 0;
     }
     ++fpsFrames;
-    if (s.raw<std::uint32_t>(off::kDwordFps) == 29)
-        s.raw<std::uint32_t>(off::kDwordFps) = 30;
-    if (s.raw<std::uint32_t>(off::kDwordFps) == 59)
-        s.raw<std::uint32_t>(off::kDwordFps) = 60;
+    if (s.state.framesPerSecond == 29)
+        s.state.framesPerSecond = 30;
+    if (s.state.framesPerSecond == 59)
+        s.state.framesPerSecond = 60;
 
     // ---- 1. mouse-delta snapshot reset ------------------------------------
     MouseInteractionBegin(app);                                  // per-frame
@@ -476,9 +476,9 @@ void FrameDriver(MMDApp* app) {
         if (GetEnvironmentVariableA(
                 "MIKUDANCESTUDIO_AB_STABLE_CAPTURE", stableCapture,
                 sizeof(stableCapture)) == 1 && stableCapture[0] == '1') {
-            app->raw<float>(offsets::kFloat320) = 0.0f;
-            app->raw<std::uint32_t>(offsets::kDword324) = 0;
-            app->raw<std::uint32_t>(offsets::kDwordFps) = 0;
+            app->state.fpsOverlayElapsedSeconds = 0.0f;
+            app->state.fpsOverlayFrameCount = 0;
+            app->state.framesPerSecond = 0;
         }
         if (!keepPhysicsEnabled)
             app->raw<std::uint8_t>(offsets::kByteA0665) = 1;
