@@ -205,6 +205,57 @@ public:
 #endif
     }
 
+    // Ground-shadow-color modeless dialog (menu 248; x86 blob slot
+    // 0xA0B14) and the saved wndproc of its value edit (0xA0B18).
+    HWND& GroundShadowColorDialog() {
+#if defined(_M_X64)
+        return m_groundShadowColorDialog;
+#else
+        return state.groundShadowColorDialog;
+#endif
+    }
+    WNDPROC& GroundShadowColorEditProc() {
+#if defined(_M_X64)
+        return m_groundShadowColorEditProc;
+#else
+        return state.groundShadowColorEditProc;
+#endif
+    }
+
+    // Accessory-order dialog scratch array (menu 249; x86 blob slot
+    // 0xA0B1C): 4*count ints allocated at WM_INITDIALOG, freed on close.
+    void*& AccessoryOrderArray() {
+#if defined(_M_X64)
+        return m_accessoryOrderArray;
+#else
+        return state.accessoryOrderArray;
+#endif
+    }
+
+    // Morph-frame cleanup shift (menu 225) and blink-register range
+    // (menu 227); x86 blob slots 0xA08F4..0xA08FC.
+    std::int32_t& MorphFrameShift() {
+#if defined(_M_X64)
+        return m_morphFrameShift;
+#else
+        return state.morphFrameShift;
+#endif
+    }
+    std::int32_t& BlinkStartFrame() {
+#if defined(_M_X64)
+        return m_blinkStartFrame;
+#else
+        return state.blinkStartFrame;
+#endif
+    }
+    std::int32_t& BlinkEndFrame() {
+#if defined(_M_X64)
+        return m_blinkEndFrame;
+#else
+        return state.blinkEndFrame;
+#endif
+    }
+
     // -- raw field access, byte offsets as in the decompilation ----------
     // On x64 the state blob uses the original x64 layout: the x86 offsets
     // from the decompilation are translated through offsets_xlate.hpp
@@ -577,7 +628,8 @@ public:
 #endif
     }
     IDirect3DTexture9*& PictureBackgroundTexture() {
-        return raw<IDirect3DTexture9*>(offsets::kDword9E42C);
+        return reinterpret_cast<IDirect3DTexture9*&>(
+            state.pictureBackgroundTexture);
     }
     IDirect3DVertexBuffer9*& PictureOverlayVertices() {
 #if defined(_M_X64)
@@ -607,7 +659,7 @@ public:
     std::int32_t& AviFrameWidth() { return state.aviFrameWidth; }
     std::int32_t& AviFrameHeight() { return state.aviFrameHeight; }
     std::uint8_t& PictureBackgroundEnabled() {
-        return raw<std::uint8_t>(offsets::kByte9E428);
+        return state.pictureBackgroundEnabled;
     }
     std::int32_t& PictureOffsetX() { return state.pictureOffsetX; }
     std::int32_t& PictureOffsetY() { return state.pictureOffsetY; }
@@ -1137,6 +1189,12 @@ private:
     std::int32_t m_aviCodecSelection{};
     HWND m_accessoryFrameDialog = nullptr;
     HWND m_frameRangeDialog = nullptr;
+    HWND m_groundShadowColorDialog = nullptr;
+    WNDPROC m_groundShadowColorEditProc = nullptr;
+    void* m_accessoryOrderArray = nullptr;
+    std::int32_t m_morphFrameShift = 0;
+    std::int32_t m_blinkStartFrame = 0;
+    std::int32_t m_blinkEndFrame = 0;
 #endif
 };
 

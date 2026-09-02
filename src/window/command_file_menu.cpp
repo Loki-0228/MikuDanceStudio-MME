@@ -125,18 +125,9 @@
 namespace mikudancestudio {
 
 // ---------------------------------------------------------------------------
-// App-state offsets used by this family but not yet registered in
-// offsets.hpp (kept file-local until gen_offsets.py catches up).
+// App-state offsets still reached through raw<T>() in this file, kept
+// file-local until the scratch-region overlay analysis is done.
 // ---------------------------------------------------------------------------
-constexpr std::size_t kOff40 = 0x40;     // modal-dialog gate flag (0xDE)
-constexpr std::size_t kOff48 = 0x48;     // modal-dialog gate flag (0xDB)
-constexpr std::size_t kOff50 = 0x50;     // menu-toggle gate flag (0xDD)
-constexpr std::size_t kOffA042C = 0xA042C;  // model count used by the panel
-constexpr std::size_t kOffA0434 = 0xA0434;  // camera flag companion of 0xA0430
-constexpr std::size_t kOffA08F4 = 0xA08F4;  // morph-frame shift amount (0xE1)
-constexpr std::size_t kOffA08F8 = 0xA08F8;  // blink register start frame (0xE3)
-constexpr std::size_t kOffA08FC = 0xA08FC;  // blink register end frame (0xE3)
-constexpr std::size_t kOff9E16C = 0x9E16C;  // blink end-frame watermark (0xE3)
 constexpr std::size_t kOff31B0 = 0x31B0;    // model frame-count field (0xE3)
 
 // Model-field offsets (model = slot array app+0x780 [byte app+0x910]).
@@ -166,7 +157,6 @@ constexpr std::size_t kModelFramesAcc = 0x26E8;  // accessory/camera/light
                                                  //  name-list ptr @ 0x10,
                                                  //  used flag @ 0x14,
                                                  //  record-base ptr @ 0x18)
-constexpr std::size_t kModelCamRec = 0x4CCE4;   // camera record array ptr
 constexpr std::size_t kModelCamCnt = 0x4CCE8;   // camera record count
 
 // Frame-table byte counts (stride x slot count).
@@ -174,11 +164,11 @@ constexpr std::size_t kBoneFrameBytes = 0x112A880u;  // 300000 x 0x3C
 constexpr std::size_t kMorphFrameBytes = 0x61A80u;   // 200000 x 0x14
 constexpr std::size_t kAccFrameBytes = 0x6D60u;      // 1000 x 0x1C
 
-// Dialog-proc app offsets not yet registered in offsets.hpp (kept
-// file-local until gen_offsets.py catches up).
-constexpr std::size_t kOffA0B18 = 0xA0B18;  // modeless dlg: saved edit wndproc
-constexpr std::size_t kOffA0B1C = 0xA0B1C;  // modal dlg: reorder int array ptr
-constexpr std::size_t kOffA0BF0 = 0xA0BF0;  // modeless dlg: scale float x4
+// The ground-shadow-color modeless dialog (menu 248) writes its four
+// channel floats into 0xA0BF0..0xA0BFC - storage the frame-copy dialog
+// (menu 262) reuses as the 172-byte camera-record scratch beginning at
+// 0xA0B80.  Promoting these needs the overlay union modelled first.
+constexpr std::size_t kOffA0BF0 = 0xA0BF0;  // ground-shadow RGBA float x4
 
 // D3D wrapper fields (the 0x1D574 render subsystem object reached via
 // app->Renderer(); layout in d3d_wrapper.hpp): stereoEnabled (+0x1D566,
@@ -540,11 +530,11 @@ INT_PTR __stdcall Sub40EEF0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     } else if (msg == WM_COMMAND) {
         if (LOWORD(wParam) == 1) {  // IDOK
             GetWindowTextA(GetDlgItem(hDlg, 0x259), text, 20);
-            app->raw<float>(offsets::kFloatFpsa) = static_cast<float>(atof(text));
+            app->state.modelOffsetX = static_cast<float>(atof(text));
             GetWindowTextA(GetDlgItem(hDlg, 0x25A), text, 20);
-            app->raw<float>(offsets::kFloatFpsb) = static_cast<float>(atof(text));
+            app->state.modelOffsetY = static_cast<float>(atof(text));
             GetWindowTextA(GetDlgItem(hDlg, 0x25B), text, 20);
-            app->raw<float>(offsets::kFloatFpsc) = static_cast<float>(atof(text));
+            app->state.modelOffsetZ = static_cast<float>(atof(text));
             EndDialog(hDlg, 1);
         } else if (LOWORD(wParam) == 2) {  // IDCANCEL
             EndDialog(hDlg, 2);
@@ -573,7 +563,7 @@ INT_PTR __stdcall Sub40F0B0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     } else if (msg == WM_COMMAND) {
         if (LOWORD(wParam) == 1) {  // IDOK
             GetWindowTextA(GetDlgItem(hDlg, 0x268), text, 20);
-            app->raw<std::int32_t>(kOffA08F4) = atol(text);
+            app->MorphFrameShift() = atol(text);
             EndDialog(hDlg, 1);
         } else if (LOWORD(wParam) == 2) {  // IDCANCEL
             EndDialog(hDlg, 2);
@@ -596,9 +586,9 @@ INT_PTR __stdcall Sub40F1E0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     } else if (msg == WM_COMMAND) {
         if (LOWORD(wParam) == 1) {  // IDOK
             GetWindowTextA(GetDlgItem(hDlg, 0x26A), text, 20);
-            app->raw<std::int32_t>(kOffA08F8) = atol(text);
+            app->BlinkStartFrame() = atol(text);
             GetWindowTextA(GetDlgItem(hDlg, 0x26B), text, 20);
-            app->raw<std::int32_t>(kOffA08FC) = atol(text);
+            app->BlinkEndFrame() = atol(text);
             EndDialog(hDlg, 1);
         } else if (LOWORD(wParam) == 2) {  // IDCANCEL
             EndDialog(hDlg, 2);
@@ -758,7 +748,7 @@ INT_PTR __stdcall Sub42DFF0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (app->FloatingWindow() != nullptr) {
             SetWindowPos(hDlg, HWND_TOPMOST, 0, 0, 0, 0, 3u);
         }
-        app->raw<void*>(kOffA0B18) = reinterpret_cast<void*>(
+        reinterpret_cast<void*&>(app->GroundShadowColorEditProc()) = reinterpret_cast<void*>(
             GetWindowLongPtrA(GetDlgItem(hDlg, 0x272), GWLP_WNDPROC));
         SetWindowLongPtrA(GetDlgItem(hDlg, 0x272), GWLP_WNDPROC,
                        reinterpret_cast<LONG_PTR>(Sub40F730));
@@ -775,7 +765,7 @@ INT_PTR __stdcall Sub42DFF0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_COMMAND:
         if (LOWORD(wParam) == 2) {  // IDCANCEL
             DestroyWindow(hDlg);
-            app->raw<std::int32_t>(offsets::kDwordA0B14) = 0;
+            app->GroundShadowColorDialog() = 0;
             return 1;
         }
         break;
@@ -836,7 +826,7 @@ INT_PTR __stdcall Sub44CA40(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         const HWND main = MainHwnd(app);
         g_accOrderCount = static_cast<int>(
             SendMessageA(GetDlgItem(main, 0x1D7), 0x146 /*CB_GETCOUNT*/, 0, 0));
-        app->raw<unsigned char*>(kOffA0B1C) = static_cast<unsigned char*>(
+        reinterpret_cast<unsigned char*&>(app->AccessoryOrderArray()) = static_cast<unsigned char*>(
             ::operator new(4u * static_cast<std::uint32_t>(g_accOrderCount)));
         for (int i = 0; i < g_accOrderCount; ++i) {
             SendMessageA(GetDlgItem(main, 0x1D7), 0x148 /*CB_GETLBTEXT*/, i,
@@ -869,7 +859,7 @@ INT_PTR __stdcall Sub44CA40(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                              sel - 1, (LPARAM)text);
                 SendMessageA(GetDlgItem(hDlg, 0x274), 0x186 /*LB_SETCURSEL*/,
                              sel - 1, 0);
-                std::int32_t* order = app->raw<std::int32_t*>(kOffA0B1C);
+                std::int32_t* order = reinterpret_cast<std::int32_t*&>(app->AccessoryOrderArray());
                 const std::int32_t tmp = order[sel - 1];
                 order[sel - 1] = order[sel];
                 order[sel] = tmp;
@@ -888,7 +878,7 @@ INT_PTR __stdcall Sub44CA40(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                              sel + 1, (LPARAM)text);
                 SendMessageA(GetDlgItem(hDlg, 0x274), 0x186 /*LB_SETCURSEL*/,
                              sel + 1, 0);
-                std::int32_t* order = app->raw<std::int32_t*>(kOffA0B1C);
+                std::int32_t* order = reinterpret_cast<std::int32_t*&>(app->AccessoryOrderArray());
                 const std::int32_t tmp = order[sel + 1];
                 order[sel + 1] = order[sel];
                 order[sel] = tmp;
@@ -939,17 +929,17 @@ INT_PTR __stdcall Sub44CA40(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             SendMessageA(GetDlgItem(main, 0x1B2), 0x14E /*CB_SETCURSEL*/, 0, 0);
             EndDialog(hDlg, 1);
-            if (app->raw<void*>(kOffA0B1C) != nullptr) {
-                free(app->raw<void*>(kOffA0B1C));
-                app->raw<void*>(kOffA0B1C) = nullptr;
+            if (app->AccessoryOrderArray() != nullptr) {
+                free(app->AccessoryOrderArray());
+                app->AccessoryOrderArray() = nullptr;
             }
             return 0;
         }
         case 2:  // IDCANCEL
             EndDialog(hDlg, 2);
-            if (app->raw<void*>(kOffA0B1C) != nullptr) {
-                free(app->raw<void*>(kOffA0B1C));
-                app->raw<void*>(kOffA0B1C) = nullptr;
+            if (app->AccessoryOrderArray() != nullptr) {
+                free(app->AccessoryOrderArray());
+                app->AccessoryOrderArray() = nullptr;
             }
             return 0;
         }
@@ -1023,9 +1013,9 @@ INT_PTR __stdcall Sub44CA40(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
 // 0x408F20 / 0x409730 / 0x4092A0 (AVI codec combo fill / bind / test) now
 // have real bodies in src/app/dshow_record_graph.cpp; the forward
 // declarations above are their only in-file reference.
-// VA 0x0043DAD0 - thiscall app method (this = Block): reads the 16 physics
+// VA 0x0043DAD0 - thiscall app method (this = Block): reads the 16
 // dialog edits (0x2AE..0x2BD) and applies the scale/offset pairs to every
-// used bone-frame record of the app+0x374 table (0x54-stride over
+// used camera-frame record of the camera key table (0x54-stride over
 // 0xCD140 bytes, transform floats at +0x10..+0x24, frame-count int at
 // +0x44; the three rotation edits enter as -deg*pi/180), then
 // ReloadModels (0x42E640) + PostViewRefresh + dirty (app+0xA0B4D).
@@ -1045,7 +1035,8 @@ void Sub43DAD0(MMDApp* app, HWND hDlg) {
     // -> +0x24 rz (+deg), 698..699 -> +0x0C scale/offset, 700..701 -> the
     // frame-count int at +0x44 (scale in double, offset added in double).
     const double kPi = 3.141592025756836;  // .rdata double 0x52BA60
-    unsigned char* base = app->at(884);               // 0x374
+    unsigned char* base =
+        reinterpret_cast<unsigned char*>(app->CameraKeys());
     for (std::size_t off = 0; off < 0xCD140; off += 84) {     // 0x54 stride
         unsigned char* rec = base + off;
         if (rec[72] == 0)
@@ -1071,7 +1062,7 @@ void Sub43DAD0(MMDApp* app, HWND hDlg) {
     }
     ReloadModels(app);                                          // 0x42E640
     PostViewRefresh(app);                                       // 0x40D130
-    s.raw<std::uint8_t>(658189) = 1;                            // 0xA0B4D dirty
+    s.state.sceneModified = 1;                            // 0xA0B4D dirty
 }
 // VA 0x00439C90 - thiscall app method (this = Block): rebuilds the
 // accessory order index array (app+0xA0B1C) from the 255 accessory
@@ -1079,7 +1070,7 @@ void Sub43DAD0(MMDApp* app, HWND hDlg) {
 // Sub42F1E0 + Sub40D070.
 void Sub439C90(MMDApp* app, int count) {
     void** order = static_cast<void**>(
-        *reinterpret_cast<void**>(app->at(658204)));   // 0xA0B1C
+        app->AccessoryOrderArray());   // 0xA0B1C
     for (int i = 0; i < count; ++i) {
         for (int j = 0; j < 255; ++j) {
             mdl::AccessoryRecord* acc = app->AccessorySlot(j);
@@ -1101,7 +1092,7 @@ void Sub439C90(MMDApp* app, int count) {
 void Sub439D00(MMDApp* app, int count, HWND hDlg) {
     auto& s = *app;
     mdl::AccessoryRecord** order = static_cast<mdl::AccessoryRecord**>(
-        *reinterpret_cast<void**>(app->at(658204)));   // 0xA0B1C
+        app->AccessoryOrderArray());   // 0xA0B1C
     char text[100];
     const HWND list = GetDlgItem(hDlg, 628);                   // 0x274
     for (int i = 0; i < count; ++i) {
@@ -1151,7 +1142,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     case 212: {
         app->state.bC = 1;  // 0xBC
         const std::intptr_t result = DialogBoxParamA(
-            static_cast<HINSTANCE>(app->raw<void*>(0)),  // this+0 hInstance
+            static_cast<HINSTANCE>(app->HInstance()),  // this+0 hInstance
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x28D : 0x25F),
             MainHwnd(app), Sub40ECE0, 0);
         if (result == 2) {  // IDCANCEL
@@ -1162,7 +1153,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         if (app->state.aviBackgroundEnabled == 1) {
             AviBgOverlayRefresh(app);                     // AVI bg overlay
         }
-        if (app->raw<std::uint8_t>(offsets::kByte9E428) != 0) {
+        if (app->state.pictureBackgroundEnabled != 0) {
             PicBgOverlayRefresh(app);                     // picture bg overlay
         }
         Sub40CAC0(app);                                 // render ops
@@ -1185,10 +1176,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
-        app->raw<std::uint32_t>(kOff48) = 1;
+        app->state.dialogFlags[6] = 1;
         app->state.bC = 1;
         const std::intptr_t result = DialogBoxParamA(
-            static_cast<HINSTANCE>(app->raw<void*>(0)),
+            static_cast<HINSTANCE>(app->HInstance()),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x28B : 0x258),
             MainHwnd(app), Sub40EEF0, 0);
         if (result == 2) {  // IDCANCEL
@@ -1215,9 +1206,9 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 // root bone only (parent == -1); 0x48824B tests the
                 // RESOLVED bone (uVar22 after the previous-chain walk)
                 if (bones[bone].parent == -1) {
-                    key.position[0] += app->raw<float>(offsets::kFloatFpsa);
-                    key.position[1] += app->raw<float>(offsets::kFloatFpsb);
-                    key.position[2] += app->raw<float>(offsets::kFloatFpsc);
+                    key.position[0] += app->state.modelOffsetX;
+                    key.position[1] += app->state.modelOffsetY;
+                    key.position[2] += app->state.modelOffsetZ;
                 }
             }
         }
@@ -1236,7 +1227,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // the 0xDD menu checkmark.
     // ------------------------------------------------------------------
     case 221: {
-        app->raw<std::uint32_t>(kOff50) = 1;
+        app->state.dialogFlags[8] = 1;
         if (app->state.groundShadowEnabled != 0) {
             app->state.groundShadowEnabled = 0;
             CheckMenuItem(GetMenu(MainHwnd(app)), 0xDD, MF_UNCHECKED);
@@ -1263,7 +1254,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
-        app->raw<std::uint32_t>(kOff40) = 1;
+        app->state.dialogFlags[4] = 1;
         // clear the used flags of all three frame tables
         for (std::size_t off = 0; off < kBoneFrameBytes; off += 0x3C) {
             unsigned char* m = ActiveModel(app);
@@ -1544,7 +1535,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // 0x260 JP) and Sub464760 / Sub45E820 depending on app+0xA0D61.
     // ------------------------------------------------------------------
     case 223: {
-        app->raw<std::uint32_t>(0x3C) = 1;
+        app->state.dialogFlags[3] = 1;
         app->state.bC = 1;
         SetCurrentDirectoryW(app->ExeDir());
         wchar_t path[0x100];
@@ -1581,7 +1572,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         CopyPathW(app->AviOutputPath(), path);  // 0x42AE40
         app->state.bC = 1;
         const std::intptr_t r = DialogBoxParamA(
-            static_cast<HINSTANCE>(app->raw<void*>(0)),
+            static_cast<HINSTANCE>(app->HInstance()),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x28E : 0x260),
             MainHwnd(app), Sub40F2F0, 0);
         if (r == 2) {  // IDCANCEL
@@ -1610,7 +1601,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         }
         app->state.bC = 1;
         const std::intptr_t r = DialogBoxParamA(
-            static_cast<HINSTANCE>(app->raw<void*>(0)),
+            static_cast<HINSTANCE>(app->HInstance()),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x28F : 0x267),
             MainHwnd(app), Sub40F0B0, 0);
         if (r == 2) {  // IDCANCEL
@@ -1646,7 +1637,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                     }
                     std::int32_t v = *reinterpret_cast<std::int32_t*>(
                                          frames + 0x14 * cur + 0) +
-                                     app->raw<std::int32_t>(kOffA08F4);
+                                     app->MorphFrameShift();
                     *reinterpret_cast<std::int32_t*>(frames + 0x14 * cur + 0) =
                         v;
                     if (v > 0) {
@@ -1673,7 +1664,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 }
                 std::int32_t v = *reinterpret_cast<std::int32_t*>(
                                      frames + 0x14 * cur + 0) +
-                                 app->raw<std::int32_t>(kOffA08F4);
+                                 app->MorphFrameShift();
                 *reinterpret_cast<std::int32_t*>(frames + 0x14 * cur + 0) = v;
                 if (v > 0) {
                     break;
@@ -1760,25 +1751,25 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         }
         app->state.bC = 1;
         const std::intptr_t r = DialogBoxParamA(
-            static_cast<HINSTANCE>(app->raw<void*>(0)),
+            static_cast<HINSTANCE>(app->HInstance()),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x290 : 0x269),
             MainHwnd(app), Sub40F1E0, 0);
         if (r == 2) {  // IDCANCEL
             break;
         }
-        std::int32_t frame = app->raw<std::int32_t>(kOffA08F8);
+        std::int32_t frame = app->BlinkStartFrame();
         std::int32_t count = 0;
-        while (frame < app->raw<std::int32_t>(kOffA08FC)) {
+        while (frame < app->BlinkEndFrame()) {
             const std::int32_t q = (rand() * 230) / 32768;  // 0xE6 / 2^15
-            const std::int8_t phase = app->raw<std::int8_t>(0x9EB7F);
+            const std::int8_t phase = static_cast<std::int8_t>(app->state.blinkPhase);
             bool registerKeys = false;
             if (q < 90 && phase <= 0) {
                 frame += 7;
-                app->raw<std::uint8_t>(0x9EB7F) = 3;
+                app->state.blinkPhase = 3;
                 registerKeys = true;
             } else if (q > 50) {
                 frame += q;
-                app->raw<std::uint8_t>(0x9EB7F) =
+                app->state.blinkPhase =
                     static_cast<std::uint8_t>(phase - 1);
                 registerKeys = true;
             }
@@ -1813,8 +1804,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         model = ActiveModel(app);
         const std::int32_t frameCount = *reinterpret_cast<std::int32_t*>(
             model + kOff31B0);
-        if (app->raw<std::int32_t>(kOff9E16C) < frameCount) {
-            app->raw<std::int32_t>(kOff9E16C) = frameCount;
+        if (app->state.lastRegisteredFrame < frameCount) {
+            app->state.lastRegisteredFrame = frameCount;
         }
         app->state.bC = 1;
         char text[0x100];
@@ -1866,7 +1857,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // Sub49D880, undo-available flag).
     // ------------------------------------------------------------------
     case 250: {
-        app->raw<std::uint32_t>(0x6C) = 1;
+        app->state.dialogFlags[15] = 1;
         const std::uint8_t opt = app->state.optflag[0];
         const bool isAcc = opt != 0;
         const auto& clipboardCounts = app->ClipboardCounts();
@@ -1991,8 +1982,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             Sub4A4940(model);
             if (recCount > 0) {
                 for (std::int32_t j = 0; j < recCount; ++j) {
-                    const unsigned char* src =
-                        app->raw<unsigned char*>(0x354) + 0x54 * j;
+                    const mdl::BoneClipboardRecord* src =
+                        app->BoneClipboard() + j;
                     unsigned char stackRec[0x54];
                     memcpy(stackRec, src, 0x54);
                     model = ActiveModel(app);
@@ -2012,7 +2003,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             break;
         }
         // ---------------- accessary paste (0x4854B5) ----------------
-        const std::uint8_t slotIdx = app->raw<std::uint8_t>(0x9E170);
+        const std::uint8_t slotIdx = app->SelectedObjectSlot();
         if (app->AccessorySlot(slotIdx) == nullptr) {
             MessageBoxA(
                 MainHwnd(app),
@@ -2041,8 +2032,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         const std::int32_t accCount = static_cast<std::int32_t>(
             app->ClipboardCounts().accessories);
         for (std::int32_t i = 0; i < accCount; ++i) {
-            const unsigned char* src =
-                app->raw<unsigned char*>(0x370) + 0x34 * i;
+            const mdl::AccessoryClipboardKey* src =
+                app->AccessoryClipboard() + i;
             unsigned char stackRec[0x34];
             memcpy(stackRec, src, 0x34);
             if (!Sub414110(app, stackRec, 1)) {
@@ -2110,8 +2101,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 model = ActiveModel(app);
                 const std::int32_t frameCount = *reinterpret_cast<std::int32_t*>(
                     model + kOff31B0);
-                if (app->raw<std::int32_t>(kOff9E16C) < frameCount) {
-                    app->raw<std::int32_t>(kOff9E16C) = frameCount;
+                if (app->state.lastRegisteredFrame < frameCount) {
+                    app->state.lastRegisteredFrame = frameCount;
                 }
             }
         }
@@ -2198,10 +2189,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // finishing with PostViewRefresh + PostLanguageSweep2.
     // ------------------------------------------------------------------
     case 247: {
-        app->raw<std::uint32_t>(0x38) = 1;
-        if (app->raw<std::uint8_t>(0x9ED98) == 0) {
+        app->state.dialogFlags[2] = 1;
+        if (app->state.v9ed98 == 0) {
             // ---- enable undo ----
-            app->raw<std::uint8_t>(0x9ED98) = 1;
+            app->state.v9ed98 = 1;
             app->ViewOffsetX() = 0.0f;
             app->ViewOffsetY() = 0.0f;
             CheckMenuItem(GetMenu(MainHwnd(app)), 0xF7, MF_CHECKED);
@@ -2226,7 +2217,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             PostLanguageSweep2(app);                       // 0x40D070
         } else {
             // ---- disable undo ----
-            app->raw<std::uint8_t>(0x9ED98) = 0;
+            app->state.v9ed98 = 0;
             CheckMenuItem(GetMenu(MainHwnd(app)), 0xF7, MF_UNCHECKED);
             SendMessageA(GetDlgItem(MainHwnd(app), 0x217), 0xF1 /*BM_SETCHECK*/,
                          0, 0);
@@ -2320,7 +2311,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 app->PathWorkspace().projectDirectory, path);
             Sub42AE20(app->DirBg(), dir);                 // 0x42AE20
         }
-        CopyPathW(reinterpret_cast<wchar_t*>(app->at(0x9E448)),
+        CopyPathW(app->state.pictureBackgroundPath,
                   path);                                  // 0x42AE40
         LoadBackgroundPicture(app);                       // 0x4337A0 picture
         app->SceneModified() = 1;
@@ -2328,16 +2319,16 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     }
 
     case 233: {
-        app->raw<std::uint32_t>(0x60) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByte9E428) != 0) {
-            app->raw<std::uint8_t>(offsets::kByte9E428) = 0;
+        app->state.dialogFlags[12] = 1;
+        if (app->state.pictureBackgroundEnabled != 0) {
+            app->state.pictureBackgroundEnabled = 0;
             CheckMenuItem(GetMenu(MainHwnd(app)), 0xE9, MF_UNCHECKED);
             break;
         }
-        if (app->raw<std::int32_t>(offsets::kDword9E42C) == 0) {
+        if (app->PictureBackgroundTexture() == 0) {
             break;
         }
-        app->raw<std::uint8_t>(offsets::kByte9E428) = 1;
+        app->state.pictureBackgroundEnabled = 1;
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xE9, MF_CHECKED);
         break;
     }
@@ -2375,13 +2366,13 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // (JP); the result is discarded.
     // ------------------------------------------------------------------
     case 242: {
-        app->raw<std::uint32_t>(0x4C) = 1;
+        app->state.dialogFlags[7] = 1;
         if (app->state.optflag[0] == 0) {  // 0x2F8
             break;
         }
         app->state.bC = 1;
         DialogBoxParamA(
-            static_cast<HINSTANCE>(app->raw<void*>(0)),
+            static_cast<HINSTANCE>(app->HInstance()),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x291 : 0x26F),
             MainHwnd(app), Sub44D2D0, 0);
         break;
@@ -2399,7 +2390,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // the 255 tables at app+0x384 (0x3C, +0x18).
     // ------------------------------------------------------------------
     case 237: {  // 0xED: bone frames
-        app->raw<std::uint32_t>(0x38) = 1;
+        app->state.dialogFlags[2] = 1;
         std::int32_t esi = 0;
         auto* frames = app->CameraKeys();
         for (std::size_t key = 0; key < 10000; ++key) {
@@ -2416,7 +2407,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     }
 
     case 238: {  // 0xEE: morph frames
-        app->raw<std::uint32_t>(0x74) = 1;
+        app->state.dialogFlags[17] = 1;
         std::int32_t esi = 0;
         auto* frames = app->LightKeys();
         for (std::size_t key = 0; key < 10000; ++key) {
@@ -2432,7 +2423,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     }
 
     case 239: {  // 0xEF: camera/light frames
-        app->raw<std::uint32_t>(kOff50) = 1;
+        app->state.dialogFlags[8] = 1;
         std::int32_t esi = 0;
         auto* frames = app->ShadowKeys();
         for (std::size_t key = 0; key < 10000; ++key) {
@@ -2448,7 +2439,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     }
 
     case 240: {  // 0xF0: accessory frames
-        app->raw<std::uint32_t>(0x3C) = 1;
+        app->state.dialogFlags[3] = 1;
         std::int32_t esi = 0;
         auto* frames = app->GravityKeys();
         for (std::size_t key = 0; key < 10000; ++key) {
@@ -2464,7 +2455,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     }
 
     case 241: {  // 0xF1: all 255 accessory frame tables
-        app->raw<std::uint32_t>(0x44) = 1;
+        app->state.dialogFlags[5] = 1;
         for (int tbl = 0; tbl < 0xFF; ++tbl) {
             unsigned char* frames = reinterpret_cast<unsigned char*>(
                 app->AccessoryKeys(tbl));
@@ -2490,7 +2481,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // (8), the other three are cleared (0).
     // ------------------------------------------------------------------
     case 243: {  // 0xF3
-        app->raw<std::uint32_t>(0x3C) = 1;
+        app->state.dialogFlags[3] = 1;
         app->CaptureMode() = ScreenCaptureMode::Disabled;
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xF3, MF_CHECKED);
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xF4, MF_UNCHECKED);
@@ -2518,7 +2509,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     }
 
     case 246: {  // 0xF6
-        app->raw<std::uint32_t>(kOff48) = 1;
+        app->state.dialogFlags[6] = 1;
         app->CaptureMode() = ScreenCaptureMode::BackgroundRefresh;
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xF3, MF_UNCHECKED);
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xF4, MF_UNCHECKED);
@@ -2534,15 +2525,15 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // the (no-op) default handler.
     // ------------------------------------------------------------------
     case 248: {
-        app->raw<std::uint32_t>(0x30) = 1;
-        if (app->raw<std::int32_t>(offsets::kDwordA0B14) != 0) {
+        app->state.dialogFlags[0] = 1;
+        if (app->GroundShadowColorDialog() != 0) {
             break;  // def_47E903 (no-op for this id)
         }
         HWND dlg = CreateDialogParamA(
-            static_cast<HINSTANCE>(app->raw<void*>(0)),
+            static_cast<HINSTANCE>(app->HInstance()),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x292 : 0x270),
             MainHwnd(app), Sub42DFF0, 0);
-        app->raw<HWND>(offsets::kDwordA0B14) = dlg;
+        app->GroundShadowColorDialog() = dlg;
         ShowWindow(dlg, SW_SHOW);
         UpdateWindow(dlg);
         break;
@@ -2553,10 +2544,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // 0x273 JP); a cancel result falls through to the no-op default.
     // ------------------------------------------------------------------
     case 249: {
-        app->raw<std::uint32_t>(kOff50) = 1;
+        app->state.dialogFlags[8] = 1;
         app->state.bC = 1;
         const std::intptr_t r = DialogBoxParamA(
-            static_cast<HINSTANCE>(app->raw<void*>(0)),
+            static_cast<HINSTANCE>(app->HInstance()),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x293 : 0x273),
             MainHwnd(app), Sub44CA40, 0);
         if (r == 2) {  // IDCANCEL

@@ -37,10 +37,10 @@ struct EmptyPad {};
 
 struct MMDAppState {
     RawPad<48> pad0;
-    // dialog-open flags (0x30..0x74): nonzero while the matching dialog
+    // dialog-open flags (0x30..0x77): nonzero while the matching dialog
     // is up; the menu command switch reads them to reject re-entry
-    std::int32_t dialogFlags[17];
-    RawPad<72> pad0b;
+    std::int32_t dialogFlags[18];
+    RawPad<68> pad0b;
     std::uint32_t bC;
     RawPad<8> pad1;
     unsigned char sidebarResizeDragging;
@@ -308,13 +308,13 @@ struct MMDAppState {
     float aviScale;
     std::int32_t aviFrameWidth;
     std::int32_t aviFrameHeight;
-    unsigned char v9e428;
+    unsigned char pictureBackgroundEnabled;
 #if defined(_M_X64)
     RawPad<7> pad140;
 #else
     RawPad<3> pad140;
 #endif
-    void* v9e42cOrUint32;
+    void* pictureBackgroundTexture;
     std::uint32_t v9e430OrPtr;
     std::int32_t pictureOffsetX;
     std::int32_t pictureOffsetY;
@@ -333,7 +333,7 @@ struct MMDAppState {
     RawPad<1314> pad153;
 #endif
     unsigned char v9eb7e;
-    unsigned char v9eb7f;
+    unsigned char blinkPhase;
 #if defined(_M_X64)
     RawPad<2> pad155;
 #endif
@@ -358,7 +358,7 @@ struct MMDAppState {
     RawPad<3> pad160;
 #endif
     std::int32_t f9ed94;
-    unsigned char v9ed98;  // aka kDwordF9ed98
+    unsigned char v9ed98;
     unsigned char playbackStartsAtCurrentFrame;  // aka kByteB9ed99
     unsigned char projectedShadowBlendEnabled;  // aka kByteB9ed9a
     RawPad<1> pad164;
@@ -601,23 +601,35 @@ struct MMDAppState {
     std::int32_t renderH;
     float cameraDistance;
     float fpsLimit;
-    float fpsA;
-    float fpsB;
-    float fpsC;
+    // model-center offset (menu 219, "model-offset" dialog): applied to
+    // every root-bone keyframe position on OK
+    float modelOffsetX;
+    float modelOffsetY;
+    float modelOffsetZ;
 #ifndef _M_X64
-    RawPad<16> pad342;
+    RawPad<4> pad342;
+    std::int32_t morphFrameShift;  // menu 225 morph-frame cleanup shift
+    std::int32_t blinkStartFrame;  // menu 227 blink register range start
+    std::int32_t blinkEndFrame;    // menu 227 blink register range end
 #endif
     wchar_t envFileName[256];
     std::int32_t aviRecordStartFrame;
     std::int32_t aviRecordEndFrame;
-    float aviRecordFps;  // aka kFloatA0b08
+    float aviRecordFps;
     unsigned char aviIncludeWave;
     unsigned char sceneModified;
     RawPad<2> pad348;
     std::uint32_t a0B10;
-    std::int32_t a0B14OrPtr;
+#if defined(_M_X64)
+    // x64: the ground-shadow-color dialog handle lives outside the blob
+    // (MMDApp::m_groundShadowColorDialog)
+    std::int32_t a0B14OrInt32;
+#else
+    HWND groundShadowColorDialog;  // menu 248, modeless
+#endif
 #ifndef _M_X64
-    RawPad<8> pad350;
+    WNDPROC groundShadowColorEditProc;  // saved wndproc of its value edit
+    void* accessoryOrderArray;          // menu 249 reorder scratch array
 #endif
     std::int32_t accessoryRenderSplitOrder;
 #ifndef _M_X64
@@ -767,6 +779,8 @@ static_assert(offsetof(MMDAppState, dialogFlags) == 48,
               "dialogFlags x86");
 static_assert(offsetof(MMDAppState, dialogFlags[16]) == 112,
               "dialogFlags[16] x86");
+static_assert(offsetof(MMDAppState, dialogFlags[17]) == 116,
+              "dialogFlags[17] x86");
 static_assert(offsetof(MMDAppState, bC) == 188,
               "bC x86");
 static_assert(offsetof(MMDAppState, optflag) == 760,
@@ -1021,10 +1035,10 @@ static_assert(offsetof(MMDAppState, aviFrameWidth) == 648224,
               "aviFrameWidth x86");
 static_assert(offsetof(MMDAppState, aviFrameHeight) == 648228,
               "aviFrameHeight x86");
-static_assert(offsetof(MMDAppState, v9e428) == 648232,
-              "v9e428 x86");
-static_assert(offsetof(MMDAppState, v9e42cOrUint32) == 648236,
-              "v9e42cOrUint32 x86");
+static_assert(offsetof(MMDAppState, pictureBackgroundEnabled) == 648232,
+              "pictureBackgroundEnabled x86");
+static_assert(offsetof(MMDAppState, pictureBackgroundTexture) == 648236,
+              "pictureBackgroundTexture x86");
 static_assert(offsetof(MMDAppState, v9e430OrPtr) == 648240,
               "v9e430OrPtr x86");
 static_assert(offsetof(MMDAppState, pictureOffsetX) == 648244,
@@ -1051,8 +1065,8 @@ static_assert(offsetof(MMDAppState, f9e658) == 648792,
               "f9e658 x86");
 static_assert(offsetof(MMDAppState, v9eb7e) == 650110,
               "v9eb7e x86");
-static_assert(offsetof(MMDAppState, v9eb7f) == 650111,
-              "v9eb7f x86");
+static_assert(offsetof(MMDAppState, blinkPhase) == 650111,
+              "blinkPhase x86");
 static_assert(offsetof(MMDAppState, captureTexture) == 650112,
               "captureTexture x86");
 static_assert(offsetof(MMDAppState, captureMode) == 650116,
@@ -1334,12 +1348,18 @@ static_assert(offsetof(MMDAppState, cameraDistance) == 657628,
               "cameraDistance x86");
 static_assert(offsetof(MMDAppState, fpsLimit) == 657632,
               "fpsLimit x86");
-static_assert(offsetof(MMDAppState, fpsA) == 657636,
-              "fpsA x86");
-static_assert(offsetof(MMDAppState, fpsB) == 657640,
-              "fpsB x86");
-static_assert(offsetof(MMDAppState, fpsC) == 657644,
-              "fpsC x86");
+static_assert(offsetof(MMDAppState, modelOffsetX) == 657636,
+              "modelOffsetX x86");
+static_assert(offsetof(MMDAppState, modelOffsetY) == 657640,
+              "modelOffsetY x86");
+static_assert(offsetof(MMDAppState, modelOffsetZ) == 657644,
+              "modelOffsetZ x86");
+static_assert(offsetof(MMDAppState, morphFrameShift) == 657652,
+              "morphFrameShift x86");
+static_assert(offsetof(MMDAppState, blinkStartFrame) == 657656,
+              "blinkStartFrame x86");
+static_assert(offsetof(MMDAppState, blinkEndFrame) == 657660,
+              "blinkEndFrame x86");
 static_assert(offsetof(MMDAppState, envFileName) == 657664,
               "envFileName x86");
 static_assert(offsetof(MMDAppState, aviRecordStartFrame) == 658176,
@@ -1354,8 +1374,12 @@ static_assert(offsetof(MMDAppState, sceneModified) == 658189,
               "sceneModified x86");
 static_assert(offsetof(MMDAppState, a0B10) == 658192,
               "a0B10 x86");
-static_assert(offsetof(MMDAppState, a0B14OrPtr) == 658196,
-              "a0B14OrPtr x86");
+static_assert(offsetof(MMDAppState, groundShadowColorDialog) == 658196,
+              "groundShadowColorDialog x86");
+static_assert(offsetof(MMDAppState, groundShadowColorEditProc) == 658200,
+              "groundShadowColorEditProc x86");
+static_assert(offsetof(MMDAppState, accessoryOrderArray) == 658204,
+              "accessoryOrderArray x86");
 static_assert(offsetof(MMDAppState, accessoryRenderSplitOrder) == 658208,
               "accessoryRenderSplitOrder x86");
 static_assert(offsetof(MMDAppState, a0B44OrInt32) == 658244,
@@ -1537,6 +1561,13 @@ static_assert(offsetof(MMDAppState, lastRegisteredFrame) == 651320,
 // A failure here means the struct layout drifted from the map - fix the
 // surrounding RawPad sizes, never the semantics.
 // ---------------------------------------------------------------------------
+static_assert(xlate::Offset(48) == offsetof(MMDAppState, dialogFlags), "xlate sync 48");
+static_assert(xlate::Offset(648232) == offsetof(MMDAppState, pictureBackgroundEnabled), "xlate sync 648232");
+static_assert(xlate::Offset(648236) == offsetof(MMDAppState, pictureBackgroundTexture), "xlate sync 648236");
+static_assert(xlate::Offset(650111) == offsetof(MMDAppState, blinkPhase), "xlate sync 650111");
+static_assert(xlate::Offset(657636) == offsetof(MMDAppState, modelOffsetX), "xlate sync 657636");
+static_assert(xlate::Offset(657640) == offsetof(MMDAppState, modelOffsetY), "xlate sync 657640");
+static_assert(xlate::Offset(657644) == offsetof(MMDAppState, modelOffsetZ), "xlate sync 657644");
 static_assert(xlate::Offset(200) == offsetof(MMDAppState, sidebarResizeDragging), "xlate sync 200");
 static_assert(xlate::Offset(836) == offsetof(MMDAppState, viewportToolHovered), "xlate sync 836");
 static_assert(xlate::Offset(840) == offsetof(MMDAppState, viewToolDragOperation), "xlate sync 840");

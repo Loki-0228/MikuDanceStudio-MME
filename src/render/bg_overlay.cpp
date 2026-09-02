@@ -289,7 +289,7 @@ void AviBgOverlayRefresh(MMDApp* app) {
         }
     } else if (s.FrameStepPlayback() == 0 ||
                s.AviUsesThirtyFpsTiming() == 0 ||
-               s.raw<float>(offsets::kFloatA0b08) != g_FrameScale) {
+               s.state.aviRecordFps != g_FrameScale) {
         // 0x416ADE: wall-clock driven sample from the seconds field
         // (9E64C is the frameB float copy; 0x52BA60 = double 1000.0).
         float secondsF;

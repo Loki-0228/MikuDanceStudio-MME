@@ -300,7 +300,7 @@ void StartAviRecordWindow(MMDApp* app) {
     if (!StartRecordGraph(app, s.RenderWidth(), s.RenderHeight())) {
         return;  // 0x45EC69: original leaves the window parked
     }
-    if (s.raw<std::uint8_t>(offsets::kByte9E428) != 0) {
+    if (s.state.pictureBackgroundEnabled != 0) {
         PicBgOverlayRefresh(app);                              // 0x45EBE0
     }
     HWND main = static_cast<HWND>(s.state.hwnd);
@@ -350,7 +350,7 @@ void StartAviRecordFullscreen(MMDApp* app) {
     // picture overlay and the shared tail.
     ProbeWritable(
         s.AviOutputPath());
-    if (s.raw<std::uint8_t>(offsets::kByte9E428) != 0) {
+    if (s.state.pictureBackgroundEnabled != 0) {
         PicBgOverlayRefresh(app);                              // 0x4649A7
     }
     RecordStartTail(app);

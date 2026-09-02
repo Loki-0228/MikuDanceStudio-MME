@@ -400,7 +400,7 @@ void ResetAppState(MMDApp* app) {
 
     // ---- frame/title state --------------------------------------------------
     app->state.aviBackgroundEnabled = 0;
-    app->state.v9e428 = 0;
+    app->state.pictureBackgroundEnabled = 0;
     app->state.v9eb7e = 0;
     CheckMenuItem(GetMenu(hwnd), 0xD6, 0u);
     CheckMenuItem(GetMenu(hwnd), 0xD8, 0u);

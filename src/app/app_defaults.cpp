@@ -80,11 +80,11 @@ void MMDApp::InitDefaults() {
     }
     state.v9e650 = 0.0f;
     s.FpsLimit() = 60.0f;
-    state.fpsA = 0.0f;
+    state.modelOffsetX = 0.0f;
     s.LastRegisteredFrame() = 0;
-    state.fpsB = 0.0f;
+    state.modelOffsetY = 0.0f;
     s.AviBackgroundTexture() = nullptr;
-    state.fpsC = 0.0f;
+    state.modelOffsetZ = 0.0f;
     s.AviBackgroundSurface() = nullptr;
     s.PictureBackgroundTexture() = nullptr;
     s.AviOverlayVertices() = nullptr;
@@ -94,7 +94,7 @@ void MMDApp::InitDefaults() {
     s.AviUsesThirtyFpsTiming() = 0;
     s.PictureBackgroundEnabled() = 0;
     state.v9eb7e = 0;
-    state.v9eb7f = 0;
+    state.blinkPhase = 0;
     s.DisplayObjectListMatchCount() = 0;
     s.DisplayObjectListScrollPosition() = 0;
     s.CaptureTexture() = nullptr;
@@ -105,7 +105,7 @@ void MMDApp::InitDefaults() {
     state.v9ed98 = 0;
     s.PlaybackStartsAtCurrentFrame() = 0;
     state.a0B10 = 0;
-    state.a0B14OrPtr = 0;
+    s.GroundShadowColorDialog() = nullptr;
     state.a0B44OrInt32 = nullptr;
     state.projectedShadowBlendEnabled = 1;
     state.v9ed9c = 0;
