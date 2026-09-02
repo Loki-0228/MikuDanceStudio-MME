@@ -158,7 +158,7 @@ LRESULT HandleNotify(HWND h, UINT m, WPARAM w, LPARAM l) {
     }
 
     if (v9 == 440) {  // 0x1B8
-        if (app->state.optflag0 != 0)  // this+0x2F8 (760)
+        if (app->state.optflag[0] != 0)  // this+0x2F8 (760)
             return DefWindowProcA(h, m, w, l);
         const std::uint8_t idx = app->SelectedModelSlot();
         const mdl::ModelRecord& model = *mdl::Mdl(app->ModelSlot(idx));
@@ -171,7 +171,7 @@ LRESULT HandleNotify(HWND h, UINT m, WPARAM w, LPARAM l) {
     }
 
     if (v9 == 441) {  // 0x1B9
-        if (app->state.optflag0 != 0)  // this+0x2F8 (760)
+        if (app->state.optflag[0] != 0)  // this+0x2F8 (760)
             return DefWindowProcA(h, m, w, l);
         const std::uint8_t idx = app->SelectedModelSlot();
         const mdl::ModelRecord& model = *mdl::Mdl(app->ModelSlot(idx));

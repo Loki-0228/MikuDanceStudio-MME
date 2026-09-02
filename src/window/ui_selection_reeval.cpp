@@ -159,7 +159,7 @@ void Sub416280(MMDApp* app) {
     const int selected = static_cast<int>(SendMessageA(
         GetDlgItem(window, 433), CB_GETCURSEL, 0, 0));
 
-    if (app->state.optflag0 != 0) {   // 0x416337
+    if (app->state.optflag[0] != 0) {   // 0x416337
         unsigned char* records = app->raw<unsigned char*>(0x374);
         if (records != nullptr) {
             for (int off = 0; off < 840000; off += 84) {
@@ -296,7 +296,7 @@ void SelectionReeval(MMDApp* app) {  // 0x430510
     bool uniform = true;
     Curve baseline{};
 
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         unsigned char* records = app->raw<unsigned char*>(0x374);
         if (records != nullptr) {
             for (int index = 0; index < 10000; ++index) {

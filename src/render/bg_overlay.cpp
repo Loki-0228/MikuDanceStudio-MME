@@ -168,7 +168,7 @@ void ComputeOverlayRect(MMDApp* app, const OverlayPlacement& placement,
         // (fildl + fidivl + fstps) divides in double precision and stores
         // the factor as float; reproduced explicitly.
         const float scale = static_cast<float>(
-            static_cast<double>(s.raw<std::int32_t>(offsets::kDwordRenderw)) /
+            static_cast<double>(s.state.renderW) /
             static_cast<double>(rectR - rectL));
         const double sc = scale;
         const double left = sc * offXv * ratio / k - 1.0;

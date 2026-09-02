@@ -102,6 +102,16 @@ struct TimelineSelectionRecord {
     std::int32_t words[4];
 };
 
+// The x86 blob packs each band's timeline-selection record pointer four
+// bytes after its count (an 8-byte grid of {4-byte count, 4-byte pointer}).
+// On x64 an eight-byte pointer stored there overruns into the NEXT band's
+// count, and the counting pass writes counts over the PREVIOUS pointer's
+// high half - dragging keyframes then read garbage counts and freed wild
+// pointers.  The counts stay at their original blob offsets; the pointers
+// live in this side table instead (defined in ui_editor_click.cpp; the
+// slots are transient drag buffers, never persisted).
+extern TimelineSelectionRecord* g_timelineSelectionRecords[8];
+
 enum class ScreenCaptureMode : std::int32_t {
     Disabled = 0,
     FullFrame = 1,
@@ -418,8 +428,8 @@ public:
     }
     TimelineSelectionRecord*& TimelineSelectionRecords(
         TimelineSelectionBand band) {
-        return raw<TimelineSelectionRecord*>(
-            0xA03F0 + 8 * static_cast<std::uint8_t>(band));
+        return g_timelineSelectionRecords[
+            static_cast<std::size_t>(band)];
     }
     mdl::ClipboardSelectionCounts& ClipboardCounts() {
         return raw<mdl::ClipboardSelectionCounts>(offsets::kDword9DA28);
@@ -473,7 +483,7 @@ public:
         light.Ambient.b = LightColor()[2];
     }
     std::uint8_t& GroundShadowEnabled() {
-        return raw<std::uint8_t>(offsets::kByte918);
+        return state.groundShadowEnabled;
     }
     IDirect3DVertexBuffer9*& GroundGridVertices() {
         return raw<IDirect3DVertexBuffer9*>(768);
@@ -617,7 +627,7 @@ public:
         return raw<IDirect3DSurface9*>(650124);  // original +0x9EB8C
     }
     ScreenCaptureMode& CaptureMode() {
-        return raw<ScreenCaptureMode>(offsets::kDword9EB84);
+        return reinterpret_cast<ScreenCaptureMode&>(state.captureMode);
     }
     void*& CaptureReadbackPixels() {
         return state.captureReadbackPixels;
@@ -761,7 +771,7 @@ public:
     std::uint8_t& UiTextGreen() { return state.uiTextGreen; }
     std::uint8_t& UiTextBlue() { return state.uiTextBlue; }
     wchar_t* WavePath() {
-        return reinterpret_cast<wchar_t*>(at(offsets::kWcsWavpath));
+        return reinterpret_cast<wchar_t*>(state.wavPath);
     }
     std::uint8_t& WaveEnabled() {
         return state.waveEnabled;
@@ -868,7 +878,7 @@ public:
         return state.savedPlaybackPhysicsMode;
     }
     std::uint8_t& PlaybackStartsAtCurrentFrame() {
-        return raw<std::uint8_t>(offsets::kByte9ED99);
+        return state.playbackStartsAtCurrentFrame;
     }
     std::uint8_t& PlaybackFrameChanged() {
         return state.playbackFrameChanged;
@@ -885,10 +895,10 @@ public:
     std::int32_t& SidebarWidth() {
         return state.sidebarWidth;
     }
-    std::int32_t& RenderWidth() { return raw<std::int32_t>(offsets::kDwordRenderw); }
-    std::int32_t& RenderHeight() { return raw<std::int32_t>(offsets::kDwordRenderh); }
+    std::int32_t& RenderWidth() { return state.renderW; }
+    std::int32_t& RenderHeight() { return state.renderH; }
     std::int32_t& SeparateWindowSidebarWidth() {
-        return raw<std::int32_t>(offsets::kDwordV658748);
+        return state.separateWindowSidebarWidth;
     }
     std::int32_t& SeparateWindowX() { return state.separateWindowX; }
     std::int32_t& SeparateWindowY() { return state.separateWindowY; }
@@ -917,7 +927,7 @@ public:
         return state.messageSeen;
     }
     std::uint8_t& WindowLayoutReady() {
-        return raw<std::uint8_t>(offsets::kByteA442C);
+        return state.windowLayoutReady;
     }
     std::uint8_t& EnhancedModelDirty() {
         return raw<std::uint8_t>(offsets::kByteA0B64);
@@ -926,7 +936,7 @@ public:
         return raw<std::uint8_t>(offsets::kByteAutorep);
     }
     std::uint8_t& UiOptionFlag(int index) {
-        return raw<std::uint8_t>(offsets::kByteOptflag0 + index);
+        return state.optflag[index];
     }
     std::uint8_t& CameraMode() { return UiOptionFlag(0); }
     std::uint32_t& ViewModeComboSelection() {
@@ -1005,7 +1015,7 @@ public:
         return reinterpret_cast<const D3DMATRIX&>(state.cameraAttachmentBasis);
     }
     std::uint8_t& CameraAttachmentTransformSuppressed() {
-        return raw<std::uint8_t>(offsets::kByteA0478);
+        return state.cameraAttachmentTransformSuppressed;
     }
     D3DMATRIX& ViewRotationTransform() {
         return raw<D3DMATRIX>(0xA0674);

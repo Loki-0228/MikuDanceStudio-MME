@@ -28,7 +28,7 @@
 //   5. 0x414A1F  icon DC over this+0x2F0 (11x11 icon sheet, two rows);
 //      band rows are SRCAND mask blits from source (44, row) plus SRCPAINT
 //      from (22/0, row); negative links use source column 33.
-//   6. 0x414A29  display mode (optflag0 @0x2F8 != 0): four fixed band lists
+//   6. 0x414A29  display mode (optflag[0] @0x2F8 != 0): four fixed band lists
 //      (this+0x374/0x378/0x37C/0x380, record strides 84/40/24/36, band
 //      y = 17/31/45/59, flag byte +72/+36/+20/+33) plus the accessory bands
 //      (this+0x9D9D0 index array -> pointers at this+0x384, stride 60,
@@ -367,7 +367,7 @@ void PanelPaint(MMDApp* app) {
         InvalidateRect(static_cast<HWND>(app->Hwnd()), &rc, FALSE);
     };
 
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         // --- 6a. display mode: four fixed bands + accessory bands ----------
         const std::int32_t limit = scroll + rows;
         DrawBandList(app, panel, icons,

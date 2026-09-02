@@ -161,8 +161,8 @@ void HandleWindowSize(MMDApp* app) {
     MoveCtrl(hwnd, 453, 363, bottom - 155, 14, 14);
 
     // --- option band 1: base v52 (0x443B02..0x443D9E) -----------------------
-    // v52 = -18, or 117 while bone mode is off (optflag0 set) and the
-    // expand toggle optflag1 is clear.
+    // v52 = -18, or 117 while bone mode is off (optflag[0] set) and the
+    // expand toggle optflag[1] is clear.
     const std::uint8_t opt0 = s.CameraMode();     // 760
     const std::uint8_t opt1 = s.UiOptionFlag(1);  // 761
     const std::uint8_t opt2 = s.UiOptionFlag(2);  // 762
@@ -190,7 +190,7 @@ void HandleWindowSize(MMDApp* app) {
     MoveCtrl(hwnd, 470, 501 - v52, bottom - 155, 14, 14);
     MoveCtrl(hwnd, 469, 501 - v52, bottom - 155, 14, 14);
 
-    // --- option band 2: v52 += 162 with expand toggle optflag2 (0x443DB3) --
+    // --- option band 2: v52 += 162 with expand toggle optflag[2] (0x443DB3) --
     if (opt0 != 0 && opt2 == 0) v52 += 162;
     MoveCtrl(hwnd, 567, 684 - v52, bottom - 155, 14, 14);
     MoveCtrl(hwnd, 566, 684 - v52, bottom - 155, 14, 14);
@@ -201,7 +201,7 @@ void HandleWindowSize(MMDApp* app) {
     MoveCtrl(hwnd, 561, 820 - v52, bottom - 100, 30, 14);
     MoveCtrl(hwnd, 565, 745 - v52, bottom - 36, 54, 30);
 
-    // --- option band 3: v52 += 160 with expand toggle optflag6 (0x443F19) --
+    // --- option band 3: v52 += 160 with expand toggle optflag[6] (0x443F19) --
     if (opt0 != 0 && opt6 == 0) v52 += 160;
     MoveCtrl(hwnd, 489, 864 - v52, bottom - 155, 14, 14);
     MoveCtrl(hwnd, 488, 864 - v52, bottom - 155, 14, 14);
@@ -223,7 +223,7 @@ void HandleWindowSize(MMDApp* app) {
     MoveCtrl(hwnd, 485, 940 - v52, bottom - 30, 48, 14);
     MoveCtrl(hwnd, 487, 995 - v52, bottom - 32, 58, 26);
 
-    // --- option band 4: v52 += 178 with expand toggle optflag3 (0x44422B);
+    // --- option band 4: v52 += 178 with expand toggle optflag[3] (0x44422B);
     // band 4 controls use fixed X -------------------------------------------
     if (opt0 != 0 && opt3 == 0) v52 += 178;
     MoveCtrl(hwnd, 503, 363, bottom - 155, 14, 14);
@@ -242,9 +242,9 @@ void HandleWindowSize(MMDApp* app) {
     MoveCtrl(hwnd, 500, 366, bottom - 36, 60, 28);
 
     // --- option band 5: second base v110 (0x44444C..0x4448BE) --------------
-    // optflag4/optflag0 both clear -> v52 += 179; then v110 = v52 - 180
-    // (bone mode on) or v52 + 53; optflag5/optflag0 both clear -> v110 +=
-    // 251; optflag0 clear -> v110 += 13.
+    // optflag[4]/optflag[0] both clear -> v52 += 179; then v110 = v52 - 180
+    // (bone mode on) or v52 + 53; optflag[5]/optflag[0] both clear -> v110 +=
+    // 251; optflag[0] clear -> v110 += 13.
     if (opt4 == 0 && opt0 == 0) v52 += 179;                   // 0x444453
     std::int32_t v110 = opt0 != 0 ? v52 - 180 : v52 + 53;     // 0x44445D
     MoveCtrl(hwnd, 529, 598 - v110, bottom - 155, 14, 14);

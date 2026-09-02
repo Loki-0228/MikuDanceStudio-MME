@@ -311,26 +311,25 @@ void LoadSceneV1(MMDApp* app, int fd) {
     s->state.a042C = 0;
     s->state.cameraParentModel = -1;
     s->state.cameraParentBone = 0;
-    s->raw<std::uint32_t>(off::kDwordA043c13) = 0;               // 0xA0470
-    s->raw<std::uint32_t>(off::kDwordA043c12) = 0;               // 0xA046C
-    s->raw<float>(off::kDwordA043c11) = 0.0f;                    // 0xA0468
-    s->raw<float>(off::kDwordA043c10) = 0.0f;                    // 0xA0464
-    s->raw<float>(off::kDwordA043c8) = 0.0f;                     // 0xA045C
-    s->raw<float>(off::kDwordA043c7) = 0.0f;                     // 0xA0458
-    s->raw<float>(off::kDwordA043c6) = 0.0f;                     // 0xA0454
-    s->raw<float>(off::kDwordA043c5) = 0.0f;                     // 0xA0450
-    s->raw<float>(off::kDwordA043c3) = 0.0f;                     // 0xA0448
-    s->raw<float>(off::kDwordA043c2) = 0.0f;                     // 0xA0444
-    s->raw<float>(off::kDwordA043c1) = 0.0f;                     // 0xA0440
-    s->raw<float>(off::kDwordA043c0) = 0.0f;                     // 0xA043C
-    s->raw<float>(off::kDwordA043c14) = 1.0f;                    // 0xA0474
-    s->raw<float>(off::kDwordA043c9) = 1.0f;                     // 0xA0460
-    s->raw<float>(off::kDwordA043c3 + 4) = 1.0f;                 // 0xA044C
+    s->state.cameraAttachmentBasis[14] = 0;               // 0xA0470
+    s->state.cameraAttachmentBasis[13] = 0;               // 0xA046C
+    s->state.cameraAttachmentBasis[12] = 0.0f;                    // 0xA0468
+    s->state.cameraAttachmentBasis[11] = 0.0f;                    // 0xA0464
+    s->state.cameraAttachmentBasis[9] = 0.0f;                     // 0xA045C
+    s->state.cameraAttachmentBasis[8] = 0.0f;                     // 0xA0458
+    s->state.cameraAttachmentBasis[7] = 0.0f;                     // 0xA0454
+    s->state.cameraAttachmentBasis[6] = 0.0f;                     // 0xA0450
+    s->state.cameraAttachmentBasis[4] = 0.0f;                     // 0xA0448
+    s->state.cameraAttachmentBasis[3] = 0.0f;                     // 0xA0444
+    s->state.cameraAttachmentBasis[2] = 0.0f;                     // 0xA0440
+    s->state.cameraAttachmentBasis[1] = 0.0f;                     // 0xA043C
+    s->state.cameraAttachmentBasis[15] = 1.0f;                    // 0xA0474
+    s->state.cameraAttachmentBasis[10] = 1.0f;                     // 0xA0460
+    s->state.cameraAttachmentBasis[5] = 1.0f;                 // 0xA044C
     s->state.cameraAttachmentBasis[0] = 1.0f;                    // 0xA0438
     s->state.v9ed98 = 0;                // 0x9ED98
 
     HWND const main = reinterpret_cast<HWND>(s->Hwnd());
-    unsigned char* const storage = s->storage();
     PathResolutionWorkspace& paths = s->PathWorkspace();
     D3DRenderer* const wrap = s->Renderer();
 
@@ -376,8 +375,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
     }
 
     // ---- header-field reads (0x4593F9..0x459501) -------------------------
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordRenderw), 4);       // 0x4593F9
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordRenderh), 4);       // 0x45940C
+    Rd(fd, &s->state.renderW, 4);       // 0x4593F9
+    Rd(fd, &s->state.renderH, 4);       // 0x45940C
     {
         std::int32_t editFlag = 0;
         Rd(fd, &editFlag, 4);                                    // 0x459420
@@ -392,7 +391,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     for (int f = 0; f < 6; ++f) {
         unsigned char b = 0;
         Rd(fd, &b, 1);                                           // 0x459455..
-        s->raw<unsigned char>(760 + f) = (b == 1) ? 1 : 0;       // 0x2F8..2FD
+        s->state.optflag[f] = (b == 1) ? 1 : 0;       // 0x2F8..2FD
     }
     strcpy_s(text, 0x100, "");                                   // 0x459526
 
@@ -484,7 +483,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             bool loaded = ModelLoadPMD(                          // 0x459965
                 model, main, widePath, wrap,
                 static_cast<int>(
-                    reinterpret_cast<std::uintptr_t>(storage + 0xA06CE)),
+                    reinterpret_cast<std::uintptr_t>(s->state.exeDir)),
                 0, s->EnglishUI(), s->Physics(),
                 paths);
             if (!loaded) {                                       // 0x45998B
@@ -499,7 +498,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                                 : kJpOpenCaption,
                             0);                                  // 0x4599ED
                 SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(
-                    storage + 0xA06CE));                         // 0x4599FA
+                    s->state.exeDir));                         // 0x4599FA
                 swprintf_s(ofnFile, 0x100, L"");                 // 0x459A11
                 OPENFILENAMEW ofn;
                 std::memset(&ofn, 0, sizeof(ofn));
@@ -515,7 +514,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 ofn.Flags = 0x1000;
                 ofn.lpstrInitialDir =
                     (GetMenuState(GetMenu(main), 0x12D, 0) & 8)
-                        ? reinterpret_cast<LPCWSTR>(storage + 0xA0D70)
+                        ? reinterpret_cast<LPCWSTR>(s->state.dirModel)
                         : kWUserModel;
                 ofn.lpstrDefExt = L"pmd;pmx";
                 ofn.nMaxFileTitle = 0x100;
@@ -531,13 +530,13 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 if (GetMenuState(GetMenu(main), 0x12D, 0) & 8) {
                     ExtractDirFromPath(ofnTitle, ofnFile);       // 0x459B3F
                     wcscpy_s(reinterpret_cast<wchar_t*>(
-                                 storage + 0xA0D70),
+                                 s->state.dirModel),
                              0x3E8, ofnTitle);                   // 0x459B51
                 }
                 if (!ModelLoadPMD(                               // 0x459B94
                         model, main, ofnFile, wrap,
                         static_cast<int>(reinterpret_cast<
-                            std::uintptr_t>(storage + 0xA06CE)),
+                            std::uintptr_t>(s->state.exeDir)),
                         0, s->EnglishUI(),
                         s->Physics(),
                         paths)) {
@@ -721,7 +720,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
 
     // ---- register-combo 0x1B1 (0x45A6D3..0x45AA89) -----------------------
     SendMessageA(GetDlgItem(main, 0x1B1), CB_RESETCONTENT, 0, 0); // 0x45A6D3
-    if (s->raw<unsigned char>(760) == 0) {
+    if (s->state.optflag[0] == 0) {
         // model-edit mode: 5 entries + reselect current model
         if (s->EnglishUI() == 0) {
             SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
@@ -995,7 +994,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                         s->EnglishUI() != 0 ? "open file" : kJpOpenCaption,
                         0);                                      // 0x45B9ED
             SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(
-                storage + 0xA06CE));                             // 0x45B9FA
+                s->state.exeDir));                             // 0x45B9FA
             swprintf_s(ofnFile, 0x100, L"");                     // 0x45BA11
             OPENFILENAMEW ofn;
             std::memset(&ofn, 0, sizeof(ofn));
@@ -1012,7 +1011,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             ofn.Flags = 0x1000;
             ofn.lpstrInitialDir =
                 (GetMenuState(GetMenu(main), 0x12D, 0) & 8)
-                    ? reinterpret_cast<LPCWSTR>(storage + 0xA1D10)
+                    ? reinterpret_cast<LPCWSTR>(s->state.dirAccs)
                     : kWUserAcc;
             ofn.lpstrDefExt = L"x";                              // 0x5297D8
             ofn.nMaxFileTitle = 0x100;
@@ -1028,7 +1027,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             if (GetMenuState(GetMenu(main), 0x12D, 0) & 8) {
                 ExtractDirFromPath(ofnTitle, ofnFile);           // 0x45BB47
                 wcscpy_s(reinterpret_cast<wchar_t*>(
-                             storage + 0xA1D10),
+                             s->state.dirAccs),
                          0x3E8, ofnTitle);                       // 0x45BB59
             }
             if (!LoadAccessoryObject(s, accs[accSlot], ofnFile)) {
@@ -1170,13 +1169,13 @@ void LoadSceneV1(MMDApp* app, int fd) {
         SendMessageA(GetDlgItem(main, 0x213), BM_SETCHECK,
                      b == 2 ? 1 : 0, 0);
         Rd(fd, &b, 1);                                           // 0x45C821
-        s->raw<unsigned char>(off::kByte340 + 1) = b ? 1 : 0;
+        s->state.playbackLoopEnabled = b ? 1 : 0;
         SendMessageA(GetDlgItem(main, 0x19B), BM_SETCHECK, b ? 1 : 0, 0);
         Rd(fd, &b, 1);                                           // 0x45C879
-        s->raw<unsigned char>(off::kByte340 + 2) = b ? 1 : 0;
+        s->state.v342 = b ? 1 : 0;
         SendMessageA(GetDlgItem(main, 0x19D), BM_SETCHECK, b ? 1 : 0, 0);
         Rd(fd, &b, 1);                                           // 0x45C8D1
-        s->raw<unsigned char>(off::kByte9ED99) = b ? 1 : 0;
+        s->state.playbackStartsAtCurrentFrame = b ? 1 : 0;
         SendMessageA(GetDlgItem(main, 0x19E), BM_SETCHECK, b ? 1 : 0, 0);
         std::int32_t v1 = 0, v2 = 0;
         Rd(fd, &v1, 4);                                          // 0x45C929
@@ -1201,7 +1200,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         Rd(fd, mbPath, 0x100);                                   // 0x45CA71
         ResolveAnsiUserFile(reinterpret_cast<unsigned char*>(wrap),
                             mbPath,
-                            reinterpret_cast<wchar_t*>(storage + 0xD0),
+                            reinterpret_cast<wchar_t*>(s->state.wavPath),
                             0x100, paths);                        // 0x45CA9A
         if (s->state.waveEnabled != 0)
             LoadWaveFile(s);                                     // 0x45CAAA
@@ -1309,7 +1308,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             SendMessageA(GetDlgItem(owner, 0x22D), BM_SETCHECK, 0, 0);
         }
         Rd(fd, &b, 1);                                           // 0x45CEE9
-        s->raw<unsigned char>(off::kByte918) = b ? 1 : 0;
+        s->state.groundShadowEnabled = b ? 1 : 0;
         CheckMenuItem(GetMenu(main), 0xDD, b ? 8 : 0);           // 0x45CF2C
     }
 
@@ -1334,8 +1333,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
         }
     }
     // screen-capture mode (0x45D03D..0x45D1CF)
-    Rd(fd, &s->raw<std::uint32_t>(off::kDword9EB84), 4);         // 0x45D03D
-    switch (s->raw<std::int32_t>(off::kDword9EB84)) {
+    Rd(fd, &reinterpret_cast<ScreenCaptureMode&>(s->state.captureMode), 4);         // 0x45D03D
+    switch (static_cast<std::int32_t>(s->state.captureMode)) {
         case 0:
             CheckMenuItem(GetMenu(main), 0xF3, 8);
             CheckMenuItem(GetMenu(main), 0xF4, 0);
@@ -1363,13 +1362,13 @@ void LoadSceneV1(MMDApp* app, int fd) {
     }
     // physics defaults + combos (0x45D1C8..0x45D265)
     s->state.gravityMagnitude = 9.8000002f;              // 0x52A1DC
-    s->raw<float>(off::kFloat9EDCC) = 0.0f;
+    s->state.v9edcc = 0.0f;
     s->state.gravityX = 0.0f;
     s->state.gravityY = -1.0f;                     // 0x5295E8
     s->state.a0CD4 = 0;
     s->state.gravityNoise = 10;
     s->state.gravityZ = 0.0f;
-    s->raw<std::uint32_t>(off::kByteA0CC8) = 0;
+    s->state.a0CC8OrUint32 = 0;
     s->state.modelOutlineColorRed = 0;
     s->state.modelOutlineColorGreen = 0;
     s->state.modelOutlineColorBlue = 0;
@@ -1393,7 +1392,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         if (slots[s->SelectedModelSlot()] != nullptr &&
             M8(slots[s->SelectedModelSlot()], 0x31BE) !=
                 0 &&
-            s->raw<unsigned char>(760) == 0)
+            s->state.optflag[0] == 0)
             SendMessageA(GetDlgItem(main, 0x1B9), BM_SETCHECK, 1,
                          0);                                     // 0x45D360
         for (int i = 0; i < 255; ++i) {
@@ -1523,32 +1522,23 @@ void LoadSceneV1(MMDApp* app, int fd) {
                             const int got9EC = Rd(fd, &bq, 1);   // 0x45D9EC
                             if (bq == 1 && got9EC > 0) {
                                 // model color sweep (0x45DA1B..0x45DA91)
-                                Rd(fd, &s->raw<std::uint32_t>(
-                                          off::kDwordA0198),
+                                Rd(fd, &s->state.modelOutlineColorRed,
                                    4);
-                                Rd(fd, &s->raw<std::uint32_t>(
-                                          off::kDwordA019C),
+                                Rd(fd, &s->state.modelOutlineColorGreen,
                                    4);
-                                Rd(fd, &s->raw<std::uint32_t>(
-                                          off::kDwordA01A0),
+                                Rd(fd, &s->state.modelOutlineColorBlue,
                                    4);
-                                if (s->raw<std::uint32_t>(
-                                        off::kDwordA0198) != 0 ||
-                                    s->raw<std::uint32_t>(
-                                        off::kDwordA019C) != 0 ||
-                                    s->raw<std::uint32_t>(
-                                        off::kDwordA01A0) != 0) {
+                                if (s->state.modelOutlineColorRed != 0 ||
+                                    s->state.modelOutlineColorGreen != 0 ||
+                                    s->state.modelOutlineColorBlue != 0) {
                                     for (int i = 0; i < 100; ++i)
                                         if (slots[i] != nullptr)
                                             Sub4A4850(
                                                 reinterpret_cast<MMDApp*>(
                                                     slots[i]),
-                                                s->raw<std::int32_t>(
-                                                    off::kDwordA0198),
-                                                s->raw<std::int32_t>(
-                                                    off::kDwordA019C),
-                                                s->raw<std::int32_t>(
-                                                    off::kDwordA01A0));
+                                                s->state.modelOutlineColorRed,
+                                                s->state.modelOutlineColorGreen,
+                                                s->state.modelOutlineColorBlue);
                                 }
 
                                 unsigned char br = 0;
@@ -1556,9 +1546,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                 if (br == 1 && gotAB4 > 0) {
                                     unsigned char b194 = 0;
                                     Rd(fd, &b194, 1);            // 0x45DAE1
-                                    s->raw<unsigned char>(
-                                        off::kByteA0194) =
-                                        (b194 != 0) ? 1 : 0;
+                                    s->state.a0194 = (b194 != 0) ? 1 : 0;
                                     CheckMenuItem(GetMenu(main), 0x11A,
                                                   b194 ? 8 : 0);
                                     unsigned char bcam = 0;
@@ -1589,18 +1577,10 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                                 Rd(fd, &cameraKeys[timelineFrame].parentBone,
                                                    4);           // 0x45DC32
                                             }
-                                            Rd(fd, &s->raw<std::uint32_t>(
-                                                      off::kDwordA0430),
-                                               4);              // 0x45DC59
-                                            Rd(fd, &s->raw<std::uint32_t>(
-                                                      off::kDwordA0434),
-                                               4);              // 0x45DC6C
-                                            const std::int32_t sel0 =
-                                                s->raw<std::int32_t>(
-                                                    off::kDwordA0430);
-                                            const std::int32_t sel1 =
-                                                s->raw<std::int32_t>(
-                                                    off::kDwordA0434);
+                                            Rd(fd, &s->state.cameraParentModel, 4);              // 0x45DC59
+                                            Rd(fd, &s->state.cameraParentBone, 4);              // 0x45DC6C
+                                            const std::int32_t sel0 = s->state.cameraParentModel;
+                                            const std::int32_t sel1 = s->state.cameraParentBone;
                                             if (sel0 >= 0) {
                                                 SendMessageA(
                                                     GetDlgItem(main,
@@ -1660,26 +1640,21 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                         if (bdd == 1 && gotDDFC > 0) {
                                         // 16 config dwords
                                         // (0x45DE2B..0x45DF4E)
-                                        Rd(fd, &s->raw<std::uint32_t>(
-                                                  off::kFloatColor16),
+                                        Rd(fd, &s->state.cameraAttachmentBasis[0],
                                            4);
                                         for (int i = 0; i < 15; ++i)
-                                            Rd(fd, &s->raw<std::uint32_t>(
-                                                      656444 + 4 * i),
-                                               4);
+                                            Rd(fd, &s->state.cameraAttachmentBasis[1 + i], 4);
                                         unsigned char bf7 = 0;
                                         Rd(fd, &bf7, 1);        // 0x45DF5F
                                         if (bf7 == 1) {
-                                            s->raw<std::uint32_t>(
-                                                off::kDwordF9ed98) = 1;
+                                            s->state.v9ed98 = 1;
                                             CheckMenuItem(
                                                 GetMenu(main), 0xF7, 8);
                                             SendMessageA(
                                                 GetDlgItem(main, 0x217),
                                                 BM_SETCHECK, 1, 0);
                                         } else {
-                                            s->raw<std::uint32_t>(
-                                                off::kDwordF9ed98) = 0;
+                                            s->state.v9ed98 = 0;
                                             CheckMenuItem(
                                                 GetMenu(main), 0xF7, 0);
                                             SendMessageA(
@@ -1689,8 +1664,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
 
                                         unsigned char b478 = 0;
                                         Rd(fd, &b478, 1);        // 0x45DFEF
-                                        s->raw<unsigned char>(
-                                            off::kByteA0478) =
+                                        s->state.cameraAttachmentTransformSuppressed =
                                             (b478 == 1) ? 1 : 0;
                                         unsigned char b11d = 0;
                                         const int got00E =
@@ -1702,16 +1676,14 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                                 CheckMenuItem(
                                                     GetMenu(main),
                                                     0x11D, 8);
-                                                s->raw<unsigned char>(
-                                                    off::kByteA0197) = 1;
+                                                s->state.a0197 = 1;
                                                 s->Physics()->groundBody
                                                     ->setDeactivationTime(1.0f);
                                             } else {
                                                 CheckMenuItem(
                                                     GetMenu(main),
                                                     0x11D, 0);
-                                                s->raw<unsigned char>(
-                                                    off::kByteA0197) = 0;
+                                                s->state.a0197 = 0;
                                                 s->Physics()->groundBody
                                                     ->setDeactivationTime(-1.0f);
                                             }
@@ -1755,7 +1727,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                   s->state.selfShadowCfgOrUint32 != 0 ? 8 : 0);
     if (slots[s->SelectedModelSlot()] != nullptr &&
         M8(slots[s->SelectedModelSlot()], 0x37C0) != 0 &&
-        s->raw<unsigned char>(760) == 0)
+        s->state.optflag[0] == 0)
         SendMessageA(GetDlgItem(main, 0x1B8), BM_SETCHECK, 1, 0); // 0x45E1C1
     {  // light direction into the physics scene (0x45E1EF..0x45E286)
         float dir[3] = {s->state.gravityX,
@@ -1791,7 +1763,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         }
     }
     swprintf_s(wndText, 0x100, L"MikuMikuDance [%s]",            // 0x45E2A4
-               reinterpret_cast<const wchar_t*>(storage + 0xA0900));
+               reinterpret_cast<const wchar_t*>(s->state.envFileName));
     SetWindowTextW(main, wndText);
 
     // physics key-chain integrity (0x26E8 array, 0x1C stride)
@@ -1912,14 +1884,14 @@ void LoadSceneV1(MMDApp* app, int fd) {
             reinterpret_cast<HWND>(s->state.floatingWindow),
             nullptr, FALSE);
     }
-    if (s->raw<unsigned char>(760) != 0) {
+    if (s->state.optflag[0] != 0) {
         Sub411070(s);                                             // 0x45E7C7
         PanelPaint(s);                                            // 0x45E7CE
     }
     InvalidateRect(main, nullptr, FALSE);                        // 0x45E7DB
     Sub442EB0(s);                                                 // 0x45E7E2
     s->PhysicsResetPending() = 1;
-    s->raw<std::uint32_t>(off::kByteA442C) = 1;
+    s->state.windowLayoutReady = 1;
     s->ApplyTimelineLightState();
     TraceSceneLightState(s, "pmm-v1-load-tail");
     PostViewRefresh(s);                                           // 0x45E7F7

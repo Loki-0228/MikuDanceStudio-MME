@@ -259,7 +259,7 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
     if (app->TimelineSelectionChanged() == 0)
         goto L_repaint;                               // loc_44A437
     memset(app->at(0xA03EC), 0, 0x40);        // 656364 (0xA03EC)
-    if (app->state.optflag0 != 0) {   // 760 (0x2F8)
+    if (app->state.optflag[0] != 0) {   // 760 (0x2F8)
         // ---- display-mode counts (0x448F2A-0x44902F) ---------------------
         // count set flags in the four record arrays (app+0x374 rigid
         // 0x54-stride flag+0x48, app+0x378 joint 0x28-stride flag+0x24,
@@ -404,7 +404,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
             // record -> 0xA0414/0xA0418, qsorted
             std::int32_t* bout = static_cast<std::int32_t*>(
                 ::operator new(static_cast<std::size_t>(boneCnt) * 0x10));
-            app->raw<void*>(0xA0418) = bout;
+            app->TimelineSelectionRecords(TimelineSelectionBand::ModelIk) =
+                reinterpret_cast<TimelineSelectionRecord*>(bout);
             int idx = 2;
             for (int i = 0; i < 0xC350; ++i) {
                 for (int k = 0; k < 6; ++k) {
@@ -417,7 +418,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
                 }
                 idx += 6;
             }
-            qsort(app->raw<void*>(0xA0418), static_cast<std::size_t>(boneCnt),
+            qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelIk),
+                  static_cast<std::size_t>(boneCnt),
                   0x10, CompareFunction);
         }
         // morph-temp records (0x449F56-0x44A1C2): 5 flags per 0x64-stride
@@ -432,7 +434,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
             if (morphCnt > 0) {
                 std::int32_t* mout = static_cast<std::int32_t*>(
                     ::operator new(static_cast<std::size_t>(morphCnt) * 0x10));
-                app->raw<void*>(0xA0420) = mout;
+                app->TimelineSelectionRecords(TimelineSelectionBand::ModelMorph) =
+                    reinterpret_cast<TimelineSelectionRecord*>(mout);
                 int idx = 2;
                 for (int i = 0; i < 0xFA0; ++i) {
                     for (int k = 0; k < 5; ++k) {
@@ -445,7 +448,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
                     }
                     idx += 5;
                 }
-                qsort(app->raw<void*>(0xA0420), static_cast<std::size_t>(morphCnt),
+                qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelMorph),
+                      static_cast<std::size_t>(morphCnt),
                       0x10, CompareFunction);
             }
         }
@@ -461,7 +465,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
             if (ikCnt > 0) {
                 std::int32_t* iout = static_cast<std::int32_t*>(
                     ::operator new(static_cast<std::size_t>(ikCnt) * 0x10));
-                app->raw<void*>(0xA0428) = iout;
+                app->TimelineSelectionRecords(TimelineSelectionBand::ModelBone) =
+                    reinterpret_cast<TimelineSelectionRecord*>(iout);
                 int idx = 2;
                 for (int i = 0; i < 0xC8; ++i) {       // 0x6D60/0x8C
                     for (int k = 0; k < 5; ++k) {
@@ -477,7 +482,7 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
             }
         }
         // fall into the shared qsort site at loc_44A426 with the IK pair.
-        qsort(app->raw<void*>(0xA0428),
+        qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelBone),
               static_cast<std::size_t>(app->raw<std::int32_t>(0xA0424)), 0x10,
               CompareFunction);
     }
@@ -487,6 +492,10 @@ L_repaint:;                                        // loc_44A437
     SelectionReeval(app);                          // 0x430510
     TimelineCanaryArm(app);  // TEMP(debug, keyframe-drag crash)
 }
+
+// x64-safe home for the eight timeline-selection record pointers - see the
+// g_timelineSelectionRecords comment in mmd_app.hpp.
+TimelineSelectionRecord* g_timelineSelectionRecords[8] = {};
 
 // ---- TEMP(debug, keyframe-drag crash) -------------------------------------
 // Snapshot the eight timeline-selection count/ptr slots (0xA03EC..0xA042B)
@@ -563,7 +572,7 @@ void HandleLButtonDown(MMDApp* app) {
     // indexes a 0x65-stride table (model+0x26D0) whose flag at +0x64 is
     // toggled.
     if (rowGateY && x > 4 && x < 0x14) {
-        if (app->state.optflag0 == 0) {  // 760 (0x2F8)
+        if (app->state.optflag[0] == 0) {  // 760 (0x2F8)
             unsigned char* model = app->SelectedModel();
             if (model == nullptr)
                 goto L_tail;
@@ -584,7 +593,7 @@ void HandleLButtonDown(MMDApp* app) {
     // -1-idx, -999 = "bottom" morph row) and dispatches the row-type
     // handlers (model+0x2DC0 byte); display mode goes to S4.
     if (rowGateY && x > 0x14 && x <= 0x5F) {
-        if (app->state.optflag0 != 0) {  // 760 (0x2F8)
+        if (app->state.optflag[0] != 0) {  // 760 (0x2F8)
             // ---- S4: display-mode name column sub-branch (loc_44719F) ---
             if (!app->ShiftModifierActive()) {
                 // clear the accessory-slot selection flag (obj+0x4AC) of all
@@ -822,7 +831,7 @@ void HandleLButtonDown(MMDApp* app) {
         if (app->PlaybackActive() != 0)
             goto L_tail;
         app->TimelineSelectionChanged() = 0;
-        if (app->state.optflag0 != 0) {  // 760 (0x2F8)
+        if (app->state.optflag[0] != 0) {  // 760 (0x2F8)
             // ---- S5a: display-mode selection columns --------------------
             // (0x4473DA-0x4479BB) band selected by this+8, row by
             // (x-100)/13 (magic 0x4EC4EC4F, sar 2).  Selection indices are
@@ -1157,7 +1166,7 @@ void HandleLButtonDown(MMDApp* app) {
             }
         }
         // mode branch (0x44A608-0x44A72B)
-        if (app->state.optflag0 != 0) {  // 760 (0x2F8)
+        if (app->state.optflag[0] != 0) {  // 760 (0x2F8)
             ReloadModels(app);                            // 0x42E640
             Sub411070(app);                               // 0x411070
             Sub411B90(app);                               // 0x411B90

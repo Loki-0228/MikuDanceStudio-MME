@@ -142,7 +142,7 @@ void PostViewRefresh(MMDApp* app) {
 
     char text[260];  // CHAR String[260] @ ebp-108h; sprintf_s count 0x100
 
-    if (app->state.optflag0 != 0) {   // this+0x2F8
+    if (app->state.optflag[0] != 0) {   // this+0x2F8
         // ---- camera / light readout ----------------------------------------
         sprintf_s(text, 0x100, "%1.2f",
                   static_cast<double>(app->CameraPositionX()));

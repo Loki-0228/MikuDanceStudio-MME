@@ -57,9 +57,9 @@ ULONG DownsampleCaptureSurface(MMDApp* app) {
     systemSurface->LockRect(&locked, nullptr, 0);
 
     const std::int32_t targetWidth =
-        app->raw<std::int32_t>(offsets::kDwordRenderw);
+        app->state.renderW;
     const std::int32_t targetHeight =
-        app->raw<std::int32_t>(offsets::kDwordRenderh);
+        app->state.renderH;
     const std::int32_t widthGcd =
         GcdBySubtraction(sourceWidth, targetWidth);
     const std::int32_t targetWidthRatio = targetWidth / widthGcd;

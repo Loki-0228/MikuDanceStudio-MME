@@ -122,7 +122,7 @@ void LoadSceneFile() {
         return;
     }
 
-    app->raw<std::uint32_t>(off::kByteA442C) = 0;              // 0x459055
+    app->state.windowLayoutReady = 0;              // 0x459055
     PathToProjectDir(app->PathWorkspace().projectDirectory,     // 0x45905C
                       app->EnvFileName());
 

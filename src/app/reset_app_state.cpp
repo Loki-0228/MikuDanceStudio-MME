@@ -148,12 +148,12 @@ void ResetAppState(MMDApp* app) {
         app->AviBackgroundTexture() = nullptr;
     }
 
-    if (app->state.optflag0 == 0) {
+    if (app->state.optflag[0] == 0) {
         SendMessageA(GetDlgItem(hwnd, 443), CB_RESETCONTENT, 0, 0);
         SendMessageA(GetDlgItem(hwnd, 434), CB_RESETCONTENT, 0, 0);
         SendMessageA(GetDlgItem(hwnd, 439), BM_CLICK, 0, 0);
         Sub44D780(app);                                          // 0x44E88F
-        app->state.optflag0 = 1;
+        app->state.optflag[0] = 1;
         PostModelReload2(app);                                   // 0x40D940
         HandleWindowSize(app);                                   // 0x443300
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -411,12 +411,12 @@ void ResetAppState(MMDApp* app) {
         SetWindowTextA(hwnd, title);
     }
     app->state.envFileName[0] = 0;
-    app->state.optflag1 = 1;
-    app->state.optflag2 = 1;
-    app->state.optflag3 = 1;
-    app->state.optflag4 = 1;
-    app->state.optflag5 = 1;
-    app->state.optflag6 = 1;
+    app->state.optflag[1] = 1;
+    app->state.optflag[2] = 1;
+    app->state.optflag[3] = 1;
+    app->state.optflag[4] = 1;
+    app->state.optflag[5] = 1;
+    app->state.optflag[6] = 1;
     app->CameraPerspective() = 0;
     SendMessageA(GetDlgItem(hwnd, 446), BM_CLICK, 1, 0);
     app->CameraPosition()[0] = 0.0f;

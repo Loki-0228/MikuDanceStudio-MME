@@ -88,7 +88,7 @@ void RestorePlaybackMenus(MMDApp* app) {
     SetMenuRange(menu, 237, 242, MF_ENABLED);
     EnableMenuItem(menu, 276, MF_ENABLED);
 
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         const int disabled[] = {217, 220, 218, 202, 203, 219, 222, 251, 252};
         for (int id : disabled)
             EnableMenuItem(menu, id, MF_GRAYED);
@@ -321,7 +321,7 @@ void UpdateBoneFrames(MMDApp* app) {
 
     const float frame = static_cast<float>(
         static_cast<double>(cursor) * kFrameRate);
-    if (app->state.optflag0 != 0 ||
+    if (app->state.optflag[0] != 0 ||
         app->state.v9ed98 != 0)
         InitGlobalTracks(app, frame);
     InitAccessoryTracks(app, frame);
@@ -365,9 +365,9 @@ void Sub4341E0(MMDApp* app) {
 
     const bool enable250 =
         (app->raw<std::uint32_t>(645672) == 0 ||
-         app->state.optflag0 != 0) &&
+         app->state.optflag[0] != 0) &&
         !(app->raw<std::uint32_t>(645700) != 0 &&
-          app->state.optflag0 != 0);
+          app->state.optflag[0] != 0);
     EnableMenuItem(GetMenu(hwnd), 250,
                    enable250 ? MF_ENABLED : MF_GRAYED);
     RestorePlaybackMenus(app);
@@ -375,7 +375,7 @@ void Sub4341E0(MMDApp* app) {
     app->PlaybackPhysicsMode() = app->SavedPlaybackPhysicsMode();
 
     unsigned char* activeModel = app->SelectedModel();
-    if (app->raw<std::uint8_t>(offsets::kByte342) != 0) {
+    if (app->state.v342 != 0) {
         if (activeModel != nullptr)
             SavePlaybackUndoSnapshot(app, activeModel);
         const int frame = static_cast<int>(
@@ -406,14 +406,14 @@ void Sub4341E0(MMDApp* app) {
         if (model != nullptr)
             Sub4B4260(model, frame, app->PlaybackPhysicsMode());
     }
-    if (app->state.optflag0 == 0 &&
+    if (app->state.optflag[0] == 0 &&
         activeModel != nullptr)
         Sub4A02C0(activeModel);
 
     app->CameraParentModel() = -1;
     SendMessageA(GetDlgItem(hwnd, 450), CB_SETCURSEL, 0, 0);
 
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         app->ViewOffsetX() = 0.0f;
         app->ViewOffsetY() = 0.0f;
         ReloadModels(app);

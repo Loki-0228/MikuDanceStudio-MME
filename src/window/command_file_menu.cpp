@@ -1182,7 +1182,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // frame counter exceeds the bone count.
     // ------------------------------------------------------------------
     case 219: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         app->raw<std::uint32_t>(kOff48) = 1;
@@ -1237,11 +1237,11 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     case 221: {
         app->raw<std::uint32_t>(kOff50) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByte918) != 0) {
-            app->raw<std::uint8_t>(offsets::kByte918) = 0;
+        if (app->state.groundShadowEnabled != 0) {
+            app->state.groundShadowEnabled = 0;
             CheckMenuItem(GetMenu(MainHwnd(app)), 0xDD, MF_UNCHECKED);
         } else {
-            app->raw<std::uint8_t>(offsets::kByte918) = 1;
+            app->state.groundShadowEnabled = 1;
             CheckMenuItem(GetMenu(MainHwnd(app)), 0xDD, MF_CHECKED);
         }
         break;
@@ -1260,7 +1260,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // reports the count.
     // ------------------------------------------------------------------
     case 222: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         app->raw<std::uint32_t>(kOff40) = 1;
@@ -1605,7 +1605,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // the shifted value turns positive; the chain tail ends the walk.
     // ------------------------------------------------------------------
     case 225: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         app->state.bC = 1;
@@ -1698,7 +1698,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // MB_TOPMOST, then PurgeMorphFrames(app, 3) and the shared purge tail.
     // ------------------------------------------------------------------
     case 226: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         app->state.bC = 1;
@@ -1728,7 +1728,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // morph via Sub49EEE0, using the app+0x9EB7F blink-phase byte.
     // ------------------------------------------------------------------
     case 227: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         unsigned char* model = ActiveModel(app);
@@ -1833,7 +1833,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // 228 (0x004890A7): delete all eyes frames - PurgeMorphFrames(app, 2).
     // ------------------------------------------------------------------
     case 228: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         app->state.bC = 1;
@@ -1867,7 +1867,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     case 250: {
         app->raw<std::uint32_t>(0x6C) = 1;
-        const std::uint8_t opt = app->state.optflag0;
+        const std::uint8_t opt = app->state.optflag[0];
         const bool isAcc = opt != 0;
         const auto& clipboardCounts = app->ClipboardCounts();
         if (isAcc ? clipboardCounts.accessories == 0
@@ -2077,7 +2077,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // beyond belongs to the out-of-scope 282..287 cases.)
     // ------------------------------------------------------------------
     case 229: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         app->SceneModified() = 1;
@@ -2135,7 +2135,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // repaint - the case ends here (0x48DACB..0x48DBFA).
     // ------------------------------------------------------------------
     case 230: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         unsigned char* model = ActiveModel(app);
@@ -2164,7 +2164,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // PurgeMorphFrames(app, 1).
     // ------------------------------------------------------------------
     case 231: {
-        if (app->state.optflag0 != 0) {  // 0x2F8
+        if (app->state.optflag[0] != 0) {  // 0x2F8
             break;
         }
         app->state.bC = 1;
@@ -2217,7 +2217,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 }
             }
             Sub4134E0(app);                                // 0x4134E0
-            if (app->state.optflag0 == 0) {  // 0x2F8
+            if (app->state.optflag[0] == 0) {  // 0x2F8
                 app->CameraAttachmentTransformSuppressed() = 0;
                 PostModelReload(app);                      // 0x41A650
             }
@@ -2230,7 +2230,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             CheckMenuItem(GetMenu(MainHwnd(app)), 0xF7, MF_UNCHECKED);
             SendMessageA(GetDlgItem(MainHwnd(app), 0x217), 0xF1 /*BM_SETCHECK*/,
                          0, 0);
-            if (app->state.optflag0 != 0) {  // 0x2F8
+            if (app->state.optflag[0] != 0) {  // 0x2F8
                 PostViewRefresh(app);                      // 0x40D130
                 PostLanguageSweep2(app);                   // 0x40D070
                 break;
@@ -2376,7 +2376,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     case 242: {
         app->raw<std::uint32_t>(0x4C) = 1;
-        if (app->state.optflag0 == 0) {  // 0x2F8
+        if (app->state.optflag[0] == 0) {  // 0x2F8
             break;
         }
         app->state.bC = 1;

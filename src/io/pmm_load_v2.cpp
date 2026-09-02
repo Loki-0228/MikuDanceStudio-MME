@@ -376,25 +376,24 @@ void Sub450000(MMDApp* app, int fd) {
     s->state.a042C = 0;
     s->state.cameraParentModel = -1;
     s->state.cameraParentBone = 0;
-    s->raw<float>(off::kDwordA043c11) = 0.0f;                   // 0xA0468
-    s->raw<float>(off::kDwordA043c10) = 0.0f;                   // 0xA0464
-    s->raw<float>(off::kDwordA043c8) = 0.0f;                    // 0xA045C
-    s->raw<float>(off::kDwordA043c7) = 0.0f;                    // 0xA0458
-    s->raw<float>(off::kDwordA043c6) = 0.0f;                    // 0xA0454
-    s->raw<float>(off::kDwordA043c5) = 0.0f;                    // 0xA0450
-    s->raw<float>(off::kDwordA043c3) = 0.0f;                    // 0xA0448
-    s->raw<float>(off::kDwordA043c2) = 0.0f;                    // 0xA0444
-    s->raw<float>(off::kDwordA043c1) = 0.0f;                    // 0xA0440
-    s->raw<float>(off::kDwordA043c0) = 0.0f;                    // 0xA043C
-    s->raw<float>(off::kDwordA043c14) = 1.0f;                   // 0xA0474
-    s->raw<float>(off::kDwordA043c9) = 1.0f;                    // 0xA0460
-    s->raw<float>(off::kDwordA043c3 + 4) = 1.0f;                // 0xA044C
+    s->state.cameraAttachmentBasis[12] = 0.0f;                   // 0xA0468
+    s->state.cameraAttachmentBasis[11] = 0.0f;                   // 0xA0464
+    s->state.cameraAttachmentBasis[9] = 0.0f;                    // 0xA045C
+    s->state.cameraAttachmentBasis[8] = 0.0f;                    // 0xA0458
+    s->state.cameraAttachmentBasis[7] = 0.0f;                    // 0xA0454
+    s->state.cameraAttachmentBasis[6] = 0.0f;                    // 0xA0450
+    s->state.cameraAttachmentBasis[4] = 0.0f;                    // 0xA0448
+    s->state.cameraAttachmentBasis[3] = 0.0f;                    // 0xA0444
+    s->state.cameraAttachmentBasis[2] = 0.0f;                    // 0xA0440
+    s->state.cameraAttachmentBasis[1] = 0.0f;                    // 0xA043C
+    s->state.cameraAttachmentBasis[15] = 1.0f;                   // 0xA0474
+    s->state.cameraAttachmentBasis[10] = 1.0f;                    // 0xA0460
+    s->state.cameraAttachmentBasis[5] = 1.0f;                // 0xA044C
     s->state.cameraAttachmentBasis[0] = 1.0f;                   // 0xA0438
     s->state.v9ed98 = 0;               // 0x9ED98
 
     HWND const main = reinterpret_cast<HWND>(s->Hwnd());
-    HINSTANCE const hInst = *reinterpret_cast<HINSTANCE*>(s->storage());
-    unsigned char* const storage = s->storage();
+    HINSTANCE const hInst = static_cast<HINSTANCE>(s->HInstance());
     PathResolutionWorkspace& paths = s->PathWorkspace();
     D3DRenderer* const wrap = s->Renderer();
 
@@ -442,21 +441,21 @@ void Sub450000(MMDApp* app, int fd) {
     }
 
     // ---- header-field reads (0x450208..0x450331) -------------------------
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordRenderw), 4);      // A08D4
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordRenderh), 4);      // A08D8
+    Rd(fd, &s->state.renderW, 4);      // A08D4
+    Rd(fd, &s->state.renderH, 4);      // A08D8
     {
         std::int32_t editFlag = 0;
         Rd(fd, &editFlag, 4);
         if (s->state.floatingWindow == 0)
             s->state.sidebarWidth = editFlag;   // A06C8
         else
-            s->raw<std::uint32_t>(off::kDwordV658748) = editFlag;   // A0D3C
+            s->state.separateWindowSidebarWidth = editFlag;   // A0D3C
     }
     Rd(fd, &s->state.cameraFov, 4);        // fov
     for (int f = 0; f < 7; ++f) {
         unsigned char b = 0;
         Rd(fd, &b, 1);
-        s->raw<unsigned char>(760 + f) = (b == 1) ? 1 : 0;      // 0x2F8..2FE
+        s->state.optflag[f] = (b == 1) ? 1 : 0;      // 0x2F8..2FE
     }
 strcpy_s(text, 0x100, "");                                  // 0x450331
 
@@ -551,7 +550,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
             bool loaded = ModelLoadPMD(                          // 0x45065F
                 model, main, widePath, wrap,
                 static_cast<int>(
-                    reinterpret_cast<std::uintptr_t>(storage + 0xA06CE)),
+                    reinterpret_cast<std::uintptr_t>(s->state.exeDir)),
                 0, s->EnglishUI(), s->Physics(),
                 paths);
             LogPmmModelAttempt(text, widePath, wrap,
@@ -563,11 +562,11 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
             bool skipFrom4 = false;  // r==4: counts/names already consumed
             if (!loaded) {                                      // 0x45066C
                 if (s->EnglishUI() != 0)
-                    sprintf_s(reinterpret_cast<char*>(storage + 0xA442D),
+                    sprintf_s(s->state.statusText,
                               0x100, "Cannot open the model file:%s",
                               workspace.sourceName);
                 else
-                    sprintf_s(reinterpret_cast<char*>(storage + 0xA442D),
+                    sprintf_s(s->state.statusText,
                               0x100, kJpQuoted,
                               workspace.modelName);
                 const INT_PTR r = DialogBoxParamA(
@@ -577,7 +576,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                 if (r == 2 || r == 4) { abortLoad(); return; }   // 0x45426C
                 if (r == 1) {                                   // 0x4506FD
                     SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(
-                        storage + 0xA06CE));
+                        s->state.exeDir));
                     swprintf_s(ofnFile, 0x100, L"%s", ofnFile); // quirk
                     OPENFILENAMEW ofn;
                     std::memset(&ofn, 0, sizeof(ofn));
@@ -593,7 +592,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                     ofn.Flags = 0x1000;
                     ofn.lpstrInitialDir =
                         (GetMenuState(GetMenu(main), 0x12D, 0) & 8)
-                            ? reinterpret_cast<LPCWSTR>(storage + 0xA0D70)
+                            ? reinterpret_cast<LPCWSTR>(s->state.dirModel)
                             : kWUserModel;
                     ofn.lpstrDefExt = L"pmd;pmx";
                     ofn.nMaxFileTitle = 0x100;
@@ -607,13 +606,13 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                         wchar_t* d = ExtractDirFromPath(
                             paths.projectDirectory,
                             ofnFile);
-                        wcscpy_s(reinterpret_cast<wchar_t*>(storage + 0xA0D70),
+                        wcscpy_s(reinterpret_cast<wchar_t*>(s->state.dirModel),
                                  0x3E8, d);
                     }
                     if (!ModelLoadPMD(
                             model, main, ofnFile, wrap,
                             static_cast<int>(reinterpret_cast<
-                                std::uintptr_t>(storage + 0xA06CE)),
+                                std::uintptr_t>(s->state.exeDir)),
                             0, s->EnglishUI(),
                             s->Physics(),
                             paths)) {                             // 0x45431A
@@ -807,13 +806,13 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
 
                     // structure-difference gate (0x4519AF..0x451A44)
                     if (s->EnglishUI() != 0)
-                        sprintf_s(reinterpret_cast<char*>(storage + 0xA442D),
+                        sprintf_s(s->state.statusText,
                                   0x100,
                                   "Model structure is different from pmm."
                                   " file:%s",
                                   workspace.sourceName);
                     else
-                        sprintf_s(reinterpret_cast<char*>(storage + 0xA442D),
+                        sprintf_s(s->state.statusText,
                                   0x100, kJpQuoted,
                                   workspace.modelName);
                     if (workspace.morphsMatch != 0 && workspace.displaysMatch != 0) break;
@@ -851,7 +850,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                         model = slots[slotByte];
                     }
                     SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(
-                        storage + 0xA06CE));
+                        s->state.exeDir));
                     swprintf_s(ofnFile, 0x100, L"%s", ofnFile); // quirk
                     {
                         OPENFILENAMEW ofn;
@@ -869,7 +868,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                         ofn.lpstrInitialDir =
                             (GetMenuState(GetMenu(main), 0x12D, 0) & 8)
                                 ? reinterpret_cast<LPCWSTR>(
-                                      storage + 0xA0D70)
+                                      s->state.dirModel)
                                 : kWUserModel;
                         ofn.lpstrDefExt = L"pmd;pmx";
                         ofn.nMaxFileTitle = 0x100;
@@ -884,14 +883,14 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                             paths.projectDirectory,
                                 ofnFile);
                             wcscpy_s(
-                                reinterpret_cast<wchar_t*>(storage + 0xA0D70),
+                                reinterpret_cast<wchar_t*>(s->state.dirModel),
                                 0x3E8, d);
                         }
                     }
                     if (!ModelLoadPMD(
                             model, main, ofnFile, wrap,
                             static_cast<int>(reinterpret_cast<
-                                std::uintptr_t>(storage + 0xA06CE)),
+                                std::uintptr_t>(s->state.exeDir)),
                             0, s->EnglishUI(),
                             s->Physics(),
                             paths)) {                             // 0x4544FD
@@ -1528,8 +1527,8 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
 
     // ---- post-loop quirk (0x454127) --------------------------------------
     if (slots[s->SelectedModelSlot()] == nullptr &&
-        s->raw<unsigned char>(760) == 0)
-        s->raw<unsigned char>(760) = 1;
+        s->state.optflag[0] == 0)
+        s->state.optflag[0] = 1;
 
     // ---- track free + null (0x45413B..0x454213) ---------------------------
     LogPmmModelStage(fd, "model-loop-complete", modelIdx,
@@ -1590,7 +1589,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                      reinterpret_cast<LPARAM>(name));
     }
     SendMessageA(GetDlgItem(main, 433), CB_RESETCONTENT, 0, 0); // 0x4548BB
-    if (s->raw<unsigned char>(760) != 0) {
+    if (s->state.optflag[0] != 0) {
         if (s->EnglishUI() != 0) {
             SendMessageA(GetDlgItem(main, 433), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("x axis move"));
@@ -1857,7 +1856,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                         s->EnglishUI() != 0 ? "open file" : kJpOpenCaption,
                         0);
             SetCurrentDirectoryW(reinterpret_cast<const wchar_t*>(
-                storage + 0xA06CE));
+                s->state.exeDir));
             swprintf_s(ofnFile, 0x100, L"%s", ofnFile);         // quirk
             OPENFILENAMEW ofn;
             std::memset(&ofn, 0, sizeof(ofn));
@@ -1874,7 +1873,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
             ofn.Flags = 0x1000;
             ofn.lpstrInitialDir =
                 (GetMenuState(GetMenu(main), 0x12D, 0) & 8)
-                    ? reinterpret_cast<LPCWSTR>(storage + 0xA0D70)
+                    ? reinterpret_cast<LPCWSTR>(s->state.dirModel)
                     : kWUserAcc;
             ofn.lpstrDefExt = L"x";
             ofn.nMaxFileTitle = 0x100;
@@ -1893,7 +1892,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                 wchar_t* d = ExtractDirFromPath(
                     paths.projectDirectory,
                     ofnFile);
-                wcscpy_s(reinterpret_cast<wchar_t*>(storage + 0xA0D70),
+                wcscpy_s(reinterpret_cast<wchar_t*>(s->state.dirModel),
                          0x3E8, d);
             }
             if (!LoadAccessoryObject(s, accs[accSlot], ofnFile)) {
@@ -2064,13 +2063,13 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
             SendMessageA(GetDlgItem(main, 531), BM_SETCHECK, 0, 0);
         }
         Rd(fd, &b, 1);                                          // 0x4569E9
-        s->raw<unsigned char>(off::kByte340 + 1) = b ? 1 : 0;
+        s->state.playbackLoopEnabled = b ? 1 : 0;
         SendMessageA(GetDlgItem(main, 411), BM_SETCHECK, b ? 1 : 0, 0);
         Rd(fd, &b, 1);                                          // 0x456A41
-        s->raw<unsigned char>(off::kByte340 + 2) = b ? 1 : 0;
+        s->state.v342 = b ? 1 : 0;
         SendMessageA(GetDlgItem(main, 413), BM_SETCHECK, b ? 1 : 0, 0);
         Rd(fd, &b, 1);                                          // 0x456A99
-        s->raw<unsigned char>(off::kByte9ED99) = b ? 1 : 0;
+        s->state.playbackStartsAtCurrentFrame = b ? 1 : 0;
         SendMessageA(GetDlgItem(main, 414), BM_SETCHECK, b ? 1 : 0, 0);
         std::int32_t v1 = 0, v2 = 0;
         Rd(fd, &v1, 4);                                         // 0x456AF4
@@ -2095,7 +2094,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
         Rd(fd, mbPath, 0x100);                                  // 0x456C43
         ResolveAnsiUserFile(reinterpret_cast<unsigned char*>(wrap),
                             mbPath,
-                            reinterpret_cast<wchar_t*>(storage + 0xD0),
+                            reinterpret_cast<wchar_t*>(s->state.wavPath),
                             0x100, paths);
         if (s->state.waveEnabled != 0)
             LoadWaveFile(s);   // 0x418500 (app-taking; path at +0xD0)
@@ -2196,7 +2195,7 @@ label_708:
             SendMessageA(GetDlgItem(owner, 557), BM_SETCHECK, 0, 0);
         }
         Rd(fd, &b, 1);                                          // 0x45707D
-        s->raw<unsigned char>(2328) = b ? 1 : 0;                // 0x918
+        s->state.groundShadowEnabled = b ? 1 : 0;                // 0x918
         CheckMenuItem(GetMenu(main), 0xDD, b ? 8 : 0);
         Rd(fd, &s->state.fpsLimit, 4); // 0x4570CF
         {
@@ -2221,7 +2220,7 @@ label_708:
         // Keeping the value only in a local makes the menu look correct but
         // leaves the renderer in mode 0, so accessories using screen.bmp see
         // a null screen texture instead of the previous-frame capture.
-        s->raw<std::int32_t>(off::kDword9EB84) = sm;
+        s->state.captureMode = static_cast<std::uint32_t>(sm);
         switch (sm) {
             case 0:
                 CheckMenuItem(GetMenu(main), 0xF3, 8);
@@ -2252,7 +2251,7 @@ label_708:
         s->state.a0CD4 = 0;
         s->state.gravityNoise = 10;
         s->state.gravityMagnitude = 9.8000002f;
-        s->raw<std::uint32_t>(off::kByteA0CC8) = 0;
+        s->state.a0CC8OrUint32 = 0;
         s->state.gravityX = 0.0f;
         s->state.gravityY = -1.0f;
         s->state.gravityZ = 0.0f;
@@ -2267,7 +2266,7 @@ label_708:
         s->SetProjectedShadowAmbientRgb(s->ProjectedShadowAmbientIntensity());
         {
             unsigned char* m = slots[s->SelectedModelSlot()];
-            if (m != nullptr && s->raw<unsigned char>(760) == 0 &&
+            if (m != nullptr && s->state.optflag[0] == 0 &&
                 mdl::Mdl(m)->postLoadFlag2 != 0)
                 SendMessageA(GetDlgItem(main, 441), BM_SETCHECK, 1, 0);
         }
@@ -2418,8 +2417,7 @@ label_708:
     Rd(fd, &s->state.cameraParentBone, 4);
     if (s->state.cameraParentModel >= 0) {
         SendMessageA(GetDlgItem(main, 449), CB_SETCURSEL,
-                     mdl::Mdl(slots[s->raw<std::int32_t>(
-                         off::kDwordA0430)])->comboSelIndex,
+                     mdl::Mdl(slots[s->state.cameraParentModel])->comboSelIndex,
                      0);
     }
     Sub410040(s, s->state.cameraParentModel);       // 0x457D27
@@ -2441,7 +2439,7 @@ label_708:
     // 16 config dwords (0x457E79..0x457F60)
     Rd(fd, &s->state.cameraAttachmentBasis, 4);      // 0xA0438
     for (int i = 0; i < 15; ++i)
-        Rd(fd, &s->raw<std::uint32_t>(656444 + 4 * i), 4);      // 0xA043C..
+        Rd(fd, &s->state.cameraAttachmentBasis[1 + i], 4);      // 0xA043C..
     {
         unsigned char b = 0;
         Rd(fd, &b, 1);                                          // 0x457F6D
@@ -2455,7 +2453,7 @@ label_708:
             SendMessageA(GetDlgItem(main, 535), BM_SETCHECK, 0, 0);
         }
         Rd(fd, &b, 1);                                          // 0x457FFD
-        s->raw<unsigned char>(off::kByteA0478) = (b == 1) ? 1 : 0;
+        s->state.cameraAttachmentTransformSuppressed = (b == 1) ? 1 : 0;
         Rd(fd, &b, 1);                                          // 0x458018
         btRigidBody* const groundBody = s->Physics()->groundBody;
         if (b == 1) {
@@ -2497,7 +2495,7 @@ label_708:
                   s->state.selfShadowCfgOrUint32 != 0 ? 8 : 0);
     {
         unsigned char* m = slots[s->SelectedModelSlot()];
-        if (m != nullptr && s->raw<unsigned char>(760) == 0 &&
+        if (m != nullptr && s->state.optflag[0] == 0 &&
             mdl::Mdl(m)->toonFlag != 0)
             SendMessageA(GetDlgItem(main, 440), BM_SETCHECK, 1, 0);
     }
@@ -2531,7 +2529,7 @@ label_708:
         }
     }
     swprintf_s(wndText, 0x100, L"MikuDanceStudio [%s]",
-               reinterpret_cast<const wchar_t*>(storage + 0xA0900));
+               reinterpret_cast<const wchar_t*>(s->state.envFileName));
     SetWindowTextW(main, wndText);
 
     // record post-processing (0x458309..0x458996)
@@ -2820,7 +2818,7 @@ label_708:
                        554),
             text);
     }
-    if (s->raw<unsigned char>(760) != 0) {
+    if (s->state.optflag[0] != 0) {
         Sub411070(s);                                           // 0x411070
         PanelPaint(s);                                          // 0x414610
     }
@@ -2830,7 +2828,7 @@ label_708:
     InvalidateRect(main, nullptr, FALSE);                       // 0x458F36
     Sub442EB0(s);                                               // 0x442EB0
     s->PhysicsResetPending() = 1;                               // 0x458F43
-    s->raw<std::uint32_t>(off::kByteA442C) = 1;                // 0x458F4C
+    s->state.windowLayoutReady = 1;                // 0x458F4C
 
     s->ApplyTimelineLightState();
     TraceSceneLightState(s, "pmm-load-tail");

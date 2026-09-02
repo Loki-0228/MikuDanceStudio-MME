@@ -274,7 +274,7 @@ void MorphStep(MMDApp* app, HWND hwnd, std::size_t lane, int comboId,
 // keyframe (sub_42D6E0), zeroes the selected bone's local position component
 // and marks its per-frame edit flag.
 void BonePosEdit(MMDApp* app, std::size_t dispOff, std::size_t axis) {
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         app->raw<float>(dispOff) = 0.0f;
         RefreshRequest(-1);
         PostViewRefresh(app);
@@ -300,7 +300,7 @@ void BonePosEdit(MMDApp* app, std::size_t dispOff, std::size_t axis) {
 // stores the rotation quaternion into the bone record (+0x14C) via
 // D3DXQuaternionRotationMatrix, marking the bone flag 0x2D98.
 void BoneRotEdit(MMDApp* app, std::size_t dispOff, int axis) {
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         app->raw<float>(dispOff) = 0.0f;
         RefreshRequest(-1);
         PostViewRefresh(app);
@@ -413,11 +413,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 502/503: option-flag checkbox pair 0x1FC (byte 0x2FC) ----------
     case 502:  // 0x47EA70
-        app->state.optflag4 = 0;
+        app->state.optflag[4] = 0;
         OptionFlagRefresh(app, hwnd);
         break;
     case 503:  // 0x47EA79
-        app->state.optflag4 = 1;
+        app->state.optflag[4] = 1;
         OptionFlagRefresh(app, hwnd);
         break;
 
@@ -524,11 +524,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 528/529: option-flag checkbox pair 0x210 (byte 0x2FD) ----------
     case 528:  // 0x47EA82
-        app->state.optflag5 = 0;
+        app->state.optflag[5] = 0;
         OptionFlagRefresh(app, hwnd);
         break;
     case 529:  // 0x47EA9A
-        app->state.optflag5 = 1;
+        app->state.optflag[5] = 1;
         OptionFlagRefresh(app, hwnd);
         break;
 
@@ -545,13 +545,13 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             app->CameraReferenceMode() =
                 CameraAttachmentReference::SelectedBone;
             SendMessageA(GetDlgItem(hwnd, 0x19C), BM_SETCHECK, 0, 0);
-            if (app->state.optflag0 == 0)
+            if (app->state.optflag[0] == 0)
                 Sub41ACD0(app, oldMode);
         } else {
             // Unchecked: mode byte 0x340 = 0, Sub41ACD0(app, old mode).
             const int oldMode = static_cast<int>(app->CameraReferenceMode());
             app->CameraReferenceMode() = CameraAttachmentReference::None;
-            if (app->state.optflag0 == 0)
+            if (app->state.optflag[0] == 0)
                 Sub41ACD0(app, oldMode);
         }
         break;
@@ -589,7 +589,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
                     Sub413120(app, i);
             }
             Sub4134E0(app);
-            if (app->state.optflag0 == 0) {
+            if (app->state.optflag[0] == 0) {
                 app->CameraAttachmentTransformSuppressed() = 0;
                 Sub41A650(app);  // 0x41A650 post-reload refresh
             }
@@ -599,7 +599,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             // gated on the selected slot (0xA0430 == slot index).
             app->state.v9ed98 = 0;
             CheckMenuItem(GetMenu(hwnd), 0xF7, MF_UNCHECKED);
-            if (app->state.optflag0 == 0) {
+            if (app->state.optflag[0] == 0) {
                 const std::int32_t sel = app->CameraParentModel();
                 if (sel == app->SelectedModelSlot() &&
                     sel >= 0) {
@@ -614,7 +614,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 536: accessory-combo sync 0x218 (combo 0x1B4) ------------------
     case 536: {  // 0x48BF6F
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             // display mode: selected accessory index 0xA042C; when zero the
             // original re-dispatches WM_COMMAND 0x1B3 on the main window.
             const std::int32_t sel =
@@ -656,7 +656,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 543: camera-angle edit box 0x21F -------------------------------
     case 543: {  // 0x48C52F
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             app->CameraDistance() = 0.0f;
             RefreshRequest(-1);
         }
@@ -863,11 +863,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 566/567: option-flag checkbox pair 0x236 (byte 0x2FE) ----------
     case 566:  // 0x47EAA6
-        app->state.optflag6 = 0;
+        app->state.optflag[6] = 0;
         OptionFlagRefresh(app, hwnd);
         break;
     case 567:  // 0x47EAAF
-        app->state.optflag6 = 1;
+        app->state.optflag[6] = 1;
         OptionFlagRefresh(app, hwnd);
         break;
 

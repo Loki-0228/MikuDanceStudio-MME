@@ -279,14 +279,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 0 / 1, then PostModelReload2 + HandleWindowSize + InvalidateRect.
     // ------------------------------------------------------------------
     case 453:
-        app->state.optflag1 = 0;
+        app->state.optflag[1] = 0;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
         break;
 
     case 454:
-        app->state.optflag1 = 1;
+        app->state.optflag[1] = 1;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -297,14 +297,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 0 / 1, same refresh chain.
     // ------------------------------------------------------------------
     case 469:
-        app->state.optflag2 = 0;
+        app->state.optflag[2] = 0;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
         break;
 
     case 470:
-        app->state.optflag2 = 1;
+        app->state.optflag[2] = 1;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -315,14 +315,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 0 / 1, same refresh chain.
     // ------------------------------------------------------------------
     case 488:
-        app->state.optflag3 = 0;
+        app->state.optflag[3] = 0;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
         break;
 
     case 489:
-        app->state.optflag3 = 1;
+        app->state.optflag[3] = 1;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);

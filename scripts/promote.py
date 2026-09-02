@@ -182,11 +182,12 @@ def cmd_apply(map_path):
         text = read(path)
         orig = text
         for name, expr in expanded.items():
-            # receiver-attached or bare call forms; exact offset only
-            ns = r'(?:mikudancestudio::)?(?:offsets|off)::'
+            # receiver-attached or bare call forms; exact offset only;
+            # \s* lets multi-line calls (constant on the next line) match
+            ns = r'\s*(?:mikudancestudio::)?(?:offsets|off)::'
             for pat, rep in (
-                (r'(?:->|\.)?raw<[^>()+]*>\(' + ns + name + r'\)', expr),
-                (r'(?:->|\.)?at\(' + ns + name + r'\)', expr),
+                (r'(?:->|\.)?raw<[^>()+]*>\(' + ns + name + r'\s*\)', expr),
+                (r'(?:->|\.)?at\(' + ns + name + r'\s*\)', expr),
             ):
                 text = re.sub(pat, lambda m, e=expr: _attach(m.group(0), e), text)
         if text != orig:
@@ -205,7 +206,17 @@ def cmd_apply(map_path):
 
 
 def _attach(matched, expr):
-    """expr like ``state.foo`` -> ``->state.foo`` / ``.state.foo`` / bare."""
+    """expr like ``state.foo`` -> ``->state.foo`` / ``.state.foo`` / bare.
+
+    Cast expressions (``reinterpret_cast<T&>(state.x)``) cannot take a
+    receiver prefix; the receiver goes inside the parentheses instead.
+    """
+    m = re.match(r'reinterpret_cast(<[^()]*>)\((.*)$', expr, re.S)
+    if m:
+        inner = m.group(2)
+        if matched.startswith(('->', '.')):
+            inner = matched + inner
+        return f'reinterpret_cast{m.group(1)}({inner}'
     if matched.startswith('->'):
         return '->' + expr
     if matched.startswith('.'):

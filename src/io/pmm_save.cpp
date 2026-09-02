@@ -270,7 +270,7 @@ void SaveSceneFile(MMDApp* app) {
     }
 
     // ---- 1. file header and global block (0x41B1B3..0x41B355) -----------
-    s->raw<std::uint32_t>(off::kByteA442C) = 0;
+    s->state.windowLayoutReady = 0;
     sprintf_s(hdr, 0x100, "Polygon Movie maker 0002");
     // Bytes 25..29 after the 24-char magic + NUL are unspecified stack
     // residue in the original (its sprintf leaves the buffer's prior bytes
@@ -279,21 +279,21 @@ void SaveSceneFile(MMDApp* app) {
     hdr[25] = hdr[26] = hdr[27] = hdr[28] = hdr[29] = 0;
     W(fd, hdr, 0x1E);                                          // 0x41B1C4
 
-    W(fd, &s->raw<std::uint32_t>(off::kDwordRenderw), 4);      // 0x41B1D7
-    W(fd, &s->raw<std::uint32_t>(off::kDwordRenderh), 4);      // 0x41B1EA
+    W(fd, &s->state.renderW, 4);      // 0x41B1D7
+    W(fd, &s->state.renderH, 4);      // 0x41B1EA
     {
         const std::int32_t v = reinterpret_cast<const std::int32_t&>(
             s->state.floatingWindow);
         if (v == 0)
             W(fd, &s->state.sidebarWidth, 4);
         else
-            W(fd, &s->raw<std::uint32_t>(off::kDwordV658748), 4);
+            W(fd, &s->state.separateWindowSidebarWidth, 4);
     }
     W(fd, &s->state.cameraFov, 4);        // 0x41B22E
 
     for (int f = 0; f < 7; ++f) {                              // 0x41B22E..0x41B303
         const unsigned char b =
-            s->raw<unsigned char>(760 + f) != 0;               // 0x2F8..0x2FE
+            s->state.optflag[f] != 0;               // 0x2F8..0x2FE
         W(fd, &b, 1);
     }
     W(fd, &s->SelectedModelSlot(), 1);                         // 0x41B31A
@@ -525,7 +525,7 @@ void SaveSceneFile(MMDApp* app) {
 
     // ---- 3. camera track (0x41C9AE..0x41CE85) ---------------------------
     unsigned char* const cam =
-        *reinterpret_cast<unsigned char**>(&s->raw<std::uint32_t>(off::kDword374));
+        *reinterpret_cast<unsigned char**>(&reinterpret_cast<mdl::CameraKey*&>(s->state.cameraKeyTrack));
     W(fd, cam + 0x00, 4);                                      // 0x41C9AE
     W(fd, cam + 0x04, 4);                                      // 0x41C9C4
     W(fd, cam + 0x08, 4);                                      // 0x41C9DA
@@ -615,7 +615,7 @@ void SaveSceneFile(MMDApp* app) {
 
     // ---- 4. light track (0x41CF51..0x41D207) ----------------------------
     unsigned char* const light =
-        *reinterpret_cast<unsigned char**>(&s->raw<std::uint32_t>(off::kDword378));
+        *reinterpret_cast<unsigned char**>(&reinterpret_cast<mdl::LightKey*&>(s->state.lightKeyTrack));
     W(fd, light + 0x00, 4);                                    // 0x41CF51
     W(fd, light + 0x04, 4);                                    // 0x41CF67
     W(fd, light + 0x08, 4);                                    // 0x41CF80
@@ -745,11 +745,11 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &b, 1);
     }
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByte342) != 0;
+        const unsigned char b = s->state.v342 != 0;
         W(fd, &b, 1);
     }
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByteB9ed99) != 0;
+        const unsigned char b = s->state.playbackStartsAtCurrentFrame != 0;
         W(fd, &b, 1);
     }
     {  // frame edit readbacks 0x199 then 0x19A (asm 0x41DBEA..0x41DC5F)
@@ -766,7 +766,7 @@ void SaveSceneFile(MMDApp* app) {
     }
     WideToSjisPath(text,                                       // 0x41DC85
                    reinterpret_cast<const wchar_t*>(
-                       &s->raw<wchar_t>(off::kWcsWavpath)),
+                       &s->state.wavPath),
                    0x100);
     W(fd, text, 0x100);                                        // 0x41DCB5
     if (s->AviStream() == nullptr) {                            // 0x41DCC1
@@ -801,11 +801,11 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &b, 1);
     }
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByte918) != 0;
+        const unsigned char b = s->state.groundShadowEnabled != 0;
         W(fd, &b, 1);
     }
     W(fd, &s->state.fpsLimit, 4);     // 0xA08E0
-    W(fd, &s->raw<std::uint32_t>(off::kDword9EB84), 4);
+    W(fd, &reinterpret_cast<ScreenCaptureMode&>(s->state.captureMode), 4);
     W(fd, &s->state.accessoryRenderSplitOrder, 4);
     W(fd, &s->ProjectedShadowAmbientIntensity(), 4);
     {
@@ -826,7 +826,7 @@ void SaveSceneFile(MMDApp* app) {
 
     // ---- 8. selection/self-shadow track (0x41DF7C..0x41E25E) ------------
     unsigned char* const sel =
-        *reinterpret_cast<unsigned char**>(&s->raw<std::uint32_t>(off::kDword380));
+        *reinterpret_cast<unsigned char**>(&reinterpret_cast<mdl::GravityKey*&>(s->state.gravityKeyTrack));
     W(fd, sel + 0x00, 4);                                      // 0x41DF7C
     W(fd, sel + 0x04, 4);                                      // 0x41DF95
     W(fd, sel + 0x08, 4);                                      // 0x41DFAB
@@ -884,7 +884,7 @@ void SaveSceneFile(MMDApp* app) {
 
     // ---- 9. self-shadow track (0x41E284..0x41E46F) ----------------------
     unsigned char* const shadow =
-        *reinterpret_cast<unsigned char**>(&s->raw<std::uint32_t>(off::kDword37C));
+        *reinterpret_cast<unsigned char**>(&reinterpret_cast<mdl::SelfShadowKey*&>(s->state.selfShadowKeyTrack));
     W(fd, shadow + 0x00, 4);                                   // 0x41E284
     W(fd, shadow + 0x04, 4);                                   // 0x41E29A
     W(fd, shadow + 0x08, 4);                                   // 0x41E2B0
@@ -930,17 +930,15 @@ void SaveSceneFile(MMDApp* app) {
     }
     W(fd, &s->state.cameraParentModel, 4);
     W(fd, &s->state.cameraParentBone, 4);
-    W(fd, &s->state.cameraAttachmentBasis, 4);      // 0xA0438
+    W(fd, &s->state.cameraAttachmentBasis[0], 4);   // 0xA0438
     for (int i = 0; i < 15; ++i)                               // 0xA043C..A0474
-        W(fd, &s->raw<std::uint32_t>(offsets::kDwordA043c0 +
-                                     static_cast<std::size_t>(i) * 4),
-          4);
+        W(fd, &s->state.cameraAttachmentBasis[1 + i], 4);
     {
         const unsigned char b = s->state.v9ed98 != 0;
         W(fd, &b, 1);                                          // 0x9ED98
     }
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByteA0478) != 0;
+        const unsigned char b = s->state.cameraAttachmentTransformSuppressed != 0;
         W(fd, &b, 1);                                          // 0xA0478
     }
     {
@@ -971,7 +969,7 @@ void SaveSceneFile(MMDApp* app) {
     swprintf_s(title, 0x100, L"MikuDanceStudio [%s]", s->EnvFileName());
     SetWindowTextW(main, title);
     MessageBeep(0x40);
-    s->raw<std::uint32_t>(off::kByteA442C) = 1;
+    s->state.windowLayoutReady = 1;
 }
 
 }  // namespace mikudancestudio

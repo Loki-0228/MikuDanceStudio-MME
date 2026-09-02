@@ -206,7 +206,7 @@ void Sub41A650(MMDApp* app) {
 
 void PostModelReload2(MMDApp* app) {  // 0x40D940
     const bool cameraMode =
-        app->state.optflag0 != 0;
+        app->state.optflag[0] != 0;
 
     const struct {
         int first;
@@ -255,7 +255,7 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     // paste and reverse-paste remain disabled.  A successful copy command
     // enables both controls and stores the record count at 0x9DA24.
     if (!cameraMode &&
-        app->state.optflag5 != 0 &&
+        app->state.optflag[5] != 0 &&
         app->state.v9da24[0] == 0) {
         EnableWindow(MainControl(app, 497), FALSE);
         EnableWindow(MainControl(app, 498), FALSE);
@@ -298,7 +298,7 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
 }
 
 void Sub44D610(MMDApp* app) {  // 0x44D610
-    app->state.optflag0 = 0;
+    app->state.optflag[0] = 0;
     HWND combo = MainControl(app, 433);
     SendMessageA(combo, CB_DELETESTRING, 5, 0);
     SendMessageA(combo, CB_DELETESTRING, 4, 0);
@@ -356,7 +356,7 @@ void Sub44D780(MMDApp* app) {  // 0x44D780
     // Rebuild the camera-mode transform combo exactly as the original does.
     // Item four is the model-mode "all" entry; the three camera entries are
     // appended in its place.
-    app->state.optflag0 = 1;
+    app->state.optflag[0] = 1;
     HWND combo = MainControl(app, 433);
     SendMessageA(combo, CB_DELETESTRING, 4, 0);
     if (app->EnglishUI() != 0) {
@@ -408,7 +408,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
     };
 
     if (selection == 0) {
-        if (app->state.optflag0 == 0) {
+        if (app->state.optflag[0] == 0) {
             SendMessageA(GetDlgItem(hwnd, 443), CB_RESETCONTENT, 0, 0);
             HWND frameCombo = GetDlgItem(hwnd, 434);
             SendMessageA(frameCombo, CB_RESETCONTENT, 0, 0);
@@ -444,7 +444,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
             SendMessageA(frameCombo, CB_SETCURSEL, 0, 0);
             SendMessageA(GetDlgItem(hwnd, 439), BM_SETCHECK, BST_UNCHECKED, 0);
             Sub44D780(app);
-            app->state.optflag0 = 1;
+            app->state.optflag[0] = 1;
             PostModelReload2(app);
             HandleWindowSize(app);
             app->EditMode() = ViewportEditMode::None;
@@ -498,9 +498,9 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
             mdl::Mdl(model)->legIkXOffset = 1.0f;
         }
 
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             Sub44D610(app);
-            app->state.optflag0 = 0;
+            app->state.optflag[0] = 0;
             PostModelReload2(app);
             HandleWindowSize(app);
             InvalidateRect(hwnd, nullptr, FALSE);
@@ -579,7 +579,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
                       : MFS_ENABLED);
     }
 
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         EnableWindow(GetDlgItem(hwnd, 400), FALSE);
         EnableWindow(GetDlgItem(hwnd, 401), FALSE);
     } else {

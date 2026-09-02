@@ -227,7 +227,7 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     CheckMenuItem(GetMenu(hwnd), 0x123, MF_CHECKED);                // 0x429f61
     s.state.depthDeviceEnabled = 1;                   // 0x429f85
 
-    if (s.state.optflag0 == 0) {         // 0x429f8b
+    if (s.state.optflag[0] == 0) {         // 0x429f8b
         unsigned char* model = s.SelectedModel();
         ModelInitMorphSlots(model);                                 // 0x4a89b0
     }

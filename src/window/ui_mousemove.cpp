@@ -28,7 +28,7 @@
 //      (right strip / timeline strip / top strip).
 //   4. 0x444F46  if byte this+0xA03EB != 0: hover row = (X - 0xA018C - 6)
 //      / 13, byte this+0xA0B0D = 1, then the drag-frame remap over the
-//      hovered row's list(s): display mode (optflag0 @0x2F8 != 0) walks
+//      hovered row's list(s): display mode (optflag[0] @0x2F8 != 0) walks
 //      the four fixed band lists (84/40/24/36-byte records via this+0x374/
 //      0x378/0x37C/0x380) and the accessory lists (this+0x384, 60-byte
 //      records) driven by the 16-byte offset records at this+0xA03EC..

@@ -420,7 +420,7 @@ void RenderFrameScene(MMDApp* app) {
     }
 
     // 0x46E214..0x46E554: accessory-dialog or Bullet collision debug pass.
-    if (app->raw<std::uint8_t>(offsets::kByteA0CC8) == 1 ||
+    if (app->state.a0CC8OrUint32 == 1 ||
         app->state.a0b74OrInt32 != 0) {
         device->SetRenderState(D3DRS_LIGHTING, FALSE);
         device->SetTexture(0, nullptr);

@@ -73,7 +73,7 @@ void ApplyFrameToModels(MMDApp* app) {
 
 void RefreshFrameContext(MMDApp* app) {
     const HWND hwnd = static_cast<HWND>(app->Hwnd());
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         ReloadModels(app);
         Sub411070(app);
         Sub411B90(app);

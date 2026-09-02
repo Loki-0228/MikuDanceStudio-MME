@@ -87,7 +87,7 @@ const wchar_t* JpControlText(int id) {
 void LocalizeUI(MMDApp* app) {
     auto& s = *app;
     const bool english = s.EnglishUI() != 0;                       // 658252
-    const bool modelMode = s.state.optflag0 != 0;  // 760
+    const bool modelMode = s.state.optflag[0] != 0;  // 760
 
     HWND combo433 = Dlg(app, 433);
     SendMessageA(combo433, CB_RESETCONTENT, 0, 0);

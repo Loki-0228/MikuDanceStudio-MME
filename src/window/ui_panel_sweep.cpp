@@ -12,7 +12,7 @@
 //      SRCCOPY of (0,0) size (91, listH @ sub+0x1D4E8) erases stale label
 //      text, then DeleteDC; the 200 line-highlight flags (this+0xA04F8)
 //      are zeroed.
-//   2. 0x42F24C  bone-edit mode (optflag0 @0x2F8 == 0), current model slot
+//   2. 0x42F24C  bone-edit mode (optflag[0] @0x2F8 == 0), current model slot
 //      (this+0x910 -> slots @0x780): root line = 604-byte-stride name at
 //      model+0x26BC indexed by model+0x3900 (+20 for EN), highlighted when
 //      the flag byte model+0x2D94[rootIdx] is set.  Link tables
@@ -33,7 +33,7 @@
 //      (-line); each drawn line's record value at model+0x2E88+4*line is
 //      the rigid index or -1-morph.  Frame 1's head line is stored at
 //      model+0x2DBC.
-//   4. 0x42F252  display mode (optflag0 != 0): fixed headers camera / light
+//   4. 0x42F252  display mode (optflag[0] != 0): fixed headers camera / light
 //      / "s shadow" / gravity at y = 17/31/45/59 (EN literals, JP
 //      Shift-JIS カメラ/照 明/セルフ影/重 力 @0x52C980..0x52C964),
 //      highlighted per the toggle bytes this+0xA03E4..0xA03E7.
@@ -151,7 +151,7 @@ void PostLanguageSweep(MMDApp* app) {
 
     std::memset(s.state.buf656632, 0, 0xC8);     // 200 flags
 
-    if (s.state.optflag0 == 0) {
+    if (s.state.optflag[0] == 0) {
         // === bone-edit mode: current model display tree (0x42F744) ========
         unsigned char* model = CurrentModel(app, slotIdx);
         mdl::ModelRecord* const record = mdl::Mdl(model);

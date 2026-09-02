@@ -193,7 +193,7 @@ int ViewportToolAtPoint(MMDApp* app) {
             column = 2;
         if (column >= 0) {
             const bool modelPanel =
-                app->state.optflag0 != 0;
+                app->state.optflag[0] != 0;
             const std::uint32_t axisMode =
                 app->raw<std::uint32_t>(offsets::kDword32C);
             if (fy > upperTop && fy < upperBottom) {
@@ -456,8 +456,7 @@ void BeginOrEndViewportToolDrag(MMDApp* app, int operation) {
             }
         } else if (operation == 21) {
             int& target = app->raw<std::int32_t>(650652);
-            const int limit = app->raw<std::uint8_t>(
-                offsets::kByteOptflag0) != 0 ? 3 : 2;
+            const int limit = app->state.optflag[0] != 0 ? 3 : 2;
             if (++target >= limit)
                 target = 0;
             PostLanguageSweep(app);
@@ -576,7 +575,7 @@ void MouseInteractionBegin(MMDApp* app) {
             app->CameraDistance() -= static_cast<float>(dy) * 0.1f;
             ViewRefreshGate(app);
         } else if (viewMode == ViewportToolAction::CameraPan) {
-            if (app->state.optflag0 != 0)
+            if (app->state.optflag[0] != 0)
                 PanCameraPosition(app, dx, dy);
             else {
                 app->ViewOffsetX() -= static_cast<float>(dx) * DragScale(app);
@@ -685,7 +684,7 @@ void ModeCameraAdjust(MMDApp* app, int axis) {
     else if (SelB3(app)) scale = g_MouseScaleB;       // 0x52E9C0
     else scale = g_MouseScaleC;                       // 0x52D738
     if (target == 2 &&
-        app->state.optflag0 != 0) {
+        app->state.optflag[0] != 0) {
         unsigned char* slot = RegSlotOf(app);
         if (slot != nullptr) {
             float& value = *reinterpret_cast<float*>(slot + kSlotOff[axis]);
@@ -741,7 +740,7 @@ void ModeAngleAdjust(MMDApp* app, int axis) {
     else if (SelB3(app)) scale = 0.0020000000949949026;
     else scale = g_Scale52E8C8;                       // 0x52E8C8
     if (target == 2 &&
-        app->state.optflag0 != 0) {
+        app->state.optflag[0] != 0) {
         unsigned char* slot = RegSlotOf(app);
         if (slot != nullptr) {
             float& value = *reinterpret_cast<float*>(slot + kSlotOff[axis]);

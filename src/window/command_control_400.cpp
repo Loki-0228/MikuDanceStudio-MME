@@ -634,7 +634,7 @@ void Sub4316B0(MMDApp* app) {
     if (app == nullptr) {
         return;
     }
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         auto* camera = app->CameraKeys();
         if (camera[0].selected != 0) {
             ResetCameraRecord(camera[0], true);
@@ -706,7 +706,7 @@ void Sub4316B0(MMDApp* app) {
 
     PanelPaint(app);
     SelectionReeval(app);
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         Sub42E640(app);
         Sub411070(app);
         Sub411B90(app);
@@ -752,7 +752,7 @@ void ResetCameraAttachmentBasis(MMDApp* app) {
 // path applies the 0xA0430/0x910/0x330/0x9ED98 gate and resets the light
 // matrix (0xA0438) to identity.
 void ResetViewVariant(MMDApp* app, float rot, bool gate30C, bool rotIn310) {
-    if (app->state.optflag0 != 0) {
+    if (app->state.optflag[0] != 0) {
         app->CameraRotation()[0] = rotIn310 ? rot : 0.0f;
         app->CameraRotation()[1] = rotIn310 ? 0.0f : rot;
         app->CameraRotation()[2] = 0.0f;
@@ -1058,7 +1058,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // def_47E903, a no-op for this id (control 0x190 != 0x1B4).
     // ------------------------------------------------------------------
     case 400: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             break;
         }
         app->SceneModified() = 1;
@@ -1094,7 +1094,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // app+0xA0CC4) - the stub only takes this + pos).
     // ------------------------------------------------------------------
     case 401: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             break;
         }
         app->SceneModified() = 1;
@@ -1161,7 +1161,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // Sub42E640 (ReloadModels) + PostModelReload, refresh.
     // ------------------------------------------------------------------
     case 407: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             app->CameraRotation()[0] = 1.5707964f;
             app->CameraRotation()[1] = 0.0f;
             app->CameraRotation()[2] = 0.0f;
@@ -1276,8 +1276,8 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             app->PlaybackLoopEnabled() == 0 ? 1 : 0;
         break;
     case 413:
-        app->raw<std::uint8_t>(offsets::kByte342) =
-            app->raw<std::uint8_t>(offsets::kByte342) == 0 ? 1 : 0;
+        app->state.v342 =
+            app->state.v342 == 0 ? 1 : 0;
         break;
     case 414:
         app->PlaybackStartsAtCurrentFrame() =
@@ -1298,13 +1298,13 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             app->CameraReferenceMode() =
                 CameraAttachmentReference::ModelRoot;
             SendMessageA(GetDlgItem(hwnd, 0x213), 0xF1 /*BM_SETCHECK*/, 0, 0);
-            if (app->state.optflag0 != 0) {
+            if (app->state.optflag[0] != 0) {
                 break;
             }
             Sub41ACD0(app, prev);
         } else {
             app->CameraReferenceMode() = CameraAttachmentReference::None;
-            if (app->state.optflag0 != 0) {
+            if (app->state.optflag[0] != 0) {
                 break;
             }
             Sub41ACD0(app, prev);
@@ -1369,7 +1369,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     case 430: {
         const LRESULT sel =
             SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             const std::int32_t idx = FirstSelectedFrame374(app);
             if (idx < 0) {
                 SetFocus(hwnd);
@@ -1419,7 +1419,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->SceneModified() = 1;
         const LRESULT sel =
             SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             auto* keys = app->CameraKeys();
             for (std::int32_t i = 0; i < 10000; ++i) {
                 mdl::CameraKey& key = keys[i];
@@ -1472,7 +1472,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->SceneModified() = 1;
         const LRESULT sel =
             SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             auto* keys = app->CameraKeys();
             for (std::int32_t i = 0; i < 10000; ++i) {
                 mdl::CameraKey& key = keys[i];
@@ -1950,7 +1950,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         GetWindowTextA(GetDlgItem(hwnd, 0x1AA), text, 8);
         const std::int32_t to = atol(text);     // var_A40
         GetWindowTextA(GetDlgItem(hwnd, 0x1B2), text, 20);
-        if (app->state.optflag0 == 0) {
+        if (app->state.optflag[0] == 0) {
             // ---- name-compare chain (loc_482CF2..loc_4831CB) ----
             if (TextEqN(text, kJpAllFrame, 7) || TextEqN(text, "All frame", 10)) {
                 // bone sweep (loc_482D40..482DB2)
@@ -2113,7 +2113,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // other blobs.  Tail: PanelPaint + SelectionReeval (no SetFocus).
     // ------------------------------------------------------------------
     case 416: {
-        if (app->state.optflag0 == 0) {
+        if (app->state.optflag[0] == 0) {
             // ---- model mode (loc_480D1D..loc_4810F3) ----
             unsigned char* model = ActiveModel(app);
             mdl::ModelRecord* modelRecord = mdl::Mdl(model);
@@ -2266,7 +2266,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 420: {
         std::uint32_t minFrame = 0xFFFFFFFFu;  // ebx
-        if (app->state.optflag0 == 0) {
+        if (app->state.optflag[0] == 0) {
             // ---- model mode (loc_483E7C..) ----
             // free the previous camera records' sub-buffers (loc_483E7C)
             if (app->DisplayClipboard() != nullptr &&
@@ -2677,7 +2677,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // Sub411070, Sub411B90, Sub412330, Sub413120 per slot, Sub4134E0).
     // ------------------------------------------------------------------
     case 421: {
-        if (app->state.optflag0 == 0) {
+        if (app->state.optflag[0] == 0) {
             const auto& clipboardCounts = app->ClipboardCounts();
             const std::uint32_t boneSel = clipboardCounts.bones;
             const std::uint32_t morphSel = clipboardCounts.morphs;
@@ -2948,7 +2948,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             Sub4B4260(model, app->state.currentFrame,
                       app->PlaybackPhysicsMode());
         }
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             Sub42E640(app);
             Sub411070(app);
             Sub411B90(app);
@@ -2972,7 +2972,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // mode branch at all).
     // ------------------------------------------------------------------
     case 422: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             break;
         }
         const std::uint32_t boneSel = app->ClipboardCounts().bones;
@@ -3075,7 +3075,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // sub_44C5D0 dialog proc.
     // ------------------------------------------------------------------
     case 424: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             break;
         }
         app->state.bC = 1;

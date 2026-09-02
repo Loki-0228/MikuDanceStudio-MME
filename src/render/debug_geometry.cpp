@@ -508,7 +508,7 @@ void SetupFrameWorldTransform(MMDApp* app) {
     const int targetModel = app->CameraParentModel();
     const int targetBone = app->CameraParentBone();
     unsigned char* target = nullptr;
-    if (app->state.optflag0 != 0 &&
+    if (app->state.optflag[0] != 0 &&
         targetModel < 0) {
         focusX = app->CameraPositionX();
         focusY = app->CameraPositionY();

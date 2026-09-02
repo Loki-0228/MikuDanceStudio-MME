@@ -509,7 +509,7 @@ LRESULT CALLBACK Sub42E270(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 // VA 0x0041E950 - current-FPS getter: camera mode (byte 0x2F8) reports a
 // constant 1.0, model mode the active model's FPS float (+0x31C0).
 float Sub41E950(MMDApp* app) {
-    if (app->state.optflag0 != 0)
+    if (app->state.optflag[0] != 0)
         return 1.0f;
     unsigned char* model = app->SelectedModel();
     return *reinterpret_cast<float*>(model + kModelFps31C0);
@@ -517,7 +517,7 @@ float Sub41E950(MMDApp* app) {
 // VA 0x0041E980 - FPS setter (model mode only): marks the in-dialog and
 // dirty flags, then stores into the active model's FPS float (+0x31C0).
 void Sub41E980(MMDApp* app, float fps) {
-    if (app->state.optflag0 != 0)
+    if (app->state.optflag[0] != 0)
         return;
     app->state.messageSeen = 1;
     app->SceneModified() = 1;
@@ -2123,7 +2123,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // default handler (no-op for menu ids).
     // ------------------------------------------------------------------
     case 251: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             return;
         }
         app->state.bC = 1;
@@ -2139,7 +2139,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 252 (0x0048A219): dialog 0x295 EN / 0x283 JP (sub_44D510).
     // ------------------------------------------------------------------
     case 252: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             return;
         }
         app->state.bC = 1;
@@ -2159,7 +2159,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (app->raw<std::int32_t>(kDwordA0B44) != 0) {
             break;  // jnz def_47E903 (no-op)
         }
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             break;
         }
         HWND dlg = CreateDialogParamA(
@@ -2223,7 +2223,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (app->state.a0B50OrPtr != 0) {
             break;
         }
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             break;
         }
         HWND dlg = CreateDialogParamA(
@@ -2254,7 +2254,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // then 0xA0B64 = 1.
     // ------------------------------------------------------------------
     case 261: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             return;
         }
         app->state.bC = 1;
@@ -2285,7 +2285,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (app->raw<std::int32_t>(kDwordA0B74) != 0) {
             break;
         }
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             return;
         }
         app->raw<std::int32_t>(kOff48) = 1;
@@ -2352,11 +2352,11 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 264: {
         app->raw<std::int32_t>(kOff40) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteA0CC8) != 0) {
-            app->raw<std::uint8_t>(offsets::kByteA0CC8) = 0;
+        if (app->state.a0CC8OrUint32 != 0) {
+            app->state.a0CC8OrUint32 = 0;
             CheckMenuItem(GetMenu(hwnd), 0x108, MF_UNCHECKED);
         } else {
-            app->raw<std::uint8_t>(offsets::kByteA0CC8) = 1;
+            app->state.a0CC8OrUint32 = 1;
             CheckMenuItem(GetMenu(hwnd), 0x108, MF_CHECKED);
         }
         return;
@@ -2500,7 +2500,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // set, then the language sweeps (0x42F1E0 / 0x40D070).
     // ------------------------------------------------------------------
     case 273: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             return;
         }
         app->raw<std::int32_t>(kOff48) = 1;
@@ -2532,7 +2532,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // PanelPaint tail.
     // ------------------------------------------------------------------
     case 274: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             return;
         }
         app->raw<std::int32_t>(kOff30) = 1;
@@ -3024,7 +3024,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // (0x429CB0).
     // ------------------------------------------------------------------
     case 296: {
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             if (english) {
                 MessageBoxA(hwnd, "Please select model!", "open oni data",
                             0x40000 /*MB_TOPMOST*/);
@@ -3140,7 +3140,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         const float kNegPi = Bits32(kFlt52B73Cbits);
         const float kThr = Bits32(kFlt52B740bits);
         app->state.bC = 1;
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             // ---- camera path (0x48A2D9..0x48A407) -----------------------
             const float t0 = app->CameraPositionX();
             const float t1 = app->CameraPositionY();
@@ -3269,7 +3269,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 302: {
         app->raw<std::int32_t>(kOff34) = 1;
-        if (app->state.optflag0 != 0) {
+        if (app->state.optflag[0] != 0) {
             app->CameraPitch() = 0.0f;
             app->CameraYaw() = 0.0f;
             app->CameraRoll() = 0.0f;

@@ -465,11 +465,11 @@ void FrameDriver(MMDApp* app) {
     if (requireLineEnabled && LineCaptureSwitchReady() &&
         InterlockedCompareExchange(&lineModeRequested, 1, 0) == 0) {
         const bool alreadyModelMode =
-            app->state.optflag0 == 0 &&
+            app->state.optflag[0] == 0 &&
             app->EditMode() == ViewportEditMode::Bone;
         if (!alreadyModelMode) {
             Sub44D610(app);
-            app->state.optflag0 = 0;
+            app->state.optflag[0] = 0;
             app->EditMode() = ViewportEditMode::Bone;
             PostLanguageSweep(app);
             PostModelReload2(app);
@@ -525,7 +525,7 @@ void FrameDriver(MMDApp* app) {
             FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
             if (tf) { fputs("frame section8 reload path\n", tf); fclose(tf); }
         }
-        s.raw<std::uint8_t>(off::kByteFa0478) = 0;
+        s.state.cameraAttachmentTransformSuppressed = 0;
         s.ViewOffsetX() = 0.0f;
         s.ViewOffsetY() = 0.0f;
         ReloadModels(app);                                        // 0x42E640

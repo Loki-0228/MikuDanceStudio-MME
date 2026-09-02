@@ -177,7 +177,7 @@ void CmdOpenWave(MMDApp* app) {
         wchar_t dir[1000];
         wcscpy_s(app->DirWave(), 0x3E8, ExtractDirFromPath(dir, path));
         CopyPathW(reinterpret_cast<wchar_t*>(
-                      app->at(offsets::kWcsWavpath)),
+                      app->state.wavPath),
                   path);                                  // 0x42AE40 -> app+0xD0
         LoadWaveFile(app);                                       // 0x418500
         MarkDirty(app);
@@ -315,7 +315,7 @@ void CmdToggleBoneDisplay(MMDApp* app) {
     app->state.v9ed98 ^= 1;            // 650136
 }
 void CmdToggleMorphDisplay(MMDApp* app) {
-    app->raw<unsigned char>(offsets::kByteB9ed99) ^= 1;            // 650137
+    app->state.playbackStartsAtCurrentFrame ^= 1;            // 650137
 }
 void CmdTogglePhysicsDisplay(MMDApp* app) {
     app->state.projectedShadowBlendEnabled ^= 1;            // 650138
