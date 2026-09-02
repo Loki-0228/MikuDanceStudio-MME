@@ -484,7 +484,10 @@ void ShutdownCleanup(MMDApp* app) {
     // ---- 7: accessory-record base + misc frees ----------------------------
     delete s.RecordingCompletionFlag();                         // 0x462DAB
     s.RecordingCompletionFlag() = nullptr;
-    FreeAppField(s, offsets::kPtrA0b7c);                        // 0x462DC4
+    if (s.state.cameraRecordArray != nullptr) {                   // 0x462DC4
+        std::free(s.state.cameraRecordArray);
+        s.state.cameraRecordArray = nullptr;
+    }
 
     // ---- 8: render-side and AVI-config Release() run ----------------------
     ReleaseAppField(s, offsets::kDword304);                     // 0x462DE2

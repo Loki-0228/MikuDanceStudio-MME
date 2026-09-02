@@ -249,67 +249,6 @@ void Sub4220C0(MMDApp* app);  // VA 0x004220C0 (stubs.cpp)
 
 namespace {
 
-// ---------------------------------------------------------------------------
-// App-state offsets used by this family but not yet registered in
-// offsets.hpp (kept file-local until gen_offsets.py catches up).
-// ---------------------------------------------------------------------------
-constexpr std::size_t kOff30 = 0x30;    // dialog-open flag 0x30 (case 274)
-constexpr std::size_t kOff34 = 0x34;    // dialog-open flag 0x34 (case 302)
-constexpr std::size_t kOff38 = 0x38;    // dialog-open flag 0x38 (289/292/275)
-constexpr std::size_t kOff40 = 0x40;    // dialog-open flag 0x40 (264/282/295/297)
-constexpr std::size_t kOff44 = 0x44;    // dialog-open flag 0x44 (267/283)
-constexpr std::size_t kOff48 = 0x48;    // dialog-open flag 0x48 (262/273/276/286)
-constexpr std::size_t kOff4C = 0x4C;    // dialog-open flag 0x4C (266)
-constexpr std::size_t kOff54 = 0x54;    // dialog-open flag 0x54 (255/268)
-constexpr std::size_t kOff58 = 0x58;    // dialog-open flag 0x58 (277)
-constexpr std::size_t kOff5C = 0x5C;    // dialog-open flag 0x5C (256/291)
-constexpr std::size_t kOff60 = 0x60;    // dialog-open flag 0x60 (263/271/279)
-constexpr std::size_t kOff64 = 0x64;    // dialog-open flag 0x64 (257)
-constexpr std::size_t kOff68 = 0x68;    // dialog-open flag 0x68 (258)
-constexpr std::size_t kOff6C = 0x6C;    // dialog-open flag 0x6C (281/284/285)
-constexpr std::size_t kOff74 = 0x74;    // dialog-open flag 0x74 (294)
-
-// Rotation-dialog scratch floats (case 300/302): shared with the dialog
-// procs sub_40FBC0 / sub_40F860 in the original, hence app fields.
-constexpr std::size_t kFltA0B28 = 0xA0B28;  // temp 0 (pos x)
-constexpr std::size_t kFltA0B2C = 0xA0B2C;  // temp 1 (pos y)
-constexpr std::size_t kFltA0B30 = 0xA0B30;  // temp 2 (pos z)
-constexpr std::size_t kFltA0B34 = 0xA0B34;  // temp 3 (rot x / cam2)
-constexpr std::size_t kFltA0B38 = 0xA0B38;  // temp 4 (rot y / cam3)
-constexpr std::size_t kFltA0B3C = 0xA0B3C;  // temp 5 (rot z / cam4)
-constexpr std::size_t kFltA0B40 = 0xA0B40;  // temp 6 (-camangle, camera path)
-
-constexpr std::size_t kDwordA0B44 = 0xA0B44;  // model-info dialog handle (253)
-constexpr std::size_t kDwordA0B74 = 0xA0B74;  // frame-copy dialog handle (262)
-constexpr std::size_t kDwordA0CCC = 0xA0CCC;  // accessory-frame dialog hndl (266)
-constexpr std::size_t kByteA0188 = 0xA0188;   // self-shadow flag mirror (279)
-constexpr std::size_t kByteA03EA = 0xA03EA;   // auto-record source byte (292)
-constexpr std::size_t kByteA03E9 = 0xA03E9;   // auto-frame checkbox flag (297)
-constexpr std::size_t kByteA066D = 0xA066D;   // IK-display flag mirror (271)
-constexpr std::size_t kDwordA02AC = 0xA02AC;  // saved render width (276)
-constexpr std::size_t kDwordA02B0 = 0xA02B0;  // saved render height (276)
-constexpr std::size_t kWcsA9F134 = 0x9F134;   // current render path buffer (276)
-constexpr std::size_t kByteA0B64 = 0xA0B64;   // enhance-model dialog flag (261)
-
-// Dialog-proc state fields (offsets not yet registered in offsets.hpp).
-constexpr std::size_t kDwordA06B8 = 0xA06B8;  // main window handle
-constexpr std::size_t kDwordA0B1C = 0xA0B1C;  // frame-order int array (288/289)
-constexpr std::size_t kDwordA0B48 = 0xA0B48;  // saved wndproc of edit 646 (253)
-constexpr std::size_t kDwordA0B54 = 0xA0B54;  // saved wndproc of edit 667 (259)
-constexpr std::size_t kDwordA0B58 = 0xA0B58;  // model-edge combo 669 cursor (259)
-constexpr std::size_t kDwordA0B5C = 0xA0B5C;  // model-edge combo 673 cursor (259)
-constexpr std::size_t kDwordA0B60 = 0xA0B60;  // model-edge combo 677 cursor (259)
-constexpr std::size_t kDwordA0B6C = 0xA0B6C;  // frame-edit dialog dirty flag (262)
-constexpr std::size_t kDwordA0B78 = 0xA0B78;  // saved wndproc of edit 705 (262)
-constexpr std::size_t kDwordA0B7C = 0xA0B7C;  // camera-frame record array ptr
-constexpr std::size_t kScratchCam = 0xA0B80;  // 172-byte camera-frame scratch (262)
-constexpr std::size_t kDwordA0C2C = 0xA0C2C;  // current camera frame index (262)
-constexpr std::size_t kDwordA0C30 = 0xA0C30;  // bone-frame record array ptr
-constexpr std::size_t kScratchBone = 0xA0C34; // 140-byte bone-frame scratch (262)
-constexpr std::size_t kDwordA0C50 = 0xA0C50;  // saved wndproc of edit 709 (266)
-constexpr std::size_t kDwordA0CC0 = 0xA0CC0;  // current bone frame index (262)
-constexpr std::size_t kByteA0CD4 = 0xA0CD4;   // accessory-frame checkbox 731 (266)
-
 // Model-field offsets (model = slot array app+0x780 [byte app+0x910]).
                                                 // stride: parent dword@0x30,
                                                 // stored pos 0x140..0x148,
@@ -325,16 +264,6 @@ constexpr std::size_t kModelOrder2D7D = 0x2D7D;   // applied order byte (288 OK)
 constexpr std::size_t kModelFps31C0 = 0x31C0;     // current-FPS float (253)
 constexpr std::size_t kModelNames33D8 = 0x33D8;   // enhance-model names, 10 x
                                                   // char[100] (261)
-constexpr std::size_t kDwordA0CD0 = 0xA0CD0;      // saved wndproc of edit 709
-                                                  // capture (266, 0x466370 tail)
-
-// Global frame-table pointer slots (0x460080 OK sweep; each holds a pointer
-// to a 10000-record table: camera 0x54-stride, light 0x28, self-shadow
-// 0x18, gravity 0x24) and the 255 accessory-track pointer array (0x384).
-constexpr std::size_t kOff374Tbl = 0x374;
-constexpr std::size_t kOff378Tbl = 0x378;
-constexpr std::size_t kOff37CTbl = 0x37C;
-constexpr std::size_t kOff380Tbl = 0x380;
 
 // Bit-exact original constants (see fidelity notes in the header).
 inline double Bits64(std::uint64_t b) {
@@ -489,7 +418,7 @@ void Sub43E680(MMDApp* app, HWND hDlg) {  // VA 0x0043E680 frame-control apply
 LRESULT CALLBACK Sub42E270(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     if (msg == WM_KEYDOWN && wParam == VK_RETURN) {  // 0x100 / 0x0D
-        const HWND dlg = app->state.a0B44OrInt32;
+        const HWND dlg = app->state.modelInfoDialog;
         if (hwnd == GetDlgItem(dlg, 0x286 /*646*/)) {
             char buf[8];
             GetWindowTextA(hwnd, buf, 8);
@@ -501,10 +430,8 @@ LRESULT CALLBACK Sub42E270(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
     }
-    return CallWindowProcA(
-        reinterpret_cast<WNDPROC>(
-            app->raw<std::intptr_t>(kDwordA0B48)),
-        hwnd, msg, wParam, lParam);
+    return CallWindowProcA(app->ModelInfoEditProc(),
+                           hwnd, msg, wParam, lParam);
 }
 // VA 0x0041E950 - current-FPS getter: camera mode (byte 0x2F8) reports a
 // constant 1.0, model mode the active model's FPS float (+0x31C0).
@@ -564,10 +491,8 @@ LRESULT CALLBACK Sub45ECC0(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
     }
-    return CallWindowProcA(
-        reinterpret_cast<WNDPROC>(
-            app->raw<std::intptr_t>(kDwordA0B54)),
-        hwnd, msg, wParam, lParam);
+    return CallWindowProcA(app->ModelEdgeEditProc(),
+                           hwnd, msg, wParam, lParam);
 }
 void Sub43C430(HWND hDlg) {  // VA 0x0043C430 model-edge dialog init
     (void)hDlg; /* TODO(port) */
@@ -630,7 +555,8 @@ void Sub41E810(int count, HWND hDlg) {  // VA 0x0041E810 reorder-dialog fill
 // i.e. it addresses slot+1 - a quirk of the original kept as-is.
 void Sub41E910(MMDApp* app, int count, HWND hDlg) {
     (void)hDlg;  // the original's second pushed argument is never read
-    std::int32_t* order = app->raw<std::int32_t*>(kDwordA0B1C);
+    std::int32_t* order =
+        static_cast<std::int32_t*>(app->AccessoryOrderArray());
     for (int i = 0; i < count; ++i) {
         unsigned char* model = app->ModelSlot(order[i]);
         model[kModelOrder2D7D] = static_cast<unsigned char>(i);
@@ -662,10 +588,8 @@ LRESULT CALLBACK Sub466370(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
     }
-    return CallWindowProcA(
-        reinterpret_cast<WNDPROC>(
-            app->raw<std::intptr_t>(kDwordA0CD0)),
-        hwnd, msg, wParam, lParam);
+    return CallWindowProcA(app->AccessoryFrameEditProc(),
+                           hwnd, msg, wParam, lParam);
 }
 // VA 0x0045FD80 - accessory-frame dialog channel apply.  Channels 0..3
 // write the gravity cluster (magnitude / direction X / Y / Z, app+0x9EDC4 /
@@ -746,15 +670,10 @@ void Sub45FD80(MMDApp* app, int idx, float v) {
 // 0x412B20 at the current frame, then RefreshRequest(-4) + PanelPaint.
 void Sub460080(MMDApp* app) {
     app->SceneModified() = 1;
-    mdl::CameraKey* camera = *reinterpret_cast<mdl::CameraKey**>(
-        app->at(kOff374Tbl));
-    mdl::LightKey* light = *reinterpret_cast<mdl::LightKey**>(
-        app->at(kOff378Tbl));
-    mdl::SelfShadowKey* shadow =
-        *reinterpret_cast<mdl::SelfShadowKey**>(
-        app->at(kOff37CTbl));
-    mdl::GravityKey* gravity = *reinterpret_cast<mdl::GravityKey**>(
-        app->at(kOff380Tbl));
+    mdl::CameraKey* camera = app->CameraKeys();
+    mdl::LightKey* light = app->LightKeys();
+    mdl::SelfShadowKey* shadow = app->ShadowKeys();
+    mdl::GravityKey* gravity = app->GravityKeys();
     for (std::size_t i = 0; i < 10000; ++i) {
         camera[i].selected = 0;
         light[i].selected = 0;
@@ -781,7 +700,8 @@ void Sub4403C0(int on) {  // VA 0x004403C0 shadow/edge display toggle
 // model slots for the model whose order byte (+0x2D7C) equals `order` and
 // store slotIndex+1 into the array at app+0xA0B1C.
 void Sub41E7B0(MMDApp* app, int count) {
-    std::int32_t* order = app->raw<std::int32_t*>(kDwordA0B1C);
+    std::int32_t* order =
+        static_cast<std::int32_t*>(app->AccessoryOrderArray());
     for (int ord = 1; ord < count; ++ord) {
         for (int i = 0; i < 100; ++i) {
             unsigned char* model = app->ModelSlot(i);
@@ -799,7 +719,8 @@ void Sub41E7B0(MMDApp* app, int count) {
 // the second argument (dialog) is never read.
 void Sub45EC80(MMDApp* app, int count, HWND hDlg) {
     (void)hDlg;
-    std::int32_t* order = app->raw<std::int32_t*>(kDwordA0B1C);
+    std::int32_t* order =
+        static_cast<std::int32_t*>(app->AccessoryOrderArray());
     for (int i = 1; i < count; ++i) {
         unsigned char* model = app->ModelSlot(order[i] - 1);
         model[kModelOrder2D7C] = static_cast<unsigned char>(i);
@@ -932,8 +853,9 @@ INT_PTR CALLBACK Sub44C7F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
-        app->raw<std::int32_t>(kDwordA0B48) =
-            GetWindowLongPtrA(GetDlgItem(hDlg, 646), GWLP_WNDPROC);
+        app->ModelInfoEditProc() =
+            reinterpret_cast<WNDPROC>(
+                GetWindowLongPtrA(GetDlgItem(hDlg, 646), GWLP_WNDPROC));
         SetWindowLongPtrA(GetDlgItem(hDlg, 646), GWLP_WNDPROC,
                        (LONG)(LONG_PTR)Sub42E270);
         const float fps = Sub41E950(app);  // 0x41E950
@@ -951,7 +873,7 @@ INT_PTR CALLBACK Sub44C7F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_COMMAND:
         if (LOWORD(wParam) == 2) {
             DestroyWindow(hDlg);
-            app->state.a0B44OrInt32 = 0;
+            app->state.modelInfoDialog = nullptr;
             return 1;
         }
         break;
@@ -1027,8 +949,9 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     const HWND hCtrl = reinterpret_cast<HWND>(lParam);
     if (msg == WM_INITDIALOG) {
-        app->raw<std::int32_t>(kDwordA0B54) =
-            GetWindowLongPtrA(GetDlgItem(hDlg, 667), GWLP_WNDPROC);
+        app->ModelEdgeEditProc() =
+            reinterpret_cast<WNDPROC>(
+                GetWindowLongPtrA(GetDlgItem(hDlg, 667), GWLP_WNDPROC));
         SetWindowLongPtrA(GetDlgItem(hDlg, 667), GWLP_WNDPROC,
                        (LONG)(LONG_PTR)Sub45ECC0);
         SetWindowLongPtrA(GetDlgItem(hDlg, 672), GWLP_WNDPROC,
@@ -1043,7 +966,9 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg != WM_COMMAND) {
         return 0;
     }
-    app->raw<std::int32_t>(kDwordA0B6C) = 1;
+    // dirty write: the frame-edit dialog deliberately invalidates the
+    // cached time (original blob reuse of app+0xA0B6C == timeNowHigh)
+    reinterpret_cast<std::int32_t&>(app->state.timeNowHigh) = 1;
     switch (LOWORD(wParam)) {
     case 1:
     case 2:
@@ -1065,7 +990,7 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         return 1;
     case 0x29E: {  // combo 669 next button
-        const int cur = app->raw<std::int32_t>(kDwordA0B58);
+        const int cur = app->ModelEdgeComboCursor(0);
         const int count = static_cast<int>(
             SendMessageA(GetDlgItem(hDlg, 669), 0x146 /*CB_GETCOUNT*/, 0, 0));
         SendMessageA(GetDlgItem(hDlg, 669), 0x14E /*CB_SETCURSEL*/,
@@ -1074,7 +999,7 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case 0x29F: {  // combo 669 prev button
-        int sel = app->raw<std::int32_t>(kDwordA0B58) - 1;
+        int sel = app->ModelEdgeComboCursor(0) - 1;
         if (sel < 0) {
             sel = static_cast<int>(
                       SendMessageA(GetDlgItem(hDlg, 669), 0x146 /*CB_GETCOUNT*/,
@@ -1086,7 +1011,7 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case 0x2A2: {  // combo 673 next button
-        const int cur = app->raw<std::int32_t>(kDwordA0B5C);
+        const int cur = app->ModelEdgeComboCursor(1);
         const int count = static_cast<int>(
             SendMessageA(GetDlgItem(hDlg, 673), 0x146 /*CB_GETCOUNT*/, 0, 0));
         SendMessageA(GetDlgItem(hDlg, 673), 0x14E /*CB_SETCURSEL*/,
@@ -1095,7 +1020,7 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case 0x2A3: {  // combo 673 prev button
-        int sel = app->raw<std::int32_t>(kDwordA0B5C) - 1;
+        int sel = app->ModelEdgeComboCursor(1) - 1;
         if (sel < 0) {
             sel = static_cast<int>(
                       SendMessageA(GetDlgItem(hDlg, 673), 0x146 /*CB_GETCOUNT*/,
@@ -1107,7 +1032,7 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case 0x2A6: {  // combo 677 next button
-        const int cur = app->raw<std::int32_t>(kDwordA0B60);
+        const int cur = app->ModelEdgeComboCursor(2);
         const int count = static_cast<int>(
             SendMessageA(GetDlgItem(hDlg, 677), 0x146 /*CB_GETCOUNT*/, 0, 0));
         SendMessageA(GetDlgItem(hDlg, 677), 0x14E /*CB_SETCURSEL*/,
@@ -1116,7 +1041,7 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case 679: {  // combo 677 prev button
-        int sel = app->raw<std::int32_t>(kDwordA0B60) - 1;
+        int sel = app->ModelEdgeComboCursor(2) - 1;
         if (sel < 0) {
             sel = static_cast<int>(
                       SendMessageA(GetDlgItem(hDlg, 677), 0x146 /*CB_GETCOUNT*/,
@@ -1178,8 +1103,9 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
-        app->raw<std::int32_t>(kDwordA0B78) =
-            GetWindowLongPtrA(GetDlgItem(hDlg, 705), GWLP_WNDPROC);
+        app->FrameCopyEditProc() =
+            reinterpret_cast<WNDPROC>(
+                GetWindowLongPtrA(GetDlgItem(hDlg, 705), GWLP_WNDPROC));
         SetWindowLongPtrA(GetDlgItem(hDlg, 705), GWLP_WNDPROC,
                        (LONG)(LONG_PTR)Sub41EC50);
         for (int i = 709; i <= 723; ++i) {
@@ -1198,7 +1124,9 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg != WM_COMMAND) {
         return 0;
     }
-    app->raw<std::int32_t>(kDwordA0B6C) = 1;
+    // dirty write: the frame-edit dialog deliberately invalidates the
+    // cached time (original blob reuse of app+0xA0B6C == timeNowHigh)
+    reinterpret_cast<std::int32_t&>(app->state.timeNowHigh) = 1;
     switch (LOWORD(wParam)) {
     case 0x2AD:  // camera combo "select"
         Sub41FF30(app);   // 0x41FF30
@@ -1214,7 +1142,8 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         SendMessageA(GetDlgItem(hDlg, 704), 0x144 /*CB_DELETESTRING*/, sel, 0);
         SendMessageA(GetDlgItem(hDlg, 741), 0x144 /*CB_DELETESTRING*/, sel, 0);
         SendMessageA(GetDlgItem(hDlg, 742), 0x144 /*CB_DELETESTRING*/, sel, 0);
-        unsigned char* cam = app->raw<unsigned char*>(kDwordA0B7C);
+        unsigned char* cam =
+            static_cast<unsigned char*>(app->state.cameraRecordArray);
         const std::int32_t curCam = app->state.selAcc;
         for (std::int32_t k = 0; k < 1400000; k += 140) {
             if (*reinterpret_cast<std::int32_t*>(cam + k + 132) >= 0) {
@@ -1271,7 +1200,7 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         Sub43CCD0(hDlg, app->state.selAcc);  // 0x43CCD0
         mikudancestudio::mdl::BoneRecord* bone =
             reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(
-                app->raw<unsigned char*>(kDwordA0C30));
+                app->state.boneRecordArray);
         if (SendMessageA(GetDlgItem(hDlg, 736), 0x146 /*CB_GETCOUNT*/, 0, 0) !=
             0) {
             if (*reinterpret_cast<std::int32_t*>(bone + 132) == 0) {
@@ -1291,7 +1220,7 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         SendMessageA(GetDlgItem(hDlg, 736), 0x144 /*CB_DELETESTRING*/, sel, 0);
         mikudancestudio::mdl::BoneRecord* bone =
             reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(
-                app->raw<unsigned char*>(kDwordA0C30));
+                app->state.boneRecordArray);
         *reinterpret_cast<std::int32_t*>(
             bone + 140 * app->state.sel8c + 132) = -1;
         for (std::int32_t ii = 0; ii < 1400000; ii += 700) {
@@ -1330,77 +1259,82 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     case 0x2D4: {  // copy camera frame to scratch (0x46564E)
         Sub41FF30(app);  // 0x41FF30
-        std::memcpy(app->at(kScratchCam),
-                    app->raw<unsigned char*>(kDwordA0B7C) +
+        std::memcpy(app->CameraFrameScratch(),
+                    static_cast<unsigned char*>(app->state.cameraRecordArray) +
                         172 * app->state.selAcc,
                     0xAC);
         return 0;
     }
     case 0x2D5: {  // restore camera frame from scratch (0x465687)
-        unsigned char* rec = app->raw<unsigned char*>(kDwordA0B7C) +
-                             172 * app->state.selAcc;
+        unsigned char* scratch = app->CameraFrameScratch();
+        unsigned char* rec =
+            static_cast<unsigned char*>(app->state.cameraRecordArray) +
+            172 * app->state.selAcc;
         *reinterpret_cast<std::int32_t*>(rec + 28) =
-            app->raw<std::int32_t>(kScratchCam + 28);
-        rec[80] = app->raw<std::uint8_t>(kScratchCam + 80);
-        rec[81] = app->raw<std::uint8_t>(kScratchCam + 81);
+            *reinterpret_cast<std::int32_t*>(scratch + 28);
+        rec[80] = scratch[80];
+        rec[81] = scratch[81];
         *reinterpret_cast<float*>(rec + 76) =
-            app->raw<float>(kScratchCam + 76);
+            *reinterpret_cast<float*>(scratch + 76);
         *reinterpret_cast<float*>(rec + 88) =
-            app->raw<float>(kScratchCam + 88);
-        std::memcpy(rec + 52, app->at(kScratchCam) + 52, 12);
+            *reinterpret_cast<float*>(scratch + 88);
+        std::memcpy(rec + 52, scratch + 52, 12);
         *reinterpret_cast<float*>(rec + 92) =
-            app->raw<float>(kScratchCam + 92);
-        std::memcpy(rec + 64, app->at(kScratchCam) + 64, 12);
-        rec[36] = app->raw<std::uint8_t>(kScratchCam + 36);
-        std::memcpy(rec + 40, app->at(kScratchCam) + 40, 12);
+            *reinterpret_cast<float*>(scratch + 92);
+        std::memcpy(rec + 64, scratch + 64, 12);
+        rec[36] = scratch[36];
+        std::memcpy(rec + 40, scratch + 40, 12);
         Sub43CCD0(hDlg, app->state.selAcc);  // 0x43CCD0
         return 0;
     }
     case 0x2E2: {  // copy bone frame to scratch (0x465636)
         Sub4204F0(app);  // 0x4204F0
-        std::memcpy(app->at(kScratchBone),
-                    app->raw<unsigned char*>(kDwordA0C30) +
+        std::memcpy(app->BoneFrameScratch(),
+                    static_cast<unsigned char*>(app->state.boneRecordArray) +
                         140 * app->state.sel8c,
                     0x8C);
         return 0;
     }
     case 0x2E3: {  // restore bone frame from scratch (0x465863)
-        unsigned char* rec = app->raw<unsigned char*>(kDwordA0C30) +
-                             140 * app->state.sel8c;
+        unsigned char* scratch = app->BoneFrameScratch();
+        unsigned char* rec =
+            static_cast<unsigned char*>(app->state.boneRecordArray) +
+            140 * app->state.sel8c;
         *reinterpret_cast<std::int32_t*>(rec + 28) =
-            app->raw<std::int32_t>(kScratchBone + 28);
+            *reinterpret_cast<std::int32_t*>(scratch + 28);
         *reinterpret_cast<std::int32_t*>(rec + 32) =
-            app->raw<std::int32_t>(kScratchBone + 32);
-        std::memcpy(rec + 72, app->at(kScratchBone) + 72, 12);
-        std::memcpy(rec + 36, app->at(kScratchBone) + 36, 12);
-        std::memcpy(rec + 108, app->at(kScratchBone) + 108, 12);
-        std::memcpy(rec + 60, app->at(kScratchBone) + 60, 12);
-        std::memcpy(rec + 96, app->at(kScratchBone) + 96, 12);
-        std::memcpy(rec + 48, app->at(kScratchBone) + 48, 12);
-        std::memcpy(rec + 120, app->at(kScratchBone) + 120, 12);
-        std::memcpy(rec + 84, app->at(kScratchBone) + 84, 12);
+            *reinterpret_cast<std::int32_t*>(scratch + 32);
+        std::memcpy(rec + 72, scratch + 72, 12);
+        std::memcpy(rec + 36, scratch + 36, 12);
+        std::memcpy(rec + 108, scratch + 108, 12);
+        std::memcpy(rec + 60, scratch + 60, 12);
+        std::memcpy(rec + 96, scratch + 96, 12);
+        std::memcpy(rec + 48, scratch + 48, 12);
+        std::memcpy(rec + 120, scratch + 120, 12);
+        std::memcpy(rec + 84, scratch + 84, 12);
         Sub4214A0(hDlg, app->state.sel8c);  // 0x4214A0
         return 0;
     }
     case 0x2D6:  // bone frame mode 0
-        app->raw<unsigned char*>(kDwordA0B7C)
+        static_cast<unsigned char*>(app->state.cameraRecordArray)
             [172 * app->state.selAcc + 36] = 0;
         Sub421CE0(hDlg, 0, app->state.selAcc);  // 0x421CE0
         return 0;
     case 0x2D7:  // bone frame mode 1
-        app->raw<unsigned char*>(kDwordA0B7C)
+        static_cast<unsigned char*>(app->state.cameraRecordArray)
             [172 * app->state.selAcc + 36] = 1;
         Sub421CE0(hDlg, 1, app->state.selAcc);  // 0x421CE0
         return 0;
     case 0x2D8:  // bone frame mode 2
-        app->raw<unsigned char*>(kDwordA0B7C)
+        static_cast<unsigned char*>(app->state.cameraRecordArray)
             [172 * app->state.selAcc + 36] = 2;
         Sub421CE0(hDlg, 2, app->state.selAcc);  // 0x421CE0
         return 0;
     case 0x2D9: {  // checkbox 731 checked (0x465B3C)
         EnableWindow(GetDlgItem(hDlg, 731), TRUE);
-        unsigned char* rec = app->raw<unsigned char*>(kDwordA0B7C) +
-                             172 * app->state.selAcc;
+        unsigned char* rec =
+            static_cast<unsigned char*>(app->state.cameraRecordArray) +
+            172 * app->state.selAcc;
         if (IsDlgButtonChecked(hDlg, 731) == 1) {
             rec[80] = 2;
             rec[81] = 1;  // LABEL_95
@@ -1412,15 +1346,17 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     case 0x2DA: {  // checkbox 731 unchecked (0x465BB6)
         EnableWindow(GetDlgItem(hDlg, 731), FALSE);
-        unsigned char* rec = app->raw<unsigned char*>(kDwordA0B7C) +
-                             172 * app->state.selAcc;
+        unsigned char* rec =
+            static_cast<unsigned char*>(app->state.cameraRecordArray) +
+            172 * app->state.selAcc;
         rec[80] = 0;
         rec[81] = 0;
         return 0;
     }
     case 0x2DB: {  // checkbox 731 tri-state click (0x465C14)
-        unsigned char* rec = app->raw<unsigned char*>(kDwordA0B7C) +
-                             172 * app->state.selAcc;
+        unsigned char* rec =
+            static_cast<unsigned char*>(app->state.cameraRecordArray) +
+            172 * app->state.selAcc;
         if (rec[80] == 2) {
             rec[80] = 1;
             rec[81] = 0;  // LABEL_87
@@ -1440,16 +1376,16 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             Sub41FF30(app);     // 0x41FF30
             Sub4204F0(app);     // 0x4204F0
             Sub4220F0(hDlg);    // 0x4220F0
-            if (app->raw<std::int32_t>(kDwordA0B7C) != 0) {
-                std::free(app->raw<void*>(kDwordA0B7C));
-                app->raw<std::int32_t>(kDwordA0B7C) = 0;
+            if (app->state.cameraRecordArray != nullptr) {
+                std::free(app->state.cameraRecordArray);
+                app->state.cameraRecordArray = nullptr;
             }
-            if (app->raw<std::int32_t>(kDwordA0C30) != 0) {
-                std::free(app->raw<void*>(kDwordA0C30));
-                app->raw<std::int32_t>(kDwordA0C30) = 0;
+            if (app->state.boneRecordArray != nullptr) {
+                std::free(app->state.boneRecordArray);
+                app->state.boneRecordArray = nullptr;
             }
             DestroyWindow(hDlg);
-            app->state.a0b74OrInt32 = 0;
+            app->state.frameCopyDialog = nullptr;
             EnableWindow(GetDlgItem(app->state.hwnd, 0x1B4), TRUE);
             EnableWindow(GetDlgItem(app->state.hwnd, 0x198), TRUE);
             if (app->state.englishUI != 0) {
@@ -1467,16 +1403,16 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (LOWORD(wParam) == 2) {
             // Cancel (0x4661E9)
             Sub4220C0(app);  // 0x4220C0 (stubs.cpp)
-            if (app->raw<std::int32_t>(kDwordA0B7C) != 0) {
-                std::free(app->raw<void*>(kDwordA0B7C));
-                app->raw<std::int32_t>(kDwordA0B7C) = 0;
+            if (app->state.cameraRecordArray != nullptr) {
+                std::free(app->state.cameraRecordArray);
+                app->state.cameraRecordArray = nullptr;
             }
-            if (app->raw<std::int32_t>(kDwordA0C30) != 0) {
-                std::free(app->raw<void*>(kDwordA0C30));
-                app->raw<std::int32_t>(kDwordA0C30) = 0;
+            if (app->state.boneRecordArray != nullptr) {
+                std::free(app->state.boneRecordArray);
+                app->state.boneRecordArray = nullptr;
             }
             DestroyWindow(hDlg);
-            app->state.a0b74OrInt32 = 0;
+            app->state.frameCopyDialog = nullptr;
             EnableWindow(GetDlgItem(app->state.hwnd, 0x1B4), TRUE);
             EnableWindow(GetDlgItem(app->state.hwnd, 0x198), TRUE);
             return 0;
@@ -1488,7 +1424,8 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         Sub41FF30(app);  // 0x41FF30
         const int sel = static_cast<int>(
             SendMessageA(GetDlgItem(hDlg, 704), 0x147 /*CB_GETCURSEL*/, 0, 0));
-        unsigned char* cam = app->raw<unsigned char*>(kDwordA0B7C);
+        unsigned char* cam =
+            static_cast<unsigned char*>(app->state.cameraRecordArray);
         for (int idx = 0; idx * 172 < 1720000; ++idx) {
             if (*reinterpret_cast<std::int32_t*>(cam + 172 * idx + 84) == sel) {
                 Sub43CCD0(hDlg, idx);  // 0x43CCD0
@@ -1504,7 +1441,7 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessageA(GetDlgItem(hDlg, 736), 0x147 /*CB_GETCURSEL*/, 0, 0));
         mikudancestudio::mdl::BoneRecord* bone =
             reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(
-                app->raw<unsigned char*>(kDwordA0C30));
+                app->state.boneRecordArray);
         for (int idx = 0; idx * 140 < 1400000; ++idx) {
             if (*reinterpret_cast<std::int32_t*>(bone + 140 * idx + 132) == sel) {
                 Sub4214A0(hDlg, idx);  // 0x4214A0
@@ -1517,10 +1454,11 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         // camera "from" combo (0x465D91): map sel -> record frame field +28
         const int sel = static_cast<int>(
             SendMessageA(GetDlgItem(hDlg, 741), 0x147 /*CB_GETCURSEL*/, 0, 0));
-        unsigned char* cam = app->raw<unsigned char*>(kDwordA0B7C);
+        unsigned char* cam =
+            static_cast<unsigned char*>(app->state.cameraRecordArray);
         mikudancestudio::mdl::BoneRecord* bone =
             reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(
-                app->raw<unsigned char*>(kDwordA0C30));
+                app->state.boneRecordArray);
         unsigned char* target =
             reinterpret_cast<unsigned char*>(
                 bone + app->state.sel8c) + 28;
@@ -1542,10 +1480,11 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         // camera "to" combo (0x465EC5): same mapping into record field +32
         const int sel = static_cast<int>(
             SendMessageA(GetDlgItem(hDlg, 742), 0x147 /*CB_GETCURSEL*/, 0, 0));
-        unsigned char* cam = app->raw<unsigned char*>(kDwordA0B7C);
+        unsigned char* cam =
+            static_cast<unsigned char*>(app->state.cameraRecordArray);
         mikudancestudio::mdl::BoneRecord* bone =
             reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(
-                app->raw<unsigned char*>(kDwordA0C30));
+                app->state.boneRecordArray);
         unsigned char* target =
             reinterpret_cast<unsigned char*>(
                 bone + app->state.sel8c) + 32;
@@ -1565,7 +1504,8 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     if (hCtrl == GetDlgItem(hDlg, 707)) {
         // camera start-frame combo (0x46600B)
-        unsigned char* cam = app->raw<unsigned char*>(kDwordA0B7C);
+        unsigned char* cam =
+            static_cast<unsigned char*>(app->state.cameraRecordArray);
         *reinterpret_cast<std::int32_t*>(
             cam + 172 * app->state.selAcc + 28) =
             static_cast<std::uint16_t>(
@@ -1575,7 +1515,8 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     if (hCtrl == GetDlgItem(hDlg, 708)) {
         // camera end-frame combo (0x466059)
-        unsigned char* cam = app->raw<unsigned char*>(kDwordA0B7C);
+        unsigned char* cam =
+            static_cast<unsigned char*>(app->state.cameraRecordArray);
         cam[172 * app->state.selAcc + 32] =
             static_cast<std::uint8_t>(
                 SendMessageA(GetDlgItem(hDlg, 708), 0x147 /*CB_GETCURSEL*/, 0, 0));
@@ -1629,7 +1570,8 @@ INT_PTR CALLBACK Sub42E370(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                          sel - 1, (LPARAM)buf);
             SendMessageA(GetDlgItem(hDlg, 628), 0x186 /*LB_SETCURSEL*/, sel - 1,
                          0);
-            std::int32_t* arr = app->raw<std::int32_t*>(kDwordA0B1C);
+            std::int32_t* arr =
+                static_cast<std::int32_t*>(app->AccessoryOrderArray());
             const std::int32_t tmp = arr[sel - 1];
             arr[sel - 1] = arr[sel];
             arr[sel] = tmp;
@@ -1649,7 +1591,8 @@ INT_PTR CALLBACK Sub42E370(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                          sel + 1, (LPARAM)buf);
             SendMessageA(GetDlgItem(hDlg, 628), 0x186 /*LB_SETCURSEL*/, sel + 1,
                          0);
-            std::int32_t* arr = app->raw<std::int32_t*>(kDwordA0B1C);
+            std::int32_t* arr =
+                static_cast<std::int32_t*>(app->AccessoryOrderArray());
             const std::int32_t tmp = arr[sel + 1];
             arr[sel + 1] = arr[sel];
             arr[sel] = tmp;
@@ -1659,20 +1602,20 @@ INT_PTR CALLBACK Sub42E370(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (id == 632) {  // OK (0x42E52E)
         Sub41E910(app, g_dword545930, hDlg);  // 0x41E910
         EndDialog(hDlg, 1);
-        if (app->raw<std::int32_t>(kDwordA0B1C) == 0) {
+        if (app->AccessoryOrderArray() == nullptr) {
             return 0;
         }
-        std::free(app->raw<void*>(kDwordA0B1C));
-        app->raw<std::int32_t>(kDwordA0B1C) = 0;
+        std::free(app->AccessoryOrderArray());
+        app->AccessoryOrderArray() = nullptr;
         return 0;
     }
     if (id == 2) {  // Cancel (0x42E57E)
         EndDialog(hDlg, 2);
-        if (app->raw<std::int32_t>(kDwordA0B1C) == 0) {
+        if (app->AccessoryOrderArray() == nullptr) {
             return 0;
         }
-        std::free(app->raw<void*>(kDwordA0B1C));
-        app->raw<std::int32_t>(kDwordA0B1C) = 0;
+        std::free(app->AccessoryOrderArray());
+        app->AccessoryOrderArray() = nullptr;
         return 0;
     }
     return 0;
@@ -1696,8 +1639,11 @@ INT_PTR CALLBACK Sub479E90(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
-        app->raw<std::int32_t>(kDwordA0C50) =
-            GetWindowLongPtrA(GetDlgItem(hDlg, 709), GWLP_WNDPROC);
+        // accessory-frame dialog reuses bone-scratch +28 for the saved
+        // wndproc (original blob-reuse semantics)
+        reinterpret_cast<WNDPROC&>(app->BoneFrameScratch()[28]) =
+            reinterpret_cast<WNDPROC>(
+                GetWindowLongPtrA(GetDlgItem(hDlg, 709), GWLP_WNDPROC));
         for (int i = 709; i <= 713; ++i) {
             SetWindowLongPtrA(GetDlgItem(hDlg, i), GWLP_WNDPROC,
                            (LONG)(LONG_PTR)Sub466370);
@@ -1847,13 +1793,10 @@ INT_PTR CALLBACK Sub40FBC0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         static const std::size_t kEditIds[7] = {637, 638, 639, 640, 641, 642, 644};
-        static const std::size_t kFltOffs[7] = {kFltA0B28, kFltA0B2C, kFltA0B30,
-                                                kFltA0B34, kFltA0B38, kFltA0B3C,
-                                                kFltA0B40};
         char buf[20];
         for (int i = 0; i < 7; ++i) {
             sprintf_s(buf, 0x14, "%7.3f",
-                      static_cast<double>(app->raw<float>(kFltOffs[i])));
+                      static_cast<double>(app->RotationDialogTemp(i)));
             SendMessageA(GetDlgItem(hDlg, kEditIds[i]), 0xC2 /*EM_REPLACESEL*/,
                          0, (LPARAM)buf);
         }
@@ -1866,13 +1809,10 @@ INT_PTR CALLBACK Sub40FBC0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         const WORD id = LOWORD(wParam);
         if (id == 1) {
             static const std::size_t kEditIds[7] = {637, 638, 639, 640, 641, 642, 644};
-            static const std::size_t kFltOffs[7] = {kFltA0B28, kFltA0B2C, kFltA0B30,
-                                                    kFltA0B34, kFltA0B38, kFltA0B3C,
-                                                    kFltA0B40};
             char buf[20];
             for (int i = 0; i < 7; ++i) {
                 GetWindowTextA(GetDlgItem(hDlg, kEditIds[i]), buf, 20);
-                app->raw<float>(kFltOffs[i]) =
+                app->RotationDialogTemp(i) =
                     static_cast<float>(atof(buf));
             }
             EndDialog(hDlg, 1);
@@ -1900,12 +1840,10 @@ INT_PTR CALLBACK Sub40F860(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         static const std::size_t kEditIds[6] = {637, 638, 639, 640, 641, 642};
-        static const std::size_t kFltOffs[6] = {kFltA0B28, kFltA0B2C, kFltA0B30,
-                                                kFltA0B34, kFltA0B38, kFltA0B3C};
         char buf[20];
         for (int i = 0; i < 6; ++i) {
             sprintf_s(buf, 0x14, "%7.3f",
-                      static_cast<double>(app->raw<float>(kFltOffs[i])));
+                      static_cast<double>(app->RotationDialogTemp(i)));
             SendMessageA(GetDlgItem(hDlg, kEditIds[i]), 0xC2 /*EM_REPLACESEL*/,
                          0, (LPARAM)buf);
         }
@@ -1918,12 +1856,10 @@ INT_PTR CALLBACK Sub40F860(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         const WORD id = LOWORD(wParam);
         if (id == 1) {
             static const std::size_t kEditIds[6] = {637, 638, 639, 640, 641, 642};
-            static const std::size_t kFltOffs[6] = {kFltA0B28, kFltA0B2C, kFltA0B30,
-                                                    kFltA0B34, kFltA0B38, kFltA0B3C};
             char buf[20];
             for (int i = 0; i < 6; ++i) {
                 GetWindowTextA(GetDlgItem(hDlg, kEditIds[i]), buf, 20);
-                app->raw<float>(kFltOffs[i]) =
+                app->RotationDialogTemp(i) =
                     static_cast<float>(atof(buf));
             }
             EndDialog(hDlg, 1);
@@ -1959,7 +1895,7 @@ INT_PTR CALLBACK Sub4641F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             SendMessageA(GetDlgItem(app->state.hwnd, 0x1B4),
                          0x146 /*CB_GETCOUNT*/, 0, 0));
         g_dword545938 = count;
-        app->raw<std::int32_t*>(kDwordA0B1C) = new std::int32_t[count];
+        app->AccessoryOrderArray() = new std::int32_t[count];
         char buf[0x100];
         for (int i = 1; i < count; ++i) {
             SendMessageA(GetDlgItem(app->state.hwnd, 0x1B4),
@@ -1987,7 +1923,8 @@ INT_PTR CALLBACK Sub4641F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                          sel - 1, (LPARAM)buf);
             SendMessageA(GetDlgItem(hDlg, 0x274), 0x186 /*LB_SETCURSEL*/,
                          sel - 1, 0);
-            std::int32_t* arr = app->raw<std::int32_t*>(kDwordA0B1C);
+            std::int32_t* arr =
+                static_cast<std::int32_t*>(app->AccessoryOrderArray());
             const std::int32_t tmp = arr[sel + 1];
             arr[sel + 1] = arr[sel];
             arr[sel] = tmp;
@@ -2007,7 +1944,8 @@ INT_PTR CALLBACK Sub4641F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                          sel + 1, (LPARAM)buf);
             SendMessageA(GetDlgItem(hDlg, 0x274), 0x186 /*LB_SETCURSEL*/,
                          sel + 1, 0);
-            std::int32_t* arr = app->raw<std::int32_t*>(kDwordA0B1C);
+            std::int32_t* arr =
+                static_cast<std::int32_t*>(app->AccessoryOrderArray());
             const std::int32_t tmp = arr[sel + 2];
             arr[sel + 2] = arr[sel + 1];
             arr[sel + 1] = tmp;
@@ -2051,20 +1989,20 @@ INT_PTR CALLBACK Sub4641F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         SendMessageA(GetDlgItem(mainWnd, 0x1B4), 0x14E /*CB_SETCURSEL*/, 0, 0);
         Sub45EC80(app, g_dword545938, hDlg);  // 0x45EC80
         EndDialog(hDlg, 1);
-        if (app->raw<std::int32_t>(kDwordA0B1C) == 0) {
+        if (app->AccessoryOrderArray() == nullptr) {
             return 0;
         }
-        std::free(app->raw<void*>(kDwordA0B1C));
-        app->raw<std::int32_t>(kDwordA0B1C) = 0;
+        std::free(app->AccessoryOrderArray());
+        app->AccessoryOrderArray() = nullptr;
         return 0;
     }
     if (id == 2) {  // Cancel (0x464613)
         EndDialog(hDlg, 2);
-        if (app->raw<std::int32_t>(kDwordA0B1C) == 0) {
+        if (app->AccessoryOrderArray() == nullptr) {
             return 0;
         }
-        std::free(app->raw<void*>(kDwordA0B1C));
-        app->raw<std::int32_t>(kDwordA0B1C) = 0;
+        std::free(app->AccessoryOrderArray());
+        app->AccessoryOrderArray() = nullptr;
         return 0;
     }
     return 0;
@@ -2113,7 +2051,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
                  std::uint16_t notify) {
     (void)notify;  // see header: the default handler's notify gate can never
                    // match any id of this family
-    HINSTANCE hInst = app->raw<HINSTANCE>(0);
+    HINSTANCE hInst = static_cast<HINSTANCE>(app->HInstance());
     const bool english = app->state.englishUI != 0;
 
     switch (id) {
@@ -2156,7 +2094,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // sub_44C7F0) as a modeless window stored at app+0xA0B44.
     // ------------------------------------------------------------------
     case 253: {
-        if (app->state.a0B44OrInt32 != 0) {
+        if (app->state.modelInfoDialog != nullptr) {
             break;  // jnz def_47E903 (no-op)
         }
         if (app->state.optflag[0] != 0) {
@@ -2165,7 +2103,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         HWND dlg = CreateDialogParamA(
             hInst, MAKEINTRESOURCEA(english ? 0x296 : 0x285),
             hwnd, Sub44C7F0, 0);
-        app->state.a0B44OrInt32 = dlg;
+        app->state.modelInfoDialog = dlg;
         ShowWindow(dlg, SW_SHOW);
         UpdateWindow(dlg);
         break;
@@ -2282,7 +2220,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // sub_465020) at app+0xA0B74.
     // ------------------------------------------------------------------
     case 262: {
-        if (app->state.a0b74OrInt32 != 0) {
+        if (app->state.frameCopyDialog != nullptr) {
             break;
         }
         if (app->state.optflag[0] != 0) {
@@ -2293,7 +2231,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         HWND dlg = CreateDialogParamA(
             hInst, MAKEINTRESOURCEA(english ? 0x2AC : 0x2AB),
             hwnd, Sub465020, 0);
-        app->state.a0b74OrInt32 = dlg;
+        app->state.frameCopyDialog = dlg;
         ShowWindow(dlg, SW_SHOW);
         UpdateWindow(dlg);
         return;
@@ -2660,8 +2598,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
                 fileBuf);
             Sub42AE20(app->DirUser(), dir);
         }
-        wcscpy_s(reinterpret_cast<wchar_t*>(app->at(kWcsA9F134)),
-                 0x100, fileBuf);
+        wcscpy_s(app->CaptureSavePath(), 0x100, fileBuf);
         D3DRenderer* locale = app->Renderer();
         const std::int32_t oldW = locale->screenWidth;   // 0x1D4E4
         const std::int32_t oldH = locale->screenHeight;  // 0x1D4E8

@@ -477,10 +477,10 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
         EnableWindow(GetDlgItem(hwnd, 422), FALSE);
         SendMessageA(GetDlgItem(hwnd, 440), BM_SETCHECK, BST_UNCHECKED, 0);
         SendMessageA(GetDlgItem(hwnd, 441), BM_SETCHECK, BST_UNCHECKED, 0);
-        HWND optionWindow = app->state.a0B44OrInt32;
+        HWND optionWindow = app->state.modelInfoDialog;
         if (optionWindow != nullptr) {
             DestroyWindow(optionWindow);
-            app->state.a0B44OrInt32 = nullptr;
+            app->state.modelInfoDialog = nullptr;
         }
         SetPhysicsMenuState(hwnd, MFS_DISABLED);
     } else {
@@ -560,7 +560,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
                      hasMainSelection ? TRUE : FALSE);
 
         unsigned char* model = app->SelectedModel();
-        HWND optionWindow = app->state.a0B44OrInt32;
+        HWND optionWindow = app->state.modelInfoDialog;
         if (optionWindow != nullptr && model != nullptr) {
             char text[256]{};
             sprintf_s(text, "%3.2f", mikudancestudio::mdl::Mdl(model)->edgeScale);

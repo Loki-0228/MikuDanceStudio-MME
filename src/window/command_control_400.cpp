@@ -181,22 +181,6 @@ namespace mikudancestudio {
 // App-state offsets used by this family but not yet registered in
 // offsets.hpp (kept file-local until gen_offsets.py catches up).
 // ---------------------------------------------------------------------------
-constexpr std::size_t kOff9E64C = 0x9E64C;  // frameA/30 copy
-constexpr std::size_t kOff9E654 = 0x9E654;  // frameA/30 (play-range start)
-constexpr std::size_t kOff9E658 = 0x9E658;  // frameB/30 (play-range end)
-constexpr std::size_t kOff9EB77 = 0x9EB77;  // IsWindowEnabled snapshot bytes
-                                            // 0x9EB77..0x9EB7D (7 controls)
-constexpr std::size_t kOff9EDA8 = 0x9EDA8;  // timeGetTime low copy
-constexpr std::size_t kOff9EDAC = 0x9EDAC;  // timeGetTime high copy
-constexpr std::size_t kOffA0B1C = 0xA0B1C;  // accessory-dialog buffer
-constexpr std::size_t kOffA0B24 = 0xA0B24;  // accessory-dialog buffer 2
-constexpr std::size_t kOffA0664 = 0xA0664;  // accessory-dialog gate byte
-// Light colour rows (combo 0x1B1 palette): 4 byte rows x 6 entries at
-// 0x9DA0A / 0x9DA10 / 0x9DA16 / 0x9DA1C (R / G / B / unused).
-constexpr std::size_t kOffLightR = 0x9DA0A;  // (offsets.hpp kByteLightA)
-constexpr std::size_t kOffLightG = 0x9DA10;  // (kByteLightB)
-constexpr std::size_t kOffLightB = 0x9DA16;  // (kByteLightC)
-constexpr std::size_t kOffLightD = 0x9DA1C;  // (kByteLightD)
 
 // Model-field offsets (model = slot array app+0x780 [byte app+0x910]).
 constexpr std::size_t kModelBoneFlag2D8D = 0x2D8D;  // checkbox 0x1B7 gate
@@ -504,8 +488,8 @@ void Sub410560(MMDApp* app, int frame) {
     const std::uint32_t absolute = static_cast<std::uint32_t>(frame);
     source.frame =
         absolute - static_cast<std::uint32_t>(app->CurrentFrame());
-    std::memcpy(source.eye, app->at(0x334), sizeof(source.eye));
-    std::memcpy(source.target, app->at(0x310), sizeof(source.target));
+    std::memcpy(source.eye, app->CameraPosition(), sizeof(source.eye));
+    std::memcpy(source.target, app->CameraRotation(), sizeof(source.target));
     source.fov = static_cast<std::int32_t>(
         app->state.cameraFov);
     source.perspective = app->CameraPerspective();
@@ -840,18 +824,18 @@ std::int32_t FirstSelectedBoneKey(unsigned char* model) {
 
 static void ReadBoneCurveChannel(MMDApp* app, const mdl::BoneKey& key,
                                  std::size_t channel, std::size_t row) {
-    app->raw<std::uint8_t>(kOffLightR + row) = key.interpolation[channel];
-    app->raw<std::uint8_t>(kOffLightG + row) = key.interpolation[4 + channel];
-    app->raw<std::uint8_t>(kOffLightB + row) = key.interpolation[8 + channel];
-    app->raw<std::uint8_t>(kOffLightD + row) = key.interpolation[12 + channel];
+    app->state.lightA[row] = key.interpolation[channel];
+    app->state.lightB[row] = key.interpolation[4 + channel];
+    app->state.lightC[row] = key.interpolation[8 + channel];
+    app->state.lightD[row] = key.interpolation[12 + channel];
 }
 
 static void WriteBoneCurveChannel(MMDApp* app, mdl::BoneKey& key,
                                   std::size_t channel, std::size_t row) {
-    key.interpolation[channel] = app->raw<std::uint8_t>(kOffLightR + row);
-    key.interpolation[4 + channel] = app->raw<std::uint8_t>(kOffLightG + row);
-    key.interpolation[8 + channel] = app->raw<std::uint8_t>(kOffLightB + row);
-    key.interpolation[12 + channel] = app->raw<std::uint8_t>(kOffLightD + row);
+    key.interpolation[channel] = app->state.lightA[row];
+    key.interpolation[4 + channel] = app->state.lightB[row];
+    key.interpolation[8 + channel] = app->state.lightC[row];
+    key.interpolation[12 + channel] = app->state.lightD[row];
 }
 
 static void ResetBoneCurveChannel(mdl::BoneKey& key, std::size_t channel) {
@@ -863,18 +847,18 @@ static void ResetBoneCurveChannel(mdl::BoneKey& key, std::size_t channel) {
 
 static void ReadCameraCurveChannel(MMDApp* app, const mdl::CameraKey& key,
                                    std::size_t channel, std::size_t row) {
-    app->raw<std::uint8_t>(kOffLightR + row) = key.interpolation[0][channel];
-    app->raw<std::uint8_t>(kOffLightG + row) = key.interpolation[1][channel];
-    app->raw<std::uint8_t>(kOffLightB + row) = key.interpolation[2][channel];
-    app->raw<std::uint8_t>(kOffLightD + row) = key.interpolation[3][channel];
+    app->state.lightA[row] = key.interpolation[0][channel];
+    app->state.lightB[row] = key.interpolation[1][channel];
+    app->state.lightC[row] = key.interpolation[2][channel];
+    app->state.lightD[row] = key.interpolation[3][channel];
 }
 
 static void WriteCameraCurveChannel(MMDApp* app, mdl::CameraKey& key,
                                     std::size_t channel, std::size_t row) {
-    key.interpolation[0][channel] = app->raw<std::uint8_t>(kOffLightR + row);
-    key.interpolation[1][channel] = app->raw<std::uint8_t>(kOffLightG + row);
-    key.interpolation[2][channel] = app->raw<std::uint8_t>(kOffLightB + row);
-    key.interpolation[3][channel] = app->raw<std::uint8_t>(kOffLightD + row);
+    key.interpolation[0][channel] = app->state.lightA[row];
+    key.interpolation[1][channel] = app->state.lightB[row];
+    key.interpolation[2][channel] = app->state.lightC[row];
+    key.interpolation[3][channel] = app->state.lightD[row];
 }
 
 static void ResetCameraCurveChannel(mdl::CameraKey& key,
@@ -1230,19 +1214,19 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         }
         app->PlaybackEndSeconds() = FrameToSeconds(end);
         app->PlaybackCursorSeconds() = app->PlaybackStartSeconds();
-        app->raw<std::uint8_t>(kOff9EB77) =
+        app->state.playbackEnabledSnapshot[0] =
             IsWindowEnabled(GetDlgItem(hwnd, 0x1F1)) ? 1 : 0;
-        app->raw<std::uint8_t>(kOff9EB77 + 1) =
+        app->state.playbackEnabledSnapshot[1] =
             IsWindowEnabled(GetDlgItem(hwnd, 0x1F2)) ? 1 : 0;
-        app->raw<std::uint8_t>(kOff9EB77 + 4) =
+        app->state.playbackEnabledSnapshot[4] =
             IsWindowEnabled(GetDlgItem(hwnd, 0x1AF)) ? 1 : 0;
-        app->raw<std::uint8_t>(kOff9EB77 + 2) =
+        app->state.playbackEnabledSnapshot[2] =
             IsWindowEnabled(GetDlgItem(hwnd, 0x1A5)) ? 1 : 0;
-        app->raw<std::uint8_t>(kOff9EB77 + 3) =
+        app->state.playbackEnabledSnapshot[3] =
             IsWindowEnabled(GetDlgItem(hwnd, 0x1A6)) ? 1 : 0;
-        app->raw<std::uint8_t>(kOff9EB77 + 5) =
+        app->state.playbackEnabledSnapshot[5] =
             IsWindowEnabled(GetDlgItem(hwnd, 0x190)) ? 1 : 0;
-        app->raw<std::uint8_t>(kOff9EB77 + 6) =
+        app->state.playbackEnabledSnapshot[6] =
             IsWindowEnabled(GetDlgItem(hwnd, 0x191)) ? 1 : 0;
         app->PlaybackActive() = 1;
         UpdateBoneFrames(app);  // 0x433A40
@@ -1260,10 +1244,8 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
                           static_cast<double>(app->PlaybackStartSeconds()));
             }
         }
-        app->raw<std::uint32_t>(kOff9EDA8) =
-            app->raw<std::uint32_t>(offsets::kDwordTimenowlo);
-        app->raw<std::uint32_t>(kOff9EDAC) =
-            app->raw<std::uint32_t>(offsets::kDwordTimenowhi);
+        app->PlaybackClockAnchorLow() = app->TimeNowLow();
+        app->PlaybackClockAnchorHigh() = app->TimeNowHigh();
         break;
     }
 
@@ -1626,19 +1608,19 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (MessageBoxA(hwnd, text, kCaptionDelModelJp, flags) != 1) {
             break;
         }
-        if (app->state.a0b74OrInt32 != 0) {
+        if (app->state.frameCopyDialog != 0) {
             Sub4220C0(app);
-            if (app->raw<void*>(offsets::kPtrA0b7c) != nullptr) {
-                free(app->raw<void*>(offsets::kPtrA0b7c));
-                app->raw<void*>(offsets::kPtrA0b7c) = nullptr;
+            if (app->state.cameraRecordArray != nullptr) {
+                free(app->state.cameraRecordArray);
+                app->state.cameraRecordArray = nullptr;
             }
-            if (app->raw<void*>(offsets::kPtrA0c30) != nullptr) {
-                free(app->raw<void*>(offsets::kPtrA0c30));
-                app->raw<void*>(offsets::kPtrA0c30) = nullptr;
+            if (app->state.boneRecordArray != nullptr) {
+                free(app->state.boneRecordArray);
+                app->state.boneRecordArray = nullptr;
             }
             DestroyWindow(reinterpret_cast<HWND>(
-                app->state.a0b74OrInt32));
-            app->state.a0b74OrInt32 = nullptr;
+                app->state.frameCopyDialog));
+            app->state.frameCopyDialog = nullptr;
             EnableWindow(GetDlgItem(hwnd, 0x1B4), TRUE);
             EnableWindow(GetDlgItem(hwnd, 0x198), TRUE);
         }
@@ -1889,9 +1871,9 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 442: {
         app->state.bC = 1;
-        app->raw<std::uint8_t>(offsets::kByteA0665) = 1;
+        app->state.a0665 = 1;
         const std::intptr_t result =
-            DialogBoxParamA(app->raw<HINSTANCE>(0),
+            DialogBoxParamA(static_cast<HINSTANCE>(app->HInstance()),
                             app->state.englishUI != 0
                                 ? reinterpret_cast<LPCSTR>(0x329)
                                 : reinterpret_cast<LPCSTR>(0x328),
@@ -1900,20 +1882,20 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             break;
         }
         app->SceneModified() = 1;
-        app->raw<std::uint8_t>(offsets::kByteA0665) = 0;
-        if (app->raw<void*>(kOffA0B1C) != nullptr) {
-            free(app->raw<void*>(kOffA0B1C));
-            app->raw<void*>(kOffA0B1C) = nullptr;
+        app->state.a0665 = 0;
+        if (app->AccessoryOrderArray() != nullptr) {
+            free(app->AccessoryOrderArray());
+            app->AccessoryOrderArray() = nullptr;
         }
-        if (app->raw<void*>(kOffA0B24) != nullptr) {
-            free(app->raw<void*>(kOffA0B24));
-            app->raw<void*>(kOffA0B24) = nullptr;
+        if (app->AccessoryEditArray() != nullptr) {
+            free(app->AccessoryEditArray());
+            app->AccessoryEditArray() = nullptr;
         }
         if (app->state.a0668OrUint32 != nullptr) {
             free(app->state.a0668OrUint32);
             app->state.a0668OrUint32 = nullptr;
         }
-        if (app->raw<std::uint8_t>(kOffA0664) == 0) {
+        if (app->AccessoryApplyGate() == 0) {
             break;
         }
         unsigned char* model = ActiveModel(app);
@@ -3080,11 +3062,11 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         }
         app->state.bC = 1;
         if (app->state.englishUI != 0) {
-            DialogBoxParamA(app->raw<HINSTANCE>(0),
+            DialogBoxParamA(static_cast<HINSTANCE>(app->HInstance()),
                             reinterpret_cast<LPCSTR>(0x28C), hwnd,
                             &Sub44C5D0, 0);
         } else {
-            DialogBoxParamA(app->raw<HINSTANCE>(0),
+            DialogBoxParamA(static_cast<HINSTANCE>(app->HInstance()),
                             reinterpret_cast<LPCSTR>(0x25E), hwnd,
                             &Sub44C5D0, 0);
         }

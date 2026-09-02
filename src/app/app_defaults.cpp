@@ -106,14 +106,14 @@ void MMDApp::InitDefaults() {
     s.PlaybackStartsAtCurrentFrame() = 0;
     state.a0B10 = 0;
     s.GroundShadowColorDialog() = nullptr;
-    state.a0B44OrInt32 = nullptr;
+    state.modelInfoDialog = nullptr;
     state.projectedShadowBlendEnabled = 1;
     state.v9ed9c = 0;
     state.englishUI = 1;
     FrameRangeDialog() = nullptr;
     s.EnhancedModelDirty() = 0;
-    state.a0b74OrInt32 = nullptr;
-    state.a0B7COrInt32 = nullptr;
+    state.frameCopyDialog = nullptr;
+    state.cameraRecordArray = nullptr;
     // Frame-config trio 0xA0B00/0xA0B04/0xA0B08 (start frame / end frame /
     // fps).  Original InitDefaults leaves these alone - the ONLY writer in
     // the whole binary is the frame-range dialog OK handler (0x40F3C4:

@@ -222,7 +222,7 @@ void HandleLButtonDblClk(MMDApp* app) {
                 // gate flag read BEFORE the 0xA02B6 store (asm zf capture)
                 const bool gate =
                     app->state.automaticFrameAdvanceEnabled == 0;  // 656361 (0xA03E9)
-                app->raw<std::uint8_t>(offsets::kByteA02B6) = 1;  // 656054 (0xA02B6)
+                app->AudioSeekReady() = 1;  // 0xA02B6
                 if (gate) {
                     SetFrameNormalized(app->FrameNormalization());  // 0x4C2B80
                     const std::int32_t v31 =

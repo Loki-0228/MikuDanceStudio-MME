@@ -343,7 +343,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
         // ---- edit-mode stats (loc_4497A1-0x44A426) ------------------------
         // count the 6 bone display flags (model+0x26E0, 0x168-stride,
         // flags at +0x38+i*0x3C) into 0xA0414
-        std::int32_t& boneCnt = app->raw<std::int32_t>(0xA0414);   // 656404
+        std::int32_t& boneCnt =
+            app->TimelineSelectionCount(TimelineSelectionBand::ModelIk);
         boneCnt = 0;
         unsigned char* m = ActiveModel(app);
         if (m == nullptr)
@@ -424,7 +425,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
         }
         // morph-temp records (0x449F56-0x44A1C2): 5 flags per 0x64-stride
         // record -> 0xA041C/0xA0420, qsorted
-        std::int32_t& morphCnt = app->raw<std::int32_t>(0xA041C);   // 656412
+        std::int32_t& morphCnt =
+            app->TimelineSelectionCount(TimelineSelectionBand::ModelMorph);
         morphCnt = 0;
         {
             unsigned char* mm = ActiveModel(app);
@@ -455,7 +457,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
         }
         // IK-temp records (0x44A1C2-0x44A426): 5 flags per 0x8C-stride
         // record -> 0xA0424/0xA0428, qsorted at loc_44A426
-        std::int32_t& ikCnt = app->raw<std::int32_t>(0xA0424);     // 656420
+        std::int32_t& ikCnt =
+            app->TimelineSelectionCount(TimelineSelectionBand::ModelBone);
         ikCnt = 0;
         {
             unsigned char* mm = ActiveModel(app);
@@ -483,8 +486,9 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
         }
         // fall into the shared qsort site at loc_44A426 with the IK pair.
         qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelBone),
-              static_cast<std::size_t>(app->raw<std::int32_t>(0xA0424)), 0x10,
-              CompareFunction);
+              static_cast<std::size_t>(
+                  app->TimelineSelectionCount(TimelineSelectionBand::ModelBone)),
+              0x10, CompareFunction);
     }
 L_repaint:;                                        // loc_44A437
     PanelPaint(app);                               // 0x414610
@@ -537,7 +541,7 @@ void TimelineCanaryDisarm() {
 void HandleLButtonDown(MMDApp* app) {
     // ---- S1: guard 0xA0274 + client rect + early-out gate ------------
     // (0x446A70-0x446B00)
-    if (app->raw<std::uint8_t>(0xA0274) != 0)                     // 655988
+    if (app->FullscreenMode() != 0)
         goto L_tail;                                              // loc_44A980
 
     // TEMP(build fix, physics session): wrapper scope so the early
@@ -557,7 +561,7 @@ void HandleLButtonDown(MMDApp* app) {
     // original): y <= bottom-0x9E(158) && x <= sidebar+6 &&
     // [0xA0D38]==0 && sidebar <= x.
     if (y <= rc.bottom - 0x9E && x <= sidebar + 6 &&
-        app->raw<std::int32_t>(0xA0D38) == 0 && sidebar <= x) {
+        app->FloatingWindow() == nullptr && sidebar <= x) {
         app->SidebarResizeDragging() = 1;
         app->WindowLayoutReady() = 0;
         goto L_tail;
@@ -608,50 +612,51 @@ void HandleLButtonDown(MMDApp* app) {
                             obj[0x4AC] = 0;
                     }
                 }
-                app->raw<std::uint8_t>(0xA03E4) = 0;                 // 656356
-                app->raw<std::uint8_t>(0xA03E5) = 0;                 // 656357
-                app->raw<std::uint8_t>(0xA03E6) = 0;                 // 656358
-                app->raw<std::uint8_t>(0xA03E7) = 0;                 // 656359
+                app->ClearGlobalTimelineTrackSelection();  // 0xA03E4..0xA03E7
             }
             // loc_447210: column-band toggles (band selected by this+8)
             if (y >= 0xA0 && y < 0xAE) {                             // bone band
-                app->raw<std::uint8_t>(0xA03E4) =
-                    app->raw<std::uint8_t>(0xA03E4) == 0 ? 1 : 0;
+                app->GlobalTrackSelected(GlobalTimelineTrack::Camera) =
+                    app->GlobalTrackSelected(GlobalTimelineTrack::Camera) == 0
+                        ? 1 : 0;
                 PostLanguageSweep(app);
                 goto L_tail;
             }
             if (y >= 0xAE && y < 0xBC) {                             // morph band
-                app->raw<std::uint8_t>(0xA03E5) =
-                    app->raw<std::uint8_t>(0xA03E5) == 0 ? 1 : 0;
+                app->GlobalTrackSelected(GlobalTimelineTrack::Light) =
+                    app->GlobalTrackSelected(GlobalTimelineTrack::Light) == 0
+                        ? 1 : 0;
                 PostLanguageSweep(app);
                 goto L_tail;
             }
             if (y >= 0xBC && y < 0xCA) {                             // IK band
-                app->raw<std::uint8_t>(0xA03E6) =
-                    app->raw<std::uint8_t>(0xA03E6) == 0 ? 1 : 0;
+                app->GlobalTrackSelected(GlobalTimelineTrack::SelfShadow) =
+                    app->GlobalTrackSelected(GlobalTimelineTrack::SelfShadow) == 0
+                        ? 1 : 0;
                 PostLanguageSweep(app);
                 goto L_tail;
             }
             if (y >= 0xCA && y < 0xD8) {                             // rigid band
-                app->raw<std::uint8_t>(0xA03E7) =
-                    app->raw<std::uint8_t>(0xA03E7) == 0 ? 1 : 0;
+                app->GlobalTrackSelected(GlobalTimelineTrack::Gravity) =
+                    app->GlobalTrackSelected(GlobalTimelineTrack::Gravity) == 0
+                        ? 1 : 0;
                 PostLanguageSweep(app);
                 goto L_tail;
             }
             {                                                        // joint band (y >= 0xD8)
                 const std::int32_t jrow = Div14(y - 0xD8);
-                const std::int32_t jidx = *reinterpret_cast<std::int32_t*>(
-                    app->at(0x9DA50 + 4 * jrow));
+                const std::int32_t jidx = app->state.jointLineMap[jrow];
                 if (jidx >= 0) {
-                    unsigned char* obj = *reinterpret_cast<unsigned char**>(
-                        app->at(0x9DD70 + 4 * jidx));
+                    unsigned char* obj =
+                        static_cast<unsigned char*>(app->ObjectSlot(jidx));
                     if (obj[0x4AC] != 0) {
                         obj[0x4AC] = 0;
                         PostLanguageSweep(app);
                         Sub40D070(app);
                     } else {
                         obj[0x4AC] = 1;
-                        app->raw<std::uint8_t>(0x9E170) = static_cast<std::uint8_t>(jidx);
+                        app->state.selLightAccSlotOrUint32 =
+                            static_cast<std::uint8_t>(jidx);
                         PostLanguageSweep(app);
                         SendMessageA(GetDlgItem(hwnd, 0x1D7), 0x14Eu /*CB_SETCURSEL*/,
                                      obj[0x49D], 0);
@@ -848,8 +853,7 @@ void HandleLButtonDown(MMDApp* app) {
             std::int32_t joint2dIdx = -1;                        // var_18C
             const bool shiftActive = app->ShiftModifierActive();
             if (y >= 0xA0 && y < 0xAE) {                         // rigid band
-                rigidIdx = *reinterpret_cast<std::int32_t*>(
-                    app->at(0x75C84 + 4 * rowD));
+                rigidIdx = app->state.rowHitBand0[rowD];
                 if (rigidIdx >= 0) {
                     auto& selected = app->CameraKeys()[rigidIdx].selected;
                     if (selected != 0) {
@@ -866,8 +870,7 @@ void HandleLButtonDown(MMDApp* app) {
                 }
             }
             if (y >= 0xAE && y < 0xBC) {                         // joint band
-                jointIdx = *reinterpret_cast<std::int32_t*>(
-                    app->at(0x75FA4 + 4 * rowD));
+                jointIdx = app->state.rowHitBand1[rowD];
                 if (jointIdx >= 0) {
                     auto& selected = app->LightKeys()[jointIdx].selected;
                     if (selected != 0) {
@@ -884,8 +887,7 @@ void HandleLButtonDown(MMDApp* app) {
                 }
             }
             if (y >= 0xBC && y < 0xCA) {                         // IK band
-                ikIdx = *reinterpret_cast<std::int32_t*>(
-                    app->at(0x762C4 + 4 * rowD));
+                ikIdx = app->state.rowHitBand2[rowD];
                 if (ikIdx >= 0) {
                     auto& selected = app->ShadowKeys()[ikIdx].selected;
                     if (selected != 0) {
@@ -902,8 +904,7 @@ void HandleLButtonDown(MMDApp* app) {
                 }
             }
             if (y >= 0xCA && y < 0xD8) {                         // morph band
-                morphIdx = *reinterpret_cast<std::int32_t*>(
-                    app->at(0x765E4 + 4 * rowD));
+                morphIdx = app->state.rowHitBand3[rowD];
                 if (morphIdx >= 0) {
                     auto& selected = app->GravityKeys()[morphIdx].selected;
                     if (selected != 0) {
@@ -921,11 +922,11 @@ void HandleLButtonDown(MMDApp* app) {
             }
             if (y >= 0xD8) {                                     // joint 2D band
                 const std::int32_t jrow = Div14(y - 0xD8);
-                const std::int32_t slotIdx = *reinterpret_cast<std::int32_t*>(
-                    app->at(0x9DA50 + 4 * jrow));
+                const std::int32_t slotIdx =
+                    app->state.jointLineMap[jrow];
                 const std::int32_t col = Div13(x - 0x64);
-                joint2dIdx = *reinterpret_cast<std::int32_t*>(
-                    app->at(0x76904 + 4 * (col * 0xC8 + jrow)));
+                joint2dIdx =
+                    app->state.rowHitAcc[col * 0xC8 + jrow];
                 if (joint2dIdx >= 0) {
                     unsigned char* slot = reinterpret_cast<unsigned char*>(
                         app->AccessoryKeys(slotIdx));
@@ -964,8 +965,7 @@ void HandleLButtonDown(MMDApp* app) {
             const std::int32_t row2d = Div13(x - 0x64) * 0xC8 + Div14(y - 0xA0);
             // stage 1 (loc_447A4D): IK-type flags, model+0x26E8 0x1C-stride
             // records with flag at +0x14
-            const std::int32_t ikType = *reinterpret_cast<std::int32_t*>(
-                app->at(0x4EB84 + 4 * row2d));
+            const std::int32_t ikType = app->state.rowHitIk[row2d];
             if (ikType > 0) {
                 mikudancestudio::mdl::DisplayKey& key =
                     mikudancestudio::mdl::DisplayKeys(ActiveModel(app))[ikType];
@@ -997,8 +997,7 @@ void HandleLButtonDown(MMDApp* app) {
             }
             // stage 2 (loc_447F03): morph-type flags, model+0x26E4
             // 0x14-stride records with flag at +0x10
-            const std::int32_t morphType = *reinterpret_cast<std::int32_t*>(
-                app->at(0x27A84 + 4 * row2d));
+            const std::int32_t morphType = app->state.rowHitMorph[row2d];
             if (morphType > 0) {
                 unsigned char* m = ActiveModel(app);
                 mikudancestudio::mdl::MorphKey& key = mikudancestudio::mdl::MorphKeys(m)[morphType];
@@ -1050,8 +1049,7 @@ void HandleLButtonDown(MMDApp* app) {
             }
             // stage 3 (loc_4485FB): bone-type flags, model+0x26E0 0x3C flag
             // stride with flag at +0x38
-            const std::int32_t boneType = *reinterpret_cast<std::int32_t*>(
-                app->at(0x984 + 4 * row2d));
+            const std::int32_t boneType = app->state.rowHitBone[row2d];
             if (boneType > 0) {
                 unsigned char* m = ActiveModel(app);
                 mikudancestudio::mdl::BoneKey& key = mikudancestudio::mdl::BoneKeys(m)[boneType];
@@ -1229,7 +1227,7 @@ void HandleLButtonDown(MMDApp* app) {
                 // gate flag read BEFORE the 0xA02B6 store (asm zf capture)
                 const bool gate =
                     app->state.automaticFrameAdvanceEnabled == 0;  // 656361 (0xA03E9)
-                app->raw<std::uint8_t>(offsets::kByteA02B6) = 1;  // 656054 (0xA02B6)
+                app->AudioSeekReady() = 1;  // 656054 (0xA02B6)
                 if (gate) {
                     SetFrameNormalized(app->FrameNormalization()); // 0x4C2B80
                     const std::int32_t v31 =

@@ -164,12 +164,6 @@ constexpr std::size_t kBoneFrameBytes = 0x112A880u;  // 300000 x 0x3C
 constexpr std::size_t kMorphFrameBytes = 0x61A80u;   // 200000 x 0x14
 constexpr std::size_t kAccFrameBytes = 0x6D60u;      // 1000 x 0x1C
 
-// The ground-shadow-color modeless dialog (menu 248) writes its four
-// channel floats into 0xA0BF0..0xA0BFC - storage the frame-copy dialog
-// (menu 262) reuses as the 172-byte camera-record scratch beginning at
-// 0xA0B80.  Promoting these needs the overlay union modelled first.
-constexpr std::size_t kOffA0BF0 = 0xA0BF0;  // ground-shadow RGBA float x4
-
 // D3D wrapper fields (the 0x1D574 render subsystem object reached via
 // app->Renderer(); layout in d3d_wrapper.hpp): stereoEnabled (+0x1D566,
 // stereo-3D gate byte), maxTextureWidth/maxTextureHeight (+0x1D568/+0x1D56C,
@@ -752,7 +746,7 @@ INT_PTR __stdcall Sub42DFF0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             GetWindowLongPtrA(GetDlgItem(hDlg, 0x272), GWLP_WNDPROC));
         SetWindowLongPtrA(GetDlgItem(hDlg, 0x272), GWLP_WNDPROC,
                        reinterpret_cast<LONG_PTR>(Sub40F730));
-        sprintf_s(text, 0x100, "%3.2f", app->raw<float>(kOffA0BF0));
+        sprintf_s(text, 0x100, "%3.2f", app->GroundShadowColor()[0]);
         SendMessageA(GetDlgItem(hDlg, 0x272), 0xC2 /*EM_REPLACESEL*/, 0,
                      (LPARAM)text);
         SendMessageA(GetDlgItem(hDlg, 0x271), 0x407 /*TBM_SETRANGEMIN*/, 0, 0);
@@ -760,7 +754,7 @@ INT_PTR __stdcall Sub42DFF0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         SendMessageA(GetDlgItem(hDlg, 0x271), 0x414 /*TBM_SETTICFREQ*/, 0x64, 0);
         SendMessageA(GetDlgItem(hDlg, 0x271), 0x405 /*TBM_SETPOS*/, 1,
                      static_cast<LPARAM>(
-                         static_cast<int>(app->raw<float>(kOffA0BF0) * 100.0)));
+                         static_cast<int>(app->GroundShadowColor()[0] * 100.0)));
         break;
     case WM_COMMAND:
         if (LOWORD(wParam) == 2) {  // IDCANCEL
@@ -775,10 +769,9 @@ INT_PTR __stdcall Sub42DFF0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             static_cast<double>(SendMessageA(GetDlgItem(hDlg, 0x271),
                                              0x400 /*TBM_GETPOS*/, 0, 0)) /
             100.0);
-        app->raw<float>(kOffA0BF0) = v;
-        app->raw<float>(kOffA0BF0 + 4) = v;
-        app->raw<float>(kOffA0BF0 + 8) = v;
-        app->raw<float>(kOffA0BF0 + 0xC) = v;
+        for (int c = 0; c < 4; ++c) {
+            app->GroundShadowColor()[c] = v;
+        }
         SendMessageA(GetDlgItem(hDlg, 0x272), 0xB1 /*EM_SETSEL*/, 0,
                      GetWindowTextLengthA(GetDlgItem(hDlg, 0x272)));
         sprintf_s(text, 0x100, "%3.2f", v);

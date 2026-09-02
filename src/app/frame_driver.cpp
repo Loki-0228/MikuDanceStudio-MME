@@ -281,8 +281,7 @@ void TimelineAdvance(MMDApp* app) {
     }
 
     // ---- save path (0x460269): extension ladder -------------------------
-    const wchar_t* path = reinterpret_cast<const wchar_t*>(
-        app->at(0x9F134));
+    const wchar_t* path = app->CaptureSavePath();
     std::intptr_t format;  // passed straight to D3DX as the original does
     if (wcsstr(path, L".bmp") != nullptr)
         format = 0;                                               // D3DXIFF_BMP
@@ -355,7 +354,7 @@ void FrameDriver(MMDApp* app) {
     if (GetEnvironmentVariableA("MIKUDANCESTUDIO_AB_FREEZE_PHYSICS", freezePhysics,
                                 sizeof(freezePhysics)) == 1 &&
         freezePhysics[0] == '1') {
-        app->raw<std::uint8_t>(offsets::kByteA0665) = 1;
+        app->state.a0665 = 1;
     }
     char requireLine[2]{};
     const bool requireLineEnabled =
@@ -485,7 +484,7 @@ void FrameDriver(MMDApp* app) {
             app->state.framesPerSecond = 0;
         }
         if (!keepPhysicsEnabled)
-            app->raw<std::uint8_t>(offsets::kByteA0665) = 1;
+            app->state.a0665 = 1;
     }
 
     // ---- 5.5 frame-step recording readback (0x46E787..0x46EFB7) ---------

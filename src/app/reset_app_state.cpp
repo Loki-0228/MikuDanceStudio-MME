@@ -102,19 +102,19 @@ void ResetAppState(MMDApp* app) {
     // ---- sub-window teardown ----------------------------------------------
     if (app->AccessoryFrameDialog() != nullptr)
         DestroyWindow(app->AccessoryFrameDialog());               // 0x44E719
-    HWND w292 = reinterpret_cast<HWND&>(app->state.a0b74OrInt32);
+    HWND w292 = app->state.frameCopyDialog;
     app->AccessoryFrameDialog() = nullptr;
     if (w292 != nullptr)
         DestroyWindow(w292);
-    reinterpret_cast<HWND&>(app->state.a0b74OrInt32) = nullptr;
+    app->state.frameCopyDialog = nullptr;
     HWND w256 = app->FrameRangeDialog();
     if (w256 != nullptr)
         DestroyWindow(w256);
     app->FrameRangeDialog() = nullptr;
-    HWND w244 = app->state.a0B44OrInt32;
+    HWND w244 = app->state.modelInfoDialog;
     if (w244 != nullptr)
         DestroyWindow(w244);
-    app->state.a0B44OrInt32 = nullptr;
+    app->state.modelInfoDialog = nullptr;
     app->EnhancedModelDirty() = 0;
     app->state.a042C = 0;
     HWND parent = app->FloatingWindow();

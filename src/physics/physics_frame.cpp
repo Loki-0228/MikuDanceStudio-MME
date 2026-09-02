@@ -798,7 +798,7 @@ void ModelPhysicsReadback(unsigned char* m) {
 // dynamic result is read back after the settle iterations.
 void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     auto& s = *app;
-    if (s.raw<std::uint8_t>(offsets::kByteA0665) != 0)
+    if (s.state.a0665 != 0)
         return;                                   // physics turned off
     PhysicsScene* scene = s.Physics();
     if (scene == nullptr)
@@ -1052,7 +1052,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // pass itself runs identically with or without wind - do NOT add
     // !windRan here, that freezes physics while the noise mode is active.
     if (runWorldPass && !idleNoStep &&
-        s.state.a0b74OrInt32 == 0) {
+        s.state.frameCopyDialog == 0) {
         for (int j = 0; j < 100; ++j)
             if (models[j] != nullptr)
                 ModelKinematicSync(models[j]);              // 0x46FD4D

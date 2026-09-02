@@ -328,10 +328,13 @@ struct MMDAppState {
     float f9e654;
     float f9e658;
 #if defined(_M_X64)
-    RawPad<1072> pad153;
+    RawPad<1065> pad153;
 #else
-    RawPad<1314> pad153;
+    RawPad<1307> pad153;
 #endif
+    // IsWindowEnabled snapshots of the 7 main-window playback controls
+    // (0x1F1/0x1F2/0x1AF/0x1A5/0x1A6/0x190/0x191), restored after playback
+    unsigned char playbackEnabledSnapshot[7];
     unsigned char v9eb7e;
     unsigned char blinkPhase;
 #if defined(_M_X64)
@@ -419,9 +422,13 @@ struct MMDAppState {
 #endif
     void* projectedShadowRestoreTexture;
 #if defined(_M_X64)
+    // x64: the render-save path buffer lives outside the blob
+    // (MMDApp::m_captureSavePath)
     RawPad<296> pad197;
 #else
-    RawPad<512> pad197;
+    // render/screenshot save path chosen by the render dialog (menu 276)
+    // and consumed by the capture save ladder
+    wchar_t captureSavePath[256];
 #endif
     void* captureReadbackPixels;
     unsigned char fontSubOrPtr;
@@ -558,7 +565,9 @@ struct MMDAppState {
     // 35-entry UI theme colour table (0xA0C98..0xA0CDC)
     std::uint32_t themeColors[35];
 #ifndef _M_X64
-    RawPad<1> pad319;
+    // accessory-edit dialog close gate: the post-close refresh runs
+    // only while nonzero (x64: mirror member MMDApp::m_accessoryApplyGate)
+    unsigned char accessoryApplyGate;
 #endif
     unsigned char a0665;
 #if defined(_M_X64)
@@ -633,11 +642,16 @@ struct MMDAppState {
 #endif
     std::int32_t accessoryRenderSplitOrder;
 #ifndef _M_X64
-    RawPad<32> pad351;
+    // accessory-edit dialog scratch buffer 2 (menu 442; freed on close;
+    // x64: mirror member MMDApp::m_accessoryEditArray)
+    void* accessoryEditArray;
+    // rotation-dialog working values, shared by the dialog procs
+    // sub_40FBC0 / sub_40F860 (cases 300/302)
+    float rotationDialogTemp[7];
 #endif
-    HWND a0B44OrInt32;
+    HWND modelInfoDialog;  // menu 253, modal
 #ifndef _M_X64
-    RawPad<4> pad352;
+    WNDPROC modelInfoEditProc;  // saved wndproc of its edit 646
 #endif
     unsigned char englishUI;
     RawPad<3> pad353;
@@ -648,36 +662,39 @@ struct MMDAppState {
     HWND frameRangeDialog;
 #endif
 #ifndef _M_X64
-    RawPad<16> pad354;
+    WNDPROC modelEdgeEditProc;      // saved wndproc of edit 667
+    std::int32_t modelEdgeComboCursor[3];  // combos 669/673/677 edit pos
 #endif
     unsigned char a0B64;
     RawPad<3> pad355;
     std::uint32_t timeNowLow;
     std::uint32_t timeNowHigh;
     float milliToSec;
-    HWND a0b74OrInt32;  // aka kDwordA0b74
+    HWND frameCopyDialog;  // menu 262, modal
 #ifndef _M_X64
-    RawPad<4> pad359;
+    WNDPROC frameCopyEditProc;  // saved wndproc of edit 705
 #endif
-    void* a0B7COrInt32;  // aka kPtrA0b7c
+    void* cameraRecordArray;  // 172-byte records, index selAcc
 #if defined(_M_X64)
-    RawPad<60> pad360;
+    // x64: the 172-byte camera-frame staging buffer lives outside the
+    // blob (MMDApp::m_cameraFrameScratch)
+    RawPad<100> pad360;
 #else
-    RawPad<128> pad360;
-#endif
-    std::int32_t fa0b00D;
-    std::int32_t fa0b04D;
-#if defined(_M_X64)
-    RawPad<32> pad362;
-#else
-    RawPad<36> pad362;
+    // dialog 262 stages a 172-byte camera record here for editing; the
+    // ground-shadow-color RGBA overlays bytes +112..+127 (menus 248/262
+    // are never open together, mirroring the original blob reuse)
+    unsigned char cameraFrameScratch[172];
 #endif
     std::int32_t selAcc;
-    unsigned char records8c[4];
+    void* boneRecordArray;  // 140-byte records, index sel8c
 #if defined(_M_X64)
-    RawPad<128> pad364;
+    // x64: the 140-byte bone-frame staging buffer lives outside the
+    // blob (MMDApp::m_boneFrameScratch)
+    RawPad<124> pad364;
 #else
-    RawPad<140> pad364;
+    // dialog 262 stages a 140-byte bone record here for editing; the
+    // accessory-frame dialog reuses byte +28 as its saved wndproc
+    unsigned char boneFrameScratch[140];
 #endif
     std::int32_t sel8c;
     std::int32_t playbackPhysicsMode;
@@ -688,7 +705,7 @@ struct MMDAppState {
 #else
     RawPad<3> pad367;
     HWND accessoryFrameDialog;  // 0xA0CCC
-    RawPad<4> pad367b;
+    WNDPROC accessoryFrameEditProc;  // saved wndproc of edit 709
 #endif
     unsigned char a0CD4;
 #if defined(_M_X64)
@@ -1063,6 +1080,8 @@ static_assert(offsetof(MMDAppState, f9e654) == 648788,
               "f9e654 x86");
 static_assert(offsetof(MMDAppState, f9e658) == 648792,
               "f9e658 x86");
+static_assert(offsetof(MMDAppState, playbackEnabledSnapshot) == 650103,
+              "playbackEnabledSnapshot x86");
 static_assert(offsetof(MMDAppState, v9eb7e) == 650110,
               "v9eb7e x86");
 static_assert(offsetof(MMDAppState, blinkPhase) == 650111,
@@ -1155,6 +1174,8 @@ static_assert(offsetof(MMDAppState, v9f12c) == 651564,
               "v9f12c x86");
 static_assert(offsetof(MMDAppState, projectedShadowRestoreTexture) == 651568,
               "projectedShadowRestoreTexture x86");
+static_assert(offsetof(MMDAppState, captureSavePath) == 651572,
+              "captureSavePath x86");
 static_assert(offsetof(MMDAppState, captureReadbackPixels) == 652084,
               "captureReadbackPixels x86");
 static_assert(offsetof(MMDAppState, fontSubOrPtr) == 652088,
@@ -1308,6 +1329,8 @@ static_assert(offsetof(MMDAppState, themeColors) == 656856,
               "themeColors x86");
 static_assert(offsetof(MMDAppState, themeColors[34]) == 656992,
               "themeColors[34] x86");
+static_assert(offsetof(MMDAppState, accessoryApplyGate) == 656996,
+              "accessoryApplyGate x86");
 static_assert(offsetof(MMDAppState, a0665) == 656997,
               "a0665 x86");
 static_assert(offsetof(MMDAppState, a0668OrUint32) == 657000,
@@ -1380,18 +1403,26 @@ static_assert(offsetof(MMDAppState, groundShadowColorEditProc) == 658200,
               "groundShadowColorEditProc x86");
 static_assert(offsetof(MMDAppState, accessoryOrderArray) == 658204,
               "accessoryOrderArray x86");
+static_assert(offsetof(MMDAppState, accessoryEditArray) == 658212,
+              "accessoryEditArray x86");
 static_assert(offsetof(MMDAppState, accessoryRenderSplitOrder) == 658208,
               "accessoryRenderSplitOrder x86");
-static_assert(offsetof(MMDAppState, a0B44OrInt32) == 658244,
-              "a0B44OrInt32 x86");
+static_assert(offsetof(MMDAppState, rotationDialogTemp) == 658216,
+              "rotationDialogTemp x86");
+static_assert(offsetof(MMDAppState, modelInfoDialog) == 658244,
+              "modelInfoDialog x86");
+static_assert(offsetof(MMDAppState, modelInfoEditProc) == 658248,
+              "modelInfoEditProc x86");
 #ifndef _M_X64
 static_assert(offsetof(MMDAppState, frameRangeDialog) == 658256,
               "frameRangeDialog x86");
+static_assert(offsetof(MMDAppState, modelEdgeEditProc) == 658260,
+              "modelEdgeEditProc x86");
+static_assert(offsetof(MMDAppState, modelEdgeComboCursor) == 658264,
+              "modelEdgeComboCursor x86");
 #endif
 static_assert(offsetof(MMDAppState, englishUI) == 658252,
               "englishUI x86");
-static_assert(offsetof(MMDAppState, frameRangeDialog) == 658256,
-              "frameRangeDialog x86");
 static_assert(offsetof(MMDAppState, a0B64) == 658276,
               "a0B64 x86");
 static_assert(offsetof(MMDAppState, timeNowLow) == 658280,
@@ -1400,18 +1431,20 @@ static_assert(offsetof(MMDAppState, timeNowHigh) == 658284,
               "timeNowHigh x86");
 static_assert(offsetof(MMDAppState, milliToSec) == 658288,
               "milliToSec x86");
-static_assert(offsetof(MMDAppState, a0b74OrInt32) == 658292,
-              "a0b74OrInt32 x86");
-static_assert(offsetof(MMDAppState, a0B7COrInt32) == 658300,
-              "a0B7COrInt32 x86");
-static_assert(offsetof(MMDAppState, fa0b00D) == 658432,
-              "fa0b00D x86");
-static_assert(offsetof(MMDAppState, fa0b04D) == 658436,
-              "fa0b04D x86");
+static_assert(offsetof(MMDAppState, frameCopyDialog) == 658292,
+              "frameCopyDialog x86");
+static_assert(offsetof(MMDAppState, frameCopyEditProc) == 658296,
+              "frameCopyEditProc x86");
+static_assert(offsetof(MMDAppState, cameraRecordArray) == 658300,
+              "cameraRecordArray x86");
+static_assert(offsetof(MMDAppState, cameraFrameScratch) == 658304,
+              "cameraFrameScratch x86");
 static_assert(offsetof(MMDAppState, selAcc) == 658476,
               "selAcc x86");
-static_assert(offsetof(MMDAppState, records8c) == 658480,
-              "records8c x86");
+static_assert(offsetof(MMDAppState, boneRecordArray) == 658480,
+              "boneRecordArray x86");
+static_assert(offsetof(MMDAppState, boneFrameScratch) == 658484,
+              "boneFrameScratch x86");
 static_assert(offsetof(MMDAppState, sel8c) == 658624,
               "sel8c x86");
 static_assert(offsetof(MMDAppState, playbackPhysicsMode) == 658628,
@@ -1423,6 +1456,8 @@ static_assert(offsetof(MMDAppState, a0CD4) == 658644,
 #ifndef _M_X64
 static_assert(offsetof(MMDAppState, accessoryFrameDialog) == 658636,
               "accessoryFrameDialog x86");
+static_assert(offsetof(MMDAppState, accessoryFrameEditProc) == 658640,
+              "accessoryFrameEditProc x86");
 #endif
 #ifndef _M_X64
 static_assert(offsetof(MMDAppState, aviCodecSelection) == 658648,
@@ -1562,6 +1597,8 @@ static_assert(offsetof(MMDAppState, lastRegisteredFrame) == 651320,
 // surrounding RawPad sizes, never the semantics.
 // ---------------------------------------------------------------------------
 static_assert(xlate::Offset(48) == offsetof(MMDAppState, dialogFlags), "xlate sync 48");
+static_assert(xlate::Offset(658300) == offsetof(MMDAppState, cameraRecordArray), "xlate sync 658300");
+static_assert(xlate::Offset(658480) == offsetof(MMDAppState, boneRecordArray), "xlate sync 658480");
 static_assert(xlate::Offset(648232) == offsetof(MMDAppState, pictureBackgroundEnabled), "xlate sync 648232");
 static_assert(xlate::Offset(648236) == offsetof(MMDAppState, pictureBackgroundTexture), "xlate sync 648236");
 static_assert(xlate::Offset(650111) == offsetof(MMDAppState, blinkPhase), "xlate sync 650111");
