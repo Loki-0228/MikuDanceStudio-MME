@@ -1570,7 +1570,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 436:
         if (notify == CBN_SELCHANGE &&
-            app->state.a0B50OrPtr == 0) {
+            app->FrameRangeDialog() == nullptr) {
             Sub44D940(app);
         }
         break;
@@ -1595,7 +1595,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // blob +0x10/+0x0C); Sub44D940.
     // ------------------------------------------------------------------
     case 437: {
-        if (app->state.a0B50OrPtr != 0) {
+        if (app->FrameRangeDialog() != nullptr) {
             break;
         }
         const LRESULT sel =

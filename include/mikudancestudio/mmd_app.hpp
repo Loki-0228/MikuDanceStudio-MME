@@ -196,12 +196,12 @@ public:
 #endif
     }
 
-    // Sub-window torn down on scene reset (x86 blob slot 0xA0A6C).
-    HWND& SceneResetSubWindow() {
+    // Accessory-frame dialog HWND (x86 blob slot 0xA0CCC).
+    HWND& AccessoryFrameDialog() {
 #if defined(_M_X64)
-        return m_hwndA0A6C;
+        return m_accessoryFrameDialog;
 #else
-        return state.hwndA0A6C;
+        return state.accessoryFrameDialog;
 #endif
     }
 
@@ -552,7 +552,7 @@ public:
         return state.aviFile;
     }
     void*& AviStream() {
-        return raw<void*>(offsets::kDword9E400);
+        return state.v9e400OrUint32;
     }
     void*& AviFrameReader() {
         return state.aviFrameReader;
@@ -729,7 +729,7 @@ public:
         return state.selfShadowMode;
     }
     std::uint8_t& DepthTextureCompositionEnabled() {
-        return raw<std::uint8_t>(offsets::kByteA03DE);
+        return state.depthTextureCompositionEnabled;
     }
     std::uint8_t& DepthDeviceEnabled() {
         return state.depthDeviceEnabled;
@@ -933,7 +933,7 @@ public:
         return raw<std::uint8_t>(offsets::kByteA0B64);
     }
     std::uint8_t& AutoRepeatCount() {
-        return raw<std::uint8_t>(offsets::kByteAutorep);
+        return state.autoRepeat;
     }
     std::uint8_t& UiOptionFlag(int index) {
         return state.optflag[index];
@@ -1135,7 +1135,7 @@ private:
     // so these dialog-local values live outside the compat blob on x64.
     wchar_t m_aviOutputPath[256]{};
     std::int32_t m_aviCodecSelection{};
-    HWND m_hwndA0A6C = nullptr;
+    HWND m_accessoryFrameDialog = nullptr;
     HWND m_frameRangeDialog = nullptr;
 #endif
 };

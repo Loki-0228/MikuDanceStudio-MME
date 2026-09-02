@@ -36,7 +36,11 @@ struct RawPad { unsigned char b[N]; };
 struct EmptyPad {};
 
 struct MMDAppState {
-    RawPad<188> pad0;
+    RawPad<48> pad0;
+    // dialog-open flags (0x30..0x74): nonzero while the matching dialog
+    // is up; the menu command switch reads them to reject re-entry
+    std::int32_t dialogFlags[17];
+    RawPad<72> pad0b;
     std::uint32_t bC;
     RawPad<8> pad1;
     unsigned char sidebarResizeDragging;
@@ -667,11 +671,11 @@ struct MMDAppState {
     std::int32_t playbackPhysicsMode;
     unsigned char a0CC8OrUint32;
 #if defined(_M_X64)
-    // x64: HWND slot kept outside the compat blob (MMDApp::m_hwndA0A6C)
+    // x64: HWND slot kept outside the compat blob (MMDApp::m_accessoryFrameDialog)
     RawPad<9> pad367;
 #else
     RawPad<3> pad367;
-    HWND hwndA0A6C;  // sub-window torn down on scene reset
+    HWND accessoryFrameDialog;  // 0xA0CCC
     RawPad<4> pad367b;
 #endif
     unsigned char a0CD4;
@@ -759,6 +763,10 @@ static_assert(sizeof(MMDAppState) <= 0xA55E0 + 2048 &&
 
 #ifndef _M_X64
 // every field pinned to its x86 offsets.hpp position
+static_assert(offsetof(MMDAppState, dialogFlags) == 48,
+              "dialogFlags x86");
+static_assert(offsetof(MMDAppState, dialogFlags[16]) == 112,
+              "dialogFlags[16] x86");
 static_assert(offsetof(MMDAppState, bC) == 188,
               "bC x86");
 static_assert(offsetof(MMDAppState, optflag) == 760,
@@ -1358,8 +1366,8 @@ static_assert(offsetof(MMDAppState, frameRangeDialog) == 658256,
 #endif
 static_assert(offsetof(MMDAppState, englishUI) == 658252,
               "englishUI x86");
-static_assert(offsetof(MMDAppState, a0B50OrPtr) == 658256,
-              "a0B50OrPtr x86");
+static_assert(offsetof(MMDAppState, frameRangeDialog) == 658256,
+              "frameRangeDialog x86");
 static_assert(offsetof(MMDAppState, a0B64) == 658276,
               "a0B64 x86");
 static_assert(offsetof(MMDAppState, timeNowLow) == 658280,
@@ -1389,8 +1397,8 @@ static_assert(offsetof(MMDAppState, a0CC8OrUint32) == 658632,
 static_assert(offsetof(MMDAppState, a0CD4) == 658644,
               "a0CD4 x86");
 #ifndef _M_X64
-static_assert(offsetof(MMDAppState, hwndA0A6C) == 658636,
-              "hwndA0A6C x86");
+static_assert(offsetof(MMDAppState, accessoryFrameDialog) == 658636,
+              "accessoryFrameDialog x86");
 #endif
 #ifndef _M_X64
 static_assert(offsetof(MMDAppState, aviCodecSelection) == 658648,
@@ -1470,10 +1478,10 @@ static_assert(offsetof(MMDAppState, val672804) == 672804,
               "val672804 x86");
 static_assert(offsetof(MMDAppState, sidebarRatio) == 672808,
               "sidebarRatio x86");
-static_assert(offsetof(MMDAppState, windowLayoutReady) == 672812,static_assert(offsetof(MMDAppState, statusText) == 672813,
-              "statusText x86");
-
+static_assert(offsetof(MMDAppState, windowLayoutReady) == 672812,
               "windowLayoutReady x86");
+static_assert(offsetof(MMDAppState, statusText) == 672813,
+              "statusText x86");
 #else
 // anchors only - instruction-level x64 ground truth (vote-grade
 static_assert(offsetof(MMDAppState, sub025c) == 208,

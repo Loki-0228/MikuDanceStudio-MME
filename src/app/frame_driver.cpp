@@ -64,7 +64,7 @@ void AdvanceFrameRenderGate(MMDApp* app) {
         state = 1;
     if (app->raw<std::uint8_t>(offsets::kByteFlag672800) == 0)
         state = 1;
-    if (app->state.a0B50OrPtr != 0)
+    if (app->FrameRangeDialog() != nullptr)
         state = 1;
 
     if (state == 1)
@@ -512,11 +512,11 @@ void FrameDriver(MMDApp* app) {
     if (s.raw<std::uint8_t>(off::kByteF9edd0) != 0) {
         TimelineAdvance(app);                                     // 0x460130
         s.raw<std::uint8_t>(off::kByteF9edd0) = 0;
-        s.raw<std::uint8_t>(off::kByteFa03b7) = 0;
+        s.state.a03B7 = 0;
     }
-    if (s.raw<std::uint8_t>(off::kByteFa03b7) != 0) {
+    if (s.state.a03B7 != 0) {
         s.raw<std::uint8_t>(off::kByteF9edd0) = 1;
-        s.raw<std::uint8_t>(off::kByteFa03b7) = 0;
+        s.state.a03B7 = 0;
     }
 
     // ---- 8. reload path (0x47989D..0x4798CB) ----------------------------

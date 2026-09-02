@@ -110,7 +110,7 @@ void MMDApp::InitDefaults() {
     state.projectedShadowBlendEnabled = 1;
     state.v9ed9c = 0;
     state.englishUI = 1;
-    state.a0B50OrPtr = 0;
+    FrameRangeDialog() = nullptr;
     s.EnhancedModelDirty() = 0;
     state.a0b74OrInt32 = nullptr;
     state.a0B7COrInt32 = nullptr;

@@ -141,7 +141,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         if (flag == 1) {
             flag = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD8, MF_UNCHECKED);
-        } else if (s.raw<std::uint32_t>(offsets::kDword9E400) != 0) {
+        } else if (s.state.v9e400OrUint32 != 0) {
             flag = 1;
             CheckMenuItem(GetMenu(hwnd), 0xD8, MF_CHECKED);
         }

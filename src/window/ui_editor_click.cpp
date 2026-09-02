@@ -597,13 +597,15 @@ void HandleLButtonDown(MMDApp* app) {
             // ---- S4: display-mode name column sub-branch (loc_44719F) ---
             if (!app->ShiftModifierActive()) {
                 // clear the accessory-slot selection flag (obj+0x4AC) of all
-                // 255 slots of the 0x9DD70 array (5 pointers per 0x14 step)
+                // 255 slots of the 0x9DD70 array (the original walks it
+                // unrolled, five 4-byte pointers per 0x14 step; on x64 the
+                // pointer array is indexed directly through ObjectSlot)
                 for (int i = 0; i < 0x33; ++i) {
-                    unsigned char** p =
-                        reinterpret_cast<unsigned char**>(app->at(0x9DD70) + 0x14 * i);
                     for (int j = 0; j < 5; ++j) {
-                        if (p[j] != nullptr)
-                            p[j][0x4AC] = 0;
+                        unsigned char* obj = static_cast<unsigned char*>(
+                            app->ObjectSlot(i * 5 + j));
+                        if (obj != nullptr)
+                            obj[0x4AC] = 0;
                     }
                 }
                 app->raw<std::uint8_t>(0xA03E4) = 0;                 // 656356

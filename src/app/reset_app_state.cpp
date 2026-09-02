@@ -100,10 +100,10 @@ void ResetAppState(MMDApp* app) {
     std::memset(app->state.buf656632, 0, 0xC8);
 
     // ---- sub-window teardown ----------------------------------------------
-    if (app->SceneResetSubWindow() != nullptr)
-        DestroyWindow(app->SceneResetSubWindow());               // 0x44E719
+    if (app->AccessoryFrameDialog() != nullptr)
+        DestroyWindow(app->AccessoryFrameDialog());               // 0x44E719
     HWND w292 = reinterpret_cast<HWND&>(app->state.a0b74OrInt32);
-    app->SceneResetSubWindow() = nullptr;
+    app->AccessoryFrameDialog() = nullptr;
     if (w292 != nullptr)
         DestroyWindow(w292);
     reinterpret_cast<HWND&>(app->state.a0b74OrInt32) = nullptr;

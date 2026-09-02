@@ -239,7 +239,7 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
         s.raw<std::uint8_t>(offsets::kByteA03DF) = 1;
         s.state.fpsLimit = 30.0f;              // 0x52997c
     }
-    s.raw<std::uint8_t>(offsets::kByteAutorep) = 0;                   // 0x429fc4
+    s.state.autoRepeat = 0;                   // 0x429fc4
 }
 
 // VA 0x0042A020 - stop Kinect capture and restore the saved fps limit.
@@ -258,7 +258,7 @@ void DisableKinect(MMDApp* app) {
     clean();                                                        // 0x42a074
 
     s.state.depthDeviceEnabled = 0;                   // 0x42a084
-    s.raw<std::uint8_t>(offsets::kByteAutorep) = 0;                   // 0x42a08b
+    s.state.autoRepeat = 0;                   // 0x42a08b
 
     unsigned char* model = s.SelectedModel();
     if (model != nullptr)                                           // 0x42a092
