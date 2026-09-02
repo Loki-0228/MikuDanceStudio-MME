@@ -1090,8 +1090,10 @@ void DrawModelEdgeGeometry(MMDApp* app, unsigned char* model,
 }
 
 void DrawModelsProjectedShadow(MMDApp* app) {
-    for (int order = 0; order < 100; ++order) {
-        for (int slot = 0; slot < 100; ++slot) {
+    // x64 inlined twin sub_7FF7CB4BFB20+0x4C0880..0x4C0916: both walks run
+    // to 0xFF (cmp edx,0FFh / cmp edi,0FFh) - kModelSlotCount wide.
+    for (int order = 0; order < kModelSlotCount; ++order) {
+        for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* model = app->ModelSlot(slot);
             if (model == nullptr || mdl::Mdl(model)->comboSelIndex != order)
                 continue;
@@ -1186,9 +1188,13 @@ void DrawModelOutlines(MMDApp* app, bool effectEdge) {
         FxSetTechnique(effect, "ColorRenderTec");
         FxBegin(effect, &passes);
     }
-    for (int order = 0; order < 100; ++order) {
+    // x64 inlines this walk into both callers with 0xFF bounds: fixed pass
+    // sub_7FF7CB4BFB20+0x4C09E0 (cmp edi,0FFh @0x4C0A74 / cmp r8d,0FFh
+    // @0x4C0A0D), effect pass sub_7FF7CB4C1E60+0x4C37A0 (@0x4C38FE /
+    // @0x4C37CE).
+    for (int order = 0; order < kModelSlotCount; ++order) {
         unsigned char* model = nullptr;
-        for (int slot = 0; slot < 100; ++slot) {
+        for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* candidate = app->ModelSlot(slot);
             if (candidate != nullptr &&
                 mdl::Mdl(candidate)->comboSelIndex == order) {
@@ -1331,8 +1337,10 @@ void RenderModelsFixed(MMDApp* app) {                         // 0x425D20
     RestoreModelMaterialPass(app, sub, device);
 
     const bool materialCapture = BeginMaterialStateCapture();
-    for (int order = 0; order < 100; ++order) {
-        for (int slot = 0; slot < 100; ++slot) {
+    // x64 twin sub_7FF7CB4BFB20+0x4C0710..0x4C077A: order and slot both run
+    // to 0xFF (cmp edi,0FFh @0x4C0774 / cmp edx,0FFh @0x4C073C).
+    for (int order = 0; order < kModelSlotCount; ++order) {
+        for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* model = app->ModelSlot(slot);
             if (model == nullptr || mdl::Mdl(model)->comboSelIndex != order)
                 continue;
@@ -1435,8 +1443,11 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     device->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
     device->SetTexture(0, sub->hdrTexture);
 
-    for (int order = 0; order < 100; ++order) {
-        for (int slot = 0; slot < 100; ++slot) {
+    // x64 twin sub_7FF7CB4C1E60+0x4C3570..0x4C36D0 (toonFlag dispatch at
+    // model+0x3B68): order and slot both run to 0xFF (cmp edi,0FFh
+    // @0x4C36CA / cmp edx,0FFh @0x4C359C).
+    for (int order = 0; order < kModelSlotCount; ++order) {
+        for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* model = app->ModelSlot(slot);
             if (model == nullptr || mdl::Mdl(model)->comboSelIndex != order)
                 continue;
@@ -1620,7 +1631,10 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
     UINT passes = 0;
     app->ActiveRenderPass() = AccessoryRenderPass::ModelEffect;
     if (SUCCEEDED(FxBegin(effect, &passes))) {
-        for (int slot = 0; slot < 100; ++slot) {
+        // x64 twin sub_7FF7CB4C1030+0x4C1CC0: slot walk is a 255-count
+        // do/while over app+0xBE8 (mov r13d,0FFh @0x4C198C, dec r13/jnz),
+        // toonFlag read at model+0x3B68.
+        for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* model = app->ModelSlot(slot);
             if (model == nullptr || mdl::Mdl(model)->toonFlag == 0)
                 continue;

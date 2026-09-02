@@ -359,7 +359,7 @@ void RenderFrameScene(MMDApp* app) {
     if (app->state.messageSeen == 0)
         return;
     if (app->state.a0665 == 0) {
-        for (int slot = 0; slot < 100; ++slot) {
+        for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* model = app->ModelSlot(slot);
             if (model != nullptr)
                 UpdateModelVertexBuffers(

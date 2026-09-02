@@ -53,9 +53,14 @@
 
 // key_ladder.cpp (registered in CMakeLists next to frame_modes_bone.cpp):
 // main-pump letter hotkey consumption ladder (x86 0x46FF35..0x4739E2).
+// pump_navigation.cpp / pump_edit_keys.cpp: the non-letter pump segments
+// that surround the ladder in the original message pump.
 namespace mikudancestudio {
 
 void ConsumeLetterHotkeys(MMDApp* app);
+void ConsumeRightButtonDrag(MMDApp* app);   // pump_navigation.cpp (G10)
+void ConsumeMiddleButtonPan(MMDApp* app);   // pump_navigation.cpp (G11)
+void ConsumeEditKeys(MMDApp* app);          // pump_edit_keys.cpp
 
 namespace {
 
@@ -396,8 +401,16 @@ void FrameDriver(MMDApp* app) {
 
     // ---- 1. mouse-delta snapshot reset ------------------------------------
     MouseInteractionBegin(app);                                  // per-frame
-    // 0x46FF02 poll done; consume the letter hotkey ladder (0x46FF35..)
-    mikudancestudio::ConsumeLetterHotkeys(app);  // key_ladder.cpp
+    // 0x46FF02 poll done.  The original pump then walks, in this order:
+    // the right/middle-button camera drags (x86 0x470BF5..0x47133D), the
+    // non-letter edit-key chain whose panel focus sweep opens the ladder
+    // region (0x471342..0x473127), and the letter ladder itself
+    // (0x46FF35..0x4739E2) - the arrow-key and numpad blocks are
+    // interleaved inside the ladder at their binary positions.
+    mikudancestudio::ConsumeRightButtonDrag(app);  // pump_navigation.cpp
+    mikudancestudio::ConsumeMiddleButtonPan(app);  // pump_navigation.cpp
+    mikudancestudio::ConsumeEditKeys(app);         // pump_edit_keys.cpp
+    mikudancestudio::ConsumeLetterHotkeys(app);    // key_ladder.cpp
     TraceOperationInput(app, "before");
 
     // ---- 2. interaction-mode dispatch --------------------------------------

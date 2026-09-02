@@ -400,7 +400,7 @@ public:
         return reinterpret_cast<unsigned char* const*>(state.modelSlots);
     }
     void ClearModelSlots() {
-        for (int index = 0; index < 100; ++index)
+        for (int index = 0; index < kModelSlotCount; ++index)
             ModelSlot(index) = nullptr;
     }
     std::uint8_t& SelectedModelSlot() {

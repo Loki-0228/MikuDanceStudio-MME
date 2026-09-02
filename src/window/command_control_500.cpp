@@ -21,7 +21,10 @@
 //                                                            0x47EA70-0x47EA77
 //   503  checkbox 0x1FC twin: byte 0x2FC = 1; same refresh chain
 //                                                            0x47EA79-0x47EA80
-//   504..506  no target (jpt default) - empty
+//   504..506  no jump-table target; 504 (0x1F8 combo) rides the
+//        dispatcher's default CBN_SELCHANGE chain (command_dispatch.cpp
+//        DefaultSelChangeChain 0x48EA48); 505/506 (slider/edit) never emit
+//        WM_COMMAND - empty here
 //   507  morph-row X combo prev 0x1FB: require a selected morph and loaded
 //        morph table, step down with wrap, skipping morphs outside panel 1;
 //        move combo 0x1F8 cursor back
@@ -29,17 +32,20 @@
 //        0x405), text 0x1FA "%5.4f"                           0x48C735-0x48C93C
 //   508  bone X combo next 0x1FC: same gates, step up with wrap 0, cursor
 //        wraps (count-1 -> 0), same spin/text echo              0x48C941-0x48CB4B
-//   509..511  no target - empty
+//   509..511  no jump-table target; 509 (0x1FD combo) rides the default
+//        chain (0x48EC56); 510/511 empty here
 //   512  bone Y combo prev 0x200: axis 0x2DA0, row 0x1FD/0x1FE/0x1FF
 //                                                            0x48CB4E-0x48CD4D
 //   513  bone Y combo next 0x201: axis 0x2DA0, row 0x1FD/0x1FE/0x1FF
 //                                                            0x48CD50-0x48CF4E
-//   514..516  no target - empty
+//   514..516  no jump-table target; 514 (0x202 combo) rides the default
+//        chain (0x48EE66); 515/516 empty here
 //   517  bone Z combo prev 0x205: axis 0x2DA4, row 0x202/0x203/0x204
 //                                                            0x48CF51-0x48D14E
 //   518  bone Z combo next 0x206: axis 0x2DA4, row 0x202/0x203/0x204
 //                                                            0x48D151-0x48D349
-//   519..521  no target - empty
+//   519..521  no jump-table target; 519 (0x207 combo) rides the default
+//        chain (0x48F066); 520/521 empty here
 //   522  bone rot combo prev 0x20A: axis 0x2DA8, row 0x207/0x208/0x209
 //                                                            0x48D34C-0x48D54D
 //   523  bone rot combo next 0x20B: axis 0x2DA8, row 0x207/0x208/0x209
@@ -420,11 +426,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         OptionFlagRefresh(app, hwnd);
         break;
 
-    // ---- 504..506: no jump-table target (default case) ------------------
-    case 504:
-    case 505:
-    case 506:
-        break;
+    // ---- 504..506: no jump-table target.  The 0x1F8 morph-row combo is
+    //      served by the dispatcher's default CBN_SELCHANGE chain
+    //      (command_dispatch.cpp DefaultSelChangeChain, x86 0x48EA48) and
+    //      never reaches this switch; the 0x1F9 slider / 0x1FA edit never
+    //      emit WM_COMMAND.  Falls through to the no-op default. ---------
 
     // ---- 507/508: bone X combo prev/next (axis 0x2D9C, row 0x1F8) ------
     case 507:  // 0x48C735
@@ -434,11 +440,9 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         MorphStep(app, hwnd, 0, 0x1F8, 0x1F9, 0x1FA, true);
         break;
 
-    // ---- 509..511: no jump-table target ---------------------------------
-    case 509:
-    case 510:
-    case 511:
-        break;
+    // ---- 509..511: no jump-table target; 0x1FD rides the dispatcher
+    //      default chain (x86 0x48EC56) - falls through to the no-op
+    //      default. --------------------------------------------------------
 
     // ---- 512/513: bone Y combo prev/next (axis 0x2DA0, row 0x1FD) ------
     case 512:  // 0x48CB4E
@@ -448,11 +452,9 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         MorphStep(app, hwnd, 1, 0x1FD, 0x1FE, 0x1FF, true);
         break;
 
-    // ---- 514..516: no jump-table target ---------------------------------
-    case 514:
-    case 515:
-    case 516:
-        break;
+    // ---- 514..516: no jump-table target; 0x202 rides the dispatcher
+    //      default chain (x86 0x48EE66) - falls through to the no-op
+    //      default. --------------------------------------------------------
 
     // ---- 517/518: bone Z combo prev/next (axis 0x2DA4, row 0x202) ------
     case 517:  // 0x48CF51
@@ -462,11 +464,9 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         MorphStep(app, hwnd, 2, 0x202, 0x203, 0x204, true);
         break;
 
-    // ---- 519..521: no jump-table target ---------------------------------
-    case 519:
-    case 520:
-    case 521:
-        break;
+    // ---- 519..521: no jump-table target; 0x207 rides the dispatcher
+    //      default chain (x86 0x48F066) - falls through to the no-op
+    //      default. --------------------------------------------------------
 
     // ---- 522/523: bone rot combo prev/next (axis 0x2DA8, row 0x207) ----
     case 522:  // 0x48D34C

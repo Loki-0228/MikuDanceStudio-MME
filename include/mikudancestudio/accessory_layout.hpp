@@ -31,7 +31,12 @@ struct AccessoryRecord {
     float opacity;
     std::uint32_t materialCount;
     std::int32_t currentMaterial;
-    std::uint8_t reservedTail[4];
+    // +0x4AC x86 / +0x4BC x64: timeline row flag - set on the accessory's
+    // registration row (combo 0x1D7 selection, x86 0x48E2A4) and read by
+    // the pump's Enter register-frame block (x64 0x44FB0A) to decide which
+    // accessory tracks get a keyframe.
+    std::uint8_t rowSelected;
+    std::uint8_t reservedTail[3];
 };
 
 #if defined(_M_X64)
@@ -42,6 +47,8 @@ static_assert(offsetof(AccessoryRecord, parentModel) == 576, "");
 static_assert(offsetof(AccessoryRecord, name) == 584, "");
 static_assert(offsetof(AccessoryRecord, shadowEnabled) == 1196, "");
 static_assert(offsetof(AccessoryRecord, opacity) == 1200, "");
+static_assert(offsetof(AccessoryRecord, rowSelected) == 1212,
+              "rowSelected x64 (+0x4BC)");
 #else
 static_assert(sizeof(AccessoryRecord) == 0x4B0, "accessory x86 size");
 static_assert(offsetof(AccessoryRecord, visible) == 528, "");
@@ -50,6 +57,8 @@ static_assert(offsetof(AccessoryRecord, parentModel) == 560, "");
 static_assert(offsetof(AccessoryRecord, name) == 568, "");
 static_assert(offsetof(AccessoryRecord, shadowEnabled) == 1180, "");
 static_assert(offsetof(AccessoryRecord, opacity) == 1184, "");
+static_assert(offsetof(AccessoryRecord, rowSelected) == 1196,
+              "rowSelected x86 (+0x4AC)");
 #endif
 
 inline AccessoryRecord* Accessory(void* object) {

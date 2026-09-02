@@ -242,6 +242,10 @@
 
 namespace mikudancestudio {
 
+// Gravity keyframe registrar, defined below at mikudancestudio scope (the
+// pump's Enter register-frame block in pump_edit_keys.cpp also calls it).
+void Sub412B20(MMDApp* app, std::int32_t frame);          // VA 0x00412B20
+
 // ---- dialog helpers moved to dedicated TUs (original VAs kept) ----------
 // physics-model editor (menu 262, dialog 0x2AC): physics_model_dialog.cpp
 void Sub45F480(HWND hDlg);                       // VA 0x0045F480
@@ -433,7 +437,6 @@ static const wchar_t kTitleOpenJp[] =
 // Forward declarations (bodies below / later in this TU).
 void Sub41E980(MMDApp* app, float fps);                   // VA 0x0041E980
 void Sub45FD80(MMDApp* app, int idx, float v);            // VA 0x0045FD80
-void Sub412B20(MMDApp* app, std::int32_t frame);          // VA 0x00412B20
 // VA 0x0042E270 - edit-646 (0x286) subclass of the model-info dialog (253):
 // on WM_KEYDOWN+VK_RETURN it reads the edit text, applies it through the
 // FPS setter (0x41E980) and parks the percent value on trackbar 647
@@ -697,6 +700,8 @@ int g_dword545938 = 0;  // frame-copy dialog combo count (0x545938)
 // file-local stub bodies so the call sites link (stubs.cpp must not be
 // modified).  Sub43BED0's real body now lives in model_edge_dialog.cpp;
 // only the forward declaration at the top of this TU is needed.
+}  // namespace (anonymous) - Sub412B20 is consumed by pump_edit_keys.cpp
+// and stays at mikudancestudio scope.
 // VA 0x00412B20 (x64 twin sub_7FF7CB47DA60, confirmed on the x64 binary;
 // the pre-existing "frame-table rebuild" label was wrong): the gravity
 // keyframe registrar.  Walks the gravity track's next-chain (app+0x380,
@@ -813,6 +818,8 @@ void Sub412B20(MMDApp* app, std::int32_t frame) {   // VA 0x00412B20
     if (target > app->state.lastRegisteredFrame)
         app->state.lastRegisteredFrame = target;
 }
+
+namespace {  // (resumed)
 
 // ---- JP strings of the dialogs, byte-exact -------------------------------
 // 0x52E628: "ON (X印)" (SJIS 0x88F3 = 印); 0x52E624: "OFF".

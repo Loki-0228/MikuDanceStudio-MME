@@ -31,6 +31,13 @@ namespace mikudancestudio {
 constexpr std::size_t kAppObjectSize =
     sizeof(void*) == 8 ? 0xA55E0 : 0xA4530;
 
+// Model-slot capacity: the x64 recompile widened the model array from the
+// x86 original's 100 (app+0x780) to 255 slots (x64 app+0xBE8).  Every walk
+// of the slot array must use this bound - hardcoded 100s silently drop
+// models loaded past slot 99 in the x64 build, and hardcoded 255s overrun
+// into neighbouring state in the x86 build.
+constexpr int kModelSlotCount = sizeof(void*) == 8 ? 255 : 100;
+
 template <std::size_t N>
 struct RawPad { unsigned char b[N]; };
 struct EmptyPad {};

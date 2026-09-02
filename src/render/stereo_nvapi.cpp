@@ -23,7 +23,10 @@ bool g_nvapiAttempted = false;
 
 int NvapiInitImpl() {                                         // 0x4C6940
     if (g_nvapiModule == nullptr) {
-        g_nvapiModule = LoadLibraryA("nvapi.dll");            // 0x4C695F
+        // x86 loads "nvapi.dll" (0x4C695F); the x64 twin sub_7FF7CB4FEA80
+        // loads "nvapi64.dll" (@0x4FEAA4).
+        g_nvapiModule = LoadLibraryA(sizeof(void*) == 8 ? "nvapi64.dll"
+                                                        : "nvapi.dll");
         if (g_nvapiModule == nullptr)
             return -2;                                        // 0x4C696D
     }

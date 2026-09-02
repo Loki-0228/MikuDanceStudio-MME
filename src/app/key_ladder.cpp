@@ -33,10 +33,15 @@
 // The poll tables (frame_modes.cpp / model_query_gaps.cpp kLetterKeys)
 // carry the same binary pairing after the 2026-09 s/g transpose fix.
 //
-// Not ported here (not letters): the ']' (VK 221) interpolation-toggle
-// block 0x4721C9, the VK 221 edit-focus block 0x472246, the arrow-key
-// camera/light repeat section 0x47283F..0x472A49, the Enter register-frame
-// blocks and the ESC handling that surround the ladder in the pump.
+// The non-letter segments that surround the ladder in the pump are ported
+// in sibling files and wired from FrameDriver / this ladder: pump_edit_keys.cpp
+// carries the panel focus sweep (0x471342..0x471EB5), the ']' (VK 221)
+// interpolation toggle 0x4721C9, the DELETE-key model-edit rebuild 0x472246
+// (poll cell +0xB8), the TAB/VK226 combo cycling, Alt+Enter fullscreen, the
+// Enter register-frame blocks and the ESC handling; pump_navigation.cpp
+// carries the right/middle-button drags, the arrow-key camera/light repeat
+// section 0x47283F..0x472A49 and the numpad view presets 0x47314B...
+// (called below at their binary positions).
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -61,13 +66,12 @@ void FineShadowModeNotice(MMDApp* app);
 // command_control_500.cpp does (not in ported_funcs.hpp).
 void Sub432FA0(MMDApp* app);                              // VA 0x432FA0
 
-namespace {
+// pump_navigation.cpp - arrow-key navigation and numpad presets, called
+// from the ladder at their binary positions (see the call sites below).
+void ConsumeArrowKeyNavigation(MMDApp* app);              // VA 0x47283F
+void ConsumeNumpadViewPresets(MMDApp* app);               // VA 0x47314B
 
-// Byte 0xA0D28 twin (x64 0xA1DC8): Shift+G self-shadow map display toggle.
-// Consumed by the pump's shadow-map render pass (x86 0x46DE61) and the
-// init path (sub_40A730); no named MMDAppState field exists yet, so the
-// toggle lives here until app_layout.hpp gains one.
-std::uint8_t g_selfShadowMapDisplay = 0;
+namespace {
 
 // Port dialogFlags slots as written by frame_modes.cpp kLetterKeys.
 enum LetterSlot {
@@ -157,12 +161,12 @@ void ConsumeLetterHotkeys(MMDApp* app) {
             // Body = command case 0xD6 minus the command bookkeeping: flip
             // app+0x9EB7E, mirror menu 0xD6 and push the flag into every
             // loaded model's displayState (the pump walks the whole slot
-            // array; the port's slot array is 100 entries).
+            // array, kModelSlotCount wide in both layouts).
             HMENU menu = GetMenu(main);
             state.v9eb7e = state.v9eb7e != 0 ? 0 : 1;
             CheckMenuItem(menu, 0xD6,
                           state.v9eb7e != 0 ? MF_CHECKED : MF_UNCHECKED);
-            for (int slot = 0; slot < 100; ++slot) {
+            for (int slot = 0; slot < kModelSlotCount; ++slot) {
                 unsigned char* model = app->ModelSlot(slot);
                 if (model != nullptr)
                     mdl::Mdl(model)->displayState = state.v9eb7e;
@@ -213,7 +217,12 @@ void ConsumeLetterHotkeys(MMDApp* app) {
     // ---- 'G' (0x4726B2): seek frame / shadow map / fine shadow -----------
     if (focusOK && !focusInEdit && pressed(kSlotG)) {
         if (shift) {
-            g_selfShadowMapDisplay = g_selfShadowMapDisplay != 0 ? 0 : 1;
+            // Shift+G: flip the self-shadow map display byte (x86 +0xA0D28,
+            // x64 +0xA1DC8).  The render pass reads it together with
+            // selfShadowMode > 0 to composite the shadow map texture into
+            // the viewport (x64 0x7FF7CB44A5CD).
+            app->SelfShadowCompositionEnabled() =
+                app->SelfShadowCompositionEnabled() != 0 ? 0 : 1;
         } else if (ctrl) {
             FineShadowModeNotice(app);                     // 0x4726EE
         } else {
@@ -244,6 +253,10 @@ void ConsumeLetterHotkeys(MMDApp* app) {
         if (state.v9ed9c >= limit)
             state.v9ed9c = 0;
     }
+
+    // x86 0x47283F..0x472A49: the arrow-key camera/light navigation (with
+    // hold auto-repeat) sits here in the pump, between 'L' and Ctrl+'S'.
+    ConsumeArrowKeyNavigation(app);                 // pump_navigation.cpp
 
     // ---- Ctrl+'S' (0x472A65): save + bell (no edit-focus gate) -----------
     if (focusOK && pressed(kSlotS) && ctrl) {
@@ -346,6 +359,10 @@ void ConsumeLetterHotkeys(MMDApp* app) {
     // ---- 'D' (0x4730D9): model-offset dialog (0xDB) ----------------------
     if (pressed(kSlotD))
         SendMenuCommand(app, 0xDB);                        // case 219
+
+    // x86 0x47314B..0x4739E2: the numpad view presets run after the ESC
+    // stop block (pump_edit_keys.cpp) and before 'R', per the pump order.
+    ConsumeNumpadViewPresets(app);                  // pump_navigation.cpp
 
     // ---- 'R' (0x473989): frame control dialog (0xFB) ---------------------
     if (focusOK && modelMode && app->FrameStepPlayback() == 0 &&

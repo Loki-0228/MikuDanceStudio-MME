@@ -80,6 +80,8 @@ add_library(mikudancestudio_core STATIC
     src/app/frame_modes.cpp
     src/app/frame_modes_bone.cpp
     src/app/key_ladder.cpp
+    src/app/pump_edit_keys.cpp
+    src/app/pump_navigation.cpp
     src/physics/physics_create.cpp
     src/physics/physics_frame.cpp
     src/physics/scene_create.cpp

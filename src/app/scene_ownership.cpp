@@ -29,7 +29,10 @@ void TraceAccessoryRelease(int slot, const char* phase, const void* track) {
 }  // namespace
 
 void ReleaseSceneModels(MMDApp& app) {
-    for (int slot = 0; slot < 100; ++slot) {
+    // x64 teardown sub_7FF7CB42BD40+0x42C130: 255-count do/while over the
+    // model slots (app+0xBE8), each entry through sub_7FF7CB4C8D50
+    // (ModelDispose twin) then operator delete - kModelSlotCount wide.
+    for (int slot = 0; slot < kModelSlotCount; ++slot) {
         unsigned char*& model = app.ModelSlot(slot);
         if (model == nullptr)
             continue;

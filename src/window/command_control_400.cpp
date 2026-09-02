@@ -14,10 +14,12 @@
 //   415:0x4829E4  416:0x48073E  417:default   418:0x480734  419:0x48072A
 //   420:0x4834D2  421:0x484973  422:0x485CF2  423:0x4810F8  424:0x488300
 //   425:default  426:default  427:default  428:default  429:0x4862E0
-//   430:0x481109  431:0x481430  432:0x4816E6  433:default  434:default
-//   435:0x47EB7B  436:default   437:0x47FCF5  438:0x480651  439:0x47F3AF
-//   440:0x48A166  441:0x48A133  442:0x48D759  443:default   444:0x47F319
-//   445:0x47F364  446:0x486392  447:default  448:default  449:default
+//   430:0x481109  431:0x481430  432:0x4816E6  433:def_48F263 434:def_48F27E
+//   435:0x47EB7B  436:def_4828AA 437:0x47FCF5  438:0x480651  439:0x47F3AF
+//   440:0x48A166  441:0x48A133  442:0x48D759  443:def_48E214 444:0x47F319
+//   445:0x47F364  446:0x486392  447:default  448:default  449:def_48E37C
+//   ("def_" targets live in the dispatcher's default CBN_SELCHANGE chain
+//   (command_dispatch.cpp DefaultSelChangeChain); plain "default" = no-op.)
 //
 // Case map (id -> behaviour -> original VA):
 //   id  hex  VA            behaviour
@@ -102,12 +104,16 @@
 //                          0x9DA0A block, EnableWindow(0x1AF)
 //   431 1AF  0x00481430    light colour -> selected frames (inverse of 430)
 //   432 1B0  0x004816E6    light colour reset: rows -> 0x14/0x14/0x6B/0x6B
-//   433 1B1  default       no-op
-//   434 1B2  default       no-op
+//   433 1B1  0x0048F263    default chain: CBN_SELCHANGE on the 0x1B1 combo
+//                          -> SelectionReeval (command_dispatch.cpp)
+//   434 1B2  0x0048F27E    default chain: CB_GETCURSEL(0x1B2) cursor stored
+//                          into model 0x4CCF0 (frameRegistrationSelection)
 //   435 1B3  0x0047EB7B    load model: OPENFILENAMEW "All Model files
 //                          (*.pmd,*.pmx)", menu-0x12D gate, LoadModelFile,
 //                          RefreshRequest(-1)
-//   436 1B4  default       no-op
+//   436 1B4  0x004828AA    default chain: CBN_SELCHANGE on the model combo
+//                          -> Sub44D940 when the 0xA0B50 gate is clear;
+//                          kept as the local case below (equivalent)
 //   437 1B5  0x0047FCF5    delete model from combo 0x1B4: confirm box (EN/JP),
 //                          dispose model + sub-window, slot fixup (ids
 //                          0x2D7C/0x2D7D, bone tables 0x4CCE4, camera tables
@@ -123,7 +129,9 @@
 //                          0xA0B1C/0xA0B24/0xA0668 buffers, then
 //                          Sub4B4260 + PostLanguageSweep + SelectionReeval
 //                          when byte 0xA0664 != 0
-//   443 1BB  default       no-op
+//   443 1BB  0x0048E214    default chain: CB_GETCURSEL(0x1BB) -> IK table
+//                          model+0x26C0[24*sel+0x12] flag -> CheckRadioButton
+//                          0x1BC (set) / 0x1BD (clear)
 //   444 1BC  0x0047F319    combo 0x1BB selection -> table model+0x26C0
 //                          [24*sel+0x12] = 1
 //   445 1BD  0x0047F364    combo 0x1BB selection -> table model+0x26C0
@@ -134,13 +142,19 @@
 //                          -> byte 0x31C = 1 + RefreshRequest(-1)
 //   447 1BF  default       no-op
 //   448 1C0  default       no-op
-//   449 1C1  default       no-op
+//   449 1C1  0x0048E37C    default chain: camera parent model combo -
+//                          model lookup by 0x2D7C, 0x1C2 bone-list rebuild,
+//                          detach keeps the bone's world position (see
+//                          command_dispatch.cpp DefaultSelChangeChain)
 //
-// Default handler def_47E903 (0x482897): only acts when notify==1 and the
-// sending control equals GetDlgItem(hwnd, 0x1B4) (Sub44D940 when
-// app+0xA0B50 == 0); the compare chain can never match the ids of this
-// family (their control HWNDs are 0x190..0x1BE), so the default is a no-op
-// here - cases 400/401/440/441 fall into it in the original.
+// Default handler def_47E903 (0x482897): when HIWORD(wParam) == 1
+// (CBN_SELCHANGE) lParam is compared against GetDlgItem(hwnd, id) for each
+// combo of the fixed chain 0x1B4/0x1BB/0x1D7/0x1C1/0x1C2/0x1DA/0x1DB/0x1F8/
+// 0x1FD/0x202/0x207/0x1B1/0x1B2 and the matching handler runs (ported as
+// DefaultSelChangeChain in command_dispatch.cpp).  Of this family's ids,
+// 433/434/443/449 belong to those combos and are handled there; 436 (0x1B4)
+// keeps the equivalent local case above; cases 400/401/440/441 fall into
+// the chain with no control match, which is a no-op for them.
 //
 // Fidelity notes:
 //   * Float math follows the original x87 shape (double intermediates,

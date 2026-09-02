@@ -112,8 +112,9 @@ namespace {
 // (@0x542660, set by the 0x4C6940 init chain), caches the resolved
 // function pointer in dword_542668 behind the one-shot flag byte_54266C,
 // and returns -3 when the interface cannot be resolved.  The port resolves
-// lazily through the same LoadLibrary("nvapi.dll") path used by
-// src/render/stereo_nvapi.cpp and src/app/shutdown_cleanup.cpp; the two
+// lazily through the same arch-split LoadLibrary path used by
+// src/render/stereo_nvapi.cpp and src/app/shutdown_cleanup.cpp (x64
+// original: sub_7FF7CB4FEA80 loads "nvapi64.dll"); the two
 // conditional trace hooks (dword_545948/dword_54594C) are always-null
 // instrumentation in the original and are omitted.
 int NvapiStereo3CD58F89(void* stereoHandle, unsigned enable) {
@@ -123,7 +124,8 @@ int NvapiStereo3CD58F89(void* stereoHandle, unsigned enable) {
     static bool resolved = false;        // mirrors byte_54266C one-shot
     if (!resolved) {
         resolved = true;
-        HMODULE module = LoadLibraryA("nvapi.dll");
+        HMODULE module = LoadLibraryA(sizeof(void*) == 8 ? "nvapi64.dll"
+                                                         : "nvapi.dll");
         if (module != nullptr) {
             auto query = reinterpret_cast<QueryInterface>(
                 GetProcAddress(module, "nvapi_QueryInterface"));

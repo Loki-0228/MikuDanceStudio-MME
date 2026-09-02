@@ -253,7 +253,10 @@ int NvapiStereoDestroyHandle(void* stereoHandle) {
     static bool resolved = false;             // mirrors 0x5425AC flag
     if (!resolved) {
         resolved = true;
-        HMODULE module = LoadLibraryA("nvapi.dll");
+        // arch-split library name, as in stereo_nvapi.cpp (x64 original:
+        // sub_7FF7CB4FEA80 loads "nvapi64.dll")
+        HMODULE module = LoadLibraryA(sizeof(void*) == 8 ? "nvapi64.dll"
+                                                         : "nvapi.dll");
         if (module != nullptr) {
             auto query = reinterpret_cast<QueryInterface>(
                 GetProcAddress(module, "nvapi_QueryInterface"));

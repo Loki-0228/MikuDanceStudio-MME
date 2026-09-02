@@ -49,10 +49,9 @@ namespace mikudancestudio {
 double g_MouseScaleA = 0.5;                       // VA 0x0052B8F0
 double g_MouseScaleB = 0.004999999888241291;      // VA 0x0052E9C0
 double g_MouseScaleC = 0.05000000074505806;       // VA 0x0052D738
-float g_MouseScaleD = 0.008726646f;       // VA 0x0052E8C0 (PI/360)
-
-constexpr double kRotateScale = 0.009999999776482582;  // VA 0x52E9C8
-constexpr double kRightModifiedScale = 0.10000000149011612; // 0x52BEA8
+float g_MouseScaleD = 0.0020000000949949f;        // VA 0x0052E8C0 (true
+                                                  // .rdata double; the old
+                                                  // PI/360 guess was wrong)
 
 static void ViewRefreshGate(MMDApp* s) {
     // Original dword gates (Ghidra: this+0x9ED98 select-state gate,
@@ -132,24 +131,8 @@ void PanCameraPosition(MMDApp* app, int dx, int dy) {
     app->CameraPositionY() += static_cast<float>(dy) * scale;
 }
 
-void PanSelectedCameraKey(MMDApp* app, int dx, int dy) {
-    double pixelScale = 0.0000199999994947575;
-    if (app->ShiftModifierActive())
-        pixelScale = 0.000199999994947575;
-    else if (app->CtrlModifierActive())
-        pixelScale = 0.00000199999999495049;
-
-    const float depth = std::fabs(app->CameraPositionZ());
-    const float depthFactor = depth <= 0.3f
-        ? 10.0f
-        : std::max(depth, 1.0f);
-    const double scale = pixelScale * static_cast<double>(depthFactor) *
-        static_cast<double>(app->CameraFov());
-    app->CameraPositionX() = static_cast<float>(
-        app->CameraPositionX() - static_cast<double>(dx) * scale);
-    app->CameraPositionY() = static_cast<float>(
-        app->CameraPositionY() + static_cast<double>(dy) * scale);
-}
+// PanSelectedCameraKey (parented-camera-key MMB pan) moved to
+// pump_navigation.cpp with the rest of the x86 0x470BF5..0x47133D block.
 
 int ViewportToolAtPoint(MMDApp* app) {
     app->ViewportToolHovered() = 0;
@@ -610,46 +593,10 @@ void MouseInteractionBegin(MMDApp* app) {
         }
     }
 
-    if (app->RightMouseButtonHeld()) {
-        if (app->ShiftModifierActive()) {
-            app->ViewOffsetY() = static_cast<float>(
-                app->ViewOffsetY() + dy * kRightModifiedScale);
-            app->ViewOffsetX() = static_cast<float>(
-                app->ViewOffsetX() - dx * kRightModifiedScale);
-        } else if (app->CtrlModifierActive()) {
-            app->CameraDistance() = static_cast<float>(
-                app->CameraDistance() - dy * kRightModifiedScale);
-        } else {
-            app->CameraYaw() = static_cast<float>(
-                app->CameraYaw() - dx * kRotateScale);
-            app->CameraPitch() = static_cast<float>(
-                app->CameraPitch() - dy * kRotateScale);
-        }
-        ViewRefreshGate(app);
-    }
-
-    if (app->MiddleMouseButtonHeld()) {
-        bool selectedCameraKey = false;
-        if (app->state.optflag[0] == 0) {
-            const double scale = app->ShiftModifierActive()
-                ? g_MouseScaleA
-                : (app->CtrlModifierActive()
-                    ? g_MouseScaleB : g_MouseScaleC);
-            app->ViewOffsetY() = static_cast<float>(
-                app->ViewOffsetY() + dy * scale);
-            app->ViewOffsetX() = static_cast<float>(
-                app->ViewOffsetX() - dx * scale);
-        } else if (app->CameraParentModel() < 0) {
-            PanCameraPosition(app, dx, dy);
-        } else {
-            PanSelectedCameraKey(app, dx, dy);
-            selectedCameraKey = true;
-        }
-        if (selectedCameraKey)
-            PostViewRefresh(app);  // 0x471128
-        else
-            ViewRefreshGate(app);
-    }
+    // Right/middle-button camera drags (x86 0x470BF5..0x47133D) live in
+    // pump_navigation.cpp ConsumeRightButtonDrag / ConsumeMiddleButtonPan,
+    // wired from FrameDriver before the letter ladder; the approximation
+    // that used to live here was removed with their arrival.
 }
 
 void MouseInteractionEnd(MMDApp* app) {

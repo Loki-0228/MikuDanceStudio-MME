@@ -133,9 +133,11 @@ void Sub464A00(MMDApp* app) {
 // VA 0x0042A110 - model count query behind ExpGetPmdNum.  Original walks the
 // 100-slot model array at +0x780 in an unrolled 20x5 loop counting non-null
 // entries (the loop body is the compiler's unroll of `for i in 0..100`).
+// x64 twin: the ExpGetPmdNum export body itself (sub_7FF7CB4FB5F0) counts
+// non-null entries in a 255-count do/while over app+0xBE8.
 int GetPmdNum(MMDApp* app) {
     int count = 0;
-    for (int slot = 0; slot < 100; ++slot) {
+    for (int slot = 0; slot < kModelSlotCount; ++slot) {
         if (app->ModelSlot(slot) != nullptr)
             ++count;
     }

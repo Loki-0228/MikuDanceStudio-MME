@@ -82,9 +82,10 @@ void Sub4C3530(void* sub, double v);                           // VA 0x004C3530
 void Sub4168D0(MMDApp* app);                                    // VA 0x004168D0
 
 // VA 0x0044D940 - row/panel mode toggle (combobox-driven rebuild of the
-// accessory/camera panel + menu enable state).  Stub body lives in
-// src/unported/stubs.cpp (finishing phase consolidation).
-// TODO(port): real body - see translated reference fcn_0044d940.cpp.
+// accessory/camera panel + menu enable state).  Full port lives in
+// src/window/ui_model_reload.cpp (verified 2026-09 branch-by-branch
+// against the x64 twin sub_7FF7CB486B10); G5 of the pump's TAB/VK226
+// combo cycle (src/app/pump_edit_keys.cpp) is a new caller.
 void Sub44D940(MMDApp* app);
 
 void HandleLButtonDblClk(MMDApp* app) {
@@ -302,13 +303,13 @@ void HandleMouseActivate(MMDApp* app) {
         if (fg == cached || app->MouseY() <= rect.bottom - 158) {
             SendMessageA(GetDlgItem(hwnd, 436), 0x14Eu /*CB_SETCURSEL*/,
                          app->ViewModeComboSelection(), 0);     // 656428 (0xA042C)
-            Sub44D940(app);                                       // 0x44D940 (pending port)
+            Sub44D940(app);                                       // 0x44D940 (ui_model_reload.cpp)
             return;
         }
     } else if (app->MouseY() > rect.bottom - 158 &&
                fg != cached) {
         SendMessageA(GetDlgItem(hwnd, 436), 0x14Eu /*CB_SETCURSEL*/, 0, 0);
-        Sub44D940(app);                                           // 0x44D940 (pending port)
+        Sub44D940(app);                                           // 0x44D940 (ui_model_reload.cpp)
         return;
     } else if (app->EditMode() != ViewportEditMode::Bone) {
         // panel already active: checkboxes 491/492/493 off, 490 on

@@ -251,7 +251,7 @@ void Sub04B0Init(void* object) {
     accessory.materialCount = 0;
     accessory.opacity = 1.0f;
     accessory.currentMaterial = -1;
-    accessory.reservedTail[0] = 0;
+    accessory.rowSelected = 0;
 }
 
 bool InitAxisMesh(MMDApp* app) {

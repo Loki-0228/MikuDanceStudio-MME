@@ -494,8 +494,11 @@ void Sub41E810(int count, HWND hDlg) {
 
     std::int32_t* order =
         static_cast<std::int32_t*>(app->AccessoryOrderArray());
+    // x64 sub_7FF7CB4A98C0+0x4A98F0: order runs 1..count (the combo count
+    // cached at dword_7FF7CB564604), the slot scan to 0xFF (cmp ecx,0FFh
+    // @0x4A991A) - kModelSlotCount wide.
     for (int ord = 1; ord <= count; ++ord) {
-        for (int slot = 0; slot < 100; ++slot) {
+        for (int slot = 0; slot < kModelSlotCount; ++slot) {
             unsigned char* model = app->ModelSlot(slot);
             if (model != nullptr &&
                 model[kModelOrder2D7C] == static_cast<unsigned char>(ord)) {

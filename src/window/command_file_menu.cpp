@@ -1104,13 +1104,13 @@ void Sub439D00(MMDApp* app, int count, HWND hDlg) {
     for (int j = 0; j < 255; ++j) {
         mdl::AccessoryRecord* acc = app->AccessorySlot(j);
         if (acc != nullptr)
-            acc->reservedTail[0] = 0;                           // 0x439DC7
+            acc->rowSelected = 0;                               // 0x439DC7
     }
     {
         mdl::AccessoryRecord* selected =
             app->AccessorySlot(s.SelectedObjectSlot());
         if (selected != nullptr)
-            selected->reservedTail[0] = 1;                      // 0x439E34
+            selected->rowSelected = 1;                          // 0x439E34
     }
     PostLanguageSweep(app);                                     // 0x42F1E0
     PostLanguageSweep2(app);                                    // 0x40D070

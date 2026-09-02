@@ -150,10 +150,15 @@ void Sub43BED0(MMDApp* app, HWND hEdit, int idx) {
                          reinterpret_cast<LPARAM>(kHeadGroundCombo));
             SendMessageA(normalCombo, CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kHeadNormalCombo));
-            for (int order = 1; order < 255; ++order) {
+            // x64 sub_7FF7CB4AC790+0x4AC9B4..0x4ACA92: order runs 1..254
+            // (inc r12d; cmp r12d,0FFh), the slot scan to 0xFF (cmp
+            // edx,0FFh @0x4AC9ED) - kModelSlotCount wide on both walks
+            // (255 == kModelSlotCount on x64; the literal also kept the x86
+            // build walking past its 100-slot array).
+            for (int order = 1; order < kModelSlotCount; ++order) {
                 // first model slot carrying this combo-order byte
                 mdl::ModelRecord* ordered = nullptr;
-                for (int slot = 0; slot < 255; ++slot) {
+                for (int slot = 0; slot < kModelSlotCount; ++slot) {
                     unsigned char* other = app->ModelSlot(slot);
                     if (other != nullptr &&
                         mdl::Mdl(other)->comboSelIndex == order) {
