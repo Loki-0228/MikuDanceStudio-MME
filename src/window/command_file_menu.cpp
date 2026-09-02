@@ -222,6 +222,28 @@ static const char kCaptionRegBlinkJp[] =
 // 0x52F8A0: "まばたき追加" (blink-count report caption)
 static const char kCaptionBlinkCntJp[] =
     "\x82\xDC\x82\xCE\x82\xBD\x82\xAB\x92\xC7\x89\xC1";
+// x64 0x7FF7CB54EB38 (x86 0x52FC9C): "%d個のポイントを削除しました" - the
+// delete-unused-frames report format (case 222, JP branch of
+// "%d point was deleted.").
+static const char kFmtPointsDeletedJp[] =
+    "%d"
+    "\x8C\xC2"                                // 個
+    "\x82\xCC"                                // の
+    "\x83\x7C\x83\x43\x83\x93\x83\x67"        // ポイント
+    "\x82\xF0"                                // を
+    "\x8D\xED\x8F\x9C"                        // 削除
+    "\x82\xB5\x82\xDC\x82\xB5\x82\xBD";       // しました
+// x64 0x7FF7CB54EF80 (x86 0x52F8B0): "%d回のまばたきを追加しました" - the
+// random-blink-registration report format (case 227, JP branch of
+// "%d blinking is registerd").
+static const char kFmtBlinksAddedJp[] =
+    "%d"
+    "\x89\xF1"                                // 回
+    "\x82\xCC"                                // の
+    "\x82\xDC\x82\xCE\x82\xBD\x82\xAB"        // まばたき
+    "\x82\xF0"                                // を
+    "\x92\xC7\x89\xC1"                        // 追加
+    "\x82\xB5\x82\xDC\x82\xB5\x82\xBD";       // しました
 // 0x52F99C: "まばたき" + NULs - the blink-morph name compared by 9 bytes.
 static const char kNameMabataki[] =
     "\x82\xDC\x82\xCE\x82\xBD\x82\xAB\x00\x00\x00\x00";
@@ -266,11 +288,12 @@ static const char kMsgSelectBoneJp[] =
 // read (only silence the compiler's format-string warning).
 static const wchar_t kFmt529688[] = L"\x0\x0%s%s";
 
-// 0x52B834: "このPCで作成できる大きさを超えています" (canvas-size dialog
-// "too big for your PC!" JP text, 0x40ECE0)
+// 0x52B834: "このPCで処理できる大きさを超えています" (canvas-size dialog
+// "too big for your PC!" JP text, 0x40ECE0; x64 0x7FF7CB54F9E8 is
+// byte-identical)
 static const char kMsgCanvasTooBigJp[] =
     "\x82\xB1\x82\xCC\x50\x43\x82\xC5"   // このPCで
-    "\x8F\x88\x97\x9D\x82\xC5\x82\xAB"   // 作成でき
+    "\x8F\x88\x97\x9D\x82\xC5\x82\xAB"   // 処理でき
     "\x82\xE9\x91\xE5\x82\xAB\x82\xB3"   // る大きさ
     "\x82\xF0\x92\xB4\x82\xA6\x82\xC4"   // を超えて
     "\x82\xA2\x82\xDC\x82\xB7";          // います
@@ -1475,7 +1498,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             sprintf_s(text, 0x100, "%d point was deleted.", deleted);
             MessageBoxA(MainHwnd(app), text, "delete unused frame", 0x40000);
         } else {
-            sprintf_s(text, 0x100, "%d", deleted);
+            sprintf_s(text, 0x100, kFmtPointsDeletedJp, deleted);
             MessageBoxA(MainHwnd(app), text, kCaptionDelUnusedJp, 0x40000);
         }
         app->SceneModified() = 1;
@@ -1806,7 +1829,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             sprintf_s(text, 0x100, "%d blinking is registerd", count);
             MessageBoxA(MainHwnd(app), text, "register blinking", 0x40000);
         } else {
-            sprintf_s(text, 0x100, "%d", count);
+            sprintf_s(text, 0x100, kFmtBlinksAddedJp, count);
             MessageBoxA(MainHwnd(app), text, kCaptionBlinkCntJp, 0x40000);
         }
         app->SceneModified() = 1;

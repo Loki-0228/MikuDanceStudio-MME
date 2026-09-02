@@ -73,6 +73,40 @@ namespace {
 using mdl::At;
 using d3dx::D3DXMATRIXF;
 
+// ---- JP header-error texts (byte-exact Shift-JIS as in the x64 .rdata) ----
+// x64 0x7FF7CB551D38 / x86 0x53140C: "PMXファイルのバージョンは2.0しか読み
+// 込めません" - the version-gate message (JP branch of "PMX files version is
+// different from 2.0.").  The x64 lists the blob as "PMX"; the SJIS tail
+// follows inline.
+static const char kMsgPmxVersionJp[] =
+    "PMX"
+    "\x83\x74\x83\x40\x83\x43\x83\x8B"        // ファイル
+    "\x82\xCC"                                // の
+    "\x83\x6F\x81\x5B\x83\x57\x83\x87\x83\x93"  // バージョン
+    "\x82\xCD"                                // は
+    "2.0"
+    "\x82\xB5\x82\xA9"                        // しか
+    "\x93\xC7\x82\xDD\x8D\x9E\x82\xDF"        // 読み込め
+    "\x82\xDC\x82\xB9\x82\xF1";               // ません
+// x64 0x7FF7CB551DA8 / x86 0x531390: "MMDではエンコード方式がUTF16のPMXファ
+// イルしか読み込めません" - the encoding-gate message (JP branch of
+// "MMD can't read UTF8 encorded PMX.\nPlease exchange it to UTF16.").
+static const char kMsgPmxUtf8Jp[] =
+    "MMD"
+    "\x82\xC5\x82\xCD"                        // では
+    "\x83\x47\x83\x93\x83\x52\x81\x5B\x83\x68"  // エンコード
+    "\x95\xFB\x8E\xAE"                        // 方式
+    "\x82\xAA"                                // が
+    "UTF16"
+    "\x82\xCC"                                // の
+    "PMX"
+    "\x83\x74\x83\x40\x83\x43\x83\x8B"        // ファイル
+    "\x82\xB5\x82\xA9"                        // しか
+    "\x93\xC7\x82\xDD\x8D\x9E\x82\xDF"        // 読み込め
+    "\x82\xDC\x82\xB9\x82\xF1";               // ません
+// JP caption of both header errors: "ファイル読込" - same blob the PMD open
+// path uses (x64 0x7FF7CB550880, x86 0x52DB80; = kTitleOpenFailJp).
+
 IDirect3DDevice9* DevOf(D3DRenderer* sub) {
     return sub->device;                       // wrapper + 120032
 }
@@ -210,8 +244,9 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             sprintf_s(text, 0x100,
                       "PMX files version is different from 2.0.");
         else
-            sprintf_s(text, 0x100, "PMX");
-        MessageBoxA(hwnd, text, enData ? "open file" : "MMD", 0);
+            sprintf_s(text, 0x100, kMsgPmxVersionJp);
+        MessageBoxA(hwnd, text,
+                    enData ? "open file" : kTitleOpenFailJp, 0);
         _close(fh);
         return false;
     }
@@ -229,8 +264,9 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
         sprintf_s(text, 0x100, enData
             ? "MMD can't read UTF8 encorded PMX.\nPlease exchange it to "
               "UTF16."
-            : "MMD");
-        MessageBoxA(hwnd, text, enData ? "open file" : "MMD", 0);
+            : kMsgPmxUtf8Jp);
+        MessageBoxA(hwnd, text,
+                    enData ? "open file" : kTitleOpenFailJp, 0);
         _close(fh);
         return false;
     }

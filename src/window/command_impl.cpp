@@ -107,10 +107,20 @@ void CmdSavePose(MMDApp* app) {
                 if (selBits[b] != 0) { anySelected = true; break; }
     }
     if (!anySelected) {
+        static const char kJpPoseTitle[] =
+            "\x83\x7c\x81\x5b\x83\x59\x83\x66\x81\x5b\x83\x5e\x95\xdb\x91\xb6";  // ポーズデータ保存
+        static const char kJpPoseText[] =
+            "\x83\x7c\x81\x5b\x83\x59\x83\x66\x81\x5b\x83\x5e\x82\xcd\x91I\x91\xf0"
+            "\x82\xb3\x82\xea\x82\xbd\x83\x7b\x81\x5b\x83\x93\x82\xcc\x82\xdd"
+            "\x82\xaa\x83\x5a\x81\x5b\x83\x75\x82\xb3\x82\xea\x82\xdc\x82\xb7\n"
+            "\x83\x7b\x81\x5b\x83\x93\x82\xcc\x88\xea\x95\x94\x81\x41\x82\xe0"
+            "\x82\xb5\x82\xad\x82\xcd\x91S\x82\xc4\x82\xf0\x91I\x91\xf0\x82\xb5"
+            "\x82\xc4\x82\xad\x82\xbe\x82\xb3\x82\xa2";  // 0x7FF7CB54E7B0
         MessageBoxA(MainHwnd(app),
             english ? "Pose data will be saved only selected bone.\nPlease select bone."
-                    : "(JP 0x53178C region)",
-            "save pose data", MB_OK | MB_ICONWARNING);
+                    : kJpPoseText,
+            english ? "save pose data" : kJpPoseTitle,
+            MB_OK | MB_ICONWARNING);
         return;
     }
     SetCurrentDirectoryW(app->ExeDir());

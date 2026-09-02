@@ -1763,7 +1763,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
                           dir[2] * mag * 10.0f));
         }
     }
-    swprintf_s(wndText, 0x100, L"MikuMikuDance [%s]",            // 0x45E2A4
+    // Title brand: the port ships as MikuDanceStudio (About-box rename);
+    // v2 load and pmm_save.cpp already use the same form.
+    swprintf_s(wndText, 0x100, L"MikuDanceStudio [%s]",           // 0x45E2A4
                reinterpret_cast<const wchar_t*>(s->state.envFileName));
     SetWindowTextW(main, wndText);
 

@@ -86,14 +86,29 @@ static bool InitTimelineAudio(MMDApp* app, HWND hwnd, HDC timeline,
 
     IDirectSound*& directSound = audio->directSound;
     if (FAILED(DirectSoundCreate(nullptr, &directSound, nullptr))) {
+        // x64 sub_7FF7CB4FA070 @ 0x7FF7CB4FA0C9: JP text is the full blob at
+        // 0x7FF7CB552568 =
+        // "DirectSoundが生成できません\nDirectSoundの使用が不可能です".
+        // Caption stays the empty string: the original passes a pointer at
+        // a NUL byte (IDA name "Locale" resolves to zeroed data).
+        static const char kJpCannotMakeDirectSound[] =
+            "DirectSound\x82\xAA\x90\xB6\x90\xAC\x82\xC5\x82\xAB\x82\xDC"
+            "\x82\xB9\x82\xF1\nDirectSound\x82\xCC\x8E\x67\x97\x70\x82\xAA"
+            "\x95\x73\x89\xC2\x94\x5C\x82\xC5\x82\xB7";
         MessageBoxA(hwnd,
-                    english ? "Cannot make DirectSound!!" : "DirectSound",
+                    english ? "Cannot make DirectSound!!"
+                            : kJpCannotMakeDirectSound,
                     "", MB_OK);
         return false;
     }
     if (FAILED(directSound->SetCooperativeLevel(hwnd, DSSCL_PRIORITY))) {
+        // JP text at x64 0x7FF7CB5525C8:
+        // "DirectSoundの協調に失敗しました".
+        static const char kJpFailedCooperateDirectSound[] =
+            "DirectSound\x82\xCC\x8B\xA2\x92\xB2\x82\xC9\x8E\xB8\x94\x73\x82\xB5\x82\xDC\x82\xB5\x82\xBD";
         MessageBoxA(hwnd,
-                    english ? "Failed cooperate DirectSound!!" : "DirectSound",
+                    english ? "Failed cooperate DirectSound!!"
+                            : kJpFailedCooperateDirectSound,
                     "", MB_OK);
         return false;
     }
@@ -368,8 +383,22 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 
         // 0x467509 and 0x46759E: the HUD sprite sheet and accessory helper
         // texture are PNG resources 102 and 114 in the original image.
-        LoadPngTexture(app, device, 0x66,
-            &s.OverlayTexture());
+        // PNG 102 load failure gets the original's error box (x64
+        // 0x7FF7CB4328EE, caption "InitFont"): EN "cannot load splite.tga"
+        // / JP "splite.tga読込失敗" (0x7FF7CB54B4C0/B4D9).  The original
+        // asset was named splite.tga; the port ships the same sheet as
+        // res/assets/hud_sprites.png, so the message names that file.
+        // Non-fatal: the original shows the box and falls through to
+        // PNG 114 (only 102 has a failure box).
+        if (!LoadPngTexture(app, device, 0x66, &s.OverlayTexture())) {
+            static const char kJpHudSheetLoadFailed[] =
+                "hud_sprites.png\x93\xC7\x8D\x9E\x8E\xB8\x94\x73";
+            MessageBoxA(hwnd,
+                        app->EnglishUI() != 0
+                            ? "cannot load hud_sprites.png"
+                            : kJpHudSheetLoadFailed,
+                        "InitFont", MB_OK);
+        }
         LoadPngTexture(app, device, 0x72,
             &s.ProjectedShadowRestoreTexture());
     }

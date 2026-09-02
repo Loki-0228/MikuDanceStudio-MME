@@ -155,7 +155,16 @@ bool InitD3D(MMDApp* app, HWND hwnd, bool english, HMODULE hModule) {
     if (d3d == nullptr) {
         MessageBoxA(hwnd,
             english ? "DirectX9 is not installed in your PC!!\nPlease install it if you want."
-                    : "(JP 0x5296C0)",
+                    : "DirectX\x82\xCC\x83\x6F\x81\x5B\x83\x57\x83\x87"
+                      "\x83\x93\x39\x82\xAA\x83\x43\x83\x93\x83\x58"
+                      "\x83\x67\x81\x5B\x83\x8B\x82\xB3\x82\xEA\x82"
+                      "\xC4\x82\xA2\x82\xDC\x82\xB9\x82\xF1\x0A\x8D"
+                      "\xC5\x90\x56\x82\xCC\x44\x69\x72\x65\x63\x74"
+                      "\x58\x82\xF0\x83\x70\x83\x73\x83\x52\x83\x93"
+                      "\x82\xC9\x83\x43\x83\x93\x83\x58\x83\x67\x81"
+                      "\x5B\x83\x8B\x82\xB5\x82\xC4\x89\xBA\x82\xB3"
+                      "\x82\xA2",  // x64 0x7FF7CB54A338
+
             "Direct3D::Init", MB_OK);
         return false;
     }

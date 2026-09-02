@@ -61,6 +61,23 @@ void StripNewline(wchar_t* s) {
     *s = L'\0';
 }
 
+// JP caption shared by every window-creation failure box of the init path
+// (x64 0x7FF7CB54B0E8 = メインウィンドウ作成).
+constexpr const char kJpCaptionCreateMainWindow[] =
+    "\x83\x81\x83\x43\x83\x93\x83\x45\x83\x42\x83\x93\x83\x68\x83\x45"
+    "\x8d\xec\x90\xac";
+
+// JP box text for the RecWindow RegisterClassA failure (x64 0x7FF7CB54B128
+// = 録画用ウィンドウ登録失敗, selected at 0x7FF7CB42EBD9).
+constexpr const char kJpRecWindowRegFailed[] =
+    "\x98\x5e\x89\xe6\x97\x70\x83\x45\x83\x42\x83\x93\x83\x68\x83\x45"
+    "\x93\x6f\x98\x5e\x8e\xb8\x94\x73";
+
+// JP box text for the MicWindow RegisterClassA failure (x64 0x7FF7CB54B170
+// = 別窓登録失敗, selected at 0x7FF7CB42EC45).
+constexpr const char kJpMicWindowRegFailed[] =
+    "\x95\xca\x91\x8b\x93\x6f\x98\x5e\x8e\xb8\x94\x73";
+
 }  // namespace
 
 
@@ -315,12 +332,9 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     if (!RegisterClassA(&wc)) {                                 // 0x47BC14
         // Original swaps only the caption on JP UI (text stays English):
         // x64 0x7FF7CB54B0E8 = "メインウィンドウ作成".
-        static const char kCaptionCreateWndJp[] =
-            "\x83\x81\x83\x43\x83\x93\x83\x45\x83\x42\x83\x93\x83\x68\x83\x45"
-            "\x8D\xEC\x90\xAC";
         MessageBoxA(nullptr, "RegisterClass failed",
                     s.EnglishUI() ? "create main window"
-                                  : kCaptionCreateWndJp,
+                                  : kJpCaptionCreateMainWindow,
                     MB_OK);
         return false;
     }
@@ -331,7 +345,14 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     wc.hInstance = hInstance;
     wc.lpszClassName = "RecWindow";
     if (!RegisterClassA(&wc)) {
-        MessageBoxA(nullptr, "RecWindow failed", "create main window", MB_OK);
+        // x64 0x7FF7CB42EBAF: EN keeps "RecWindow failed"/"create main
+        // window"; JP swaps both text and caption (0x7FF7CB42EBD2).
+        MessageBoxA(nullptr,
+                    s.EnglishUI() ? "RecWindow failed"
+                                  : kJpRecWindowRegFailed,
+                    s.EnglishUI() ? "create main window"
+                                  : kJpCaptionCreateMainWindow,
+                    MB_OK);
         return false;
     }
 
@@ -341,7 +362,14 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     wc.hInstance = hInstance;
     wc.lpszClassName = "MicWindow";
     if (!RegisterClassA(&wc)) {
-        MessageBoxA(nullptr, "MicWindow failed", "create main window", MB_OK);
+        // x64 0x7FF7CB42EC1B: EN keeps "MicWindow failed"/"create main
+        // window"; JP swaps both text and caption (0x7FF7CB42EC3E).
+        MessageBoxA(nullptr,
+                    s.EnglishUI() ? "MicWindow failed"
+                                  : kJpMicWindowRegFailed,
+                    s.EnglishUI() ? "create main window"
+                                  : kJpCaptionCreateMainWindow,
+                    MB_OK);
         return false;
     }
 

@@ -704,10 +704,20 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
         ++slot;
     if (slot >= 255) {
         app->state.bC = 1;
+        static const char kJpAccLimit[] =
+            "\x92\xc7\x89\xc1\x82\xc5\x82\xab\x82\xe9\x83\x41\x83\x4e"
+            "\x83\x5a\x83\x54\x83\x8a\x82\xcc\x8d\xc5\x91\xe5\x90\x94"
+            "\x82\xcd%d\x8c\xc2\x82\xdc\x82\xc5\x82\xc5\x82\xb7";
+        static const char kJpAccTitle[] =
+            "\x83\x41\x83\x4e\x83\x5a\x83\x54\x83\x8a\x93\xc7\x8d\x9e";  // アクセサリ読込
+        const bool english = app->EnglishUI() != 0;
         char text[256];
-        sprintf_s(text, "You cannot add accessory over %d", 255);
-        MessageBoxA(static_cast<HWND>(app->Hwnd()), text, "load accessory",
-                    MB_OK);
+        sprintf_s(text,
+                  english ? "You cannot add accessory over %d"
+                          : kJpAccLimit,
+                  255);
+        MessageBoxA(static_cast<HWND>(app->Hwnd()), text,
+                    english ? "load accessory" : kJpAccTitle, MB_OK);
         return;
     }
 

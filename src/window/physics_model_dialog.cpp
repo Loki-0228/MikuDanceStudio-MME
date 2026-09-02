@@ -193,8 +193,8 @@ static const char kMsgNoBodyJp[] =
     "\x82\xa2";
 // x64 0x7FF7CB55129C: last group-combo entry (Shift-JIS)
 static const char kGroup16Jp[] = "16(\x8f\xb0)";
-// x64 0x7FF7CB5512B8: "半径"
-static const char kLabelRadiusJp[] = "\x94\xbc\x8c\xa1";
+// x64 0x7FF7CB5512B8 / x86 0x52BF90: "半径" (径 = 0x8C61; 0x8CA1 would be 牽)
+static const char kLabelRadiusJp[] = "\x94\xbc\x8c\x61";
 // x64 0x7FF7CB5512D8: "　幅" (full-width space + width)
 static const char kLabelWidthJp[] = "\x81\x40\x95\x9d";
 // x64 0x7FF7CB5512E0: "高さ"
