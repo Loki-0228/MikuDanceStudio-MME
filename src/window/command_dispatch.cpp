@@ -42,7 +42,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
 
     switch (id) {
     case 200:        // File: Exit (0x48BCF9) - flag + WM_CLOSE
-        s.raw<std::uint32_t>(0x30) = 1;
+        s.state.dialogFlags[0] = 1;
         SendMessageA(hwnd, WM_CLOSE, 0, 0);
         break;
 
@@ -110,7 +110,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         CmdLoadAvi(app);
         break;
     case 0xD6: {    // View: character transparent mode (0x487FA0)
-        auto& flag = s.raw<unsigned char>(offsets::kByte9EB7E);
+        auto& flag = s.state.v9eb7e;
         flag = flag ? 0 : 1;
         CheckMenuItem(GetMenu(hwnd), 0xD6, flag ? MF_CHECKED : MF_UNCHECKED);
         // 0x487FF5..0x48803C: push the new flag into every loaded model's

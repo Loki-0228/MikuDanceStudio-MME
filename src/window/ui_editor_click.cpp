@@ -1254,12 +1254,12 @@ void HandleLButtonDown(MMDApp* app) {
     // + row marker 0x9DA09 = 1.  Morph rect: same with 9DA07/9DA08, marker 2.
     {
         const std::int32_t boneOff =
-            static_cast<std::int8_t>(app->raw<std::uint8_t>(0x9DA06)) + rc.bottom;
+            static_cast<std::int8_t>(app->state.interpCurveControlCache[1]) + rc.bottom;
         const std::int32_t boneTop =
-            static_cast<std::int8_t>(app->raw<std::uint8_t>(0x9DA05));
+            static_cast<std::int8_t>(app->state.interpCurveControlCache[0]);
         if (x < boneTop + 0xD && x > boneTop + 3 &&
             y > boneOff - 0x8C && y < boneOff - 0x82 &&
-            app->raw<std::uint8_t>(0x9DA04) != 0) {
+            app->state.interpCurveUniformFound != 0) {
             if (app->PlaybackActive() != 0)
                 goto L_tail;
             unsigned char* m = ActiveModel(app);
@@ -1271,12 +1271,12 @@ void HandleLButtonDown(MMDApp* app) {
             goto L_tail;
         }
         const std::int32_t morphOff =
-            static_cast<std::int8_t>(app->raw<std::uint8_t>(0x9DA08)) + rc.bottom;
+            static_cast<std::int8_t>(app->state.interpCurveControlCache[3]) + rc.bottom;
         const std::int32_t morphTop =
-            static_cast<std::int8_t>(app->raw<std::uint8_t>(0x9DA07));
+            static_cast<std::int8_t>(app->state.interpCurveControlCache[2]);
         if (x < morphTop + 0xD && x > morphTop + 3 &&
             y > morphOff - 0x8C && y < morphOff - 0x82 &&
-            app->raw<std::uint8_t>(0x9DA04) != 0) {
+            app->state.interpCurveUniformFound != 0) {
             if (app->PlaybackActive() != 0)
                 goto L_tail;
             unsigned char* m = ActiveModel(app);

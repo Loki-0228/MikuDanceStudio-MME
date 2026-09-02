@@ -65,7 +65,6 @@
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
@@ -87,20 +86,9 @@ void Sub413120(MMDApp* a, int idx);     // 0x413120
 
 namespace {
 
-// --- app offsets not yet named in offsets.hpp (0x literals) ----------------
-constexpr std::size_t kMapIk = 0x984;        // IK row map (bone-edit)
-constexpr std::size_t kMapMorph = 0x27A84;   // morph row map (bone-edit)
-constexpr std::size_t kMapBone = 0x4EB84;    // bone row map (bone-edit)
-constexpr std::size_t kMapBand0 = 0x75C84;   // band0 row map (200 ints)
-constexpr std::size_t kMapBand1 = 0x75FA4;   // band1 row map
-constexpr std::size_t kMapBand2 = 0x762C4;   // band2 row map
-constexpr std::size_t kMapBand3 = 0x765E4;   // band3 row map
+// --- deferred: the accessory hit grid stays offset-addressed -------
+// (x64 xlate only carries its first 800 element entries)
 constexpr std::size_t kMapAcc = 0x76904;     // accessory map [row][band]
-constexpr std::size_t kSlotArr = 0x9DA50;    // accessory slot array (200 ints)
-constexpr std::size_t kCtlMorphCnt = 0xA041C;
-constexpr std::size_t kCtlMorphPtr = 0xA0420;
-constexpr std::size_t kCtlBoneCnt = 0xA0424;
-constexpr std::size_t kCtlBonePtr = 0xA0428;
 
 // --- layout constants -------------------------------------------------------
 constexpr int kRowPitch = 13;     // 0x0D  hover row pitch
@@ -110,13 +98,6 @@ constexpr int kColY0 = 209;       // 0xD1  first hover column y (display)
 constexpr int kColY0Bone = 153;   // 0x99  first hover column y (bone-edit)
 constexpr int kSidebarMin = 250;  // 0xFA  sidebar drag minimum
 
-// Offsets that exist in offsets.hpp under their generated names.
-using offsets::kByte9F12C;
-using offsets::kByteA06B4;
-using offsets::kByteA06B5;
-using offsets::kByteA06B6;
-using offsets::kByteB6568483;
-using offsets::kByteOptflag0;
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -540,8 +521,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                     auto* lightKeys = app->LightKeys();
                     auto* shadowKeys = app->ShadowKeys();
                     auto* gravityKeys = app->GravityKeys();
-                    int* bandMaps =
-                        reinterpret_cast<int*>(app->at(kMapBand1));
+                    int* bandMaps = app->state.rowHitBand1;
                     int* accWalk =
                         reinterpret_cast<int*>(app->at(kMapAcc) + 4);
                     for (int row_i = 0; row_i < 200; ++row_i) {
@@ -560,8 +540,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                         // accessory map + slot array, 40 groups of 5
                         // (0x446242..0x4462FC); accWalk keeps walking the
                         // whole map across rows, slotWalk restarts per row.
-                        int* slotWalk =
-                            reinterpret_cast<int*>(app->at(kSlotArr) + 4);
+                        int* slotWalk = app->state.jointLineMap + 4;
                         for (int g = 0; g < 40; ++g, slotWalk += 5, accWalk += 5) {
                             const int a0 = accWalk[-1];
                             if (a0 >= 0) {
@@ -598,7 +577,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 // (0x446342..0x44649F)
                 if (yBottom >= 160 && yTop <= 174 && rowStart < rowEnd) {
                     auto* keys = app->CameraKeys();
-                    int* m = reinterpret_cast<int*>(app->at(kMapBand0)) + rowStart;
+                    int* m = app->state.rowHitBand0 + rowStart;
                     int n = rowEnd - rowStart;
                     do {
                         if (*m >= 0)
@@ -608,7 +587,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 }
                 if (yBottom >= 174 && yTop <= 188 && rowStart < rowEnd) {
                     auto* keys = app->LightKeys();
-                    int* m = reinterpret_cast<int*>(app->at(kMapBand1)) + rowStart;
+                    int* m = app->state.rowHitBand1 + rowStart;
                     int n = rowEnd - rowStart;
                     do {
                         if (*m >= 0)
@@ -618,7 +597,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 }
                 if (yBottom >= 188 && yTop <= 202 && rowStart < rowEnd) {
                     auto* keys = app->ShadowKeys();
-                    int* m = reinterpret_cast<int*>(app->at(kMapBand2)) + rowStart;
+                    int* m = app->state.rowHitBand2 + rowStart;
                     int n = rowEnd - rowStart;
                     do {
                         if (*m >= 0)
@@ -628,7 +607,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 }
                 if (yBottom >= 202 && yTop <= 216 && rowStart < rowEnd) {
                     auto* keys = app->GravityKeys();
-                    int* m = reinterpret_cast<int*>(app->at(kMapBand3)) + rowStart;
+                    int* m = app->state.rowHitBand3 + rowStart;
                     int n = rowEnd - rowStart;
                     do {
                         if (*m >= 0)
@@ -643,8 +622,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                     int rows = rowEnd - rowStart;
                     do {
                         if (colStart < colEnd) {
-                            int* slots =
-                                reinterpret_cast<int*>(app->at(kSlotArr)) + colStart;
+                            int* slots = app->state.jointLineMap + colStart;
                             int cols = colEnd - colStart;
                             do {
                                 if (*acc >= 0 && *slots >= 0)
@@ -668,7 +646,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                     // (0x44653F..0x4467F0)
                     displayKeys[0].allocated = 0;
                     boneKeys[0].allocated = 0;
-                    int* map = reinterpret_cast<int*>(app->at(kMapMorph));
+                    int* map = app->state.rowHitMorph;
                     for (int row_i = 0; row_i < 200; ++row_i) {
                         for (int g = 0; g < 40; ++g, map += 5) {
                             const int b0 = map[40000];  // bone map
@@ -730,7 +708,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 if (yBottom - kColPitch * colEndB - kColY0Bone > 7)
                     colEndB += 1;
                 if (rowStart < rowEnd) {
-                    int* map = reinterpret_cast<int*>(app->at(kMapMorph)) +
+                    int* map = app->state.rowHitMorph +
                                (colStartB + 200 * rowStart);
                     int rows = rowEnd - rowStart;
                     do {

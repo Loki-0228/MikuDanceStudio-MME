@@ -84,7 +84,7 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
         app->state.a042C =
             mdl::Mdl(model)->comboSelIndex;
         app->SetSelectedModelSlot(static_cast<std::uint8_t>(slot));
-        mikudancestudio::mdl::Mdl(model)->displayState = app->raw<std::uint8_t>(offsets::kByte9EB7E);
+        mikudancestudio::mdl::Mdl(model)->displayState = app->state.v9eb7e;
 
         if (app->state.optflag[0] != 0) {
             Sub44D610(app);                                   // 0x44D610
@@ -129,15 +129,15 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
         DrawMenuBar(hwnd);
 
         EnableWindow(GetDlgItem(hwnd, 421), 0);
-        if (app->raw<std::int32_t>(offsets::kDword9DA2C) != 0 ||
-            app->raw<std::int32_t>(offsets::kDword9DA30) != 0) {
+        if (app->ClipboardCounts().morphs != 0 ||
+            app->ClipboardCounts().displays != 0) {
             EnableWindow(GetDlgItem(hwnd, 421), 1);
-            if (app->raw<std::int32_t>(offsets::kDword9DA28) != 0) {
+            if (app->ClipboardCounts().bones != 0) {
                 EnableWindow(GetDlgItem(hwnd, 422), 1);
                 PostLanguageSweep2(app);                      // 0x40D070
                 return;
             }
-        } else if (app->raw<std::int32_t>(offsets::kDword9DA28) != 0) {
+        } else if (app->ClipboardCounts().bones != 0) {
             EnableWindow(GetDlgItem(hwnd, 421), 1);
             EnableWindow(GetDlgItem(hwnd, 422), 1);
             PostLanguageSweep2(app);                          // 0x40D070

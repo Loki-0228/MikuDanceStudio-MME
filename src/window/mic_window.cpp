@@ -40,10 +40,10 @@ int Sub428FF0(MMDApp* app, unsigned short x, unsigned short y) {
         s.state.a06B5 = 0;              // 0x42902E
     }
     int result = y;
-    if (s.raw<std::uint8_t>(offsets::kByteA06B4) != 0) {           // 0x429034
+    if (s.state.a06B4 != 0) {                                       // 0x429034
         if (y > s.ViewportRect().bottom)                            // 0x42904A
             return result;
-        s.raw<std::uint8_t>(offsets::kByteA06B4) = 0;              // 0x429050
+        s.state.a06B4 = 0;                                          // 0x429050
     }
     if (s.MouseX() != x || s.MouseY() != y) {                      // 0x42906F
         const bool first = s.state.v9f12c == 0;
@@ -55,7 +55,7 @@ int Sub428FF0(MMDApp* app, unsigned short x, unsigned short y) {
             // 0x429090: OFSUB/SF/ZF flag algebra on the unsigned deltas
             // reduces to "either axis moved more than 50 px".
             if (dx > 50 || dy > 50)                                // 0x429096
-                s.raw<std::uint8_t>(offsets::kByteB6568483) = 1;   // 0x4290AC
+                s.state.b6568483 = 1;                              // 0x4290AC
             s.PreviousMouseX() = x;                                // 0x4290B4
             s.PreviousMouseY() = y;                                // 0x4290B7
             s.state.v9f12c = 0;          // 0x4290BA

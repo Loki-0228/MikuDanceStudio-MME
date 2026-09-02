@@ -75,10 +75,6 @@ namespace {
 
 constexpr double kPiOver180 = 0.01745329238474369;   // dbl_52BB20 region
 
-inline float F(const MMDApp* a, std::size_t off) {
-    return a->raw<float>(off);
-}
-
 // A PMM may retain an accessory animation track after the corresponding
 // object could not be restored.  Keep that sparse-project state explicit:
 // playback can retire the orphaned track, but must never treat its slot as a
@@ -242,8 +238,7 @@ void ReloadModels(MMDApp* app) {
                 api.perspectiveFovLH(
                     &projection,
                     static_cast<float>(
-                        static_cast<double>(s.raw<float>(
-                            offsets::kFloat9e1e8)) * kPiOver180),
+                        static_cast<double>(s.CameraFov()) * kPiOver180),
                     wrapper->aspectRatio,  // +0x1D4EC
                     1.0f, 100000.0f);
                 device->SetTransform(
@@ -287,8 +282,8 @@ void PlaybackPoseAdvance(MMDApp* app, int advance) {
     // ---- 4A. camera track (0x417656..0x417A48) ----------------------------
     if (editGate && s.CameraTrackActive() != 0) {
         mdl::CameraKey* keys = s.CameraKeys();
-        s.raw<float>(776) = 0.0f;                          // 0x308/0x30C
-        s.raw<float>(780) = 0.0f;
+        s.state.viewOffsetX = 0.0f;                        // 0x308/0x30C
+        s.state.viewOffsetY = 0.0f;
         while (true) {
             const mdl::CameraKey& key = keys[s.CameraTrackCursor()];
             if (!(static_cast<double>(key.frame) < frame &&

@@ -73,7 +73,6 @@
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
@@ -97,14 +96,7 @@ constexpr int kSheetNegX = 33;    // 0x21  SRCPAINT "reverse link" column
 constexpr int kSheetAltX = 11;    // 0x0B  SRCPAINT alternate column
 constexpr int kSheetOffX = 0;     //      SRCPAINT "disabled" column
 
-// --- row-hit map bases (200 ints per band/row) ---------------------------
-constexpr std::size_t kMapIk = 0x984;       // IK map (bone-edit mode)
-constexpr std::size_t kMapMorph = 0x27A84;  // morph map (bone-edit mode)
-constexpr std::size_t kMapBone = 0x4EB84;   // bone map (bone-edit mode)
-constexpr std::size_t kMapBand0 = 0x75C84;  // 84-byte band map (y=17)
-constexpr std::size_t kMapBand1 = 0x75FA4;  // 40-byte band map (y=31)
-constexpr std::size_t kMapBand2 = 0x762C4;  // 24-byte band map (y=45)
-constexpr std::size_t kMapBand3 = 0x765E4;  // 36-byte band map (y=59)
+// --- row-hit map base (200 ints per band/row) ----------------------------
 constexpr std::size_t kMapAcc = 0x76904;    // accessory band maps (y=73+14k)
 
 // --- model object offsets (bone-edit mode) --------------------------------
@@ -269,12 +261,13 @@ void PanelPaint(MMDApp* app) {
     // the old 32-bit state blob.  In the x64 layout that walk crosses
     // unrelated state (including the accessory-track pointer table).
     if (rows > 0) {
-        std::int32_t* const ikMap =
-            reinterpret_cast<std::int32_t*>(app->at(kMapIk));
-        std::int32_t* const morphMap =
-            reinterpret_cast<std::int32_t*>(app->at(kMapMorph));
-        std::int32_t* const boneMap =
-            reinterpret_cast<std::int32_t*>(app->at(kMapBone));
+        // Historic naming inversion: the old local name said "kMapIk", but
+        // 0x984 is pinned as rowHitBone (the bone row map).  Likewise the
+        // old "kMapBone" 0x4EB84 is pinned as rowHitIk exactly - NOT the
+        // BoneEditRowMap() rowHitIk+64 view, which matches x86 0x4EC84.
+        std::int32_t* const ikMap = app->state.rowHitBone;
+        std::int32_t* const morphMap = app->state.rowHitMorph;
+        std::int32_t* const boneMap = app->state.rowHitIk;
         for (int index = 0; index < 200; ++index) {
             ikMap[index] = 0;
             morphMap[index] = 0;
@@ -282,14 +275,10 @@ void PanelPaint(MMDApp* app) {
         }
     }
     {
-        std::int32_t* const band0Map =
-            reinterpret_cast<std::int32_t*>(app->at(kMapBand0));
-        std::int32_t* const band1Map =
-            reinterpret_cast<std::int32_t*>(app->at(kMapBand1));
-        std::int32_t* const band2Map =
-            reinterpret_cast<std::int32_t*>(app->at(kMapBand2));
-        std::int32_t* const band3Map =
-            reinterpret_cast<std::int32_t*>(app->at(kMapBand3));
+        std::int32_t* const band0Map = app->state.rowHitBand0;
+        std::int32_t* const band1Map = app->state.rowHitBand1;
+        std::int32_t* const band2Map = app->state.rowHitBand2;
+        std::int32_t* const band3Map = app->state.rowHitBand3;
         unsigned char* acc = app->at(kMapAcc);
         for (int row = 0; row < 200; ++row) {
             band0Map[row] = -1;
@@ -452,8 +441,8 @@ void PanelPaint(MMDApp* app) {
                         BitBlt(panel, x, y, kIcon, kIcon, icons,
                                key.allocated ? kSheetOnX : kSheetOffX,
                                0, SRCPAINT);
-                        reinterpret_cast<std::int32_t*>(app->at(kMapBone))
-                            [link + 200 * row] = record != 0 ? record : -10;
+                        app->state.rowHitIk[link + 200 * row] =
+                            record != 0 ? record : -10;
                     }
                 }
                 const int next = static_cast<int>(key.next);
@@ -469,8 +458,7 @@ void PanelPaint(MMDApp* app) {
             mdl::MorphKey* morphList = mdl::MorphKeys(model);
             std::int32_t* morphLinks =
                 *reinterpret_cast<std::int32_t**>(model + kModelMorphLink);
-            std::int32_t* mapMorph =
-                reinterpret_cast<std::int32_t*>(app->at(kMapMorph));
+            std::int32_t* mapMorph = app->state.rowHitMorph;
             const std::int32_t morphCnt =
                 *reinterpret_cast<std::int32_t*>(model + kModelMorphCnt);
             for (int head = 0; head < morphCnt; ++head) {
@@ -553,8 +541,7 @@ void PanelPaint(MMDApp* app) {
             mdl::BoneRecord* bones = mdl::Bones(model);
             std::int32_t* ikLinks =
                 *reinterpret_cast<std::int32_t**>(model + kModelIkLink);
-            std::int32_t* mapIk =
-                reinterpret_cast<std::int32_t*>(app->at(kMapIk));
+            std::int32_t* mapIk = app->state.rowHitBone;  // old name kMapIk
             int head = 0;       // chain-head index (x)
             int rec = 0;
             for (;;) {

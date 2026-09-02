@@ -111,7 +111,7 @@ void PrepareFrameTextOverlay(MMDApp* app) {  // 0x423420
         if (fps > 0) {
             float xOffset = 15.0f;
             const bool numeric = app->PlaybackActive() != 0 ||
-                app->raw<std::uint8_t>(672800) == 0;
+                app->state.flag672800 == 0;
             if (numeric) {
                 char value[256]{};
                 std::snprintf(value, sizeof(value), "%3d", fps);
@@ -187,7 +187,7 @@ void PrepareFrameTextOverlay(MMDApp* app) {  // 0x423420
 
     // 0x424A1F..0x424D8F: transient renderer-state indication. These
     // overlays are deliberately unscaled and use alpha-byte color patterns.
-    const std::uint8_t status = app->raw<std::uint8_t>(658792);
+    const std::uint8_t status = app->state.autoRepeat;
     if (status > 0 && status < 4) {
         const float left = static_cast<float>(view.right) - 160.0f;
         const float top = static_cast<float>(view.top) + 30.0f;
@@ -211,7 +211,7 @@ void PrepareFrameTextOverlay(MMDApp* app) {  // 0x423420
 void PrepareFrameLineOverlay(MMDApp* app) {  // 0x4757C3..0x4759D8
     app->LineOverlayPrimitiveCount() = 0;
     if (!app->LeftMouseButtonHeld() ||
-        app->raw<std::uint8_t>(650705) == 0 ||
+        app->state.viewportInputActive == 0 ||
         app->BoneBoxSelectionActive() == 0)
         return;
 

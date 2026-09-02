@@ -880,7 +880,18 @@ public:
         return state.modelOutlineColorBlue;
     }
     std::uint8_t& WireframeRenderingEnabled() {
-        return raw<std::uint8_t>(0xA01D4);
+        return state.wireframeRenderingEnabled;
+    }
+    std::uint32_t& GravityNoiseModeWord() {
+        // Dword view at +0xA0CD4: byte 0 is the promoted a0CD4 noise-mode
+        // flag; the upper three bytes land in pad368 on both architectures
+        // (the original writes all four bytes from the gravity record).
+        return *reinterpret_cast<std::uint32_t*>(&state.a0CD4);
+    }
+    std::uint8_t& F9ed94Byte1() {
+        // Byte view of f9ed94+1: the original seeks poke this byte while
+        // the recording catch-up reads the surrounding dword as a counter.
+        return reinterpret_cast<std::uint8_t*>(&state.f9ed94)[1];
     }
     std::int32_t& AccessoryRenderSplitOrder() {
         // Generated field is uint32_t; preserve the signed accessor view.
@@ -1238,10 +1249,19 @@ public:
         return state.cameraAttachmentTransformSuppressed;
     }
     D3DMATRIX& ViewRotationTransform() {
-        return raw<D3DMATRIX>(0xA0674);
+#if defined(_M_X64)
+        return m_viewRotationTransform;
+#else
+        return reinterpret_cast<D3DMATRIX&>(state.viewRotationTransform[0]);
+#endif
     }
     const D3DMATRIX& ViewRotationTransform() const {
-        return raw<D3DMATRIX>(0xA0674);
+#if defined(_M_X64)
+        return m_viewRotationTransform;
+#else
+        return reinterpret_cast<const D3DMATRIX&>(
+            state.viewRotationTransform[0]);
+#endif
     }
     std::int32_t& ShadowMode() {
         return state.selfShadowMode;
@@ -1404,6 +1424,7 @@ private:
     void* m_oniExportSlot4 = nullptr;
     WINDOWPLACEMENT m_savedPlacement{};
     std::int32_t m_frameRangeStartFrame = 0;
+    D3DMATRIX m_viewRotationTransform{};
 
     // This scratch workspace is 3,536 bytes in the original x86 state.  The
     // provisional x64 blob reserves only 3,240 bytes before the next live

@@ -134,10 +134,10 @@ bool InitSceneFontTexture(MMDApp* app) {
     surface->Release();
 
     // destination texture slot (this+650784), recreated as SYSTEMMEM
-    if (s.raw<void*>(offsets::kPtrFonttex) != nullptr) {
-        reinterpret_cast<IDirect3DTexture9*>(s.raw<void*>(
-            offsets::kPtrFonttex))->Release();
-        s.raw<void*>(offsets::kPtrFonttex) = nullptr;
+    if (s.state.sceneFontTexture != nullptr) {
+        reinterpret_cast<IDirect3DTexture9*>(
+            s.state.sceneFontTexture)->Release();
+        s.state.sceneFontTexture = nullptr;
     }
     IDirect3DTexture9* fontTex = nullptr;
     if (FAILED(device->CreateTexture(512, 512, 1, 0, D3DFMT_A8R8G8B8 /*21*/,
@@ -145,7 +145,7 @@ bool InitSceneFontTexture(MMDApp* app) {
         sourceTex->Release();
         return false;
     }
-    s.raw<void*>(offsets::kPtrFonttex) = fontTex;
+    s.state.sceneFontTexture = fontTex;
 
     // 0x42C0B0..0x42C124: destination RGB is white and alpha comes from the
     // pure-blue GDI glyph coverage in byte 0 of X8R8G8B8 pixels.

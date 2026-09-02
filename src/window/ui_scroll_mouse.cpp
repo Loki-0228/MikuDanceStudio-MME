@@ -28,7 +28,6 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -57,16 +56,16 @@ void HandleVScroll(LPARAM lParam, WPARAM wParam) {
                 break;
             case 2:  // SB_PAGEUP
                 app->DisplayObjectListScrollPosition() -=
-                    app->raw<std::int32_t>(offsets::kDwordScrollNpage);
+                    app->state.scrollNPage;
                 break;
             case 3:  // SB_PAGEDOWN
                 app->DisplayObjectListScrollPosition() +=
-                    app->raw<std::int32_t>(offsets::kDwordScrollNpage);
+                    app->state.scrollNPage;
                 break;
             case 5:  // SB_THUMBTRACK
                 app->DisplayObjectListScrollPosition() +=
                     static_cast<std::int32_t>(HIWORD(wParam)) -
-                    app->raw<std::int32_t>(offsets::kDwordScrollNpos);
+                    app->state.scrollNPos;
                 break;
             default:
                 break;
@@ -88,16 +87,16 @@ void HandleVScroll(LPARAM lParam, WPARAM wParam) {
                 break;
             case 2:  // SB_PAGEUP
                 record.boneListPos -=
-                    app->raw<std::int32_t>(offsets::kDwordScrollNpage);
+                    app->state.scrollNPage;
                 break;
             case 3:  // SB_PAGEDOWN
                 record.boneListPos +=
-                    app->raw<std::int32_t>(offsets::kDwordScrollNpage);
+                    app->state.scrollNPage;
                 break;
             case 5:  // SB_THUMBTRACK
                 record.boneListPos +=
                     static_cast<std::int32_t>(HIWORD(wParam)) -
-                    app->raw<std::int32_t>(offsets::kDwordScrollNpos);
+                    app->state.scrollNPos;
                 break;
             default:
                 break;
@@ -183,11 +182,11 @@ void HandleMouseWheel(int delta) {
             axis == static_cast<int>(app->SelectedModelSlot()) &&
             axis >= 0;
         if (morphFollow) {
-            app->raw<std::uint8_t>(offsets::kByteB6568481) = 1;  // 656849 (0xA05D1)
+            app->state.b6568481 = 1;                       // 656849 (0xA05D1)
             app->WindowLayoutReady() = 0;
             PostLanguageSweep2(app);                              // 0x40D070
             app->WindowLayoutReady() = 1;
-            app->raw<std::uint8_t>(offsets::kByteB6568482) = 1;  // 656850 (0xA05D2)
+            app->state.b6568482 = 1;                       // 656850 (0xA05D2)
             PostViewRefresh(app);                                 // 0x40D130
             return;
         }

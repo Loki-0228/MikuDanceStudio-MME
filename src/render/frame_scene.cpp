@@ -376,7 +376,7 @@ void RenderFrameScene(MMDApp* app) {
             : D3DCOLOR_XRGB(255, 255, 255);
     device->Clear(0, nullptr, clearFlags, clearColor, 1.0f, 0);
 
-    app->raw<std::int32_t>(offsets::kDwordA0270) = 1;
+    app->state.a0270 = 1;
     if (FAILED(device->BeginScene()))
         return;
 
@@ -386,8 +386,8 @@ void RenderFrameScene(MMDApp* app) {
 
     // 0x46DDF6..0x46DE5F is deliberately a loop: render callbacks may add
     // another pass by incrementing A0270 while a pass is in progress.
-    while (app->raw<std::int32_t>(offsets::kDwordA0270) > 0) {
-        --app->raw<std::int32_t>(offsets::kDwordA0270);
+    while (app->state.a0270 > 0) {
+        --app->state.a0270;
         if (effectRenderer)
             RenderModelsEffect(app,
                 reinterpret_cast<const float*>(&frameWorld));
@@ -434,7 +434,7 @@ void RenderFrameScene(MMDApp* app) {
     }
 
     // 0x46E556..0x46E592: selected-bone local/global operation axis.
-    if (app->raw<std::uint8_t>(760) == 0 &&
+    if (app->state.optflag[0] == 0 &&
         app->PlaybackActive() == 0 &&
         app->state.frameCopyDialog == 0) {
         DrawBoneOperationAxis(app,

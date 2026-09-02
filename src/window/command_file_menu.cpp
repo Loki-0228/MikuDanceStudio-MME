@@ -125,8 +125,9 @@
 namespace mikudancestudio {
 
 // ---------------------------------------------------------------------------
-// App-state offsets still reached through raw<T>() in this file, kept
-// file-local until the scratch-region overlay analysis is done.
+// No app-state raw<T>() accesses remain in this file.  The one file-local
+// offset below is a MODEL-object field (not app state), still reached
+// through model pointer arithmetic.
 // ---------------------------------------------------------------------------
 constexpr std::size_t kOff31B0 = 0x31B0;    // model frame-count field (0xE3)
 

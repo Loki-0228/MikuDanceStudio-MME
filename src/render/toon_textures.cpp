@@ -145,16 +145,16 @@ bool InitToonTextures(MMDApp* app) {
         0.93359399f, 0.91796899f, 1.0f, 0.90234399f,
     };
     for (int i = 0; i < 14; ++i)
-        s.raw<float>(offsets::kFloatToonedge + 4 * i) = defaults[i];
+        s.state.toonEdgeTable[i] = defaults[i];
     // Trailing table (dwords 0x28052..0x28061): [14..17] pull the four
     // rdata floats 0x52c0c0/c0bc/c0b8/c0b4 (0.863281, 0.761719, 0.671875,
     // 0.011719); [18..29] are all 1.0.
     const float tail[4] = {0.86328101f, 0.76171899f, 0.671875f,
                            0.011719f};
     for (int i = 0; i < 4; ++i)
-        s.raw<float>(offsets::kFloatToonedge + 4 * (14 + i)) = tail[i];
+        s.state.toonEdgeTable[14 + i] = tail[i];
     for (int i = 18; i < 30; ++i)
-        s.raw<float>(offsets::kFloatToonedge + 4 * i) = 1.0f;
+        s.state.toonEdgeTable[i] = 1.0f;
 
     // slots 1..10: toonNN.bmp with embedded PNG fallback, colour from pixel
     for (int i = 1; i < 11; ++i) {
@@ -186,7 +186,7 @@ bool InitToonTextures(MMDApp* app) {
             if (SUCCEEDED((*slot)->LockRect(0, &rect, nullptr, 0))) {
                 auto* row = static_cast<unsigned char*>(rect.pBits) +
                             rect.Pitch * (info.Height - 1);
-                float* out = &s.raw<float>(offsets::kFloatToonedge + 4 * i);
+                float* out = &s.state.toonEdgeTable[i];
                 out[1] = row[0] * 0.00390625f;     // G? original: [0]->v7[1]
                 out[0] = row[1] * 0.00390625f;
                 out[-1] = row[2] * 0.00390625f;

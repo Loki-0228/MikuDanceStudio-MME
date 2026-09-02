@@ -57,18 +57,14 @@
 #include <cstring>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
 namespace mikudancestudio {
 namespace {
 
-// --- app offsets not yet named in offsets.hpp -------------------------------
-constexpr std::size_t kHbitmapPanel = 0x2DC;  // panel back-store bitmap
+// --- panel layout constants --------------------------------------------------
 constexpr std::size_t kListLeft = 91;         // 0x5B  label column width
-constexpr std::size_t kJointMap = 0x9DA50;    // joint index -> line map (200 ints)
-constexpr std::size_t kJointFlagBase = 0xA04FC;  // joint-row highlight flags (this+656636)
 
 // --- model display-tree offsets (model object, PMD/PMX chain) ---------------
 constexpr std::size_t kModelSelLine = 0x2DBC;     // head line of frame 1 (bone list)
@@ -96,38 +92,40 @@ unsigned char* CurrentModel(MMDApp* app, std::size_t slotIdx) {
     return app->ModelSlot(static_cast<int>(slotIdx));
 }
 
-// Colour from the color.txt COLORREF at `colorOff` (0xA065C normal /
-// 0xA0660 highlight), split into the three bytes the original pushes.
+// Colour from the color.txt COLORREF `color` (themeColors[33] = 0xA065C
+// normal / themeColors[34] = 0xA0660 highlight), split into the three bytes
+// the original pushes.  COLORREF = 0x00BBGGRR, so little-endian byte 0 = R,
+// 1 = G, 2 = B - the same bytes the former per-offset reads fetched.
 void DrawPanelText(MMDApp* app, const char* text, HDC hdc, int size, int x,
-                   int y, std::size_t colorOff) {
+                   int y, const std::uint32_t& color) {
     DrawGlyph(app, text, hdc, size, x, y,
-              app->raw<std::uint8_t>(colorOff),
-              app->raw<std::uint8_t>(colorOff + 1),
-              app->raw<std::uint8_t>(colorOff + 2), 1);
+              static_cast<std::uint8_t>(color & 0xFF),
+              static_cast<std::uint8_t>((color >> 8) & 0xFF),
+              static_cast<std::uint8_t>((color >> 16) & 0xFF), 1);
 }
 
 // Display-frame name row (0x42FB18/0x42FB98 and siblings).
 void DrawFrameName(MMDApp* app, const mdl::DisplayGroup& frame,
-                   HDC hdc, int y, std::size_t colorOff) {
+                   HDC hdc, int y, const std::uint32_t& color) {
     const bool english = app->EnglishUI() != 0;
     DrawPanelText(app,
                   english ? frame.nameEn : frame.name,
-                  hdc, 12, 12, y, colorOff);
+                  hdc, 12, 12, y, color);
 }
 
 // Rigid-group / face record name row (0x430401/0x430443, 0x43020C/0x430247).
 void DrawRecordName(MMDApp* app, const mdl::FrameGroup& record, HDC hdc, int y,
-                    std::size_t colorOff) {
+                    const std::uint32_t& color) {
     const bool english = app->EnglishUI() != 0;
     DrawPanelText(app,
                   english ? record.nameEn : record.name,
-                  hdc, 12, 15, y, colorOff);
+                  hdc, 12, 15, y, color);
 }
 
 // Fixed header label of the display-mode band column (0x42F292 etc.).
 void DrawHeader(MMDApp* app, HDC hdc, const char* text, int y,
-                std::size_t colorOff) {
-    DrawPanelText(app, text, hdc, 12, 12, y, colorOff);
+                const std::uint32_t& color) {
+    DrawPanelText(app, text, hdc, 12, 12, y, color);
 }
 
 }  // namespace
@@ -145,7 +143,7 @@ void PostLanguageSweep(MMDApp* app) {
 
     // --- 1. erase the label column from the panel bitmap (0x42F1F2) --------
     HDC dc = CreateCompatibleDC(nullptr);
-    SelectObject(dc, s.raw<HGDIOBJ>(kHbitmapPanel));                // 732
+    SelectObject(dc, reinterpret_cast<HGDIOBJ>(s.state.bmpPanelSpare));  // 732
     BitBlt(panel, 0, 0, kListLeft, listH, dc, 0, 0, SRCCOPY);
     DeleteDC(dc);
 
@@ -166,11 +164,11 @@ void PostLanguageSweep(MMDApp* app) {
         const char* rootName = english ? rootBone.nameEn : rootBone.name;
         if (flagTab[rootIdx] != 0) {
             DrawPanelText(app, rootName, panel, 12, 12, 17,
-                          offsets::kDwordCol656992);
+                          s.state.themeColors[34]);
             s.state.buf656632[0] = 1;
         } else {
             DrawPanelText(app, rootName, panel, 12, 12, 17,
-                          offsets::kDwordCol656988);
+                          s.state.themeColors[33]);
         }
 
         // --- zero link tables, clear line records (0x42F88C..0x42F9FB) -----
@@ -226,17 +224,17 @@ void PostLanguageSweep(MMDApp* app) {
                             if (v20 > 1)
                                 DrawGlyph(app, "+", panel, 12, 1, 14 * v21 + 17, 0, 0, 0, 1);
                             DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                          offsets::kDwordCol656988);
+                                          s.state.themeColors[33]);
                         } else {
                             if (v20 > 1)
                                 DrawGlyph(app, kJpPlus, panel, 12, 1, 14 * v21 + 17, 0, 0, 0, 1);
                             DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                          offsets::kDwordCol656988);
+                                          s.state.themeColors[33]);
                         }
                         if (((v72 == 1) & *reinterpret_cast<std::uint8_t*>(model + kModelSelFlag)) != 0) {
                             DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                          offsets::kDwordCol656992);
-                            s.raw<std::uint8_t>(offsets::kBufBuf656632 + v21) = 1;
+                                          s.state.themeColors[34]);
+                            s.state.buf656632[v21] = 1;
                         }
                         if (record->facialFrameCount != 0 && v72 == 2) {
                             // frame 2: highlight when any face flag (+44) is
@@ -248,8 +246,8 @@ void PostLanguageSweep(MMDApp* app) {
                                     goto lab76;
                             }
                             DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                          offsets::kDwordCol656992);
-                            s.raw<std::uint8_t>(offsets::kBufBuf656632 + v21) = 1;
+                                          s.state.themeColors[34]);
+                            s.state.buf656632[v21] = 1;
                         }
                     lab76:
                         // highlight when a rigid group of this frame is visible (0x42FD26)
@@ -262,8 +260,8 @@ void PostLanguageSweep(MMDApp* app) {
                                         goto lab86;
                                 }
                                 DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                              offsets::kDwordCol656992);
-                                s.raw<std::uint8_t>(offsets::kBufBuf656632 + v21) = 1;
+                                              s.state.themeColors[34]);
+                                s.state.buf656632[v21] = 1;
                             }
                         }
                     lab86:
@@ -299,12 +297,12 @@ void PostLanguageSweep(MMDApp* app) {
                         if (v20 > 1)
                             DrawGlyph(app, "-", panel, 12, 1, 14 * v21 + 17, 0, 0, 0, 1);
                         DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                      offsets::kDwordCol656988);
+                                      s.state.themeColors[33]);
                     } else {
                         if (v20 > 1)
                             DrawGlyph(app, kJpMinus, panel, 12, 1, 14 * v21 + 17, 0, 0, 0, 1);
                         DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                      offsets::kDwordCol656988);
+                                      s.state.themeColors[33]);
                     }
                     model[v21++ + kModelLineType] = v72;
                     v20 = v72;
@@ -327,11 +325,11 @@ void PostLanguageSweep(MMDApp* app) {
                                     v21 < 200) {
                                     if (flagTab[rigid.targetIndex] != 0) {
                                         DrawRecordName(app, rigid, panel, v58,
-                                                       offsets::kDwordCol656992);
-                                        s.raw<std::uint8_t>(offsets::kBufBuf656632 + v21) = 1;
+                                                       s.state.themeColors[34]);
+                                        s.state.buf656632[v21] = 1;
                                     } else {
                                         DrawRecordName(app, rigid, panel, v58,
-                                                       offsets::kDwordCol656988);
+                                                       s.state.themeColors[33]);
                                     }
                                     *reinterpret_cast<std::int32_t*>(model + v87) =
                                         rigid.targetIndex;
@@ -376,21 +374,21 @@ void PostLanguageSweep(MMDApp* app) {
             if (english) {
                 if (face.selected == 0) {
                     DrawPanelText(app, face.nameEn, panel,
-                                  12, 15, v47, offsets::kDwordCol656988);
+                                  12, 15, v47, s.state.themeColors[33]);
                     goto lab122;
                 }
                 DrawPanelText(app, face.nameEn, panel,
-                              12, 15, v47, offsets::kDwordCol656992);
+                              12, 15, v47, s.state.themeColors[34]);
             } else {
                 if (face.selected == 0) {
                     DrawPanelText(app, face.name, panel,
-                                  12, 15, v47, offsets::kDwordCol656988);
+                                  12, 15, v47, s.state.themeColors[33]);
                     goto lab122;
                 }
                 DrawPanelText(app, face.name, panel,
-                              12, 15, v47, offsets::kDwordCol656992);
+                              12, 15, v47, s.state.themeColors[34]);
             }
-            s.raw<std::uint8_t>(offsets::kBufBuf656632 + v21) = 1;
+            s.state.buf656632[v21] = 1;
         lab122:
             *reinterpret_cast<std::int32_t*>(model + v86) =
                 -1 - face.targetIndex;
@@ -407,59 +405,59 @@ void PostLanguageSweep(MMDApp* app) {
         // (0x42F252..0x42F5F0)
         if (english) {
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Camera)) {
-                DrawHeader(app, panel, "camera", 17, offsets::kDwordCol656992);
+                DrawHeader(app, panel, "camera", 17, s.state.themeColors[34]);
                 s.state.buf656632[0] = 1;
             } else {
-                DrawHeader(app, panel, "camera", 17, offsets::kDwordCol656988);
+                DrawHeader(app, panel, "camera", 17, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Light)) {
-                DrawHeader(app, panel, "light", 31, offsets::kDwordCol656992);
-                s.raw<std::uint8_t>(offsets::kBufBuf656632 + 1) = 1;
+                DrawHeader(app, panel, "light", 31, s.state.themeColors[34]);
+                s.state.buf656632[1] = 1;
             } else {
-                DrawHeader(app, panel, "light", 31, offsets::kDwordCol656988);
+                DrawHeader(app, panel, "light", 31, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::SelfShadow)) {
-                s.raw<std::uint8_t>(offsets::kBufBuf656632 + 2) = 1;
-                DrawHeader(app, panel, "s shadow", 45, offsets::kDwordCol656992);
+                s.state.buf656632[2] = 1;
+                DrawHeader(app, panel, "s shadow", 45, s.state.themeColors[34]);
             } else {
-                DrawHeader(app, panel, "s shadow", 45, offsets::kDwordCol656988);
+                DrawHeader(app, panel, "s shadow", 45, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Gravity)) {
-                s.raw<std::uint8_t>(offsets::kBufBuf656632 + 3) = 1;
-                DrawHeader(app, panel, "gravity", 59, offsets::kDwordCol656992);
+                s.state.buf656632[3] = 1;
+                DrawHeader(app, panel, "gravity", 59, s.state.themeColors[34]);
             } else {
-                DrawHeader(app, panel, "gravity", 59, offsets::kDwordCol656988);
+                DrawHeader(app, panel, "gravity", 59, s.state.themeColors[33]);
             }
         } else {
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Camera)) {
-                DrawHeader(app, panel, kJpCamera, 17, offsets::kDwordCol656992);
+                DrawHeader(app, panel, kJpCamera, 17, s.state.themeColors[34]);
                 s.state.buf656632[0] = 1;
             } else {
-                DrawHeader(app, panel, kJpCamera, 17, offsets::kDwordCol656988);
+                DrawHeader(app, panel, kJpCamera, 17, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Light)) {
-                DrawHeader(app, panel, kJpLight, 31, offsets::kDwordCol656992);
-                s.raw<std::uint8_t>(offsets::kBufBuf656632 + 1) = 1;
+                DrawHeader(app, panel, kJpLight, 31, s.state.themeColors[34]);
+                s.state.buf656632[1] = 1;
             } else {
-                DrawHeader(app, panel, kJpLight, 31, offsets::kDwordCol656988);
+                DrawHeader(app, panel, kJpLight, 31, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::SelfShadow)) {
-                s.raw<std::uint8_t>(offsets::kBufBuf656632 + 2) = 1;
-                DrawHeader(app, panel, kJpShadow, 45, offsets::kDwordCol656992);
+                s.state.buf656632[2] = 1;
+                DrawHeader(app, panel, kJpShadow, 45, s.state.themeColors[34]);
             } else {
-                DrawHeader(app, panel, kJpShadow, 45, offsets::kDwordCol656988);
+                DrawHeader(app, panel, kJpShadow, 45, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Gravity)) {
-                s.raw<std::uint8_t>(offsets::kBufBuf656632 + 3) = 1;
-                DrawHeader(app, panel, kJpGravity, 59, offsets::kDwordCol656992);
+                s.state.buf656632[3] = 1;
+                DrawHeader(app, panel, kJpGravity, 59, s.state.themeColors[34]);
             } else {
-                DrawHeader(app, panel, kJpGravity, 59, offsets::kDwordCol656988);
+                DrawHeader(app, panel, kJpGravity, 59, s.state.themeColors[33]);
             }
         }
     }
 
     // === joint list below the tree (0x42F5F6..0x42F72A) =====================
-    std::memset(s.at(kJointMap), 0xFF, 0x320);       // 200 ints
+    std::memset(s.state.jointLineMap, 0xFF, 0x320);  // 200 ints
     s.DisplayObjectListMatchCount() = 1;
     std::uint8_t v73 = 0;                                    // joint type 0..254
     int v79 = 0;                                             // type counter (scroll gate)
@@ -467,8 +465,7 @@ void PostLanguageSweep(MMDApp* app) {
     do {
         int v6 = 0;                                          // joint record index
         int v7 = 14 * v5 + 73;
-        std::int32_t* map =
-            reinterpret_cast<std::int32_t*>(s.at(kJointMap)) + v5;
+        std::int32_t* map = s.state.jointLineMap + v5;
         do {
             unsigned char* joint = static_cast<unsigned char*>(s.ObjectSlot(v6));
             if (joint != nullptr && joint[kJointType] == v73) {
@@ -476,12 +473,12 @@ void PostLanguageSweep(MMDApp* app) {
                     if (joint[kJointFlag] != 0) {
                         DrawPanelText(app,
                                       reinterpret_cast<const char*>(joint + kJointName),
-                                      panel, 12, 12, v7, offsets::kDwordCol656992);
-                        s.raw<std::uint8_t>(kJointFlagBase + v5) = 1;
+                                      panel, 12, 12, v7, s.state.themeColors[34]);
+                        s.state.buf656632[4 + v5] = 1;
                     } else {
                         DrawPanelText(app,
                                       reinterpret_cast<const char*>(joint + kJointName),
-                                      panel, 12, 12, v7, offsets::kDwordCol656988);
+                                      panel, 12, 12, v7, s.state.themeColors[33]);
                     }
                     *map = v6;
                     ++v5;

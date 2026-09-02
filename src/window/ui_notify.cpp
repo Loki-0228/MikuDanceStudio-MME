@@ -106,7 +106,8 @@ LRESULT HandleNotify(HWND h, UINT m, WPARAM w, LPARAM l) {
     // First BM_GETCHECK probe: ctrl 556 on the main window.
     const LRESULT v8 =
         SendMessageA(GetDlgItem(mainHwnd, 556), 0xF0u, 0, 0);  // BM_GETCHECK
-    const std::uint32_t v16 = app->raw<std::uint32_t>(0xA0D30);  // 658736
+    const std::uint32_t v16 =
+        static_cast<std::uint32_t>(app->state.selfShadowMode);  // 658736
     const std::uint32_t v15 =
         static_cast<std::uint32_t>(app->EditMode());
     const std::uint8_t lParama = app->PlaybackActive();

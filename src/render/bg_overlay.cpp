@@ -293,16 +293,15 @@ void AviBgOverlayRefresh(MMDApp* app) {
         // 0x416ADE: wall-clock driven sample from the seconds field
         // (9E64C is the frameB float copy; 0x52BA60 = double 1000.0).
         float secondsF;
-        std::memcpy(&secondsF, &s.raw<std::uint32_t>(offsets::kDwordF9e64c),
-                    sizeof secondsF);
+        std::memcpy(&secondsF, &s.state.f9e64c, sizeof secondsF);
         const LONG t = static_cast<LONG>(
             static_cast<double>(secondsF) * 1000.0);
         sample = (stream != nullptr ? AVIStreamTimeToSample(stream, t)
                                     : 0) +
-                 s.raw<std::int32_t>(offsets::kDwordA0B10);
+                 static_cast<std::int32_t>(s.state.a0B10);
     } else {
-        sample = s.raw<std::int32_t>(offsets::kDwordF9e648);      // 0x416ABC
-        s.raw<std::int32_t>(offsets::kDwordF9e648) = sample + 1;
+        sample = s.state.f9e648;      // 0x416ABC
+        s.state.f9e648 = sample + 1;
     }
     if (sample < s.AviStreamStartFrame())
         sample = s.AviStreamStartFrame();

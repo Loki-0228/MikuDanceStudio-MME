@@ -91,9 +91,9 @@ void PostDeviceReset(MMDApp* app) {
         Sub42C810(app);                                           // 0x42C810
     }
 
-    app->raw<std::uint8_t>(0x9EE24) = 0;                          // 0x440FE2
-    app->raw<std::uint8_t>(0x9EF24) = 0;
-    app->raw<std::uint8_t>(0x9F024) = 0;
+    app->state.recentFile0[0] = 0;                                 // 0x440FE2
+    app->state.recentFile1[0] = 0;
+    app->state.recentFile2[0] = 0;
 }
 
 }  // namespace mikudancestudio

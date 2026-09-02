@@ -79,11 +79,6 @@ namespace mikudancestudio {
 
 namespace {
 
-// Offsets used here that are not yet registered in offsets.hpp.
-constexpr std::size_t kPathWave = 208;            // 0x0D0  wave path buffer wchar[256]
-constexpr std::size_t kPathAvi = 647660;          // 0x9E1EC avi path buffer wchar[256]
-constexpr std::size_t kPathBackdrop = 648264;     // 0x9E448 backdrop image path wchar[256]
-
 // JP-locale MessageBox byte strings - verbatim Shift-JIS from .rdata.
 // 0x52E568 "保存していない変更点があります\n\nこのままロードしてよろしいですか？"
 const char kJpDirtyText[] =
@@ -262,7 +257,7 @@ void HandleDropFiles(HDROP hDrop) {
             if (DirMenuChecked(app)) {
                 wcscpy_s(app->DirBg(), 0x3E8, DirOf(app, szFile));     // 0xA3C50
             }
-            wcscpy_s(app->raw<wchar_t*>(kPathAvi), 0x100, szFile);     // 0x9E1EC
+            wcscpy_s(app->state.wcs9e1ec, 0x100, szFile);              // 0x9E1EC
             // original: sub_433250(this) reads the path from app+647660;
             // the stub interface takes the path - pass the same buffer
             LoadAviFile(app);                                        // 0x433250
@@ -282,7 +277,7 @@ void HandleDropFiles(HDROP hDrop) {
                 // ---- .wav - wave audio ----
                 if (wcsstr(szFile, L".wav") || wcsstr(szFile, L".WAV") ||
                     wcsstr(szFile, L".Wav")) {
-                    wcscpy_s(app->raw<wchar_t*>(kPathWave), 0x100, szFile);  // 0xD0
+                    wcscpy_s(app->state.wavPath, 0x100, szFile);  // 0xD0
                     if (DirMenuChecked(app)) {
                         wcscpy_s(app->DirWave(), 0x3E8, DirOf(app, szFile));  // 0xA3480
                     }
@@ -330,7 +325,7 @@ void HandleDropFiles(HDROP hDrop) {
             }
         }
         // .bmp or .jpg matched: backdrop tail shared at 0x46199F
-        wcscpy_s(app->raw<wchar_t*>(kPathBackdrop), 0x100, szFile);   // 0x9E448
+        wcscpy_s(app->state.pictureBackgroundPath, 0x100, szFile);    // 0x9E448
         LoadBackgroundPicture(app);                                   // 0x4337A0
         app->SceneModified() = 1;
     }

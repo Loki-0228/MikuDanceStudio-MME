@@ -178,21 +178,21 @@ void StepFrame(MMDApp* app, bool forward) {
 }  // namespace
 
 void Sub40D070(MMDApp* app) {
-    HWND target = app->raw<HWND>(164686 * sizeof(std::uint32_t));
+    HWND target = app->FloatingWindow();
     int leftBase = 0;
     RECT client{};
     if (target != nullptr) {
         GetClientRect(target, &client);
     } else {
-        target = app->raw<HWND>(164270 * sizeof(std::uint32_t));
+        target = app->state.hwnd;
         GetClientRect(target, &client);
-        leftBase = app->raw<std::int32_t>(164274 * sizeof(std::uint32_t)) + 9;
+        leftBase = app->state.sidebarWidth + 9;
     }
-    const int bottom = app->raw<std::int32_t>(164689 * sizeof(std::uint32_t));
+    const int bottom = app->state.hideTop;
     RECT rect{leftBase + 10, bottom - 22, client.right - 450, bottom - 1};
     InvalidateRect(target, &rect, FALSE);
     rect.left = leftBase + 68;
-    rect.top = app->raw<std::int32_t>(164691 * sizeof(std::uint32_t));
+    rect.top = app->state.hideBottom;
     rect.right = leftBase + 139;
     rect.bottom = rect.top + 30;
     InvalidateRect(target, &rect, FALSE);

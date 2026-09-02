@@ -40,15 +40,13 @@
 namespace mikudancestudio {
 namespace {
 
-constexpr std::size_t kOffA0CCC = 0xA0CCC;   // physics dialog HWND
-constexpr std::size_t kOffA0CD4 = 0xA0CD4;   // gravity "add noise" mode
 constexpr float kWrap2p32 = 4294967296.0f;   // 0x52B9F0
 
 // applies the record fields of the gravity track into the live cluster
 void ApplyGravityRecord(MMDApp* app, const mdl::GravityKey& key) {
     std::uint32_t noiseModeWord;
     std::memcpy(&noiseModeWord, &key.noiseEnabled, sizeof noiseModeWord);
-    app->raw<std::uint32_t>(kOffA0CD4) = noiseModeWord;
+    app->GravityNoiseModeWord() = noiseModeWord;
     app->state.gravityNoise =
         static_cast<std::uint32_t>(key.noise);
     app->state.gravityMagnitude = key.acceleration;
@@ -59,7 +57,7 @@ void ApplyGravityRecord(MMDApp* app, const mdl::GravityKey& key) {
 
 // physics-dialog mirror of the live cluster (0x4123F2..0x412820)
 void RefreshPhysicsDialog(MMDApp* app) {
-    HWND dlg = app->raw<HWND>(kOffA0CCC);
+    HWND dlg = app->AccessoryFrameDialog();
     if (dlg == nullptr) return;
     char text[0x32];
     sprintf_s(text, 0x32, "%3.2f",
@@ -87,7 +85,7 @@ void RefreshPhysicsDialog(MMDApp* app) {
               static_cast<int>(
                   app->state.gravityNoise));
     SetWindowTextA(GetDlgItem(dlg, 0x2C9), text);             // 0x52B9F4
-    const BOOL mode = app->raw<std::uint8_t>(kOffA0CD4) != 0;
+    const BOOL mode = app->state.a0CD4 != 0;
     SendMessageA(GetDlgItem(dlg, 0x2DB), BM_SETCHECK, mode, 0);
     EnableWindow(GetDlgItem(dlg, 0x2C9), mode);               // 0x412B03
 }
@@ -151,7 +149,7 @@ void Sub412330(MMDApp* app) {
         (rec.direction[2] - prev.direction[2]) * t + prev.direction[2];
     std::uint32_t noiseModeWord;
     std::memcpy(&noiseModeWord, &rec.noiseEnabled, sizeof noiseModeWord);
-    app->raw<std::uint32_t>(kOffA0CD4) = noiseModeWord;
+    app->GravityNoiseModeWord() = noiseModeWord;
     RefreshPhysicsDialog(app);
 }
 

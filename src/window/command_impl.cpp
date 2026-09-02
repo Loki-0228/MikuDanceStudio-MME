@@ -242,17 +242,17 @@ void CmdSaveMotion(MMDApp* app) {
         return false;
     };
     bool any = false;
-    if (app->raw<std::uint8_t>(0x2F8) != 0) {
+    if (app->state.optflag[0] != 0) {
         // 0x487BE8 jz: with the camera/light/shadow mode flag set, only
         // the app tables are scanned; the shadow table falling through
         // with no hit jumps straight to the test (0x487C4B ->
         // 0x487CC2) - the model tables are NEVER scanned in this mode.
         any = anySelectedByte(reinterpret_cast<unsigned char*>(
-                                  app->raw<void*>(0x374)), 0x48, 0x54, 10000) ||
+                                  app->state.cameraKeyTrack), 0x48, 0x54, 10000) ||
             anySelectedByte(reinterpret_cast<unsigned char*>(
-                                app->raw<void*>(0x378)), 0x24, 0x28, 10000) ||
+                                app->state.lightKeyTrack), 0x24, 0x28, 10000) ||
             anySelectedByte(reinterpret_cast<unsigned char*>(
-                                app->raw<void*>(0x37C)), 0x14, 0x18, 10000);
+                                app->state.selfShadowKeyTrack), 0x14, 0x18, 10000);
     } else {
         unsigned char* const model = app->SelectedModel();
         if (model != nullptr) {
@@ -292,7 +292,7 @@ void CmdSaveMotion(MMDApp* app) {
 
 // 0xD5 - File: load AVI background
 void CmdLoadAvi(MMDApp* app) {
-    app->raw<std::uint32_t>(0x74) = 1;                // 0x4870B4 [0x1D]=1
+    app->state.dialogFlags[17] = 1;                // 0x4870B4 [0x1D]=1
     app->state.bC = 1;   // 0x4870B7 [0x2F]=1
     SetCurrentDirectoryW(app->ExeDir());
     wchar_t path[MAX_PATH] = L"";
@@ -302,8 +302,7 @@ void CmdLoadAvi(MMDApp* app) {
                    path, MAX_PATH)) {
         wchar_t dir[1000];
         wcscpy_s(app->DirBg(), 0x3E8, ExtractDirFromPath(dir, path));
-        CopyPathW(reinterpret_cast<wchar_t*>(
-                      app->at(offsets::kWcs9e1ec)),
+        CopyPathW(app->state.wcs9e1ec,
                   path);                                  // 0x42AE40 -> app+0x9E1EC
         LoadAviFile(app);                                        // 0x433250
         MarkDirty(app);

@@ -799,8 +799,7 @@ void ConfigureEffectMaterial(MMDApp* app, D3DRenderer* sub,
             standard = strcmp(mdl::PmdToonFileNames(model)[toonIndex],
                               names[toonIndex]) == 0;
             if (standard) {
-                const float* table = reinterpret_cast<const float*>(
-                    app->at(offsets::kFloatToonedge));
+                const float* table = app->state.toonEdgeTable;
                 toon[0] = table[3 * toonIndex + 0];
                 toon[1] = table[3 * toonIndex + 1];
                 toon[2] = table[3 * toonIndex + 2];
@@ -1416,7 +1415,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     FxSetMatrix(effect, "matLightViewProj",
                 reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
     FxSetMatrix(effect, "matRotate",
-                reinterpret_cast<const Matrix*>(app->at(657012)));
+                reinterpret_cast<const Matrix*>(&app->ViewRotationTransform()));
     FxSetInt(effect, "transp", app->state.v9eb7e != 0);
     device->SetTexture(0, sub->hdrTexture);
     device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);

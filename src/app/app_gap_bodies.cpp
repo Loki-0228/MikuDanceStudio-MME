@@ -154,8 +154,7 @@ bool MakeLineGeometry(MMDApp* app) {  // 0x40AF40
     IDirect3DDevice9* device = RenderDeviceOf(app);
 
     // 1. line vertex buffer (release stale one first) ---------------------
-    IDirect3DVertexBuffer9*& lineVb = s.raw<IDirect3DVertexBuffer9*>(
-        offsets::kDword300);                                        // 768
+    IDirect3DVertexBuffer9*& lineVb = s.GroundGridVertices();       // 768
     if (lineVb != nullptr) {
         lineVb->Release();
         lineVb = nullptr;
@@ -202,8 +201,7 @@ bool MakeLineGeometry(MMDApp* app) {  // 0x40AF40
     lineVb->Unlock();                            // 0x40b38d
 
     // 2. line index buffer -----------------------------------------------
-    IDirect3DIndexBuffer9*& lineIb = s.raw<IDirect3DIndexBuffer9*>(
-        offsets::kDword304);                                        // 772
+    IDirect3DIndexBuffer9*& lineIb = s.GroundGridIndices();         // 772
     if (FAILED(device->CreateIndexBuffer(180, 0,
                                          D3DFMT_INDEX16 /*101*/,
                                          D3DPOOL_MANAGED /*1*/,
@@ -222,8 +220,7 @@ bool MakeLineGeometry(MMDApp* app) {  // 0x40AF40
     lineIb->Unlock();                                              // 0x40b468
 
     // 3. ground quad VB @app+651560 (unchecked, like the original) --------
-    IDirect3DVertexBuffer9*& groundVb = s.raw<IDirect3DVertexBuffer9*>(
-        offsets::kDword9F128);                                      // 651560
+    IDirect3DVertexBuffer9*& groundVb = s.GroundPlaneVertices();    // 651560
     device->CreateVertexBuffer(96, 8 /*WRITEONLY*/, 0x42,
                                D3DPOOL_MANAGED, &groundVb, nullptr);
     LineVertex* ground = nullptr;
@@ -303,10 +300,9 @@ HRESULT DrawGridLines(MMDApp* app) {  // 0x40E4E0
     device->SetTexture(0, nullptr);                                 // 0x40e51a
     device->SetFVF(0x42 /*D3DFVF_XYZ|D3DFVF_DIFFUSE*/);             // 0x40e533
     device->SetStreamSource(
-        0, app->raw<IDirect3DVertexBuffer9*>(offsets::kDword300) /*768*/,
+        0, app->GroundGridVertices() /*768*/,
         0, 16);                                                     // 0x40e557
-    device->SetIndices(app->raw<IDirect3DIndexBuffer9*>(
-        offsets::kDword304) /*772*/);                               // 0x40e575
+    device->SetIndices(app->GroundGridIndices() /*772*/);           // 0x40e575
     return device->DrawIndexedPrimitive(D3DPT_LINELIST /*2*/, 0, 0, 90,
                                         0, 45);                     // 0x40e59a
 }
@@ -330,7 +326,7 @@ std::uintptr_t DrawGroundPolygon(MMDApp* app) {  // 0x40E5A0
     if (r->d3dInitialized != 0)   // wrapper+120164 (0x1D564)          0x40e5a9
         device->SetRenderState(D3DRS_STENCILENABLE /*52*/, 0);
     device->SetStreamSource(
-        0, app->raw<IDirect3DVertexBuffer9*>(offsets::kDword9F128) /*651560*/,
+        0, app->GroundPlaneVertices() /*651560*/,
         0, 16);                                                     // 0x40e5eb
     device->SetFVF(0x42);                                           // 0x40e604
     device->DrawPrimitive(D3DPT_TRIANGLELIST /*4*/, 0, 2);          // 0x40e621

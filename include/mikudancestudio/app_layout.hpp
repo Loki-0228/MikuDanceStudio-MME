@@ -186,7 +186,10 @@ struct MMDAppState {
     std::int32_t scrollNMax;
     std::int32_t scrollNPage;
     std::int32_t scrollNPos;
-    RawPad<32> pad67;
+    RawPad<20> pad67;
+    std::int32_t timelineScrollNPage;  // +0x970 timeline scrollbar cached nPage
+    std::int32_t timelineScrollNMin;   // +0x974 timeline scrollbar cached nMin
+    RawPad<4> pad67b;
     std::int32_t timelineStartFrame;
     std::int32_t currentFrame;
     std::int32_t rowHitBone[200];  // x64 pin 5204
@@ -290,7 +293,7 @@ struct MMDAppState {
     // 0x9DA04..0x9DA0A: interp-curve editor panel state (uniform-curve
     // found flag + the cached control-point pair, y as 127-complement)
     unsigned char interpCurveUniformFound;     // +0x9DA04
-    unsigned char interpCurveControlCache[4];  // +0x9DA05..09
+    unsigned char interpCurveControlCache[4];  // +0x9DA05..08
     unsigned char pendingTimelineSelectionRow;
     unsigned char lightA[6];
     unsigned char lightB[6];
@@ -513,7 +516,9 @@ struct MMDAppState {
     std::int32_t modelOutlineColorRed;
     std::int32_t modelOutlineColorGreen;
     std::int32_t modelOutlineColorBlue;
-    unsigned char buf655780[64];
+    unsigned char buf655780[48];
+    unsigned char wireframeRenderingEnabled;  // +0xA01D4 wireframe fill mode
+    RawPad<15> pad209;
     unsigned char a01E4;
 #if defined(_M_X64)
     RawPad<99> pad213;  // the two projection matrices live in MMDApp
@@ -664,7 +669,9 @@ struct MMDAppState {
 #if defined(_M_X64)
     RawPad<40> pad324;
 #else
-    RawPad<64> pad324;
+    // +0xA0674 view-rotation matrix (D3DMATRIX).  The x64 blob reserves
+    // only 40 bytes here, so x64 keeps an MMDApp mirror instead.
+    float viewRotationTransform[16];
 #endif
     unsigned char a06B4;
     unsigned char a06B5;
@@ -1081,6 +1088,10 @@ static_assert(offsetof(MMDAppState, scrollNPage) == 2388,
               "scrollNPage x86");
 static_assert(offsetof(MMDAppState, scrollNPos) == 2392,
               "scrollNPos x86");
+static_assert(offsetof(MMDAppState, timelineScrollNPage) == 2416,
+              "timelineScrollNPage x86");
+static_assert(offsetof(MMDAppState, timelineScrollNMin) == 2420,
+              "timelineScrollNMin x86");
 static_assert(offsetof(MMDAppState, timelineStartFrame) == 2428,
               "timelineStartFrame x86");
 static_assert(offsetof(MMDAppState, currentFrame) == 2432,
@@ -1376,6 +1387,8 @@ static_assert(offsetof(MMDAppState, modelOutlineColorBlue) == 655776,
               "modelOutlineColorBlue x86");
 static_assert(offsetof(MMDAppState, buf655780) == 655780,
               "buf655780 x86");
+static_assert(offsetof(MMDAppState, wireframeRenderingEnabled) == 655828,
+              "wireframeRenderingEnabled x86");
 static_assert(offsetof(MMDAppState, a01E4) == 655844,
               "a01E4 x86");
 static_assert(offsetof(MMDAppState, lightViewProjectionMatrix) == 655848,
@@ -1518,6 +1531,10 @@ static_assert(offsetof(MMDAppState, a066D) == 657005,
               "a066D x86");
 static_assert(offsetof(MMDAppState, savedPlaybackPhysicsMode) == 657008,
               "savedPlaybackPhysicsMode x86");
+#ifndef _M_X64
+static_assert(offsetof(MMDAppState, viewRotationTransform) == 657012,
+              "viewRotationTransform x86");
+#endif
 static_assert(offsetof(MMDAppState, a06B4) == 657076,
               "a06B4 x86");
 static_assert(offsetof(MMDAppState, a06B5) == 657077,

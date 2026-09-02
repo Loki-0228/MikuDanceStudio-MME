@@ -220,7 +220,7 @@ __declspec(dllexport) char* ExpGetPmdFilename(int index) {
     unsigned char* model = ModelByIndex(app, index);
     if (model == nullptr)
         return nullptr;                      // original: xor eax, eax
-    char* out = reinterpret_cast<char*>(app->at(mikudancestudio::offsets::kBufBufa02b7));
+    char* out = reinterpret_cast<char*>(app->state.sjisOut);
     mikudancestudio::WideToSjisPath(out, mikudancestudio::mdl::Mdl(model)->path, 0x100);
     return out;
 }
@@ -364,7 +364,7 @@ __declspec(dllexport) char* ExpGetAcsFilename(int index) {
     mikudancestudio::mdl::AccessoryRecord* acc = AcsByIndex(app, index);
     if (acc == nullptr)
         return nullptr;
-    char* out = reinterpret_cast<char*>(app->at(mikudancestudio::offsets::kBufBufa02b7));
+    char* out = reinterpret_cast<char*>(app->state.sjisOut);
     mikudancestudio::WideToSjisPath(out, acc->sourcePath, 0x100);
     return out;
 }
@@ -499,7 +499,7 @@ __declspec(dllexport) float* ExpGetAcsMaterial(float* out, int index,
 // ExpGetPmdOrder); 0 when null or unmatched.
 __declspec(dllexport) int ExpGetCurrentObject() {
     MMDApp* app = mikudancestudio::g_Block;
-    unsigned char* cur = app->raw<unsigned char*>(mikudancestudio::offsets::kDwordA0268);
+    unsigned char* cur = static_cast<unsigned char*>(app->state.activeRenderObject);
     if (cur == nullptr)
         return 0;
     // accessory slots first
@@ -529,7 +529,7 @@ __declspec(dllexport) int ExpGetCurrentObject() {
 // rendered (accessory +0x4A8 / model +0x37C4); -1 when null or unmatched.
 __declspec(dllexport) int ExpGetCurrentMaterial() {
     MMDApp* app = mikudancestudio::g_Block;
-    unsigned char* cur = app->raw<unsigned char*>(mikudancestudio::offsets::kDwordA0268);
+    unsigned char* cur = static_cast<unsigned char*>(app->state.activeRenderObject);
     if (cur == nullptr)
         return -1;
     for (int i = 0; i < 0xFF; ++i) {
@@ -547,17 +547,17 @@ __declspec(dllexport) int ExpGetCurrentMaterial() {
 
 // 0x4C39C0 -> 0x42ADE0.
 __declspec(dllexport) int ExpGetCurrentTechnic() {
-    return mikudancestudio::g_Block->raw<std::int32_t>(mikudancestudio::offsets::kDwordA026C);
+    return mikudancestudio::g_Block->state.activeRenderPass;
 }
 
 // 0x4C39D0 -> 0x42ADF0.
 __declspec(dllexport) void ExpSetRenderRepeatCount(int count) {
-    mikudancestudio::g_Block->raw<std::int32_t>(mikudancestudio::offsets::kDwordA0270) = count;
+    mikudancestudio::g_Block->state.a0270 = count;
 }
 
 // 0x4C39F0 -> 0x42AE00.
 __declspec(dllexport) int ExpGetRenderRepeatCount() {
-    return mikudancestudio::g_Block->raw<std::int32_t>(mikudancestudio::offsets::kDwordA0270);
+    return mikudancestudio::g_Block->state.a0270;
 }
 
 // 0x4C3A00 -> 0x42AE10: English UI flag byte (app+0xA0B4C).
@@ -571,7 +571,7 @@ __declspec(dllexport) int ExpGetEnglishMode() {
 __declspec(dllexport) float ExpGetFrameTime() {
     MMDApp* app = mikudancestudio::g_Block;
     if (app->state.playbackActive != 0)
-        return app->raw<float>(mikudancestudio::offsets::kDwordF9e64c);
+        return app->state.f9e64c;
     const std::int32_t frame = app->state.currentFrame;
     // fild / fadds flt_52B9F0 (2^32) when negative / fdivl dbl_52BA68 (30.0)
     return static_cast<float>(static_cast<double>(

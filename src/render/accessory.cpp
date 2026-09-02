@@ -686,15 +686,15 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
     }
 
     HWND hwnd = static_cast<HWND>(app->Hwnd());
-    app->raw<std::uint8_t>(0xA0B0D) = 1;
+    app->state.sceneModified = 1;
     const char* name = mdl::Accessory(accessory)->name;
     LRESULT displayIndex = SendDlgItemMessageA(
         hwnd, 471, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
     mdl::Accessory(accessory)->order =
         static_cast<std::uint8_t>(displayIndex);
     if (displayIndex >= 0)
-        app->raw<std::int32_t>(0xA0B20) = std::max(
-            app->raw<std::int32_t>(0xA0B20),
+        app->AccessoryRenderSplitOrder() = std::max(
+            app->AccessoryRenderSplitOrder(),
             static_cast<std::int32_t>(displayIndex + 1));
     SendDlgItemMessageA(hwnd, 471, CB_SETCURSEL, displayIndex, 0);
     app->SelectedAccessorySlot() = static_cast<std::uint8_t>(slot);

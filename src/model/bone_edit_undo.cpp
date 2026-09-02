@@ -15,8 +15,9 @@ namespace mikudancestudio {
 void Sub42D6E0(MMDApp* app) {
     if (app == nullptr)
         return;
-    const unsigned modelSlot = app->raw<std::uint8_t>(2320);
-    auto* model = app->raw<unsigned char*>(1920 + 4 * modelSlot);
+    const unsigned modelSlot = app->state.slotIdx;
+    auto* model = static_cast<unsigned char*>(
+        app->state.modelSlots[modelSlot]);
     if (model == nullptr)
         return;
 
@@ -33,7 +34,7 @@ void Sub42D6E0(MMDApp* app) {
     if (selectedCount == 0)
         return;
 
-    HWND window = app->raw<HWND>(657080);
+    HWND window = app->state.hwnd;
     if (window == nullptr)
         window = static_cast<HWND>(app->Hwnd());
     EnableWindow(GetDlgItem(window, 400), TRUE);

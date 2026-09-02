@@ -179,7 +179,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     }
     _read(fileHandle, text, nameLen);
 
-    if (s.raw<std::uint8_t>(760) != 0) {
+    if (s.state.optflag[0] != 0) {
         // ==== camera / light / self-shadow motion =========================
         if (ver == 2 && std::memcmp(text, kCameraLightName, 13) != 0) {
             MessageBoxA(hwnd,

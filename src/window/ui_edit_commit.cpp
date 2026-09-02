@@ -58,7 +58,6 @@
 #include <cstdlib>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
@@ -196,14 +195,12 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
                     static_cast<float>(v * kPiLit / 180.0);
                 app->state.eulerY =
                     static_cast<float>(-static_cast<double>(
-                                           app->raw<float>(
-                                               offsets::kFloatEulery)) *
+                                           app->state.eulerY) *
                                        kPiLit / 180.0);
                 app->state.eulerZ =
                     static_cast<float>(kPiLit *
                                        -static_cast<double>(
-                                           app->raw<float>(
-                                               offsets::kFloatEulerz)) /
+                                           app->state.eulerZ) /
                                        180.0);
                 ComposeEulerToBone(app, model, sel);
             }
@@ -239,8 +236,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
             app->state.eulerZ =
                 static_cast<float>(kPiLit *
                                    -static_cast<double>(
-                                       app->raw<float>(
-                                           offsets::kFloatEulerz)) /
+                                       app->state.eulerZ) /
                                    180.0);
             ComposeEulerToBone(app, model, sel);
         }
@@ -268,8 +264,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
                     kPiLit / 180.0);
             app->state.eulerY =
                 static_cast<float>(-static_cast<double>(
-                                       app->raw<float>(
-                                           offsets::kFloatEulery)) *
+                                       app->state.eulerY) *
                                    kPiLit / 180.0);
             app->state.eulerZ =
                 static_cast<float>(kPiLit * -v / 180.0);

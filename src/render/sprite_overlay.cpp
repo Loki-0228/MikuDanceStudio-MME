@@ -259,7 +259,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
     // 0x499BD0: bone projection plus the bone-line and bone-icon producers.
     // The original runs this after WORLD/VIEW/PROJECTION are installed and
     // appends to the line batch built by 0x4757C3 on the previous frame.
-    if (app->raw<std::uint8_t>(760) == 0 &&
+    if (app->state.optflag[0] == 0 &&
         app->PlaybackActive() == 0 && sub != nullptr) {
         auto* model = app->SelectedModel();
         auto* device = sub->device;
@@ -277,7 +277,8 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
             const int relationshipCount =
                 static_cast<int>(mdl::Mdl(model)->ikChainCount);
             const int cursorKind = static_cast<int>(app->EditMode());
-            const int boneFilter = app->raw<int>(658628);
+            // 658628 = playbackPhysicsMode（原 boneFilter 误名）
+            const int physMode = app->PlaybackPhysicsMode();
             D3DMATRIX world{};
             D3DMATRIX viewMatrix{};
             D3DMATRIX projection{};
@@ -321,8 +322,8 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                         40 * (5000 - incomingLineCount),
                         reinterpret_cast<void**>(&lines), 0))) {
                     const auto filtered = [&](mikudancestudio::mdl::BoneRecord* bone) -> bool {
-                        return (boneFilter == 1 && bone->f492) ||
-                            (boneFilter == 2 && bone->f492 &&
+                        return (physMode == 1 && bone->f492) ||
+                            (physMode == 2 && bone->f492 &&
                              bone->f493 == 0);
                     };
                     const auto endpoint = [&](mikudancestudio::mdl::BoneRecord* bone,
@@ -497,8 +498,8 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                             emit = true;
                         }
                     } else if (cursorKind < 2 &&
-                               !((boneFilter == 1 && bone->f492) ||
-                                 (boneFilter == 2 && bone->f492 &&
+                               !((physMode == 1 && bone->f492) ||
+                                 (physMode == 2 && bone->f492 &&
                                   bone->f493 == 0))) {
                         const int state = isActive ? 0 : (isSecondary ? 1 : 2);
                         switch (type) {
@@ -556,7 +557,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                     const std::uint16_t flags =
                         bone->flags;
                     const bool filteredInMode2 =
-                        boneFilter == 2 && bone->f492 &&
+                        physMode == 2 && bone->f492 &&
                         bone->f493 == 0;
                     float v0 = 0.0f;
                     float v1 = 0.0f;
@@ -660,7 +661,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                    right - scale * 10.0f, bottom - scale * 10.0f,
                    0.001953f, 0.177734f, 0.23242199f, 0.234375f);
         } else {
-            const int boneMode = app->raw<std::int32_t>(812);
+            const int boneMode = static_cast<std::int32_t>(app->state.v32c);
             if (boneMode >= 0 && boneMode <= 3) {
                 const bool alternate = (boneMode & 1) != 0;
                 const bool lowerPair = boneMode >= 2;

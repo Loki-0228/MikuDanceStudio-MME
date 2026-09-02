@@ -431,10 +431,7 @@ void BoneLocalAxes(MMDApp* app, float out[16]) {
 
 // VA region 0x475A6E..0x477220 - modes 1..6 of the bone-drag stage.
 void BoneEditModes(MMDApp* app) {
-    auto raw = [&app](std::size_t off) -> std::int32_t& {
-        return *reinterpret_cast<std::int32_t*>(app->at(off));
-    };
-    const int mode = raw(844);
+    const int mode = static_cast<int>(app->state.interactionDragMode);
     if (mode <= 0 || mode > 12)
         return;
 
@@ -464,11 +461,8 @@ void BoneEditModes(MMDApp* app) {
     const auto M = [bone](std::size_t off) -> float& {
         return mdl::At<float>(bone, off);
     };
-    const auto fraw = [&app](std::size_t off) -> float& {
-        return *reinterpret_cast<float*>(app->at(off));
-    };
-    const bool selA = raw(36) == 3;      // coarse selector
-    const bool selB = raw(192) == 3;     // fine selector
+    const bool selA = app->state.shiftModifierState == 3;  // coarse selector
+    const bool selB = app->state.ctrlModifierState == 3;   // fine selector
     const auto scaleOf = [&](float base) -> float {
         if (selA)
             return static_cast<float>(kCoarse * base);
@@ -482,10 +476,11 @@ void BoneEditModes(MMDApp* app) {
 
     if (mode == 1) {
         const float base = static_cast<float>(
-            static_cast<double>(raw(12) - raw(4)) * kAngBase);
+            static_cast<double>(app->state.previousMouseX -
+                                app->state.mouseX) * kAngBase);
         ang = scaleOf(base);
-        const double aX = -static_cast<double>(fraw(0x310));
-        const double aY = -static_cast<double>(fraw(0x314));
+        const double aX = -static_cast<double>(app->CameraRotation()[0]);
+        const double aY = -static_cast<double>(app->CameraRotation()[1]);
         const float ax = static_cast<float>(std::cos(aX));
         const float ay = static_cast<float>(std::sin(aY) * std::sin(aX));
         const float az = static_cast<float>(std::cos(aY) * std::sin(aX));
@@ -494,10 +489,11 @@ void BoneEditModes(MMDApp* app) {
         axis[2] = M(0xDC) * az + M(0xD8) * ax + M(0xD4) * ay;
     } else if (mode == 2) {
         const float base = static_cast<float>(
-            static_cast<double>(raw(16) - raw(8)) * kAngBase);
+            static_cast<double>(app->state.previousMouseY -
+                                app->state.mouseY) * kAngBase);
         ang = scaleOf(base);
-        const double aX = -static_cast<double>(fraw(0x310));
-        const double aY = -static_cast<double>(fraw(0x314));
+        const double aX = -static_cast<double>(app->CameraRotation()[0]);
+        const double aY = -static_cast<double>(app->CameraRotation()[1]);
         const float ax = static_cast<float>(std::cos(aX));
         const float az = static_cast<float>(std::sin(aY));
         axis[0] = M(0xB4) * ax + M(0xBC) * az;
@@ -505,11 +501,13 @@ void BoneEditModes(MMDApp* app) {
         axis[2] = M(0xD4) * ax + M(0xDC) * az;
     } else if (mode == 3) {
         const double a1 = std::atan2(
-            static_cast<double>(raw(4) - raw(2352)),
-            static_cast<double>(raw(8) - raw(2356)));
+            static_cast<double>(app->state.mouseX - app->state.dragOriginX),
+            static_cast<double>(app->state.mouseY - app->state.dragOriginY));
         const double a2 = std::atan2(
-            static_cast<double>(raw(12) - raw(2352)),
-            static_cast<double>(raw(16) - raw(2356)));
+            static_cast<double>(app->state.previousMouseX -
+                                app->state.dragOriginX),
+            static_cast<double>(app->state.previousMouseY -
+                                app->state.dragOriginY));
         float ang1 = static_cast<float>(a1 * g_MouseScaleA);
         float ang2 = static_cast<float>(a2 * g_MouseScaleA);
         if (kWrap < static_cast<double>(ang1) - ang2)
@@ -517,8 +515,8 @@ void BoneEditModes(MMDApp* app) {
         if (static_cast<double>(ang1) - ang2 < -kWrap)
             ang1 = static_cast<float>(ang1 + kWrap);
         ang = scaleOf(ang1 - ang2);
-        const double aX = -static_cast<double>(fraw(0x310));
-        const double aY = -static_cast<double>(fraw(0x314));
+        const double aX = -static_cast<double>(app->CameraRotation()[0]);
+        const double aY = -static_cast<double>(app->CameraRotation()[1]);
         const float ax = -static_cast<float>(std::sin(aX));
         const float ay = static_cast<float>(std::sin(aY) * std::cos(aX));
         const float az = static_cast<float>(std::cos(aY) * std::cos(aX));
@@ -528,9 +526,12 @@ void BoneEditModes(MMDApp* app) {
     } else {
         // modes 4/5/6 - local axes
         const float base = static_cast<float>(
-            static_cast<double>(raw(16) - raw(8)) * kAngBase);
+            static_cast<double>(app->state.previousMouseY -
+                                app->state.mouseY) * kAngBase);
         ang = scaleOf(base);
-        if (raw(650076) == 1) {
+        // "direct" mode selector 0x9EDB4 (a9edb4; the pre-promotion call
+        // read offset 650076, an unpinned typo of the pinned 650676)
+        if (app->state.a9edb4 == 1) {
             const std::size_t o = static_cast<std::size_t>(mode - 4) * 4;
             axis[0] = M(0xB4 + o);
             axis[1] = M(0xC4 + o);

@@ -280,8 +280,8 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
     const bool selSkip = selActive != 0;
 
     // ---- 1. frame counter display + N++ (0x46EEE0..0x46EFB7) ------------
-    if (s.raw<std::uint8_t>(offsets::kByteBa0d61) == 0) {
-        const std::int32_t n = s.raw<std::int32_t>(offsets::kDwordF9ed94);
+    if (s.state.aviStereoOutput == 0) {
+        const std::int32_t n = s.state.f9ed94;
         const std::int32_t frameA = s.AviRecordStartFrame();
         const double fps = s.AviRecordFps();
         const int shown = static_cast<int>(
@@ -295,7 +295,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
         }
         SetWindowTextW(s.RecordingWindow(), buf);
     }
-    s.raw<std::int32_t>(offsets::kDwordF9ed94) += 1;        // 0x46EFB7
+    s.state.f9ed94 += 1;                                     // 0x46EFB7
 
     // ---- 2./3. gates (0x46EFBE..0x46EFEE) --------------------------------
     if (s.state.messageSeen == 0)
@@ -306,7 +306,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
     // BLOCK loops below decrement it by 1/60 per substep (0x46F226 and the
     // BLOCK 2 twin) and the settle main step consumes the REMAINDER - see
     // g_CatchupDtBudget in globals.hpp.
-    g_CatchupDtBudget = s.raw<float>(offsets::kFloatDeltatime); // 0xA06BC
+    g_CatchupDtBudget = s.state.deltaTime;                   // 0xA06BC
     if (s.PlaybackActive() == 0)
         return;                                    // -> 0x46F575
 
@@ -319,7 +319,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
         // the float store): the frame's FULL dt budget, of which the BLOCK
         // loop substeps below consume their 1/60s and the settle main
         // step steps the remainder.
-        const std::int32_t n = s.raw<std::int32_t>(offsets::kDwordF9ed94);
+        const std::int32_t n = s.state.f9ed94;
         const std::int32_t frameA = s.AviRecordStartFrame();
         const double fps = s.AviRecordFps();
         g_CatchupDtBudget = static_cast<float>(1.0 / fps);    // 0x46F00D

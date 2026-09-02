@@ -155,32 +155,66 @@ int Sub41A1F0(int fh, char* out, int len) {
 // ===========================================================================
 // Frame-driver key polling: 63 edge scans pairing virtual keys with the
 // dword state cells at app+20..+196 (decompile's this[N] dword indices).
-// Several cells are fed by two keys (menu accelerator + numpad twin); the
-// table below preserves the exact original call order.  Called once per
-// frame from 0x46FF02.
+// Several cells are fed by two keys (menu accelerator + letter twin); the
+// tables below cover every original 0x42D3AA..0x42D6B6 pairing, regrouped
+// into named cells / letter twins / numpad twins - observationally
+// identical because each scan writes only its own cell plus the
+// idempotent messageSeen latch.  Called once per frame from 0x46FF02.
 // =========================================================================//
 void Sub42D3A0(MMDApp* app) {
-    static const struct { int vk; std::size_t cellOff; } kMap[] = {
-        // 0x42D3AA..0x42D428
-        {38, 20}, {40, 24}, {37, 28}, {39, 32}, {16, 36}, {32, 40},
-        {17, 192}, {46, 184}, {27, 44}, {9, 128},
-        // 0x42D435..0x42D4BF  (two keys per cell)
-        {120, 48}, {88, 48}, {122, 52}, {90, 52}, {99, 56}, {67, 56},
-        {118, 60}, {86, 60}, {100, 64}, {68, 64}, {97, 68}, {65, 68},
-        {98, 72}, {66, 72}, {115, 76}, {83, 76}, {103, 80}, {71, 80},
-        {104, 88}, {72, 88}, {105, 84}, {73, 84},
-        // 0x42D4C9..0x42D525
-        {107, 92}, {75, 92}, {112, 96}, {80, 96}, {117, 100}, {85, 100},
-        {106, 104}, {74, 104}, {102, 108}, {70, 108}, {114, 112}, {82, 112},
-        {108, 116}, {76, 116},
-        // 0x42D5D6..0x42D6B6
-        {1, 132}, {2, 136}, {4, 140}, {13, 188}, {18, 196},
-        {96, 144}, {97, 148}, {98, 152}, {99, 156}, {100, 160}, {101, 164},
-        {102, 168}, {103, 172}, {104, 176}, {105, 180},
-        {221, 120}, {226, 124},
+    struct KeyCell { int vk; std::int32_t MMDAppState::* cell; };
+    static constexpr KeyCell kNamedCells[] = {
+        // 0x42D3AA..0x42D428 and the 0x42D5D6..0x42D6B6 non-numpad entries
+        {VK_UP, &MMDAppState::upKeyState},
+        {VK_DOWN, &MMDAppState::downKeyState},
+        {VK_LEFT, &MMDAppState::leftKeyState},
+        {VK_RIGHT, &MMDAppState::rightKeyState},
+        {VK_SHIFT, &MMDAppState::shiftModifierState},
+        {VK_SPACE, &MMDAppState::spaceKeyState},
+        {VK_CONTROL, &MMDAppState::ctrlModifierState},
+        {VK_DELETE, &MMDAppState::deleteKeyState},
+        {VK_ESCAPE, &MMDAppState::escKeyState},
+        {VK_TAB, &MMDAppState::tabKeyState},
+        {VK_LBUTTON, &MMDAppState::leftMouseButtonState},
+        {VK_RBUTTON, &MMDAppState::rightMouseButtonState},
+        {VK_MBUTTON, &MMDAppState::middleMouseButtonState},
+        {VK_RETURN, &MMDAppState::bC},
+        {VK_MENU, &MMDAppState::menuKeyState},
+        {221, &MMDAppState::keyState221},
+        {226, &MMDAppState::keyState226},
     };
-    for (const auto& e : kMap)
-        KeyEdgeScan(app, e.vk, &app->raw<std::uint32_t>(e.cellOff));
+    for (const KeyCell& e : kNamedCells)
+        KeyEdgeScan(app, e.vk,
+                    reinterpret_cast<std::uint32_t*>(&(app->state.*e.cell)));
+
+    // 0x42D435..0x42D525 (two keys per cell): letter hotkeys share the
+    // dialog re-entry guard ints (MMDAppState::dialogFlags, cells
+    // app+48..+116); lowercase/uppercase VK pairs fold onto one slot.
+    // The pairings follow the original table exactly: 's' lands on slot 7
+    // and 'g' on slot 8, and 'h' (slot 10) is scanned before 'i' (slot 9).
+    // frame_modes.cpp kLetterKeys now carries the same s/g pairing (its
+    // earlier swap against this ground-truth table was fixed 2026-09).
+    static constexpr struct { int key; int flagIndex; } kLetterKeys[] = {
+        {'x', 0}, {'X', 0}, {'z', 1}, {'Z', 1},
+        {'c', 2}, {'C', 2}, {'v', 3}, {'V', 3},
+        {'d', 4}, {'D', 4}, {'a', 5}, {'A', 5},
+        {'b', 6}, {'B', 6}, {'s', 7}, {'S', 7},
+        {'g', 8}, {'G', 8}, {'h', 10}, {'H', 10},
+        {'i', 9}, {'I', 9}, {'k', 11}, {'K', 11},
+        {'p', 12}, {'P', 12}, {'u', 13}, {'U', 13},
+        {'j', 14}, {'J', 14}, {'f', 15}, {'F', 15},
+        {'r', 16}, {'R', 16}, {'l', 17}, {'L', 17},
+    };
+    for (const auto& e : kLetterKeys)
+        KeyEdgeScan(app, e.key,
+                    reinterpret_cast<std::uint32_t*>(
+                        &app->state.dialogFlags[e.flagIndex]));
+
+    // 0x42D5D6..0x42D6B6 tail: VK_NUMPAD0..9 twin scans -> app+144..+180
+    for (int i = 0; i < 10; ++i)
+        KeyEdgeScan(app, VK_NUMPAD0 + i,
+                    reinterpret_cast<std::uint32_t*>(
+                        &app->state.numpadKeyState[i]));
 }
 
 // ===========================================================================

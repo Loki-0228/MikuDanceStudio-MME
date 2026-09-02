@@ -38,7 +38,7 @@ void CreateUiFont(MMDApp* app, HWND hwnd) {
     SystemParametersInfoA(SPI_GETNONCLIENTMETRICS /*0x29*/, 0x154,
                           &metrics, 0);
     // lfMessageFont copy (15 dwords = 60 bytes) -> this+656508
-    std::memcpy(s.at(offsets::kBufLogfont),
+    std::memcpy(s.state.logFont,
                 &metrics.lfMessageFont, sizeof(LOGFONTA));
 
     const bool english = s.EnglishUI() != 0;                      // 658252
@@ -49,7 +49,7 @@ void CreateUiFont(MMDApp* app, HWND hwnd) {
         OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, PROOF_QUALITY /*2*/,
         FIXED_PITCH | FF_MODERN /*0x31*/,
         english ? "Tahoma" : "MS PGothic");                       // 0x52BD18/0x52B7C4
-    s.raw<void*>(offsets::kPtrHfontui) = font;                    // 656572
+    s.state.hFontUI = font;                                       // 656572
 
 }
 
@@ -70,8 +70,7 @@ void ApplyUiFontToControl(MMDApp* app, HWND control, int id) {
         }
         if (control != nullptr)
             SendMessageA(control, WM_SETFONT,
-                         reinterpret_cast<WPARAM>(
-                             app->raw<void*>(offsets::kPtrHfontui)),
+                         reinterpret_cast<WPARAM>(app->state.hFontUI),
                          TRUE);
 }
 

@@ -253,14 +253,14 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
     else if (ctrl == GetDlgItem(hwnd, 447)) {
         const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 447),
                                          0x400 /*TBM_GETPOS*/, 0, 0);
-        app->raw<float>(0x9E1E8) = static_cast<float>(pos);
+        app->CameraFov() = static_cast<float>(pos);
         char buf[256];
-        sprintf_s(buf, 0x100, "%3d", static_cast<int>(app->raw<float>(0x9E1E8)));
+        sprintf_s(buf, 0x100, "%3d", static_cast<int>(app->CameraFov()));
         EchoEditText(hwnd, 448, buf);
 
         // fovRad = float(fovDeg * dbl_52BB20), dbl_52BB20 = 0.01745329238474369
         const float fovRad = static_cast<float>(
-            static_cast<double>(app->raw<float>(0x9E1E8)) * 0.01745329238474369);
+            static_cast<double>(app->CameraFov()) * 0.01745329238474369);
         D3DRenderer* locale = app->Renderer();
         const float aspect = locale->aspectRatio;  // 0x1D4EC
 
@@ -316,16 +316,16 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
             break;
         case 2:  // SB_PAGEUP
             app->state.timelineStartFrame -=
-                app->raw<std::int32_t>(0x970);  // timeline SCROLLINFO nPage
+                app->state.timelineScrollNPage;  // timeline SCROLLINFO nPage
             break;
         case 3:  // SB_PAGEDOWN
             app->state.timelineStartFrame +=
-                app->raw<std::int32_t>(0x970);
+                app->state.timelineScrollNPage;
             break;
         case 5:  // SB_THUMBPOSITION
             app->state.timelineStartFrame +=
                 static_cast<std::int32_t>(HIWORD(wParam)) -
-                app->raw<std::int32_t>(0x974);  // timeline SCROLLINFO nMin
+                app->state.timelineScrollNMin;  // timeline SCROLLINFO nMin
             break;
         default:
             break;

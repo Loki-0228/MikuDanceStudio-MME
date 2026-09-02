@@ -42,9 +42,6 @@ const T& At(const unsigned char* p, std::size_t offset) {
     return *reinterpret_cast<const T*>(p + offset);
 }
 
-constexpr std::size_t kAppFrame = 0x980;       // current frame
-constexpr std::size_t kAccCurrent = 0x9E170;   // active accessory slot byte
-
 // JP overflow strings 0x52B918 / 0x52B908, Shift-JIS byte-exact (same
 // resources as the global-track registrar in command_control_400.cpp).
 const char kJpOverflow[] =
@@ -153,7 +150,7 @@ void Sub413120(MMDApp* app, int slot) {
     if (app == nullptr || slot < 0 || slot >= 255)
         return;
     const std::uint32_t cur =
-        app->raw<std::uint32_t>(kAppFrame);
+        static_cast<std::uint32_t>(app->CurrentFrame());
     mdl::AccessoryKey* keys = app->AccessoryKeys(slot);
     auto* obj = app->AccessorySlot(slot);
     if (keys == nullptr || !IsReadableAccessory(obj))
@@ -226,7 +223,7 @@ int Sub414110(MMDApp* app, void* recData, int flag) {
     const auto& src =
         *static_cast<const mdl::AccessoryClipboardKey*>(recData);
     const std::uint8_t slot =
-        flag != 0 ? app->raw<std::uint8_t>(kAccCurrent) : src.slot;
+        flag != 0 ? app->SelectedAccessorySlot() : src.slot;
 
     // No accessory loaded: the original returns through its epilogue
     // without touching anything (0x41411E..0x414164).
@@ -236,7 +233,7 @@ int Sub414110(MMDApp* app, void* recData, int flag) {
 
     mdl::AccessoryKey* table = app->AccessoryKeys(slot);
     const std::uint32_t frame =
-        app->raw<std::uint32_t>(kAppFrame) + src.frameOffset;
+        static_cast<std::uint32_t>(app->CurrentFrame()) + src.frameOffset;
 
     // Walk to the first record with frame >= target (0x41416D..0x4141AF).
     std::uint32_t index = 0;

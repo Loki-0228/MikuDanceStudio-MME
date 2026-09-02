@@ -273,7 +273,8 @@ void HandlePaletteChanged2(HDC hdc) {
 
     // 49x24 playing-icon blit from the offscreen DC handle at this+0x2F4.
     HDC compat = CreateCompatibleDC(nullptr);                    // 0x42C1EF
-    SelectObject(compat, app->raw<HGDIOBJ>(0x2F4));              // this+0x2F4 (756)
+    SelectObject(compat,
+                 reinterpret_cast<HGDIOBJ>(app->state.bmpRes119));  // this+0x2F4 (756)
     BitBlt(hdc, blitX - 58, hideTop - 24, 49, 24, compat, 0, 0,
            0xCC0020u);                                           // 0x42C226 (SRCCOPY)
     DeleteDC(compat);                                            // 0x42C22D
@@ -358,7 +359,7 @@ void HandlePaletteChanged2(HDC hdc) {
                         (app->SelectedModelSlot() == traceTarget) &
                         (traceTarget >= 0);                      // 0x42C553..0x42C572
                     if (traceActive) {
-                        if (app->raw<std::uint8_t>(offsets::kByteB6568481) != 0) {  // 0xA05D1
+                        if (app->state.b6568481 != 0) {  // 0xA05D1
                             DrawGlyph(app, "camera bone trace mode (release trace button)",
                                       hdc, 16, xBase + width + 30, hideTop - 22,
                                       0xFF, 0xFF, 0xFF, 1);      // 0x42C5A7
@@ -397,7 +398,7 @@ void HandlePaletteChanged2(HDC hdc) {
                     (app->SelectedModelSlot() == traceTarget) &
                     (traceTarget >= 0);                          // 0x42C6F9..0x42C721
                 if (traceActive) {
-                    if (app->raw<std::uint8_t>(offsets::kByteB6568481) != 0) {  // 0xA05D1
+                    if (app->state.b6568481 != 0) {  // 0xA05D1
                         DrawGlyph(app, kS52C808, hdc, 16, xBase + width + 30,
                                   hideTop - 20, 0xFF, 0xFF, 0xFF, 1);  // 0x42C756
                         DrawGlyph(app, kS52C808, hdc, 16, xBase + width + 29,

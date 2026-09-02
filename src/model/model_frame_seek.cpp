@@ -445,7 +445,7 @@ void Sub4220C0(MMDApp* app) {
     unsigned char* model = app->SelectedModel();
     Sub4B4260(model, app->state.currentFrame,
               app->PlaybackPhysicsMode());                         // 0x4220DF
-    app->raw<std::uint8_t>(0x9ED95) = 1;                          // 0x4220E4
+    app->F9ed94Byte1() = 1;                                        // 0x4220E4
 }
 
 }  // namespace mikudancestudio
