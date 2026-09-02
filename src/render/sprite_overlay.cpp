@@ -620,7 +620,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
     // 0x46C297..0x46C6C5: with no selected model, the camera look-at point
     // projects to the exact viewport centre. The original uses asymmetric
     // -9.5/+8.5 extents so texels land on the same pixels.
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0 &&
+    if (app->state.optflag0 != 0 &&
         app->PlaybackActive() == 0 &&
         app->CameraParentModel() < 0) {
         const float cx = static_cast<float>((view.left + view.right) / 2);
@@ -652,7 +652,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
     // 0x46C6E2..0x46CE84: camera and bone operation rows. Playback takes
     // LABEL_105 and deliberately emits neither rows nor highlights.
     if (!playback) {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             append(right - scale * 130.0f, bottom - scale * 80.0f,
                    right - scale * 10.0f, bottom - scale * 50.0f,
                    0.001953f, 0.41210899f, 0.23242199f, 0.46875f);
@@ -705,7 +705,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
         // 0x46D74D..0x46DB2A: operation cursor pictures in bone mode. These
         // use raw projected mouse coordinates returned by 0x499BD0 and are
         // intentionally not multiplied by the viewport scale.
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+        if (app->state.optflag0 == 0) {
             const float x = static_cast<float>(app->ViewportToolCenterX());
             const float y = static_cast<float>(app->ViewportToolCenterY());
             const int cursorKind = static_cast<int>(app->EditMode());

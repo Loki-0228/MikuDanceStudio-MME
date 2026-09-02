@@ -777,8 +777,10 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
         VsqEvent& ev = events[i];
         const double start = ev.start;
         const double end = ev.end;
-        if (ev.vowel == 'h')                                        // 0x438150
-            ev.vowel = ev.consonant[0];
+        // 0x438150: 'h' inherits token[5] (record +0x0C), NOT the
+        // consonant byte at +0 (pfVar164-4 where pfVar164 = &ev.start).
+        if (ev.vowel == 'h')
+            ev.vowel = ev.token[5];
         const int f1 = -2 - static_cast<int>(start * -30.0);        // 0x52CE10
         const int f2 = static_cast<int>(start * 30.0);              // 0x52BA68
         const int f3 = -2 - static_cast<int>(end * -30.0);
@@ -820,10 +822,10 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
         // (the original reads events+count*0x24-0x10 unconditionally)
         const float lastEnd =
             events[count - 1].end;
-        s.raw<std::int32_t>(offsets::kDword980) =
+        s.state.currentFrame =
             static_cast<int>(lastEnd * 30.0);
     }
-    const int frameNow = s.raw<std::int32_t>(offsets::kDword980);
+    const int frameNow = s.state.currentFrame;
     const std::uint32_t modelMax = modelRecord.maxFrame;
     if (s.LastRegisteredFrame() < modelMax)
         s.LastRegisteredFrame() = modelMax;
@@ -838,12 +840,12 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
 
     Sub4B4260(model, frameNow, s.PlaybackPhysicsMode());             // 0x4B4260
 
-    s.raw<std::int32_t>(offsets::kDword97C) =
+    s.state.timelineStartFrame =
         frameNow > 6 ? frameNow - 6 : 0;
     PanelPaint(app);                                                // 0x414610
 
-    if (s.raw<unsigned char>(offsets::kByteA06CC) != 0) {
-        TimelineDrawTicks(s.raw<std::int32_t>(offsets::kDword97C),
+    if (s.state.waveEnabled != 0) {
+        TimelineDrawTicks(s.state.timelineStartFrame,
                           s.raw<std::int32_t>(offsets::kDwordSidebar));
         RECT rc;
         rc.left = 6;

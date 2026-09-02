@@ -77,7 +77,7 @@ const char kJpMakeLine[] =
 // --- 0x40AF40 message helper: EN/JP selection via app+658252 -----------
 void MakeLineFailBox(MMDApp* app, const char* jpSuffix, const char* title) {
     char text[256];
-    if (app->raw<unsigned char>(offsets::kByteEnglish) != 0)
+    if (app->state.englishUI != 0)
         sprintf_s(text, 0x100, "%s",
                   "The performance of the graphics card doesn't suffice.");
     else
@@ -257,11 +257,11 @@ void UpdateKeyEdgeState(MMDApp* app, int nVirtKey,
             *state = 3;                                            // 0x40e401
         } else {
             *state = 1;                                            // 0x40e3ed
-            app->raw<std::uint32_t>(offsets::kDwordA0D6C) = 1;      // 658796
+            app->state.messageSeen = 1;      // 658796
         }
     } else if (*state == 1 || *state == 3) {
         *state = 2;                                                // 0x40e425
-        app->raw<std::uint32_t>(offsets::kDwordA0D6C) = 1;
+        app->state.messageSeen = 1;
     } else {
         *state = 0;                                                // 0x40e41b
     }
@@ -367,9 +367,9 @@ std::uintptr_t DrawGroundPolygon(MMDApp* app) {  // 0x40E5A0
 // ===========================================================================
 void JumpNextKeyframe(MMDApp* app) {  // 0x441070
     auto& s = *app;
-    const std::uint32_t cur = s.raw<std::uint32_t>(offsets::kDword980);
+    const std::uint32_t cur = s.state.currentFrame;
 
-    if (s.raw<unsigned char>(offsets::kByteOptflag0) != 0) {        // 0x441089
+    if (s.state.optflag0 != 0) {        // 0x441089
         std::uint32_t best = 0xFFFFFFFAu;
 
         // camera tree (+884, node stride 21 dwords)
@@ -479,7 +479,7 @@ void JumpNextKeyframe(MMDApp* app) {  // 0x441070
         }
 
         if (best < 0xFFFFFFFAu) {                                   // 0x441244
-            s.raw<std::uint32_t>(offsets::kDword980) = best;        // 0x44125a
+            s.state.currentFrame = best;        // 0x44125a
             char buf[256];
             sprintf_s(buf, 0x100, "%d", best);                      // 0x441260
             SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 417),
@@ -573,7 +573,7 @@ void JumpNextKeyframe(MMDApp* app) {  // 0x441070
     }
 
     if (best < 0xFFFFFFFAu) {                                       // 0x44144c
-        s.raw<std::uint32_t>(offsets::kDword980) = best;            // 0x44145e
+        s.state.currentFrame = best;            // 0x44145e
         char buf[256];
         sprintf_s(buf, 0x100, "%d", best);                          // 0x441464
         SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 417),
@@ -594,9 +594,9 @@ void JumpNextKeyframe(MMDApp* app) {  // 0x441070
 // ===========================================================================
 void JumpPrevKeyframe(MMDApp* app) {  // 0x4414C0
     auto& s = *app;
-    const std::uint32_t cur = s.raw<std::uint32_t>(offsets::kDword980);
+    const std::uint32_t cur = s.state.currentFrame;
 
-    if (s.raw<unsigned char>(offsets::kByteOptflag0) != 0) {        // 0x4414d9
+    if (s.state.optflag0 != 0) {        // 0x4414d9
         std::uint32_t best = 0;
 
         // camera tree (+884, node stride 21 dwords)
@@ -731,7 +731,7 @@ void JumpPrevKeyframe(MMDApp* app) {  // 0x4414C0
             }
         }
 
-        s.raw<std::uint32_t>(offsets::kDword980) = best;            // 0x441753
+        s.state.currentFrame = best;            // 0x441753
         char buf[256];
         sprintf_s(buf, 0x100, "%d", best);                          // 0x441759
         SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 417),
@@ -839,7 +839,7 @@ void JumpPrevKeyframe(MMDApp* app) {  // 0x4414C0
         }
     }
 
-    s.raw<std::uint32_t>(offsets::kDword980) = best;                // 0x441a79
+    s.state.currentFrame = best;                // 0x441a79
     char buf[256];
     sprintf_s(buf, 0x100, "%d", best);                              // 0x441a7f
     SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 417),

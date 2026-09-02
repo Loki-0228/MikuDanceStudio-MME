@@ -155,8 +155,8 @@ void HandleWindowPaint(MMDApp* app) {
     // like the original (each active panel reserves its width).
     const BottomPanelLayout panelLayout = ComputeBottomPanelLayout(app);
     int v9 = panelLayout.leading;
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag1) != 0) {
+    if (app->state.optflag0 != 0) {
+        if (app->state.optflag1 != 0) {
             if (en) {
                 Lbl(app, "camera", hdc, 12, 423, rc.bottom - 155);
                 Lbl(app, "view angle ", hdc, 11, 368, rc.bottom - 107);
@@ -182,7 +182,7 @@ void HandleWindowPaint(MMDApp* app) {
                 Lbl(app, kJpLblSaku, hdc, 12, 364, rc.bottom - 50);
             }
         }
-    } else if (app->raw<std::uint8_t>(offsets::kByteOptflag4) != 0) {
+    } else if (app->state.optflag4 != 0) {
         if (en)
             Lbl(app, "bone manipulation", hdc, 12, 413, rc.bottom - 155);
         else
@@ -203,8 +203,8 @@ void HandleWindowPaint(MMDApp* app) {
     }
 
     // light panel (only reachable in camera mode, mirrors the original)
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag2) != 0) {
+    if (app->state.optflag0 != 0) {
+        if (app->state.optflag2 != 0) {
             if (en) {
                 Lbl(app, "light manipulation", hdc, 12, 548 - v9, rc.bottom - 155);
                 Lbl(app, "R", hdc, 12, 502 - v9, rc.bottom - 137);
@@ -236,7 +236,7 @@ void HandleWindowPaint(MMDApp* app) {
                 Lbl(app, kJpLblSaku, hdc, 12, 502 - v9, rc.bottom - 70);
             }
         }
-    } else if (app->raw<std::uint8_t>(offsets::kByteOptflag5) != 0) {
+    } else if (app->state.optflag5 != 0) {
         // facial panel
         if (en) {
             Lbl(app, "facial manipulation", hdc, 12, 683 - v9, rc.bottom - 155);
@@ -267,8 +267,8 @@ void HandleWindowPaint(MMDApp* app) {
     v9 = panelLayout.afterLightOrFace;
 
     // self-shadow panel
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag6) != 0) {
+    if (app->state.optflag0 != 0) {
+        if (app->state.optflag6 != 0) {
             if (en) {
                 Lbl(app, "self_shadow manipulation", hdc, 12, 708 - v9, rc.bottom - 155);
                 Lbl(app, "shadow range", hdc, 12, 690 - v9, rc.bottom - 95);
@@ -302,9 +302,9 @@ void HandleWindowPaint(MMDApp* app) {
     v9 = panelLayout.afterSelfShadow;
 
     // accessory panel
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         v9 = panelLayout.accessory;
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag3) != 0) {
+        if (app->state.optflag3 != 0) {
             if (en) {
                 Lbl(app, "accessory manipulation", hdc, 12, 723 - v9, rc.bottom - 155);
                 Lbl(app, "X", hdc, 12, 686 - v9, rc.bottom - 68);
@@ -395,7 +395,7 @@ void HandleWindowPaint(MMDApp* app) {
            app->CurveDC(), 0, 0, SRCCOPY);
     EndPaint(hwnd, &ps);
 
-    app->raw<std::uint32_t>(offsets::kDwordMsgseen) = 1;
+    app->state.messageSeen = 1;
     if (app->WindowLayoutReady() != 0)
         FrameDriver(app);                                         // 0x46B090
 
@@ -403,7 +403,7 @@ void HandleWindowPaint(MMDApp* app) {
     app->raw<std::int32_t>(offsets::kDwordScrollCb) = 28;
     app->raw<std::int32_t>(offsets::kDwordScrollFmask) = 7;        // SIF_ALL
     app->raw<std::int32_t>(offsets::kDwordScrollNmin) = 0;
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+    if (app->state.optflag0 == 0) {
         unsigned char* model = app->SelectedModel();
         app->raw<std::int32_t>(offsets::kDwordScrollNmax) =
             mikudancestudio::mdl::Mdl(model)->boneListRows - 3;

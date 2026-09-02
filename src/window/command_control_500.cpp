@@ -274,7 +274,7 @@ void MorphStep(MMDApp* app, HWND hwnd, std::size_t lane, int comboId,
 // keyframe (sub_42D6E0), zeroes the selected bone's local position component
 // and marks its per-frame edit flag.
 void BonePosEdit(MMDApp* app, std::size_t dispOff, std::size_t axis) {
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         app->raw<float>(dispOff) = 0.0f;
         RefreshRequest(-1);
         PostViewRefresh(app);
@@ -300,7 +300,7 @@ void BonePosEdit(MMDApp* app, std::size_t dispOff, std::size_t axis) {
 // stores the rotation quaternion into the bone record (+0x14C) via
 // D3DXQuaternionRotationMatrix, marking the bone flag 0x2D98.
 void BoneRotEdit(MMDApp* app, std::size_t dispOff, int axis) {
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         app->raw<float>(dispOff) = 0.0f;
         RefreshRequest(-1);
         PostViewRefresh(app);
@@ -379,13 +379,13 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         app->SceneModified() = 1;
         Sub4C2080(
             ActiveModel(app),
-            app->raw<std::int32_t>(offsets::kDword980),
+            app->state.currentFrame,
             app->PlaybackPhysicsMode());
         // 0x9E16C = max(0x9E16C, model+0x31B0)
         const std::int32_t frames =
             static_cast<std::int32_t>(mdl::Mdl(ActiveModel(app))->maxFrame);
-        if (app->raw<std::int32_t>(offsets::kDword9E16C) < frames)
-            app->raw<std::int32_t>(offsets::kDword9E16C) = frames;
+        if (app->state.lastRegisteredFrame < frames)
+            app->state.lastRegisteredFrame = frames;
         PanelPaint(app);              // 0x414610
         SelectionReeval(app);         // 0x430510
         break;
@@ -413,11 +413,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 502/503: option-flag checkbox pair 0x1FC (byte 0x2FC) ----------
     case 502:  // 0x47EA70
-        app->raw<std::uint8_t>(offsets::kByteOptflag4) = 0;
+        app->state.optflag4 = 0;
         OptionFlagRefresh(app, hwnd);
         break;
     case 503:  // 0x47EA79
-        app->raw<std::uint8_t>(offsets::kByteOptflag4) = 1;
+        app->state.optflag4 = 1;
         OptionFlagRefresh(app, hwnd);
         break;
 
@@ -513,22 +513,22 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         Sub49EEE0(
             m,
             mdl::Mdl(m)->selectedMorphs[lane],
-            app->raw<std::int32_t>(offsets::kDword980));
+            app->state.currentFrame);
         const std::int32_t frames =
             *reinterpret_cast<std::int32_t*>(ActiveModel(app) + 0x31B0);
-        if (app->raw<std::int32_t>(offsets::kDword9E16C) < frames)
-            app->raw<std::int32_t>(offsets::kDword9E16C) = frames;
+        if (app->state.lastRegisteredFrame < frames)
+            app->state.lastRegisteredFrame = frames;
         PanelPaint(app);
         break;
     }
 
     // ---- 528/529: option-flag checkbox pair 0x210 (byte 0x2FD) ----------
     case 528:  // 0x47EA82
-        app->raw<std::uint8_t>(offsets::kByteOptflag5) = 0;
+        app->state.optflag5 = 0;
         OptionFlagRefresh(app, hwnd);
         break;
     case 529:  // 0x47EA9A
-        app->raw<std::uint8_t>(offsets::kByteOptflag5) = 1;
+        app->state.optflag5 = 1;
         OptionFlagRefresh(app, hwnd);
         break;
 
@@ -545,13 +545,13 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             app->CameraReferenceMode() =
                 CameraAttachmentReference::SelectedBone;
             SendMessageA(GetDlgItem(hwnd, 0x19C), BM_SETCHECK, 0, 0);
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0)
+            if (app->state.optflag0 == 0)
                 Sub41ACD0(app, oldMode);
         } else {
             // Unchecked: mode byte 0x340 = 0, Sub41ACD0(app, old mode).
             const int oldMode = static_cast<int>(app->CameraReferenceMode());
             app->CameraReferenceMode() = CameraAttachmentReference::None;
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0)
+            if (app->state.optflag0 == 0)
                 Sub41ACD0(app, oldMode);
         }
         break;
@@ -576,7 +576,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             // full model/slot refresh chain (0x42E640, 0x411070, 0x411B90,
             // 0x412330, per-slot 0x413120, 0x4134E0), then the edit-mode
             // gated PostModelReload (0x41A650) and PostLanguageSweep2.
-            app->raw<std::uint8_t>(offsets::kByte9ED98) = 1;
+            app->state.v9ed98 = 1;
             app->ViewOffsetX() = 0.0f;
             app->ViewOffsetY() = 0.0f;
             CheckMenuItem(GetMenu(hwnd), 0xF7, MF_CHECKED);
@@ -589,7 +589,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
                     Sub413120(app, i);
             }
             Sub4134E0(app);
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+            if (app->state.optflag0 == 0) {
                 app->CameraAttachmentTransformSuppressed() = 0;
                 Sub41A650(app);  // 0x41A650 post-reload refresh
             }
@@ -597,9 +597,9 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         } else {
             // unchecked: byte 0x9ED98 = 0, menu 0xF7 unchecked, reload
             // gated on the selected slot (0xA0430 == slot index).
-            app->raw<std::uint8_t>(offsets::kByte9ED98) = 0;
+            app->state.v9ed98 = 0;
             CheckMenuItem(GetMenu(hwnd), 0xF7, MF_UNCHECKED);
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+            if (app->state.optflag0 == 0) {
                 const std::int32_t sel = app->CameraParentModel();
                 if (sel == app->SelectedModelSlot() &&
                     sel >= 0) {
@@ -614,7 +614,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 536: accessory-combo sync 0x218 (combo 0x1B4) ------------------
     case 536: {  // 0x48BF6F
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             // display mode: selected accessory index 0xA042C; when zero the
             // original re-dispatches WM_COMMAND 0x1B3 on the main window.
             const std::int32_t sel =
@@ -656,7 +656,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 543: camera-angle edit box 0x21F -------------------------------
     case 543: {  // 0x48C52F
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             app->CameraDistance() = 0.0f;
             RefreshRequest(-1);
         }
@@ -683,10 +683,10 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         long v = atol(buf);
         if (v < 0)
             v = 0;
-        app->raw<std::int32_t>(offsets::kDword980) = static_cast<std::int32_t>(v);
+        app->state.currentFrame = static_cast<std::int32_t>(v);
         Sub432FA0(app);   // 0x432FA0 frame-apply chain
         PostViewRefresh(app);
-        sprintf_s(buf, 0x100u, "%d", app->raw<std::int32_t>(offsets::kDword980));
+        sprintf_s(buf, 0x100u, "%d", app->state.currentFrame);
         SetWindowTextA(GetDlgItem(hwnd, 0x1A1), buf);
         break;
     }
@@ -694,7 +694,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
     // ---- 555: frame edit box 0x22B echo ---------------------------------
     case 555: {  // 0x48DE84
         char buf[0x100];
-        sprintf_s(buf, 0x100u, "%d", app->raw<std::int32_t>(offsets::kDword980));
+        sprintf_s(buf, 0x100u, "%d", app->state.currentFrame);
         SetWindowTextA(GetDlgItem(hwnd, 0x22A), buf);
         break;
     }
@@ -730,23 +730,23 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 558: frame-reset button 0x22E ----------------------------------
     case 558: {  // 0x48C679
-        app->raw<std::int32_t>(offsets::kDword980) = 0;
+        app->state.currentFrame = 0;
         Sub432FA0(app);   // 0x432FA0 frame-apply chain
         PostViewRefresh(app);
         char buf[0x100];
-        sprintf_s(buf, 0x100u, "%d", app->raw<std::int32_t>(offsets::kDword980));
+        sprintf_s(buf, 0x100u, "%d", app->state.currentFrame);
         SetWindowTextA(GetDlgItem(hwnd, 0x1A1), buf);
         break;
     }
 
     // ---- 559: frame-end button 0x22F ------------------------------------
     case 559: {  // 0x48C6D6
-        app->raw<std::int32_t>(offsets::kDword980) =
-            app->raw<std::int32_t>(offsets::kDword9E16C);
+        app->state.currentFrame =
+            app->state.lastRegisteredFrame;
         Sub432FA0(app);   // 0x432FA0 frame-apply chain
         PostViewRefresh(app);
         char buf[0x100];
-        sprintf_s(buf, 0x100u, "%d", app->raw<std::int32_t>(offsets::kDword980));
+        sprintf_s(buf, 0x100u, "%d", app->state.currentFrame);
         SetWindowTextA(GetDlgItem(hwnd, 0x1A1), buf);
         break;
     }
@@ -808,7 +808,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             for (std::size_t off = 0; off < 0x927C0; off += 0x3C)
                 rec[off + 0x18] = 0;
         }
-        Sub411DF0(app, app->raw<std::int32_t>(offsets::kDword980));
+        Sub411DF0(app, app->state.currentFrame);
         RefreshRequest(-3);
         PanelPaint(app);
         break;
@@ -863,11 +863,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 566/567: option-flag checkbox pair 0x236 (byte 0x2FE) ----------
     case 566:  // 0x47EAA6
-        app->raw<std::uint8_t>(offsets::kByteOptflag6) = 0;
+        app->state.optflag6 = 0;
         OptionFlagRefresh(app, hwnd);
         break;
     case 567:  // 0x47EAAF
-        app->raw<std::uint8_t>(offsets::kByteOptflag6) = 1;
+        app->state.optflag6 = 1;
         OptionFlagRefresh(app, hwnd);
         break;
 

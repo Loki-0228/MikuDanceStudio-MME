@@ -227,17 +227,17 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     CheckMenuItem(GetMenu(hwnd), 0x123, MF_CHECKED);                // 0x429f61
     s.raw<std::uint8_t>(offsets::kByteA03B8) = 1;                   // 0x429f85
 
-    if (s.raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {         // 0x429f8b
+    if (s.state.optflag0 == 0) {         // 0x429f8b
         unsigned char* model = s.SelectedModel();
         ModelInitMorphSlots(model);                                 // 0x4a89b0
     }
 
     // 0x429fa0..0x429fbc: save the fps limit; a capture file caps it to 30.
     s.raw<float>(offsets::kFloatA03e0) =
-        s.raw<float>(offsets::kFloatFpslimit);
+        s.state.fpsLimit;
     if (sjisPath != nullptr) {
         s.raw<std::uint8_t>(offsets::kByteA03DF) = 1;
-        s.raw<float>(offsets::kFloatFpslimit) = 30.0f;              // 0x52997c
+        s.state.fpsLimit = 30.0f;              // 0x52997c
     }
     s.raw<std::uint8_t>(offsets::kByteAutorep) = 0;                   // 0x429fc4
 }
@@ -262,10 +262,10 @@ void DisableKinect(MMDApp* app) {
 
     unsigned char* model = s.SelectedModel();
     if (model != nullptr)                                           // 0x42a092
-        Sub4B4260(model, s.raw<std::int32_t>(offsets::kDword980),
+        Sub4B4260(model, s.state.currentFrame,
                   s.PlaybackPhysicsMode());
 
-    s.raw<float>(offsets::kFloatFpslimit) =                         // 0x42a0ac
+    s.state.fpsLimit =                         // 0x42a0ac
         s.raw<float>(offsets::kFloatA03e0);
     s.PhysicsResetPending() = 1;                                   // 0x42a0b9
     s.raw<std::uint8_t>(offsets::kByteA03DF) = 0;                   // 0x42a0c0

@@ -76,7 +76,7 @@ void SaveVmdFile(const wchar_t* path) {
     if (app == nullptr) return;
     auto& s = *app;
 
-    const bool cameraMode = s.raw<std::uint8_t>(offsets::kByteOptflag0) != 0;
+    const bool cameraMode = s.state.optflag0 != 0;
     unsigned char* const model = ActiveModel(app);
 
     // ---- pass 1: counts + minimum frame ---------------------------------
@@ -140,7 +140,7 @@ void SaveVmdFile(const wchar_t* path) {
     int fd;
     if (_wsopen_s(&fd, path, 0x8301, 0x40, 0x80) != 0) {
         char text[256];
-        if (s.raw<std::uint8_t>(offsets::kByteEnglish) != 0)
+        if (s.state.englishUI != 0)
             sprintf_s(text, 0x100, "Cannot save file:%d", errno);
         else
             sprintf_s(text, 0x100, kJpCannotSave, errno);

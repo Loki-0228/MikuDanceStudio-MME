@@ -86,9 +86,9 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
         app->SetSelectedModelSlot(static_cast<std::uint8_t>(slot));
         mikudancestudio::mdl::Mdl(model)->displayState = app->raw<std::uint8_t>(offsets::kByte9EB7E);
 
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             Sub44D610(app);                                   // 0x44D610
-            app->raw<std::uint8_t>(offsets::kByteOptflag0) = 0;
+            app->state.optflag0 = 0;
             PostLanguageSweep(app);                           // 0x42F1E0
             PostModelReload2(app);                            // 0x40D940
             HandleWindowSize(app);                            // 0x443300

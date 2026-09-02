@@ -94,7 +94,7 @@ struct MMDAppState {
 #if defined(_M_X64)
     RawPad<1> pad35;
 #endif
-    unsigned char v330OrUint32;
+    unsigned char playbackActive;
 #if defined(_M_X64)
     RawPad<6> pad36;
 #else
@@ -107,7 +107,7 @@ struct MMDAppState {
 #endif
     float posZ;
     unsigned char v340;
-    unsigned char v341;
+    unsigned char playbackLoopEnabled;
     unsigned char v342;
     RawPad<1> pad42;
     std::uint32_t viewportToolHovered;  // aka kDwordToolhover
@@ -157,8 +157,8 @@ struct MMDAppState {
     std::int32_t scrollNPage;
     std::int32_t scrollNPos;
     RawPad<32> pad67;
-    std::int32_t v97c;
-    std::uint32_t v980;
+    std::int32_t timelineStartFrame;
+    std::int32_t currentFrame;
     std::int32_t rowHitBone[200];  // x64 pin 5204
 #if defined(_M_X64)
     RawPad<2823> pad70;
@@ -268,7 +268,7 @@ struct MMDAppState {
     std::int32_t displayObjectListMatchCount;
     std::int32_t jointLineMap[200];  // x64 pin 648480
     void* buf9ddx[255];  // x64 pin 649280
-    std::uint32_t v9e16c;  // x64 pin 651320
+    std::uint32_t lastRegisteredFrame;  // x64 pin 651320
     unsigned char selLightAccSlotOrUint32;
     RawPad<3> pad115;
     float lightDirection;
@@ -518,8 +518,8 @@ struct MMDAppState {
     RawPad<64> pad249;
 #endif
     std::uint32_t a042C;
-    std::uint32_t a0430;
-    std::int32_t a0434;
+    std::int32_t cameraParentModel;
+    std::int32_t cameraParentBone;
     // 16-float basis/colour matrix (0xA0438..0xA0478); rows 0/2/4/6 of the
     // original camera-attachment basis default to identity diag 1.0
     float cameraAttachmentBasis[16];
@@ -594,7 +594,7 @@ struct MMDAppState {
     void* sub06c;
     void* rendererOrLocaleTable;
     std::int32_t sidebarWidthOrPtr;
-    unsigned char a06CC;
+    unsigned char waveEnabled;
     RawPad<1> pad333;
     wchar_t exeDir[256];
     RawPad<2> pad334;
@@ -621,7 +621,7 @@ struct MMDAppState {
 #ifndef _M_X64
     RawPad<8> pad350;
 #endif
-    std::uint32_t a0B20;
+    std::int32_t accessoryRenderSplitOrder;
 #ifndef _M_X64
     RawPad<32> pad351;
 #endif
@@ -706,9 +706,9 @@ struct MMDAppState {
     unsigned char selfShadowCompositionEnabled;
     RawPad<3> pad378;
     float ba0d2cOrByte;  // aka kFloatPhysicsint
-    std::int32_t a0d30;
+    std::int32_t selfShadowMode;
     RawPad<4> pad380;
-    HWND a0D38OrInt32;  // aka kDwordA0d38
+    HWND floatingWindow;  // aka kDwordA0d38
     std::int32_t cfg658748;
     std::int32_t hideRightOrBuf_bytes;
     std::int32_t hideTop;
@@ -827,8 +827,8 @@ static_assert(offsetof(MMDAppState, fps) == 808,
               "fps x86");
 static_assert(offsetof(MMDAppState, v32c) == 812,
               "v32c x86");
-static_assert(offsetof(MMDAppState, v330OrUint32) == 816,
-              "v330OrUint32 x86");
+static_assert(offsetof(MMDAppState, playbackActive) == 816,
+              "playbackActive x86");
 static_assert(offsetof(MMDAppState, posX) == 820,
               "posX x86");
 static_assert(offsetof(MMDAppState, posY) == 824,
@@ -837,8 +837,8 @@ static_assert(offsetof(MMDAppState, posZ) == 828,
               "posZ x86");
 static_assert(offsetof(MMDAppState, v340) == 832,
               "v340 x86");
-static_assert(offsetof(MMDAppState, v341) == 833,
-              "v341 x86");
+static_assert(offsetof(MMDAppState, playbackLoopEnabled) == 833,
+              "playbackLoopEnabled x86");
 static_assert(offsetof(MMDAppState, v342) == 834,
               "v342 x86");
 static_assert(offsetof(MMDAppState, viewportToolHovered) == 836,
@@ -891,10 +891,10 @@ static_assert(offsetof(MMDAppState, scrollNPage) == 2388,
               "scrollNPage x86");
 static_assert(offsetof(MMDAppState, scrollNPos) == 2392,
               "scrollNPos x86");
-static_assert(offsetof(MMDAppState, v97c) == 2428,
-              "v97c x86");
-static_assert(offsetof(MMDAppState, v980) == 2432,
-              "v980 x86");
+static_assert(offsetof(MMDAppState, timelineStartFrame) == 2428,
+              "timelineStartFrame x86");
+static_assert(offsetof(MMDAppState, currentFrame) == 2432,
+              "currentFrame x86");
 static_assert(offsetof(MMDAppState, rowHitBone) == 2436,
               "rowHitBone x86");
 static_assert(offsetof(MMDAppState, pmxEncoding) == 8624,
@@ -969,8 +969,8 @@ static_assert(offsetof(MMDAppState, jointLineMap) == 645712,
               "jointLineMap x86");
 static_assert(offsetof(MMDAppState, buf9ddx) == 646512,
               "buf9ddx x86");
-static_assert(offsetof(MMDAppState, v9e16c) == 647532,
-              "v9e16c x86");
+static_assert(offsetof(MMDAppState, lastRegisteredFrame) == 647532,
+              "lastRegisteredFrame x86");
 static_assert(offsetof(MMDAppState, selLightAccSlotOrUint32) == 647536,
               "selLightAccSlotOrUint32 x86");
 static_assert(offsetof(MMDAppState, lightDirection) == 647540,
@@ -1250,10 +1250,10 @@ static_assert(offsetof(MMDAppState, timelineSelectionChanged) == 656363,
               "timelineSelectionChanged x86");
 static_assert(offsetof(MMDAppState, a042C) == 656428,
               "a042C x86");
-static_assert(offsetof(MMDAppState, a0430) == 656432,
-              "a0430 x86");
-static_assert(offsetof(MMDAppState, a0434) == 656436,
-              "a0434 x86");
+static_assert(offsetof(MMDAppState, cameraParentModel) == 656432,
+              "cameraParentModel x86");
+static_assert(offsetof(MMDAppState, cameraParentBone) == 656436,
+              "cameraParentBone x86");
 static_assert(offsetof(MMDAppState, cameraAttachmentBasis) == 656440,
               "cameraAttachmentBasis x86");
 static_assert(offsetof(MMDAppState, cameraAttachmentBasis[15]) == 656500,
@@ -1320,8 +1320,8 @@ static_assert(offsetof(MMDAppState, rendererOrLocaleTable) == 657092,
               "rendererOrLocaleTable x86");
 static_assert(offsetof(MMDAppState, sidebarWidthOrPtr) == 657096,
               "sidebarWidthOrPtr x86");
-static_assert(offsetof(MMDAppState, a06CC) == 657100,
-              "a06CC x86");
+static_assert(offsetof(MMDAppState, waveEnabled) == 657100,
+              "waveEnabled x86");
 static_assert(offsetof(MMDAppState, exeDir) == 657102,
               "exeDir x86");
 static_assert(offsetof(MMDAppState, origEditProc) == 657616,
@@ -1356,8 +1356,8 @@ static_assert(offsetof(MMDAppState, a0B10) == 658192,
               "a0B10 x86");
 static_assert(offsetof(MMDAppState, a0B14OrPtr) == 658196,
               "a0B14OrPtr x86");
-static_assert(offsetof(MMDAppState, a0B20) == 658208,
-              "a0B20 x86");
+static_assert(offsetof(MMDAppState, accessoryRenderSplitOrder) == 658208,
+              "accessoryRenderSplitOrder x86");
 static_assert(offsetof(MMDAppState, a0B44OrInt32) == 658244,
               "a0B44OrInt32 x86");
 static_assert(offsetof(MMDAppState, englishUI) == 658252,
@@ -1422,10 +1422,10 @@ static_assert(offsetof(MMDAppState, selfShadowCompositionEnabled) == 658728,
               "selfShadowCompositionEnabled x86");
 static_assert(offsetof(MMDAppState, ba0d2cOrByte) == 658732,
               "ba0d2cOrByte x86");
-static_assert(offsetof(MMDAppState, a0d30) == 658736,
-              "a0d30 x86");
-static_assert(offsetof(MMDAppState, a0D38OrInt32) == 658744,
-              "a0D38OrInt32 x86");
+static_assert(offsetof(MMDAppState, selfShadowMode) == 658736,
+              "selfShadowMode x86");
+static_assert(offsetof(MMDAppState, floatingWindow) == 658744,
+              "floatingWindow x86");
 static_assert(offsetof(MMDAppState, cfg658748) == 658748,
               "cfg658748 x86");
 static_assert(offsetof(MMDAppState, hideRightOrBuf_bytes) == 658752,
@@ -1520,8 +1520,8 @@ static_assert(offsetof(MMDAppState, jointLineMap) == 648480,
               "jointLineMap x64");
 static_assert(offsetof(MMDAppState, buf9ddx) == 649280,
               "buf9ddx x64");
-static_assert(offsetof(MMDAppState, v9e16c) == 651320,
-              "v9e16c x64");
+static_assert(offsetof(MMDAppState, lastRegisteredFrame) == 651320,
+              "lastRegisteredFrame x64");
 #endif
 
 #ifdef _M_X64

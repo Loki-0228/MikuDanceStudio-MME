@@ -72,7 +72,7 @@ void PostDeviceReset(MMDApp* app) {
 
     InitRenderStates(app);                                        // 0x406E90
 
-    const HWND hwnd = static_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));
+    const HWND hwnd = static_cast<HWND>(app->state.hwnd);
     const UINT menuState = GetMenuState(GetMenu(hwnd), 0x115, 0);// 0x440F7C
     device->SetRenderState(                                       // 0x440FAD
         static_cast<D3DRENDERSTATETYPE>(0xA1),

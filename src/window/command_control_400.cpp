@@ -372,7 +372,7 @@ static int InsertGlobalFrame(MMDApp* app, Key* table,
     }
     if (freeIndex >= 10000) {
         char message[0x100];
-        if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+        if (app->state.englishUI != 0) {
             sprintf_s(message, sizeof(message),
                       "You cannot regist over %dpoint.\n"
                       "Please execute 'delete unused frame'", 10000);
@@ -415,8 +415,8 @@ static int InsertGlobalFrame(MMDApp* app, Key* table,
     }
     added.frame = frame;
     fill(added, source);
-    if (frame > app->raw<std::uint32_t>(offsets::kDword9E16C)) {
-        app->raw<std::uint32_t>(offsets::kDword9E16C) = frame;
+    if (frame > app->state.lastRegisteredFrame) {
+        app->state.lastRegisteredFrame = frame;
     }
     return 1;
 }
@@ -597,7 +597,7 @@ static unsigned char DefaultShadowMode(MMDApp* app) {
     }
     // Fixed-function fallback: keep the PMM self-shadow mode when the
     // optional post-effect object was unavailable on this device.
-    return app->raw<std::uint32_t>(offsets::kDwordA0d30) != 0 ? 1 : 0;
+    return app->state.selfShadowMode != 0 ? 1 : 0;
 }
 
 static void ResetShadowRecord(MMDApp* app, mdl::SelfShadowKey& key) {
@@ -634,7 +634,7 @@ void Sub4316B0(MMDApp* app) {
     if (app == nullptr) {
         return;
     }
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         auto* camera = app->CameraKeys();
         if (camera[0].selected != 0) {
             ResetCameraRecord(camera[0], true);
@@ -701,12 +701,12 @@ void Sub4316B0(MMDApp* app) {
         unsigned char* model = ActiveModel(app);
         if (model != nullptr)
             Sub4A09E0(model,
-                      app->raw<std::int32_t>(offsets::kDword980));
+                      app->state.currentFrame);
     }
 
     PanelPaint(app);
     SelectionReeval(app);
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         Sub42E640(app);
         Sub411070(app);
         Sub411B90(app);
@@ -721,7 +721,7 @@ void Sub4316B0(MMDApp* app) {
         unsigned char* model = ActiveModel(app);
         if (model != nullptr) {
             Sub4B4260(model,
-                      app->raw<std::int32_t>(offsets::kDword980),
+                      app->state.currentFrame,
                       app->PlaybackPhysicsMode());
         }
     }
@@ -752,7 +752,7 @@ void ResetCameraAttachmentBasis(MMDApp* app) {
 // path applies the 0xA0430/0x910/0x330/0x9ED98 gate and resets the light
 // matrix (0xA0438) to identity.
 void ResetViewVariant(MMDApp* app, float rot, bool gate30C, bool rotIn310) {
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         app->CameraRotation()[0] = rotIn310 ? rot : 0.0f;
         app->CameraRotation()[1] = rotIn310 ? 0.0f : rot;
         app->CameraRotation()[2] = 0.0f;
@@ -762,7 +762,7 @@ void ResetViewVariant(MMDApp* app, float rot, bool gate30C, bool rotIn310) {
     }
     const std::int32_t a0430 = app->CameraParentModel();
     const std::uint8_t slot = app->SelectedModelSlot();
-    const std::uint8_t esi = app->raw<std::uint8_t>(offsets::kByte9ED98);
+    const std::uint8_t esi = app->state.v9ed98;
     const bool c = a0430 >= 0;  // setnl cl
     const bool b = (slot == a0430) &&
                    app->PlaybackActive() == 0 &&
@@ -1058,14 +1058,14 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // def_47E903, a no-op for this id (control 0x190 != 0x1B4).
     // ------------------------------------------------------------------
     case 400: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             break;
         }
         app->SceneModified() = 1;
         unsigned char* model = ActiveModel(app);
         mdl::ModelRecord& record = *mdl::Mdl(model);
         Sub4A1870(model, reinterpret_cast<std::int32_t*>(
-                             app->at(offsets::kDword980)));
+                             app->state.currentFrame));
         const std::int32_t cnt = record.undoState[0];
         if (record.undoRings[0].slots[cnt].operation == 0) {
             EnableWindow(GetDlgItem(hwnd, 0x190), FALSE);
@@ -1094,14 +1094,14 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // app+0xA0CC4) - the stub only takes this + pos).
     // ------------------------------------------------------------------
     case 401: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             break;
         }
         app->SceneModified() = 1;
         unsigned char* model = ActiveModel(app);
         mdl::ModelRecord& record = *mdl::Mdl(model);
         Sub4A2490(model, reinterpret_cast<std::int32_t*>(
-                             app->at(offsets::kDword980)));
+                             app->state.currentFrame));
         if (record.undoState[0] == record.undoState[1]) {
             EnableWindow(GetDlgItem(hwnd, 0x191), FALSE);
             record.redoDirty = 0;
@@ -1116,7 +1116,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             // original: sub_4B4260(ecx = model, frame = app+0x980,
             // app+0xA0CC4)
             Sub4B4260(model,
-                      app->raw<std::int32_t>(offsets::kDword980),
+                      app->state.currentFrame,
                       app->PlaybackPhysicsMode());
         }
         SetFocus(hwnd);
@@ -1161,7 +1161,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // Sub42E640 (ReloadModels) + PostModelReload, refresh.
     // ------------------------------------------------------------------
     case 407: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             app->CameraRotation()[0] = 1.5707964f;
             app->CameraRotation()[1] = 0.0f;
             app->CameraRotation()[2] = 0.0f;
@@ -1173,7 +1173,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         const std::uint8_t slot = app->SelectedModelSlot();
         const bool hit = (slot == a0430) &&
                          app->PlaybackActive() == 0 &&
-                         app->raw<std::uint8_t>(offsets::kByte9ED98) != 0 &&
+                         app->state.v9ed98 != 0 &&
                          a0430 >= 0;
         if (!hit) {
             app->CameraAttachmentTransformSuppressed() = 0;
@@ -1217,16 +1217,16 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         std::int32_t end = atol(text);  // eax
         if (app->PlaybackStartsAtCurrentFrame() != 0) {
             app->PlaybackStartSeconds() = FrameToSeconds(
-                app->raw<std::int32_t>(offsets::kDword980));
+                app->state.currentFrame);
             app->PlaybackFrameChanged() = 1;
         } else {
             app->PlaybackStartSeconds() = FrameToSeconds(start);
-            if (start != app->raw<std::int32_t>(offsets::kDword980)) {
+            if (start != app->state.currentFrame) {
                 app->PlaybackFrameChanged() = 1;
             }
         }
         if (end == 0) {
-            end = app->raw<std::int32_t>(offsets::kDword9E16C);
+            end = app->state.lastRegisteredFrame;
         }
         app->PlaybackEndSeconds() = FrameToSeconds(end);
         app->PlaybackCursorSeconds() = app->PlaybackStartSeconds();
@@ -1298,13 +1298,13 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             app->CameraReferenceMode() =
                 CameraAttachmentReference::ModelRoot;
             SendMessageA(GetDlgItem(hwnd, 0x213), 0xF1 /*BM_SETCHECK*/, 0, 0);
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+            if (app->state.optflag0 != 0) {
                 break;
             }
             Sub41ACD0(app, prev);
         } else {
             app->CameraReferenceMode() = CameraAttachmentReference::None;
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+            if (app->state.optflag0 != 0) {
                 break;
             }
             Sub41ACD0(app, prev);
@@ -1334,15 +1334,15 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             app->SidebarWidth();
         const std::int32_t count = (sidebar - 0x54) / 26;
         const std::int32_t frame =
-            app->raw<std::int32_t>(offsets::kDword980);
+            app->state.currentFrame;
         if (frame > count) {
-            app->raw<std::int32_t>(offsets::kDword97C) = frame - count;
+            app->state.timelineStartFrame = frame - count;
         } else {
-            app->raw<std::int32_t>(offsets::kDword97C) = 0;
+            app->state.timelineStartFrame = 0;
         }
         PanelPaint(app);
-        if (app->raw<std::uint8_t>(offsets::kByteA06CC) != 0) {
-            TimelineDrawTicks(app->raw<std::int32_t>(offsets::kDword97C),
+        if (app->state.waveEnabled != 0) {
+            TimelineDrawTicks(app->state.timelineStartFrame,
                               sidebar);
             RECT rc;
             rc.left = 6;
@@ -1369,7 +1369,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     case 430: {
         const LRESULT sel =
             SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             const std::int32_t idx = FirstSelectedFrame374(app);
             if (idx < 0) {
                 SetFocus(hwnd);
@@ -1419,7 +1419,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->SceneModified() = 1;
         const LRESULT sel =
             SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             auto* keys = app->CameraKeys();
             for (std::int32_t i = 0; i < 10000; ++i) {
                 mdl::CameraKey& key = keys[i];
@@ -1440,7 +1440,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         } else {
             unsigned char* model = ActiveModel(app);
             // original: Sub4A1510(ecx = model, frame = dword app+0x980)
-            Sub4A1510(model, app->raw<std::int32_t>(offsets::kDword980));
+            Sub4A1510(model, app->state.currentFrame);
             mdl::BoneKey* keys = mdl::BoneKeys(model);
             for (std::int32_t i = 0; i < 300000; ++i) {
                 mdl::BoneKey& key = keys[i];
@@ -1472,7 +1472,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->SceneModified() = 1;
         const LRESULT sel =
             SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             auto* keys = app->CameraKeys();
             for (std::int32_t i = 0; i < 10000; ++i) {
                 mdl::CameraKey& key = keys[i];
@@ -1493,7 +1493,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         } else {
             unsigned char* model = ActiveModel(app);
             // original: Sub4A1510(ecx = model, frame = dword app+0x980)
-            Sub4A1510(model, app->raw<std::int32_t>(offsets::kDword980));
+            Sub4A1510(model, app->state.currentFrame);
             mdl::BoneKey* keys = mdl::BoneKeys(model);
             for (std::int32_t i = 0; i < 300000; ++i) {
                 mdl::BoneKey& key = keys[i];
@@ -1526,15 +1526,15 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 435: {
         SetCurrentDirectoryW(app->ExeDir());
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         wchar_t fileBuf[0x100];
         memset(fileBuf, 0, sizeof(fileBuf));
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = 0x4C;
-        ofn.hwndOwner = app->raw<std::int32_t>(offsets::kDwordA0d38) != 0
+        ofn.hwndOwner = app->state.floatingWindow != 0
                             ? reinterpret_cast<HWND>(
-                                  app->raw<void*>(offsets::kDwordA0d38))
+                                  app->state.floatingWindow)
                             : hwnd;
         ofn.lpstrFilter = kFilterModel;
         ofn.lpstrFile = fileBuf;
@@ -1547,7 +1547,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         ofn.lpstrDefExt = kDefExtPmd;
         ofn.nMaxFileTitle = 0x100;
         ofn.lpstrFileTitle = nullptr;
-        ofn.lpstrTitle = app->raw<std::uint8_t>(offsets::kByteEnglish) != 0
+        ofn.lpstrTitle = app->state.englishUI != 0
                              ? kTitleLoadModel
                              : kTitleOpenFileJp;
         if (GetOpenFileNameW(&ofn) != 0) {
@@ -1600,7 +1600,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         }
         const LRESULT sel =
             SendMessageA(GetDlgItem(hwnd, 0x1B4), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         std::int32_t found = -1;
         for (std::int32_t i = 0; i < 0x64; ++i) {
             unsigned char* m = app->ModelSlot(i);
@@ -1612,17 +1612,17 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (found < 0) {
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         unsigned char* model = app->ModelSlot(found);
         const mdl::ModelRecord& record = *mdl::Mdl(model);
         char text[0x100];
-        if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+        if (app->state.englishUI != 0) {
             sprintf_s(text, 0x100, kMsgDelModelEn, record.nameEn);
         } else {
             sprintf_s(text, 0x100, kMsgDelModelJp, record.name);
         }
         const std::uint32_t flags =
-            app->raw<std::int32_t>(offsets::kDwordA0d38) != 0 ? 0x40001u : 1u;
+            app->state.floatingWindow != 0 ? 0x40001u : 1u;
         if (MessageBoxA(hwnd, text, kCaptionDelModelJp, flags) != 1) {
             break;
         }
@@ -1771,11 +1771,11 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         ClearModelKeyMarks(mdl::BoneKeys(model), 300000);
         ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
         ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
-        Sub49F480(model, app->raw<std::int32_t>(offsets::kDword980));
+        Sub49F480(model, app->state.currentFrame);
         const std::int32_t v =
             static_cast<std::int32_t>(mdl::Mdl(model)->maxFrame);
-        if (app->raw<std::int32_t>(offsets::kDword9E16C) < v) {
-            app->raw<std::int32_t>(offsets::kDword9E16C) = v;
+        if (app->state.lastRegisteredFrame < v) {
+            app->state.lastRegisteredFrame = v;
         }
         PanelPaint(app);
         break;
@@ -1888,11 +1888,11 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // SelectionReeval.
     // ------------------------------------------------------------------
     case 442: {
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         app->raw<std::uint8_t>(offsets::kByteA0665) = 1;
         const std::intptr_t result =
             DialogBoxParamA(app->raw<HINSTANCE>(0),
-                            app->raw<std::uint8_t>(offsets::kByteEnglish) != 0
+                            app->state.englishUI != 0
                                 ? reinterpret_cast<LPCSTR>(0x329)
                                 : reinterpret_cast<LPCSTR>(0x328),
                             hwnd, &Sub47A3F0, 0);
@@ -1920,7 +1920,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         // original: sub_4B4260(ecx = model, frame = app+0x980,
         // app+0xA0CC4)
         Sub4B4260(model,
-                  app->raw<std::int32_t>(offsets::kDword980),
+                  app->state.currentFrame,
                   app->PlaybackPhysicsMode());
         PostLanguageSweep(app);
         SelectionReeval(app);
@@ -1950,7 +1950,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         GetWindowTextA(GetDlgItem(hwnd, 0x1AA), text, 8);
         const std::int32_t to = atol(text);     // var_A40
         GetWindowTextA(GetDlgItem(hwnd, 0x1B2), text, 20);
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+        if (app->state.optflag0 == 0) {
             // ---- name-compare chain (loc_482CF2..loc_4831CB) ----
             if (TextEqN(text, kJpAllFrame, 7) || TextEqN(text, "All frame", 10)) {
                 // bone sweep (loc_482D40..482DB2)
@@ -2113,7 +2113,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // other blobs.  Tail: PanelPaint + SelectionReeval (no SetFocus).
     // ------------------------------------------------------------------
     case 416: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+        if (app->state.optflag0 == 0) {
             // ---- model mode (loc_480D1D..loc_4810F3) ----
             unsigned char* model = ActiveModel(app);
             mdl::ModelRecord* modelRecord = mdl::Mdl(model);
@@ -2266,7 +2266,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 420: {
         std::uint32_t minFrame = 0xFFFFFFFFu;  // ebx
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+        if (app->state.optflag0 == 0) {
             // ---- model mode (loc_483E7C..) ----
             // free the previous camera records' sub-buffers (loc_483E7C)
             if (app->DisplayClipboard() != nullptr &&
@@ -2677,7 +2677,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // Sub411070, Sub411B90, Sub412330, Sub413120 per slot, Sub4134E0).
     // ------------------------------------------------------------------
     case 421: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+        if (app->state.optflag0 == 0) {
             const auto& clipboardCounts = app->ClipboardCounts();
             const std::uint32_t boneSel = clipboardCounts.bones;
             const std::uint32_t morphSel = clipboardCounts.morphs;
@@ -2689,7 +2689,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             }
             app->SceneModified() = 1;
             const std::int32_t frame =
-                app->raw<std::int32_t>(offsets::kDword980);
+                app->state.currentFrame;
             unsigned char* model = ActiveModel(app);
             TraceModelPaste("active model=%p frame=%d", model, frame);
             // clear all model-mode marks (loc_4849C0..)
@@ -2881,7 +2881,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
                 ClearSelectedKeys(keys, 10000);
             }
             const std::int32_t frame =
-                app->raw<std::int32_t>(offsets::kDword980);
+                app->state.currentFrame;
             // paste loops (loc_484A54..484Bxx): record-by-value + bool
             if (cameraCount != 0) {
                 const auto* src = app->CameraClipboard();
@@ -2945,10 +2945,10 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         SelectionReeval(app);
         unsigned char* model = ActiveModel(app);
         if (model != nullptr) {
-            Sub4B4260(model, app->raw<std::int32_t>(offsets::kDword980),
+            Sub4B4260(model, app->state.currentFrame,
                       app->PlaybackPhysicsMode());
         }
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             Sub42E640(app);
             Sub411070(app);
             Sub411B90(app);
@@ -2972,7 +2972,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // mode branch at all).
     // ------------------------------------------------------------------
     case 422: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             break;
         }
         const std::uint32_t boneSel = app->ClipboardCounts().bones;
@@ -2981,7 +2981,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         }
         app->SceneModified() = 1;
         const std::int32_t frame =
-            app->raw<std::int32_t>(offsets::kDword980);
+            app->state.currentFrame;
         unsigned char* model = ActiveModel(app);
         // clear all model-mode marks (loc_485D60..)
         ClearModelKeyMarks(mdl::BoneKeys(model), 300000);
@@ -3075,11 +3075,11 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // sub_44C5D0 dialog proc.
     // ------------------------------------------------------------------
     case 424: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+        app->state.bC = 1;
+        if (app->state.englishUI != 0) {
             DialogBoxParamA(app->raw<HINSTANCE>(0),
                             reinterpret_cast<LPCSTR>(0x28C), hwnd,
                             &Sub44C5D0, 0);

@@ -194,10 +194,10 @@ void RecordStartTail(MMDApp* app) {
         }
     }
     s.raw<std::int32_t>(offsets::kDwordF9eddc) =
-        s.raw<std::int32_t>(offsets::kDword980);               // 0x45EC35
+        s.state.currentFrame;               // 0x45EC35
     if (s.AviRecordStartFrame() !=
-        s.raw<std::int32_t>(offsets::kDword980)) {
-        s.raw<std::int32_t>(offsets::kDword980) =
+        s.state.currentFrame) {
+        s.state.currentFrame =
             s.AviRecordStartFrame();                            // 0x45EC3D
         Sub432FA0(app);                                        // 0x432FA0
         PostViewRefresh(app);                                  // 0x40D130
@@ -249,7 +249,7 @@ bool StartRecordGraph(MMDApp* app, std::int32_t outW, std::int32_t outH) {
     if (recorder == nullptr)
         return false;  // port-side guard: 0x466D20 allocation
     return Sub409A80(recorder,
-                     static_cast<HWND>(s.raw<void*>(offsets::kPtrHwnd)),
+                     static_cast<HWND>(s.state.hwnd),
                      static_cast<unsigned char>(s.EnglishUI() != 0),
                      s.AviOutputPath(), &config, fpsF, 1, wavPath,
                      seconds);
@@ -262,7 +262,7 @@ void StartAviRecordWindow(MMDApp* app) {
     auto& s = *app;
     if (!ProbeWritable(
             s.AviOutputPath())) {                               // 0x45E849
-        const HWND main = static_cast<HWND>(s.raw<void*>(offsets::kPtrHwnd));
+        const HWND main = static_cast<HWND>(s.state.hwnd);
         MessageBoxA(main, s.EnglishUI() != 0 ? kMsgSaveFailEn
                                              : kMsgSaveFailJp,
                     s.EnglishUI() != 0 ? kCaptionAviOutEn : kCaptionAviOutJp,
@@ -303,13 +303,13 @@ void StartAviRecordWindow(MMDApp* app) {
     if (s.raw<std::uint8_t>(offsets::kByte9E428) != 0) {
         PicBgOverlayRefresh(app);                              // 0x45EBE0
     }
-    HWND main = static_cast<HWND>(s.raw<void*>(offsets::kPtrHwnd));
+    HWND main = static_cast<HWND>(s.state.hwnd);
     EnableWindow(GetDlgItem(main, 0x198), FALSE);             // 0x45EBFB
     ShowWindow(main, SW_HIDE);                                // 0x45EC0B
     ShowWindow(main, SW_HIDE);                                // 0x45EC18
-    if (s.raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+    if (s.state.floatingWindow != 0) {
         ShowWindow(
-            static_cast<HWND>(s.raw<void*>(offsets::kDwordA0d38)),
+            static_cast<HWND>(s.state.floatingWindow),
             SW_HIDE);                                          // 0x45EC25
     }
     RecordStartTail(app);
@@ -322,7 +322,7 @@ void StartAviRecordFullscreen(MMDApp* app) {
     const std::int32_t screenH = GetSystemMetrics(SM_CYSCREEN);
     const std::int32_t w = s.RenderWidth();
     const std::int32_t h = s.RenderHeight();
-    const HWND main = static_cast<HWND>(s.raw<void*>(offsets::kPtrHwnd));
+    const HWND main = static_cast<HWND>(s.state.hwnd);
     if ((h != screenH && screenH <= h) || (w != screenW && screenW <= w)) {
         MessageBoxA(main, s.EnglishUI() != 0
                               ? "output size must less than screen "
@@ -363,7 +363,7 @@ void StartAviRecordFullscreen(MMDApp* app) {
 // placement and menu, shows the control band and restores the RT dimensions.
 void Sub4629D0(MMDApp* app) {
     auto& s = *app;
-    const HWND main = static_cast<HWND>(s.raw<void*>(offsets::kPtrHwnd));
+    const HWND main = static_cast<HWND>(s.state.hwnd);
     if (main == nullptr)
         return;
 

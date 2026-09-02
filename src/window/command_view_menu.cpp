@@ -509,7 +509,7 @@ LRESULT CALLBACK Sub42E270(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 // VA 0x0041E950 - current-FPS getter: camera mode (byte 0x2F8) reports a
 // constant 1.0, model mode the active model's FPS float (+0x31C0).
 float Sub41E950(MMDApp* app) {
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0)
+    if (app->state.optflag0 != 0)
         return 1.0f;
     unsigned char* model = app->SelectedModel();
     return *reinterpret_cast<float*>(model + kModelFps31C0);
@@ -517,9 +517,9 @@ float Sub41E950(MMDApp* app) {
 // VA 0x0041E980 - FPS setter (model mode only): marks the in-dialog and
 // dirty flags, then stores into the active model's FPS float (+0x31C0).
 void Sub41E980(MMDApp* app, float fps) {
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0)
+    if (app->state.optflag0 != 0)
         return;
-    app->raw<std::uint32_t>(offsets::kDwordA0D6C) = 1;
+    app->state.messageSeen = 1;
     app->SceneModified() = 1;
     unsigned char* model = app->SelectedModel();
     *reinterpret_cast<float*>(model + kModelFps31C0) = fps;
@@ -544,7 +544,7 @@ int Sub41EA20(HWND hDlg) {  // VA 0x0041EA20 enhance-model dialog collect
 LRESULT CALLBACK Sub45ECC0(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     if (msg == WM_KEYDOWN && wParam == VK_RETURN) {
-        app->raw<std::uint32_t>(offsets::kDwordA0D6C) = 1;
+        app->state.messageSeen = 1;
         const HWND dlg = app->raw<HWND>(offsets::kDwordA0B50);
         if (hwnd == GetDlgItem(dlg, 0x29B)) {
             Sub43BED0(app, hwnd, 0);                        // 0x43BED0
@@ -678,29 +678,29 @@ LRESULT CALLBACK Sub466370(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 void Sub45FD80(MMDApp* app, int idx, float v) {
     switch (idx) {
     case 0:
-        app->raw<float>(offsets::kFloatGravmag) = v;
-        if (app->raw<float>(offsets::kFloatGravx) == 0.0f &&
-            app->raw<float>(offsets::kFloatGravy) == 0.0f &&
-            app->raw<float>(offsets::kFloatGravz) == 0.0f)
-            app->raw<float>(offsets::kFloatGravy) = 0.1f;  // flt 0x529624
+        app->state.gravityMagnitude = v;
+        if (app->state.gravityX == 0.0f &&
+            app->state.gravityY == 0.0f &&
+            app->state.gravityZ == 0.0f)
+            app->state.gravityY = 0.1f;  // flt 0x529624
         break;
     case 1:
-        app->raw<float>(offsets::kFloatGravx) = v;
-        if (v == 0.0f && app->raw<float>(offsets::kFloatGravy) == 0.0f &&
-            app->raw<float>(offsets::kFloatGravz) == 0.0f)
-            app->raw<float>(offsets::kFloatGravy) = 0.1f;
+        app->state.gravityX = v;
+        if (v == 0.0f && app->state.gravityY == 0.0f &&
+            app->state.gravityZ == 0.0f)
+            app->state.gravityY = 0.1f;
         break;
     case 2:
-        app->raw<float>(offsets::kFloatGravy) = v;
-        if (app->raw<float>(offsets::kFloatGravx) == 0.0f &&
-            app->raw<float>(offsets::kFloatGravz) == 0.0f && v == 0.0f)
-            app->raw<float>(offsets::kFloatGravy) = 0.1f;
+        app->state.gravityY = v;
+        if (app->state.gravityX == 0.0f &&
+            app->state.gravityZ == 0.0f && v == 0.0f)
+            app->state.gravityY = 0.1f;
         break;
     case 3:
-        app->raw<float>(offsets::kFloatGravz) = v;
-        if (app->raw<float>(offsets::kFloatGravx) == 0.0f &&
-            app->raw<float>(offsets::kFloatGravy) == 0.0f && v == 0.0f)
-            app->raw<float>(offsets::kFloatGravy) = 0.1f;
+        app->state.gravityZ = v;
+        if (app->state.gravityX == 0.0f &&
+            app->state.gravityY == 0.0f && v == 0.0f)
+            app->state.gravityY = 0.1f;
         break;
     default:
         if (idx == 4)
@@ -711,9 +711,9 @@ void Sub45FD80(MMDApp* app, int idx, float v) {
     }
 
     // common tail: normalise, scale by magnitude * 10, setGravity
-    float dir[3] = {app->raw<float>(offsets::kFloatGravx),
-                    app->raw<float>(offsets::kFloatGravy),
-                    app->raw<float>(offsets::kFloatGravz)};
+    float dir[3] = {app->state.gravityX,
+                    app->state.gravityY,
+                    app->state.gravityZ};
     if (d3dx::Get().vec3Normalize != nullptr && d3dx::Get().Load())
         d3dx::Get().vec3Normalize(dir, dir);
     else {  // documented fallback (same formula; 1/sqrt)
@@ -724,7 +724,7 @@ void Sub45FD80(MMDApp* app, int idx, float v) {
         dir[1] *= inv;
         dir[2] *= inv;
     }
-    const float mag = app->raw<float>(offsets::kFloatGravmag);
+    const float mag = app->state.gravityMagnitude;
     float vec[4] = {static_cast<float>(dir[0] * mag * 10.0),
                     static_cast<float>(dir[1] * mag * 10.0),
                     static_cast<float>(dir[2] * mag * 10.0), 0.0f};
@@ -768,7 +768,7 @@ void Sub460080(MMDApp* app) {
         for (std::size_t i = 0; i < 10000; ++i)
             acc[i].selected = 0;
     }
-    Sub412B20(app, app->raw<std::int32_t>(offsets::kDword980));  // 0x412B20
+    Sub412B20(app, app->state.currentFrame);  // 0x412B20
     RefreshRequest(-4);                                       // 0x440AC0
     PanelPaint(app);                                          // 0x414610
 }
@@ -845,7 +845,7 @@ INT_PTR CALLBACK Sub44D3F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             // original: SetWindowPos(hDlg, HWND_MESSAGE|2, ...) == HWND_TOP
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
@@ -888,7 +888,7 @@ INT_PTR CALLBACK Sub44D510(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         SendMessageA(GetDlgItem(hDlg, 686), 0xC2 /*EM_REPLACESEL*/, 0,
@@ -929,7 +929,7 @@ INT_PTR CALLBACK Sub44C7F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     switch (msg) {
     case WM_INITDIALOG: {
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         app->raw<std::int32_t>(kDwordA0B48) =
@@ -986,7 +986,7 @@ INT_PTR CALLBACK Sub43C9A0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         Sub41E9C0(app, hDlg);  // 0x41E9C0
@@ -1052,7 +1052,7 @@ INT_PTR CALLBACK Sub464BD0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         app->raw<std::int32_t>(offsets::kDwordA0B50) = 0;
         EnableWindow(GetDlgItem(app->raw<HWND>(kDwordA06B8), 0x1B4), TRUE);
         if (LOWORD(wParam) == 1) {
-            if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+            if (app->state.englishUI != 0) {
                 MessageBoxA(app->raw<HWND>(kDwordA06B8),
                             "Please preserve the edit result as a new model by "
                             "'save enhanced model'.",
@@ -1175,7 +1175,7 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     const HWND hCtrl = reinterpret_cast<HWND>(lParam);
     if (msg == WM_INITDIALOG) {
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         app->raw<std::int32_t>(kDwordA0B78) =
@@ -1452,7 +1452,7 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             app->raw<std::int32_t>(kDwordA0B74) = 0;
             EnableWindow(GetDlgItem(app->raw<HWND>(kDwordA06B8), 0x1B4), TRUE);
             EnableWindow(GetDlgItem(app->raw<HWND>(kDwordA06B8), 0x198), TRUE);
-            if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+            if (app->state.englishUI != 0) {
                 MessageBoxA(app->raw<HWND>(kDwordA06B8),
                             "Please preserve the edit result as a new model by "
                             "'save enhanced model'.",
@@ -1602,7 +1602,7 @@ INT_PTR CALLBACK Sub42E370(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         g_dword545930 = static_cast<int>(
@@ -1693,7 +1693,7 @@ INT_PTR CALLBACK Sub479E90(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     const HWND hCtrl = reinterpret_cast<HWND>(lParam);
     if (msg == WM_INITDIALOG) {
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         app->raw<std::int32_t>(kDwordA0C50) =
@@ -1799,7 +1799,7 @@ INT_PTR CALLBACK Sub461CE0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_INITDIALOG) {
         SendMessageA(GetDlgItem(hDlg, 669), 0x14B /*CB_RESETCONTENT*/, 0, 0);
         const char* first =
-            g_Block->raw<std::uint8_t>(offsets::kByteEnglish) != 0
+            g_Block->state.englishUI != 0
                 ? "ON (X mark)"
                 : kOnXMarkJp;
         SendMessageA(GetDlgItem(hDlg, 669), 0x143 /*CB_ADDSTRING*/, 0,
@@ -1843,7 +1843,7 @@ INT_PTR CALLBACK Sub40FBC0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         static const std::size_t kEditIds[7] = {637, 638, 639, 640, 641, 642, 644};
@@ -1896,7 +1896,7 @@ INT_PTR CALLBACK Sub40F860(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         static const std::size_t kEditIds[6] = {637, 638, 639, 640, 641, 642};
@@ -1952,7 +1952,7 @@ INT_PTR CALLBACK Sub4641F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
         }
         const int count = static_cast<int>(
@@ -2022,7 +2022,7 @@ INT_PTR CALLBACK Sub4641F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                      0);
         SendMessageA(GetDlgItem(mainWnd, 0x1C1), 0x14B /*CB_RESETCONTENT*/, 0,
                      0);
-        if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+        if (app->state.englishUI != 0) {
             SendMessageA(GetDlgItem(mainWnd, 0x1B4), 0x143 /*CB_ADDSTRING*/, 0,
                          (LPARAM)"camera/light/accessory");
             SendMessageA(GetDlgItem(mainWnd, 0x1DA), 0x143 /*CB_ADDSTRING*/, 0,
@@ -2114,7 +2114,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     (void)notify;  // see header: the default handler's notify gate can never
                    // match any id of this family
     HINSTANCE hInst = app->raw<HINSTANCE>(0);
-    const bool english = app->raw<std::uint8_t>(offsets::kByteEnglish) != 0;
+    const bool english = app->state.englishUI != 0;
 
     switch (id) {
     // ------------------------------------------------------------------
@@ -2123,10 +2123,10 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // default handler (no-op for menu ids).
     // ------------------------------------------------------------------
     case 251: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             return;
         }
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         if (DialogBoxParamA(hInst,
                             MAKEINTRESOURCEA(english ? 0x294 : 0x27C),
                             hwnd, Sub44D3F0, 0) == 2) {
@@ -2139,10 +2139,10 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 252 (0x0048A219): dialog 0x295 EN / 0x283 JP (sub_44D510).
     // ------------------------------------------------------------------
     case 252: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             return;
         }
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         if (DialogBoxParamA(hInst,
                             MAKEINTRESOURCEA(english ? 0x295 : 0x283),
                             hwnd, Sub44D510, 0) == 2) {
@@ -2159,7 +2159,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (app->raw<std::int32_t>(kDwordA0B44) != 0) {
             break;  // jnz def_47E903 (no-op)
         }
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             break;
         }
         HWND dlg = CreateDialogParamA(
@@ -2223,7 +2223,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (app->raw<std::int32_t>(offsets::kDwordA0B50) != 0) {
             break;
         }
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             break;
         }
         HWND dlg = CreateDialogParamA(
@@ -2241,8 +2241,8 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 260: {
         const std::uint8_t cur =
-            app->raw<std::uint8_t>(offsets::kByteEnglish);
-        app->raw<std::uint8_t>(offsets::kByteEnglish) = (cur == 0) ? 1 : 0;
+            app->state.englishUI;
+        app->state.englishUI = (cur == 0) ? 1 : 0;
         LocalizeUI(app);                             // 0x441AD0
         Sub40B5A0(app);                              // 0x40B5A0
         return;
@@ -2254,10 +2254,10 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // then 0xA0B64 = 1.
     // ------------------------------------------------------------------
     case 261: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             return;
         }
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const INT_PTR r = DialogBoxParamA(
             hInst, MAKEINTRESOURCEA(english ? 0x2AA : 0x2A9),
             hwnd, Sub43C9A0, 0);
@@ -2285,11 +2285,11 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (app->raw<std::int32_t>(kDwordA0B74) != 0) {
             break;
         }
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             return;
         }
         app->raw<std::int32_t>(kOff48) = 1;
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         HWND dlg = CreateDialogParamA(
             hInst, MAKEINTRESOURCEA(english ? 0x2AC : 0x2AB),
             hwnd, Sub465020, 0);
@@ -2309,7 +2309,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 263: {
         app->raw<std::int32_t>(kOff60) = 1;
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         SetCurrentDirectoryW(app->ExeDir());
         wchar_t fileBuf[0x100];
         fileBuf[0] = L'\0';
@@ -2441,7 +2441,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
             return;
         }
         app->raw<std::int32_t>(kOff4C) = 1;
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         HWND dlg = CreateDialogParamA(
             hInst, MAKEINTRESOURCEA(english ? 0x323 : 0x322),
             hwnd, Sub479E90, 0);
@@ -2500,7 +2500,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // set, then the language sweeps (0x42F1E0 / 0x40D070).
     // ------------------------------------------------------------------
     case 273: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             return;
         }
         app->raw<std::int32_t>(kOff48) = 1;
@@ -2532,7 +2532,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // PanelPaint tail.
     // ------------------------------------------------------------------
     case 274: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             return;
         }
         app->raw<std::int32_t>(kOff30) = 1;
@@ -2604,7 +2604,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 275:
         app->raw<std::int32_t>(kOff38) = 1;
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         DialogBoxParamA(hInst,
                         MAKEINTRESOURCEA(english ? 0x32D : 0x32C),
                         hwnd, Sub461CE0, 0);
@@ -2624,7 +2624,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 276: {
         app->raw<std::int32_t>(kOff48) = 1;
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         SetCurrentDirectoryW(app->ExeDir());
         wchar_t fileBuf[0x100];
         fileBuf[0] = L'\0';
@@ -2756,7 +2756,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 280 (0x0048B416): flag-subsystem save/init keyed on app+0xA0D38.
     // ------------------------------------------------------------------
     case 280:
-        if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
+        if (app->state.floatingWindow != 0) {
             SaveFlagSubsystem(app);  // 0x461FA0
         } else {
             InitFlagSubsystem(app);  // 0x461E00
@@ -2772,14 +2772,14 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->raw<std::int32_t>(kOff6C) = 1;
         if ((GetMenuState(GetMenu(hwnd), 0x119, 0) & 8) == 0) {
             CheckMenuItem(GetMenu(hwnd), 0x119, MF_CHECKED);
-            if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
-                SetWindowPos(app->raw<HWND>(offsets::kDwordA0d38),
+            if (app->state.floatingWindow != 0) {
+                SetWindowPos(app->state.floatingWindow,
                              HWND_TOPMOST, 0, 0, 0, 0, 0x43);
             }
         } else {
             CheckMenuItem(GetMenu(hwnd), 0x119, MF_UNCHECKED);
-            if (app->raw<std::int32_t>(offsets::kDwordA0d38) != 0) {
-                SetWindowPos(app->raw<HWND>(offsets::kDwordA0d38),
+            if (app->state.floatingWindow != 0) {
+                SetWindowPos(app->state.floatingWindow,
                              HWND_NOTOPMOST, 0, 0, 0, 0, 0x43);
             }
         }
@@ -2851,7 +2851,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 286: {
         app->raw<std::int32_t>(kOff48) = 1;
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         CHOOSECOLORA cc;
         std::memset(&cc, 0, sizeof(cc));
         cc.lStructSize = 0x24;
@@ -2904,7 +2904,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // return when closed.
     // ------------------------------------------------------------------
     case 288:
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         DialogBoxParamA(hInst,
                         MAKEINTRESOURCEA(english ? 0x325 : 0x324),
                         hwnd, Sub4641F0, 0);
@@ -2916,7 +2916,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 289:
         app->raw<std::int32_t>(kOff38) = 1;
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         DialogBoxParamA(hInst,
                         MAKEINTRESOURCEA(english ? 0x32B : 0x32A),
                         hwnd, Sub42E370, 0);
@@ -3024,7 +3024,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // (0x429CB0).
     // ------------------------------------------------------------------
     case 296: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             if (english) {
                 MessageBoxA(hwnd, "Please select model!", "open oni data",
                             0x40000 /*MB_TOPMOST*/);
@@ -3040,8 +3040,8 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         OPENFILENAMEW ofn;
         std::memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = 0x4C;
-        ofn.hwndOwner = app->raw<std::int32_t>(offsets::kDwordA0d38) != 0
-                            ? app->raw<HWND>(offsets::kDwordA0d38)
+        ofn.hwndOwner = app->state.floatingWindow != 0
+                            ? app->state.floatingWindow
                             : hwnd;
         ofn.lpstrFilter =
             L"oni files(*.oni)\x00\x00*.oni\x00\x00All Files(*.*)\x00\x00";
@@ -3106,8 +3106,8 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // BM_SETCHECK, byte app+0xA4420 mirrors.
     // ------------------------------------------------------------------
     case 299: {
-        HWND owner = app->raw<std::int32_t>(offsets::kDwordA0d38) != 0
-                         ? app->raw<HWND>(offsets::kDwordA0d38)
+        HWND owner = app->state.floatingWindow != 0
+                         ? app->state.floatingWindow
                          : hwnd;
         if ((GetMenuState(GetMenu(hwnd), 0x12B, 0) & 8) == 0) {
             CheckMenuItem(GetMenu(hwnd), 0x12B, MF_CHECKED);
@@ -3139,8 +3139,8 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         const float kPi = Bits32(kFlt52B738bits);   // +pi float
         const float kNegPi = Bits32(kFlt52B73Cbits);
         const float kThr = Bits32(kFlt52B740bits);
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        app->state.bC = 1;
+        if (app->state.optflag0 != 0) {
             // ---- camera path (0x48A2D9..0x48A407) -----------------------
             const float t0 = app->CameraPositionX();
             const float t1 = app->CameraPositionY();
@@ -3269,7 +3269,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 302: {
         app->raw<std::int32_t>(kOff34) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             app->CameraPitch() = 0.0f;
             app->CameraYaw() = 0.0f;
             app->CameraRoll() = 0.0f;

@@ -371,11 +371,11 @@ void Sub450000(MMDApp* app, int fd) {
     ReleaseSceneModels(*s);                                      // 0x450040
 
     // ---- scene-state reset run (0x450093..0x450121) ----------------------
-    s->raw<std::uint32_t>(off::kDwordA0B20) = 0;
+    s->state.accessoryRenderSplitOrder = 0;
     s->SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
     s->raw<std::uint32_t>(off::kDwordA042C) = 0;
-    s->raw<std::int32_t>(off::kDwordA0430) = -1;
-    s->raw<std::uint32_t>(off::kDwordA0434) = 0;
+    s->state.cameraParentModel = -1;
+    s->state.cameraParentBone = 0;
     s->raw<float>(off::kDwordA043c11) = 0.0f;                   // 0xA0468
     s->raw<float>(off::kDwordA043c10) = 0.0f;                   // 0xA0464
     s->raw<float>(off::kDwordA043c8) = 0.0f;                    // 0xA045C
@@ -390,7 +390,7 @@ void Sub450000(MMDApp* app, int fd) {
     s->raw<float>(off::kDwordA043c9) = 1.0f;                    // 0xA0460
     s->raw<float>(off::kDwordA043c3 + 4) = 1.0f;                // 0xA044C
     s->raw<float>(off::kFloatColor16) = 1.0f;                   // 0xA0438
-    s->raw<std::uint32_t>(off::kDwordF9ed98) = 0;               // 0x9ED98
+    s->state.v9ed98 = 0;               // 0x9ED98
 
     HWND const main = reinterpret_cast<HWND>(s->Hwnd());
     HINSTANCE const hInst = *reinterpret_cast<HINSTANCE*>(s->storage());
@@ -413,7 +413,7 @@ void Sub450000(MMDApp* app, int fd) {
     CheckMenuItem(GetMenu(main), 0xF7, 0);
     SendMessageA(GetDlgItem(main, 0x217), BM_SETCHECK, 0, 0);
 
-    s->raw<std::uint32_t>(off::kDwordA0d30) = 0;                // 0x450161
+    s->state.selfShadowMode = 0;                // 0x450161
     s->raw<std::uint32_t>(off::kByteBa0d2c) = 0x3C3851ECu;      // flt_52A1D8
 
     // ---- AVI teardown trio (0x45016D..0x4501B5) --------------------------
@@ -447,7 +447,7 @@ void Sub450000(MMDApp* app, int fd) {
     {
         std::int32_t editFlag = 0;
         Rd(fd, &editFlag, 4);
-        if (s->raw<std::int32_t>(off::kDwordA0d38) == 0)
+        if (s->state.floatingWindow == 0)
             s->raw<std::uint32_t>(off::kDwordSidebar) = editFlag;   // A06C8
         else
             s->raw<std::uint32_t>(off::kDwordV658748) = editFlag;   // A0D3C
@@ -583,9 +583,9 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                     std::memset(&ofn, 0, sizeof(ofn));
                     ofn.lStructSize = 0x4C;
                     ofn.hwndOwner =
-                        s->raw<std::int32_t>(off::kDwordA0D38)
+                        s->state.floatingWindow
                             ? reinterpret_cast<HWND>(
-                                  s->raw<void*>(off::kDwordA0D38))
+                                  s->state.floatingWindow)
                             : main;
                     ofn.lpstrFilter = kWFilterModel;
                     ofn.lpstrFile = ofnFile;
@@ -858,9 +858,9 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                         std::memset(&ofn, 0, sizeof(ofn));
                         ofn.lStructSize = 0x4C;
                         ofn.hwndOwner =
-                            s->raw<std::int32_t>(off::kDwordA0D38)
+                            s->state.floatingWindow
                                 ? reinterpret_cast<HWND>(
-                                      s->raw<void*>(off::kDwordA0D38))
+                                      s->state.floatingWindow)
                                 : main;
                         ofn.lpstrFilter = kWFilterModel;
                         ofn.lpstrFile = ofnFile;
@@ -1152,7 +1152,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                 Rd(fd, &modelRecord->comboSelIndex,
                    sizeof modelRecord->comboSelIndex);          // 0x452A77
                 modelRecord->comboSelIndex2 = modelRecord->comboSelIndex;
-                s->raw<std::uint32_t>(off::kDwordA0434) =
+                s->state.cameraParentBone =
                     modelRecord->comboSelIndex;
                 {
                     unsigned char b = 0;
@@ -1678,7 +1678,7 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
     selfShadowKeys[0].mode =
         wrap->postProcessEnabled ? 1 : 0;                        // 0x454D0D
     selfShadowKeys[0].distance = 0.01125f;                       // flt_52A1D8
-    s->raw<std::uint32_t>(off::kDwordA0d30) = 1;                // 0x454D3B
+    s->state.selfShadowMode = 1;                // 0x454D3B
     s->raw<std::uint32_t>(off::kByteA0188) = 0;
     gravityKeys[0].noise = 10;
     gravityKeys[0].acceleration = 9.8000002f;
@@ -1744,7 +1744,9 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
     {
         const int frame =
             static_cast<int>(s->raw<float>(off::kFloat9e1e8));    // 0x9E1E8
-        SendMessageA(GetDlgItem(main, 447), UDM_SETRANGE32, 1, frame);
+        // 0x405 = TBM_SETPOS (0x4551B0: wParam 1 = redraw, lParam frame).
+        SendMessageA(GetDlgItem(main, 447), 0x405 /*TBM_SETPOS*/, 1,
+                     frame);
         SendMessageA(GetDlgItem(main, 448), EM_SETSEL, 0,
                      GetWindowTextLengthA(GetDlgItem(main, 448)));
         sprintf_s(text, 0x100, "%3d", frame);
@@ -1795,7 +1797,9 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
             s->LightDirection()[2]};
         for (int k = 0; k < 6; ++k) {
             const double scale = k < 3 ? 256.0 : 100.0;
-            SendMessageA(GetDlgItem(main, sliderIds[k]), UDM_SETRANGE32, 1,
+            // 0x405 = TBM_SETPOS, same shape as the frame slider.
+            SendMessageA(GetDlgItem(main, sliderIds[k]),
+                         0x405 /*TBM_SETPOS*/, 1,
                          static_cast<int>(values[k] * scale));
             HWND item = GetDlgItem(main, editIds[k]);
             SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
@@ -1859,9 +1863,9 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
             std::memset(&ofn, 0, sizeof(ofn));
             ofn.lStructSize = 0x4C;
             ofn.hwndOwner =
-                s->raw<std::int32_t>(off::kDwordA0D38)
+                s->state.floatingWindow
                     ? reinterpret_cast<HWND>(
-                          s->raw<void*>(off::kDwordA0D38))
+                          s->state.floatingWindow)
                     : main;
             ofn.lpstrFilter =
                 s->EnglishUI() != 0 ? kWFilterAccEn : kWFilterAccJp;
@@ -1987,14 +1991,14 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
     }
 
     // ---- config block head (0x456617..0x4566CB) ---------------------------
-    Rd(fd, &s->raw<std::uint32_t>(off::kDword980), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kDword97C), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kDword9E16C), 4);
+    Rd(fd, &s->state.currentFrame, 4);
+    Rd(fd, &s->state.timelineStartFrame, 4);
+    Rd(fd, &s->state.lastRegisteredFrame, 4);
     {
         HWND item = GetDlgItem(main, 417);
         SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
         sprintf_s(text, 0x100, "%d",
-                  s->raw<std::int32_t>(off::kDword980));
+                  s->state.currentFrame);
         SendMessageA(item, EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(text));
     }
@@ -2023,16 +2027,18 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                 SendMessageA(GetDlgItem(main, 493), BM_SETCHECK, 0, 0);
                 break;
             case ViewportEditMode::None:
+                // 0x4567C3..0x45682C: case 2 unchecks ALL four radios.
+                SendMessageA(GetDlgItem(main, 490), BM_SETCHECK, 0, 0);
+                SendMessageA(GetDlgItem(main, 491), BM_SETCHECK, 0, 0);
+                SendMessageA(GetDlgItem(main, 492), BM_SETCHECK, 0, 0);
+                SendMessageA(GetDlgItem(main, 493), BM_SETCHECK, 0, 0);
+                break;
+            case ViewportEditMode::Camera:
+                // 0x456862..0x45674D: case 3 checks 0x1ED (493) only.
                 SendMessageA(GetDlgItem(main, 490), BM_SETCHECK, 0, 0);
                 SendMessageA(GetDlgItem(main, 491), BM_SETCHECK, 0, 0);
                 SendMessageA(GetDlgItem(main, 492), BM_SETCHECK, 0, 0);
                 SendMessageA(GetDlgItem(main, 493), BM_SETCHECK, 1, 0);
-                break;
-            case ViewportEditMode::Camera:
-                SendMessageA(GetDlgItem(main, 490), BM_SETCHECK, 0, 0);
-                SendMessageA(GetDlgItem(main, 491), BM_SETCHECK, 0, 0);
-                SendMessageA(GetDlgItem(main, 492), BM_SETCHECK, 1, 0);
-                SendMessageA(GetDlgItem(main, 493), BM_SETCHECK, 0, 0);
                 break;
             case ViewportEditMode::Light:
                 SendMessageA(GetDlgItem(main, 490), BM_SETCHECK, 0, 0);
@@ -2085,13 +2091,13 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
         }
         Sub40AE00(s);                                           // 0x456C09
         Rd(fd, &b, 1);                                          // 0x456C16
-        s->raw<unsigned char>(off::kByteA06CC) = b ? 1 : 0;
+        s->state.waveEnabled = b ? 1 : 0;
         Rd(fd, mbPath, 0x100);                                  // 0x456C43
         ResolveAnsiUserFile(reinterpret_cast<unsigned char*>(wrap),
                             mbPath,
                             reinterpret_cast<wchar_t*>(storage + 0xD0),
                             0x100, paths);
-        if (s->raw<unsigned char>(off::kByteA06CC) != 0)
+        if (s->state.waveEnabled != 0)
             LoadWaveFile(s);   // 0x418500 (app-taking; path at +0xD0)
         std::int32_t w1 = 0, w2 = 0, w3 = 0;
         Rd(fd, &w1, 4);                                         // 0x456C8C
@@ -2166,8 +2172,8 @@ label_708:
     {
         unsigned char b = 0;
         const HWND owner =
-            s->raw<std::int32_t>(off::kDwordA0D38)
-                ? reinterpret_cast<HWND>(s->raw<void*>(off::kDwordA0D38))
+            s->state.floatingWindow
+                ? reinterpret_cast<HWND>(s->state.floatingWindow)
                 : main;
         Rd(fd, &b, 1);                                          // 0x456F53
         if (b != 0) {
@@ -2192,9 +2198,9 @@ label_708:
         Rd(fd, &b, 1);                                          // 0x45707D
         s->raw<unsigned char>(2328) = b ? 1 : 0;                // 0x918
         CheckMenuItem(GetMenu(main), 0xDD, b ? 8 : 0);
-        Rd(fd, &s->raw<std::uint32_t>(off::kFloatFpslimit), 4); // 0x4570CF
+        Rd(fd, &s->state.fpsLimit, 4); // 0x4570CF
         {
-            const float v = s->raw<float>(off::kFloatFpslimit);
+            const float v = s->state.fpsLimit;
             if (v == 1000.0f) {
                 CheckMenuItem(GetMenu(main), 0xEB, 0);
                 CheckMenuItem(GetMenu(main), 0xEC, 0);
@@ -2245,18 +2251,18 @@ label_708:
         // physics defaults + combos (0x45736C..0x4573FE)
         s->raw<unsigned char>(off::kByteA0CD4) = 0;
         s->raw<std::uint32_t>(off::kDword9EDC8) = 10;
-        s->raw<float>(off::kFloatGravmag) = 9.8000002f;
+        s->state.gravityMagnitude = 9.8000002f;
         s->raw<std::uint32_t>(off::kByteA0CC8) = 0;
-        s->raw<float>(off::kFloatGravx) = 0.0f;
-        s->raw<float>(off::kFloatGravy) = -1.0f;
-        s->raw<float>(off::kFloatGravz) = 0.0f;
+        s->state.gravityX = 0.0f;
+        s->state.gravityY = -1.0f;
+        s->state.gravityZ = 0.0f;
         s->raw<std::uint32_t>(off::kDwordA0198) = 0;
         s->raw<std::uint32_t>(off::kDwordA019C) = 0;
         s->raw<std::uint32_t>(off::kDwordA01A0) = 0;
         SendMessageA(GetDlgItem(main, 449), CB_SETCURSEL, 0, 0);
         SendMessageA(GetDlgItem(main, 450), CB_SETCURSEL, 0, 0);
         // 0xA0B20 + shadow distance copies (0x45740E..0x457443)
-        Rd(fd, &s->raw<std::uint32_t>(off::kDwordA0B20), 4);
+        Rd(fd, &s->state.accessoryRenderSplitOrder, 4);
         Rd(fd, &s->ProjectedShadowAmbientIntensity(), 4);
         s->SetProjectedShadowAmbientRgb(s->ProjectedShadowAmbientIntensity());
         {
@@ -2313,11 +2319,11 @@ label_708:
         for (int i = 0; i < 100; ++i)                           // 0x4576C7
             if (slots[i] != nullptr) ModelKinematicSync(slots[i]);
         // physics reads (0x457713..0x45776E)
-        Rd(fd, &s->raw<std::uint32_t>(off::kFloatGravmag), 4);
+        Rd(fd, &s->state.gravityMagnitude, 4);
         Rd(fd, &s->raw<std::uint32_t>(off::kDword9EDC8), 4);
-        Rd(fd, &s->raw<std::uint32_t>(off::kFloatGravx), 4);
-        Rd(fd, &s->raw<std::uint32_t>(off::kFloatGravy), 4);
-        Rd(fd, &s->raw<std::uint32_t>(off::kFloatGravz), 4);
+        Rd(fd, &s->state.gravityX, 4);
+        Rd(fd, &s->state.gravityY, 4);
+        Rd(fd, &s->state.gravityZ, 4);
         Rd(fd, &b, 1);                                          // 0x45775C
         if (std::getenv("MIKUDANCESTUDIO_TRACE_NOISE_OFF") != nullptr)
             std::fprintf(stderr, "noise byte file offset=%ld value=%d\n",
@@ -2360,12 +2366,12 @@ label_708:
     {
         unsigned char b = 0;                                    // 0x4579FA
         Rd(fd, &b, 1);
-        s->raw<std::uint32_t>(off::kDwordA0d30) = b;
+        s->state.selfShadowMode = b;
         s->raw<unsigned char>(off::kByteA0188) = (b != 0) ? 1 : 0;
     }
     Rd(fd, &s->raw<std::uint32_t>(off::kFloatPhysicsint), 4);   // 0x457A22
     selfShadowKeys[0].mode =
-        static_cast<unsigned char>(s->raw<std::uint32_t>(off::kDwordA0d30));
+        static_cast<unsigned char>(s->state.selfShadowMode);
     selfShadowKeys[0].distance = s->raw<float>(off::kFloatPhysicsint);
     // self-shadow track read (0x457A4F..0x457BDE), 24-byte app+0x37C.
     {
@@ -2408,25 +2414,25 @@ label_708:
         s->raw<unsigned char>(off::kByteA0194) = b ? 1 : 0;
         CheckMenuItem(GetMenu(main), 0x11A, b ? 8 : 0);
     }
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordA0430), 4);        // 0x457CD2
-    Rd(fd, &s->raw<std::uint32_t>(off::kDwordA0434), 4);
-    if (s->raw<std::int32_t>(off::kDwordA0430) >= 0) {
+    Rd(fd, &s->state.cameraParentModel, 4);        // 0x457CD2
+    Rd(fd, &s->state.cameraParentBone, 4);
+    if (s->state.cameraParentModel >= 0) {
         SendMessageA(GetDlgItem(main, 449), CB_SETCURSEL,
                      mdl::Mdl(slots[s->raw<std::int32_t>(
                          off::kDwordA0430)])->comboSelIndex,
                      0);
     }
-    Sub410040(s, s->raw<std::int32_t>(off::kDwordA0430));       // 0x457D27
-    if (s->raw<std::int32_t>(off::kDwordA0430) >= 0) {
+    Sub410040(s, s->state.cameraParentModel);       // 0x457D27
+    if (s->state.cameraParentModel >= 0) {
         const LRESULT n = SendMessageA(GetDlgItem(main, 450), CB_GETCOUNT, 0,
                                        0);
-        unsigned char* m = slots[s->raw<std::int32_t>(off::kDwordA0430)];
+        unsigned char* m = slots[s->state.cameraParentModel];
         for (LRESULT i = 0; i < n; ++i) {
             SendMessageA(GetDlgItem(main, 450), CB_GETLBTEXT,
                          static_cast<WPARAM>(i),
                          reinterpret_cast<LPARAM>(lbText));
             const mdl::BoneRecord& bone = mdl::Bones(m)[
-                s->raw<std::int32_t>(off::kDwordA0434)];
+                s->state.cameraParentBone];
             if (strcmp(lbText, bone.name) == 0)
                 SendMessageA(GetDlgItem(main, 450), CB_SETCURSEL,
                              static_cast<WPARAM>(i), 0);
@@ -2440,11 +2446,11 @@ label_708:
         unsigned char b = 0;
         Rd(fd, &b, 1);                                          // 0x457F6D
         if (b == 1) {
-            s->raw<unsigned char>(off::kDwordF9ed98) = 1;       // 0x9ED98
+            s->state.v9ed98 = 1;       // 0x9ED98
             CheckMenuItem(GetMenu(main), 0xF7, 8);
             SendMessageA(GetDlgItem(main, 535), BM_SETCHECK, 1, 0);
         } else {
-            s->raw<unsigned char>(off::kDwordF9ed98) = 0;
+            s->state.v9ed98 = 0;
             CheckMenuItem(GetMenu(main), 0xF7, 0);
             SendMessageA(GetDlgItem(main, 535), BM_SETCHECK, 0, 0);
         }
@@ -2485,7 +2491,7 @@ label_708:
         Sub411B90(s);                                           // 0x45813E
     } else {
         s->raw<unsigned char>(off::kByteA0188) = 0;
-        s->raw<std::uint32_t>(off::kDwordA0d30) = 0;
+        s->state.selfShadowMode = 0;
     }
     CheckMenuItem(GetMenu(main), 0x117,
                   s->raw<unsigned char>(off::kByteA0188) != 0 ? 8 : 0);
@@ -2496,9 +2502,9 @@ label_708:
             SendMessageA(GetDlgItem(main, 440), BM_SETCHECK, 1, 0);
     }
     {  // light direction into the physics scene (0x4581D1..0x4582B6)
-        float dir[3] = {s->raw<float>(off::kFloatGravx),
-                        s->raw<float>(off::kFloatGravy),
-                        s->raw<float>(off::kFloatGravz)};
+        float dir[3] = {s->state.gravityX,
+                        s->state.gravityY,
+                        s->state.gravityZ};
         auto& d3dxApi = d3dx::Get();
         if (d3dxApi.Load()) {
             // Preserve d3dx9_32's reciprocal-sqrt rounding.  For the unit
@@ -2516,7 +2522,7 @@ label_708:
                 dir[2] = static_cast<float>(dir[2] / len);
             }
         }
-        const float mag = s->raw<float>(off::kFloatGravmag);
+        const float mag = s->state.gravityMagnitude;
         const float v[4] = {dir[0] * mag * 10.0f, dir[1] * mag * 10.0f,
                             dir[2] * mag * 10.0f, 0.0f};
         PhysicsScene* const physics = s->Physics();
@@ -2566,10 +2572,10 @@ label_708:
                     }
                 }
             }
-            if (s->raw<std::int32_t>(off::kDwordA0430) == workspace.modelSlot) {
+            if (s->state.cameraParentModel == workspace.modelSlot) {
                 unsigned char* m = slots[workspace.modelSlot];
-                s->raw<std::int32_t>(off::kDwordA0434) = remapBoneIndex(
-                    s->raw<std::int32_t>(off::kDwordA0434));
+                s->state.cameraParentBone = remapBoneIndex(
+                    s->state.cameraParentBone);
                 const LRESULT n = SendMessageA(GetDlgItem(main, 450),
                                                CB_GETCOUNT, 0, 0);
                 for (LRESULT k = 0; k < n; ++k) {
@@ -2577,7 +2583,7 @@ label_708:
                                  static_cast<WPARAM>(k),
                                  reinterpret_cast<LPARAM>(lbText));
                     const mdl::BoneRecord& bone = mdl::Bones(m)[
-                        s->raw<std::int32_t>(off::kDwordA0434)];
+                        s->state.cameraParentBone];
                     if (strcmp(lbText, bone.name) == 0)
                         SendMessageA(GetDlgItem(main, 450), CB_SETCURSEL,
                                      static_cast<WPARAM>(k), 0);
@@ -2642,9 +2648,9 @@ label_708:
                     }
                 }
             }
-            if (s->raw<std::int32_t>(off::kDwordA0430) == workspace.modelSlot) {
-                s->raw<std::int32_t>(off::kDwordA0430) = -1;
-                s->raw<std::int32_t>(off::kDwordA0434) = 0;
+            if (s->state.cameraParentModel == workspace.modelSlot) {
+                s->state.cameraParentModel = -1;
+                s->state.cameraParentBone = 0;
                 SendMessageA(GetDlgItem(main, 449), CB_SETCURSEL, 0, 0);
                 SendMessageA(GetDlgItem(main, 450), CB_RESETCONTENT, 0, 0);
             }
@@ -2735,14 +2741,17 @@ label_708:
                                  reinterpret_cast<void*>(static_cast<
                                      std::uintptr_t>(keys[cur].frame)));
                 mikudancestudio::mdl::BoneRecord* bone = mdl::Bones(m) + b;
+                // 0x458B49: the format argument and the chain cut both
+                // use the EXPECTED-PREV record (iVar13's byte offset),
+                // not the mismatching cur record.
                 sprintf_s(text, 0x100, kJpChainFmtPhys,
                           mdl::Mdl(m)->name,
                           reinterpret_cast<char*>(bone),
-                          keys[cur].frame,
-                          keys[cur].frame,
+                          keys[prev].frame,
+                          keys[prev].frame,
                           reinterpret_cast<char*>(bone));
                 MessageBoxA(main, text, kJpChainCapDisp, 0);
-                keys[cur].next = 0;
+                keys[prev].next = 0;
             }
         }
     }
@@ -2795,18 +2804,18 @@ label_708:
         }
     }
     // child window refresh + frame edit (0x458DF7..0x458E86)
-    if (s->raw<std::int32_t>(off::kDwordA0D38) != 0) {
+    if (s->state.floatingWindow != 0) {
         Sub4290F0(s);                                           // 0x4290F0
         InvalidateRect(
-            reinterpret_cast<HWND>(s->raw<void*>(off::kDwordA0D38)),
+            reinterpret_cast<HWND>(s->state.floatingWindow),
             nullptr, FALSE);
     }
     {
         sprintf_s(text, 0x100, "%d", maxFrame);
         SetWindowTextA(
-            GetDlgItem(s->raw<std::int32_t>(off::kDwordA0D38)
+            GetDlgItem(s->state.floatingWindow
                            ? reinterpret_cast<HWND>(
-                                 s->raw<void*>(off::kDwordA0D38))
+                                 s->state.floatingWindow)
                            : main,
                        554),
             text);

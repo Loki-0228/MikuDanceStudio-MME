@@ -117,11 +117,9 @@ using offsets::kByteA06B5;
 using offsets::kByteA06B6;
 using offsets::kByteB6568483;
 using offsets::kByteOptflag0;
-using offsets::kDword980;
 using offsets::kDwordHideBottom;
 using offsets::kDwordHideLeft;
 using offsets::kDwordHideRight;
-using offsets::kPtrHwnd;
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -450,7 +448,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 // 0x446065: original __thiscall(this=model, dword0x980,
                 // dword0xA0CC4).
                 Sub4B4260(model,
-                          app->raw<std::int32_t>(kDword980),
+                          app->state.currentFrame,
                           app->raw<std::int32_t>(0xA0CC4));
             } else {
                 // ---- display mode (0x444F8A..0x44587D) --------------------

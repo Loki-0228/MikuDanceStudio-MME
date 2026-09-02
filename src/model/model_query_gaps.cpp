@@ -77,7 +77,7 @@ inline std::uint8_t& DisplayObjectActive(unsigned char* object) {
 }
 
 inline HWND AppHwnd(MMDApp* app) {
-    return app->raw<HWND>(offsets::kPtrHwnd);
+    return app->state.hwnd;
 }
 
 // VA 0x0040E3D0 - single-key edge detector, inlined into Sub42D3A0 below
@@ -89,11 +89,11 @@ inline void KeyEdgeScan(MMDApp* app, int vk, std::uint32_t* cell) {
             *cell = 3;                               // 0x40E401 held repeat
         } else {
             *cell = 1;                               // 0x40E3ED press edge
-            app->raw<std::uint32_t>(offsets::kDwordMsgseen) = 1;  // 0x40E3F3
+            app->state.messageSeen = 1;  // 0x40E3F3
         }
     } else if (*cell == 1u || *cell == 3u) {
         *cell = 2;                                   // 0x40E425 release edge
-        app->raw<std::uint32_t>(offsets::kDwordMsgseen) = 1;      // 0x40E42B
+        app->state.messageSeen = 1;      // 0x40E42B
     } else {
         *cell = 0;                                   // 0x40E41B stayed up
     }

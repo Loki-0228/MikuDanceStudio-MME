@@ -46,7 +46,7 @@ void HandleVScroll(LPARAM lParam, WPARAM wParam) {
     const std::uint32_t code = LOWORD(wParam);                 // a3: SB_ code
 
     if (ctrl == GetDlgItem(hwnd, 427)) {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             // mode 0x2F8 set: operate on the app timeline frame counter
             switch (code) {
             case 0:  // SB_LINEUP
@@ -168,7 +168,7 @@ void HandleMouseWheel(int delta) {
     }
 
     const std::int32_t axis = app->CameraParentModel();
-    const std::uint8_t mode = app->raw<std::uint8_t>(offsets::kByteOptflag0);  // 760
+    const std::uint8_t mode = app->state.optflag0;  // 760
 
     if ((mode & (axis >= 0 ? 1u : 0u)) != 0) {
         // camera distance: this+828 (float) += delta * 0.05
@@ -178,7 +178,7 @@ void HandleMouseWheel(int delta) {
     } else {
         const bool morphFollow =
             mode == 0 &&
-            app->raw<std::uint8_t>(offsets::kByte9ED98) != 0 &&
+            app->state.v9ed98 != 0 &&
             app->PlaybackActive() == 0 &&
             axis == static_cast<int>(app->SelectedModelSlot()) &&
             axis >= 0;

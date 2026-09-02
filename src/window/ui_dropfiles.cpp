@@ -210,7 +210,7 @@ void HandleDropFiles(HDROP hDrop) {
         // ---- .vpd - pose data ---------------------------------------------
         if (wcsstr(szFile, L".vpd") || wcsstr(szFile, L".VPD") ||
             wcsstr(szFile, L".Vpd")) {
-            if (app->raw<unsigned char>(offsets::kByteOptflag0) != 0) {  // 760
+            if (app->state.optflag0 != 0) {  // 760
                 if (app->EnglishUI())
                     MessageBoxA(MainHwnd(app), "Not selected model!",
                                 "open pose data", MB_OK);
@@ -294,7 +294,7 @@ void HandleDropFiles(HDROP hDrop) {
                     // ---- .vsq - VOCALOID sequence ----
                     if (wcsstr(szFile, L".vsq") || wcsstr(szFile, L".VSQ") ||
                         wcsstr(szFile, L".Vsq")) {
-                        if (app->raw<unsigned char>(offsets::kByteOptflag0) != 0) {
+                        if (app->state.optflag0 != 0) {
                             if (app->EnglishUI())
                                 MessageBoxA(MainHwnd(app), "Not selected model!",
                                             "open vsq data", MB_OK);
@@ -309,7 +309,7 @@ void HandleDropFiles(HDROP hDrop) {
                         // ---- .oni - OpenNI/Kinect data ----
                         if (wcsstr(szFile, L".oni") || wcsstr(szFile, L".ONI") ||
                             wcsstr(szFile, L".Oni")) {
-                            if (app->raw<unsigned char>(offsets::kByteOptflag0) != 0) {
+                            if (app->state.optflag0 != 0) {
                                 if (app->EnglishUI())
                                     MessageBoxA(MainHwnd(app), "Please select model!",
                                                 "open oni data", MB_OK);

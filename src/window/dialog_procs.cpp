@@ -63,12 +63,12 @@ INT_PTR CALLBACK Sub44C5D0(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
 
     if (Msg == WM_INITDIALOG) {                     // 0x44C5F8
         MMDApp* app = g_Block;
-        if (app->raw<std::int32_t>(offsets::kDwordA0D38) != 0)   // 0xA0D38
+        if (app->state.floatingWindow != 0)   // 0xA0D38
             SetWindowPos(hDlg, HWND_BOTTOM, 0, 0, 0, 0,
                          SWP_NOSIZE | SWP_NOMOVE);  // asm: -1, flags 3
 
         const HWND main = reinterpret_cast<HWND>(
-            app->raw<void*>(offsets::kPtrHwnd));
+            app->state.hwnd);
         GetWindowTextA(GetDlgItem(main, 425), text, 8);           // 0x44C68E
         sprintf_s(text, 0x100, "%d", atol(text));
         SendMessageA(GetDlgItem(hDlg, 686), 0xC2 /*WM_SETTEXT*/, 0,

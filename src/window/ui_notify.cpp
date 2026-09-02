@@ -95,7 +95,7 @@ LRESULT HandleNotify(HWND h, UINT m, WPARAM w, LPARAM l) {
     MMDApp* app = g_Block;
     const NotifyCd* cd = reinterpret_cast<const NotifyCd*>(l);
     const HWND mainHwnd =
-        static_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));  // this+0xA06B8 (657080)
+        static_cast<HWND>(app->state.hwnd);  // this+0xA06B8 (657080)
 
     // Gate: NM_CUSTOMDRAW (-12) on NMHDR.code and CDDS_PREPAINT (1) on
     // dwDrawStage, else default.  (asm 0x4398B9 / 0x4398C7)
@@ -135,7 +135,7 @@ LRESULT HandleNotify(HWND h, UINT m, WPARAM w, LPARAM l) {
         | (v9 == 551) & app->raw<std::uint8_t>(offsets::kByte31E)  // 798
         | (v9 == 563) & (v16 == 1)
         | (v9 == 562) & (v16 == 0)
-        | (v9 == 535) & app->raw<std::uint8_t>(offsets::kByte9ED98)  // 650648
+        | (v9 == 535) & app->state.v9ed98  // 650648
         | (v9 == 408) & (lParama != 0));                          // 816
 
     if (hit) {
@@ -158,7 +158,7 @@ LRESULT HandleNotify(HWND h, UINT m, WPARAM w, LPARAM l) {
     }
 
     if (v9 == 440) {  // 0x1B8
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0)  // this+0x2F8 (760)
+        if (app->state.optflag0 != 0)  // this+0x2F8 (760)
             return DefWindowProcA(h, m, w, l);
         const std::uint8_t idx = app->SelectedModelSlot();
         const mdl::ModelRecord& model = *mdl::Mdl(app->ModelSlot(idx));
@@ -171,7 +171,7 @@ LRESULT HandleNotify(HWND h, UINT m, WPARAM w, LPARAM l) {
     }
 
     if (v9 == 441) {  // 0x1B9
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0)  // this+0x2F8 (760)
+        if (app->state.optflag0 != 0)  // this+0x2F8 (760)
             return DefWindowProcA(h, m, w, l);
         const std::uint8_t idx = app->SelectedModelSlot();
         const mdl::ModelRecord& model = *mdl::Mdl(app->ModelSlot(idx));

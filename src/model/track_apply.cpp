@@ -51,10 +51,10 @@ void ApplyGravityRecord(MMDApp* app, const mdl::GravityKey& key) {
     app->raw<std::uint32_t>(kOffA0CD4) = noiseModeWord;
     app->raw<std::uint32_t>(offsets::kDword9EDC8) =
         static_cast<std::uint32_t>(key.noise);
-    app->raw<float>(offsets::kFloatGravmag) = key.acceleration;
-    app->raw<float>(offsets::kFloatGravx) = key.direction[0];
-    app->raw<float>(offsets::kFloatGravy) = key.direction[1];
-    app->raw<float>(offsets::kFloatGravz) = key.direction[2];
+    app->state.gravityMagnitude = key.acceleration;
+    app->state.gravityX = key.direction[0];
+    app->state.gravityY = key.direction[1];
+    app->state.gravityZ = key.direction[2];
 }
 
 // physics-dialog mirror of the live cluster (0x4123F2..0x412820)
@@ -63,26 +63,26 @@ void RefreshPhysicsDialog(MMDApp* app) {
     if (dlg == nullptr) return;
     char text[0x32];
     sprintf_s(text, 0x32, "%3.2f",
-              app->raw<float>(offsets::kFloatGravmag));       // 0x52BA08
+              app->state.gravityMagnitude);       // 0x52BA08
     SetWindowTextA(GetDlgItem(dlg, 0x2C5), text);
     sprintf_s(text, 0x32, "%3.2f",
-              app->raw<float>(offsets::kFloatGravx));
+              app->state.gravityX);
     SetWindowTextA(GetDlgItem(dlg, 0x2C6), text);
     sprintf_s(text, 0x32, "%3.2f",
-              app->raw<float>(offsets::kFloatGravy));
+              app->state.gravityY);
     SetWindowTextA(GetDlgItem(dlg, 0x2C7), text);
     sprintf_s(text, 0x32, "%3.2f",
-              app->raw<float>(offsets::kFloatGravz));
+              app->state.gravityZ);
     SetWindowTextA(GetDlgItem(dlg, 0x2C8), text);
     SendMessageA(GetDlgItem(dlg, 0x27D), TBM_SETPOS, 1,       // 0x4124E0..
         static_cast<LPARAM>(
-            static_cast<int>(app->raw<float>(offsets::kFloatGravx) * 100.0)));
+            static_cast<int>(app->state.gravityX * 100.0)));
     SendMessageA(GetDlgItem(dlg, 0x27E), TBM_SETPOS, 1,
         static_cast<LPARAM>(
-            static_cast<int>(app->raw<float>(offsets::kFloatGravy) * 100.0)));
+            static_cast<int>(app->state.gravityY * 100.0)));
     SendMessageA(GetDlgItem(dlg, 0x27F), TBM_SETPOS, 1,
         static_cast<LPARAM>(
-            static_cast<int>(app->raw<float>(offsets::kFloatGravz) * 100.0)));
+            static_cast<int>(app->state.gravityZ * 100.0)));
     sprintf_s(text, 0x32, "%d",
               static_cast<int>(
                   app->raw<std::uint32_t>(offsets::kDword9EDC8)));
@@ -96,7 +96,7 @@ void RefreshPhysicsDialog(MMDApp* app) {
 
 // ---- VA 0x00412330 --------------------------------------------------------
 void Sub412330(MMDApp* app) {
-    const std::uint32_t frame = app->raw<std::uint32_t>(offsets::kDword980);
+    const std::uint32_t frame = app->state.currentFrame;
     mdl::GravityKey* const track = app->GravityKeys();
     if (track == nullptr) return;   // guard: 0x466D20 allocates the track
 
@@ -141,13 +141,13 @@ void Sub412330(MMDApp* app) {
     app->raw<std::uint32_t>(offsets::kDword9EDC8) =
         static_cast<std::uint32_t>(
             static_cast<int>(t * static_cast<float>(dIter)) + prev.noise);
-    app->raw<float>(offsets::kFloatGravmag) =
+    app->state.gravityMagnitude =
         (rec.acceleration - prev.acceleration) * t + prev.acceleration;
-    app->raw<float>(offsets::kFloatGravx) =
+    app->state.gravityX =
         (rec.direction[0] - prev.direction[0]) * t + prev.direction[0];
-    app->raw<float>(offsets::kFloatGravy) =
+    app->state.gravityY =
         (rec.direction[1] - prev.direction[1]) * t + prev.direction[1];
-    app->raw<float>(offsets::kFloatGravz) =
+    app->state.gravityZ =
         (rec.direction[2] - prev.direction[2]) * t + prev.direction[2];
     std::uint32_t noiseModeWord;
     std::memcpy(&noiseModeWord, &rec.noiseEnabled, sizeof noiseModeWord);

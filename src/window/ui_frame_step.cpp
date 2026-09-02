@@ -42,7 +42,7 @@ void SnapshotAndClearBoneSelection(MMDApp* app) {
             ++index;
         if (index >= count)
             continue;
-        Sub4A0080(model, app->raw<std::int32_t>(offsets::kDword980));
+        Sub4A0080(model, app->state.currentFrame);
         for (index = 0; index < count; ++index)
             selected[index] = 0;
     }
@@ -55,7 +55,7 @@ void SetFrameEditText(MMDApp* app) {
     SendMessageA(edit, EM_SETSEL, 0, length);
     char text[0x100];
     sprintf_s(text, sizeof(text), "%d",
-              app->raw<std::int32_t>(offsets::kDword980));
+              app->state.currentFrame);
     SendMessageA(edit, EM_REPLACESEL, 0, reinterpret_cast<LPARAM>(text));
 }
 
@@ -64,7 +64,7 @@ void ApplyFrameToModels(MMDApp* app) {
         unsigned char* model = app->ModelSlot(slot);
         if (model == nullptr)
             continue;
-        Sub4B4260(model, app->raw<std::int32_t>(offsets::kDword980),
+        Sub4B4260(model, app->state.currentFrame,
                   app->PlaybackPhysicsMode());
         if (slot == app->SelectedModelSlot())
             Sub4A02C0(model);
@@ -73,7 +73,7 @@ void ApplyFrameToModels(MMDApp* app) {
 
 void RefreshFrameContext(MMDApp* app) {
     const HWND hwnd = static_cast<HWND>(app->Hwnd());
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         ReloadModels(app);
         Sub411070(app);
         Sub411B90(app);
@@ -86,7 +86,7 @@ void RefreshFrameContext(MMDApp* app) {
         return;
     }
 
-    if (app->raw<std::uint8_t>(offsets::kByte9ED98) != 0) {
+    if (app->state.v9ed98 != 0) {
         app->ViewOffsetX() = 0.0f;
         app->ViewOffsetY() = 0.0f;
         ReloadModels(app);
@@ -117,15 +117,15 @@ void RefreshFrameContext(MMDApp* app) {
 
 void RefreshTimeline(MMDApp* app, bool forward) {
     const std::uint32_t frame = static_cast<std::uint32_t>(
-        app->raw<std::int32_t>(offsets::kDword980));
+        app->state.currentFrame);
     const std::uint32_t visible = static_cast<std::uint32_t>(
         (app->SidebarWidth() - 0x54) / 0x1A);
-    app->raw<std::int32_t>(offsets::kDword97C) =
+    app->state.timelineStartFrame =
         frame <= visible ? 0 : static_cast<std::int32_t>(frame - visible);
     PanelPaint(app);
 
     if (app->WaveEnabled() != 0) {
-        TimelineDrawTicks(app->raw<std::int32_t>(offsets::kDword97C),
+        TimelineDrawTicks(app->state.timelineStartFrame,
                           app->SidebarWidth());
         RECT rect{6, 95,
                   app->SidebarWidth() - 3, 146};
@@ -138,7 +138,7 @@ void RefreshTimeline(MMDApp* app, bool forward) {
                 SetFrameNormalized(
                     app->FrameNormalization());
                 const std::int32_t previous =
-                    app->raw<std::int32_t>(offsets::kDword980) - 1;
+                    app->state.currentFrame - 1;
                 double time = static_cast<double>(
                     static_cast<std::uint32_t>(previous)) / 30.0;
                 if (time < 0.0)
@@ -164,7 +164,7 @@ void RefreshTimeline(MMDApp* app, bool forward) {
 void StepFrame(MMDApp* app, bool forward) {
     app->CameraAttachmentTransformSuppressed() = 0;
     SnapshotAndClearBoneSelection(app);
-    std::int32_t& frame = app->raw<std::int32_t>(offsets::kDword980);
+    std::int32_t& frame = app->state.currentFrame;
     if (forward)
         ++frame;
     else if (frame != 0)
@@ -208,14 +208,14 @@ void Sub432FA0(MMDApp* app) {
     SnapshotAndClearBoneSelection(app);
 
     const std::uint32_t frame =
-        app->raw<std::uint32_t>(offsets::kDword980);
+        app->state.currentFrame;
     const std::uint32_t visible = static_cast<std::uint32_t>(
         (app->SidebarWidth() - 84) / 26);
-    app->raw<std::int32_t>(offsets::kDword97C) =
+    app->state.timelineStartFrame =
         frame <= visible ? 0 : static_cast<std::int32_t>(frame - visible);
     PanelPaint(app);
     if (app->WaveEnabled() != 0) {
-        TimelineDrawTicks(app->raw<std::int32_t>(offsets::kDword97C),
+        TimelineDrawTicks(app->state.timelineStartFrame,
                           app->SidebarWidth());
         RECT rect{6, 95,
                   app->SidebarWidth() - 3, 146};

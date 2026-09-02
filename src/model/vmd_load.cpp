@@ -146,7 +146,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     const HWND hwnd = reinterpret_cast<HWND>(
         *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(&s) +
                                   offsets::kPtrHwnd));
-    const bool english = s.raw<std::uint8_t>(offsets::kByteEnglish) != 0;
+    const bool english = s.state.englishUI != 0;
 
     const errno_t openErr =
         _sopen_s(&fileHandle, fileName,
@@ -347,7 +347,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     auto& undo = mikudancestudio::mdl::Mdl(model)->undoRings[0].slots[ringIdx];
     undo.operation = 2;
     undo.dirty = 0;
-    undo.frame = s.raw<std::int32_t>(offsets::kDword980);
+    undo.frame = s.state.currentFrame;
     if (undo.bonePose != nullptr)
         free(undo.bonePose);
     const int boneCnt = static_cast<int>(record.boneCount);
@@ -411,7 +411,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
         }
         if (boneOk) {
             if (!Sub49D880(model, rec,
-                           s.raw<std::int32_t>(offsets::kDword980), 0))
+                           s.state.currentFrame, 0))
                 boneOk = 0;
         }
     }
@@ -431,7 +431,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
             *reinterpret_cast<float*>(rec + 36) = 0.0f;
         if (morphOk) {
             if (!Sub49F190(model, rec,
-                           s.raw<std::int32_t>(offsets::kDword980)))
+                           s.state.currentFrame))
                 morphOk = 0;
         }
     }
@@ -466,7 +466,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
             if (ikOk) {
                 if (!Sub49F8C0(model, *reinterpret_cast<int*>(rec), rec[4],
                                n, entries, 0, nullptr,
-                               s.raw<std::int32_t>(offsets::kDword980)))
+                               s.state.currentFrame))
                     ikOk = 0;
             }
             if (entries) free(entries);
@@ -479,7 +479,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     _close(fileHandle);
     PanelPaint(app);                                    // 0x414610
     SelectionReeval(app);                               // 0x430510
-    return Sub4B4260(model, s.raw<std::int32_t>(offsets::kDword980),
+    return Sub4B4260(model, s.state.currentFrame,
                      s.PlaybackPhysicsMode());
 }
 

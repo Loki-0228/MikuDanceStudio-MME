@@ -90,7 +90,7 @@ unsigned char* ModelAt(MMDApp* app, int slot) {
 }
 
 bool English(MMDApp* app) {
-    return app->raw<unsigned char>(offsets::kByteEnglish) != 0;  // 0xA0B4C
+    return app->state.englishUI != 0;  // 0xA0B4C
 }
 
 struct SelectAttachRecord {
@@ -223,7 +223,7 @@ void Sub466630(MMDApp* app, HWND hDlg) {
     // Fill combo 673 item 2.. with the loaded models in display order,
     // mirroring the main-window model combo (item count - 1).
     const HWND mainCombo = GetDlgItem(
-        static_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd)), 436); // 0x4668A0
+        static_cast<HWND>(app->state.hwnd), 436); // 0x4668A0
     const int modelCount =
         static_cast<int>(SendMessageA(mainCombo, 0x146, 0, 0)) - 1;  // 0x4668B1
     if (app->raw<void*>(kPtrA0B1C) != nullptr) {                    // 0x4668AB
@@ -443,7 +443,7 @@ void Sub4256C0(MMDApp* app) {
                sizeof(SelectAttachRecord) * static_cast<std::size_t>(count));
     }
 
-    Sub49F480(model, app->raw<std::int32_t>(offsets::kDword980));    // 0x42592E
+    Sub49F480(model, app->state.currentFrame);    // 0x42592E
     const auto registeredFrames = mdl::Mdl(model)->maxFrame;         // 0x31B0
     if (app->LastRegisteredFrame() < registeredFrames)                // 0x42594E
         app->LastRegisteredFrame() = registeredFrames;
@@ -533,7 +533,7 @@ void Sub43D610(MMDApp* app, HWND hDlg) {
         selFlags[i] = 0;
     selFlags[rec->boneIndex] = 1;                                    // 0x43DA5E
 
-    Sub4C2080(model, app->raw<std::int32_t>(offsets::kDword980),     // 0x43DA7E
+    Sub4C2080(model, app->state.currentFrame,     // 0x43DA7E
               app->PlaybackPhysicsMode());
     const auto registeredFrames = mdl::Mdl(model)->maxFrame;         // 0x31B0
     if (app->LastRegisteredFrame() < registeredFrames)                // 0x43DA9D

@@ -88,7 +88,7 @@ void RestorePlaybackMenus(MMDApp* app) {
     SetMenuRange(menu, 237, 242, MF_ENABLED);
     EnableMenuItem(menu, 276, MF_ENABLED);
 
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         const int disabled[] = {217, 220, 218, 202, 203, 219, 222, 251, 252};
         for (int id : disabled)
             EnableMenuItem(menu, id, MF_GRAYED);
@@ -280,7 +280,7 @@ void SavePlaybackUndoSnapshot(MMDApp* app, unsigned char* model) {
     auto& undo = state.undoRings[0].slots[undoIndex];
     undo.operation = 3;
     undo.dirty = boneCount;
-    undo.frame = app->raw<std::int32_t>(offsets::kDword980);
+    undo.frame = app->state.currentFrame;
     auto*& buffer = undo.bonePose;
     std::free(buffer);
     buffer = static_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
@@ -321,8 +321,8 @@ void UpdateBoneFrames(MMDApp* app) {
 
     const float frame = static_cast<float>(
         static_cast<double>(cursor) * kFrameRate);
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0 ||
-        app->raw<std::uint8_t>(offsets::kDwordF9ed98) != 0)
+    if (app->state.optflag0 != 0 ||
+        app->state.v9ed98 != 0)
         InitGlobalTracks(app, frame);
     InitAccessoryTracks(app, frame);
 
@@ -365,9 +365,9 @@ void Sub4341E0(MMDApp* app) {
 
     const bool enable250 =
         (app->raw<std::uint32_t>(645672) == 0 ||
-         app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) &&
+         app->state.optflag0 != 0) &&
         !(app->raw<std::uint32_t>(645700) != 0 &&
-          app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0);
+          app->state.optflag0 != 0);
     EnableMenuItem(GetMenu(hwnd), 250,
                    enable250 ? MF_ENABLED : MF_GRAYED);
     RestorePlaybackMenus(app);
@@ -381,8 +381,8 @@ void Sub4341E0(MMDApp* app) {
         const int frame = static_cast<int>(
             static_cast<double>(app->PlaybackCursorSeconds()) *
             kFrameRate);
-        app->raw<std::int32_t>(offsets::kDword980) = frame;
-        app->raw<std::int32_t>(offsets::kDword97C) =
+        app->state.currentFrame = frame;
+        app->state.timelineStartFrame =
             frame > 6 ? frame - 6 : 0;
         char text[50];
         sprintf_s(text, "%d", frame);
@@ -391,8 +391,8 @@ void Sub4341E0(MMDApp* app) {
         SendMessageA(edit, EM_REPLACESEL, FALSE,
                      reinterpret_cast<LPARAM>(text));
         PanelPaint(app);
-        if (app->raw<std::uint8_t>(offsets::kByteA06CC) != 0) {
-            TimelineDrawTicks(app->raw<std::int32_t>(offsets::kDword97C),
+        if (app->state.waveEnabled != 0) {
+            TimelineDrawTicks(app->state.timelineStartFrame,
                               app->SidebarWidth());
             RECT rect{6, 95,
                       app->SidebarWidth() - 3, 146};
@@ -400,27 +400,27 @@ void Sub4341E0(MMDApp* app) {
         }
     }
 
-    const int frame = app->raw<std::int32_t>(offsets::kDword980);
+    const int frame = app->state.currentFrame;
     for (int i = 0; i < 100; ++i) {
         unsigned char* model = app->ModelSlot(i);
         if (model != nullptr)
             Sub4B4260(model, frame, app->PlaybackPhysicsMode());
     }
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0 &&
+    if (app->state.optflag0 == 0 &&
         activeModel != nullptr)
         Sub4A02C0(activeModel);
 
     app->CameraParentModel() = -1;
     SendMessageA(GetDlgItem(hwnd, 450), CB_SETCURSEL, 0, 0);
 
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         app->ViewOffsetX() = 0.0f;
         app->ViewOffsetY() = 0.0f;
         ReloadModels(app);
         Sub411070(app);
         Sub411B90(app);
         Sub412330(app);
-    } else if (app->raw<std::uint8_t>(offsets::kDwordF9ed98) != 0) {
+    } else if (app->state.v9ed98 != 0) {
         if (app->CameraParentModel() >= 0) {
             ModelApplyMorphs(activeModel);
             SetPhysicsMode(activeModel, 0, app->ModelSlots(),

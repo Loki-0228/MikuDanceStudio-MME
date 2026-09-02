@@ -139,7 +139,13 @@ void OverflowBox300k(unsigned char* m) {
                   "Please execute 'delete unused frame'", 300000);
     else
         sprintf_s(text, 0x100, kJpOverflow, 300000);
-    MessageBoxA(*reinterpret_cast<HWND*>(m), text, "register frame", 0);
+    // Caption 0x4A4C22: JP 0x52B908 when the JP flag is clear, "register
+    // frame" when set (the JP constant was previously unused).
+    MessageBoxA(*reinterpret_cast<HWND*>(m), text,
+                mikudancestudio::mdl::Mdl(m)->physicsFlags != 0
+                    ? "register frame"
+                    : kJpFrameRegTitle,
+                0);
 }
 
 // 60-byte bone-key record body write shared by all insert/overwrite paths
@@ -505,12 +511,14 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
     }
     if (*reinterpret_cast<signed char*>(m + 14589) >= 15) {        // 0x4A600A
         i = FindBoneByName(m, kNameLFoot, 5);                      // 0x4A6030
+        // 0x4A6056/0x4A60B6: like every other probe, a LFoot/RFoot
+        // failure is a PLAIN return in the original - no cleanup.
         if (i != -1 && !Sub4A4A50(m, i, 69, 1, frame))             // 0x4A6056
-            { cleanup(); return; }
+            return;
         if (*reinterpret_cast<signed char*>(m + 14589) >= 15) {    // 0x4A606A
             i = FindBoneByName(m, kNameRFoot, 5);                  // 0x4A6090
             if (i != -1 && !Sub4A4A50(m, i, 73, 1, frame))         // 0x4A60B6
-                { cleanup(); return; }
+                return;
         }
     }
     cleanup();                                                     // 0x4A60BF

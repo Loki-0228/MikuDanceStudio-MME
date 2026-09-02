@@ -328,11 +328,43 @@ void ModelVertexFormat(unsigned char* model, DWORD* fvf, UINT* stride) {
     }
 }
 
-IDirect3DTexture9* ToonTexture(MMDApp* app, unsigned char* material) {
+IDirect3DTexture9* ToonTexture(MMDApp* app, D3DRenderer* sub,
+                               unsigned char* model,
+                               unsigned char* material) {
+    // 0x491E8B..0x492163: toonReference == -1 -> shared table slot 0; a
+    // model whose indexed toon file name IS "toonNN.bmp" -> slot N+1; any
+    // other name resolves the texture itself (PMX: the material toon path
+    // at +0x4C0; PMD: modelDirectory + converted file name).
     const int index = static_cast<std::int8_t>(
         mdl::Material(material).toonReference);
-    const int slot = index < 0 ? 0 : std::min(index + 1, 10);
-    return app->ToonTexture(slot);
+    if (index == -1)
+        return app->ToonTexture(0);
+    if (index >= 0 && index < 10) {
+        static const char* names[10] = {
+            "toon01.bmp", "toon02.bmp", "toon03.bmp", "toon04.bmp",
+            "toon05.bmp", "toon06.bmp", "toon07.bmp", "toon08.bmp",
+            "toon09.bmp", "toon10.bmp"};
+        if (strcmp(mdl::PmdToonFileNames(model)[index],
+                   names[index]) == 0)
+            return app->ToonTexture(index + 1);
+    }
+    if (mdl::Mdl(model)->physicsMode == 2) {
+        // PMX custom toon (0x4920D7): cached texture for material+0x4C0.
+        return FindCachedTexture(sub,
+                                 mdl::Material(material).toonPath);
+    }
+    if (index >= 0 && index < 10) {
+        // PMD custom toon (0x492111..0x492157): model directory + the
+        // converted (SJIS -> wide) toon file name.
+        wchar_t converted[256] = {};
+        wchar_t path[256] = {};
+        ConvertAnsiToWide(sub, mdl::PmdToonFileNames(model)[index],
+                          converted, 0x100);
+        swprintf_s(path, 0x100, L"%s%s",
+                   mdl::Mdl(model)->modelDirectory, converted);
+        return FindCachedTexture(sub, path);
+    }
+    return app->ToonTexture(0);
 }
 
 bool HasSuffix(const wchar_t* value, const wchar_t* lower,
@@ -608,7 +640,7 @@ void ConfigureMaterialStages(MMDApp* app, D3DRenderer* sub,
                                  D3DTSS_TCI_CAMERASPACENORMAL);
     device->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
     device->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
-    device->SetTexture(0, ToonTexture(app, material));
+    device->SetTexture(0, ToonTexture(app, sub, model, material));
 }
 
 // Loop-tail stage-1 reset for ".sp*" main paths: 0x4925CE..0x4925E5.
@@ -910,7 +942,10 @@ void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
                                                  state.vertexCount,
                                                  firstIndex, indexCount / 3);
                 };
-                const float alpha = record.diffuse[3];
+                // 0x492203 compares the COPY's Diffuse.a (esp+0x138),
+                // which carries the 0.5 displayState override - not the
+                // raw record value.
+                const float alpha = d3dMaterial.Diffuse.a;
                 if (state.postLoadFlag2 != 0) {
                     // 0x4921D1..0x49237A
                     device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);

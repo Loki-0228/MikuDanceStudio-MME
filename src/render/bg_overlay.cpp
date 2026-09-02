@@ -66,7 +66,7 @@ void ReleaseAviBackgroundHandles(MMDApp* app) {
 }
 
 HWND OverlayHwnd(MMDApp* app) {
-    return static_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));
+    return static_cast<HWND>(app->state.hwnd);
 }
 
 // Locked-buffer quad writer.  Byte offsets and float stores follow the
@@ -281,11 +281,11 @@ void AviBgOverlayRefresh(MMDApp* app) {
         if (s.AviUsesThirtyFpsTiming() == 0) {
             sample = stream != nullptr
                 ? AVIStreamTimeToSample(
-                      stream, s.raw<std::int32_t>(offsets::kDword980) *
+                      stream, s.state.currentFrame *
                                    1000 / 30)                       // 0x416B27
                 : 0;
         } else {
-            sample = s.raw<std::int32_t>(offsets::kDword980);
+            sample = s.state.currentFrame;
         }
     } else if (s.FrameStepPlayback() == 0 ||
                s.AviUsesThirtyFpsTiming() == 0 ||

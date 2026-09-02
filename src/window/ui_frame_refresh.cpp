@@ -89,7 +89,7 @@ void Sub411070(MMDApp* app) {
     if (keys == nullptr)
         return;
 
-    const std::uint32_t frame = app->raw<std::uint32_t>(offsets::kDword980);
+    const std::uint32_t frame = app->state.currentFrame;
     const std::uint32_t index = FindKeyAtOrAfter(keys, 10, frame);
     const std::uint32_t* rightRecord = keys + index * 10;
     float* right = reinterpret_cast<float*>(keys + index * 10);
@@ -136,7 +136,7 @@ void Sub411070(MMDApp* app) {
     }
     TraceSceneLightState(app, "timeline-light-refresh");
 
-    const HWND main = app->raw<HWND>(offsets::kPtrHwnd);
+    const HWND main = app->state.hwnd;
     char text[0x34];
     for (int lane = 0; lane < 3; ++lane) {
         SendMessageA(GetDlgItem(main, 455 + lane), TBM_SETPOS, TRUE,
@@ -159,7 +159,7 @@ void Sub411B90(MMDApp* app) {
     if (keys == nullptr)
         return;
 
-    const std::uint32_t frame = app->raw<std::uint32_t>(offsets::kDword980);
+    const std::uint32_t frame = app->state.currentFrame;
     const std::uint32_t index = FindKeyAtOrAfter(keys, 6, frame);
     const std::uint32_t* record = keys + index * 6;
     if (record[0] != frame)
@@ -176,7 +176,7 @@ void Sub411B90(MMDApp* app) {
     if (rawRange - static_cast<double>(range) >= 0.5)
         ++range;
 
-    const HWND main = app->raw<HWND>(offsets::kPtrHwnd);
+    const HWND main = app->state.hwnd;
     SendMessageA(GetDlgItem(main, 560), TBM_SETPOS, TRUE, range);
     char text[0x34];
     sprintf_s(text, sizeof(text), "%d", range);
@@ -199,7 +199,7 @@ void Sub4134E0(MMDApp* app) {
     if (accessory == nullptr)
         return;
 
-    const HWND main = app->raw<HWND>(offsets::kPtrHwnd);
+    const HWND main = app->state.hwnd;
     HWND modelCombo = GetDlgItem(main, 474);
     const LRESULT oldModel = SendMessageA(modelCombo, CB_GETCURSEL, 0, 0);
     const std::int32_t parentSlot = accessory->parentModel;
@@ -310,7 +310,7 @@ void Sub411DF0(MMDApp* app, int frameValue) {
         sprintf_s(message, sizeof(message),
                   "You cannot regist over %dpoint.\n"
                   "Please execute 'delete unused frame'", 10000);
-        MessageBoxA(app->raw<HWND>(offsets::kPtrHwnd), message,
+        MessageBoxA(app->state.hwnd, message,
                     "register frame", 0);
         return;
     }
@@ -331,8 +331,8 @@ void Sub411DF0(MMDApp* app, int frameValue) {
         static_cast<std::uint8_t>(app->raw<std::int32_t>(0xA0D30));
     *reinterpret_cast<float*>(added + 4) = app->raw<float>(0xA0D2C);
     reinterpret_cast<std::uint8_t*>(added)[20] = 1;
-    if (frame > app->raw<std::uint32_t>(offsets::kDword9E16C))
-        app->raw<std::uint32_t>(offsets::kDword9E16C) = frame;
+    if (frame > app->state.lastRegisteredFrame)
+        app->state.lastRegisteredFrame = frame;
 }
 
 }  // namespace mikudancestudio

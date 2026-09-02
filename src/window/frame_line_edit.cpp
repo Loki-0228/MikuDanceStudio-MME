@@ -199,9 +199,9 @@ void Sub439E40(MMDApp* app) {
         }
         if (affected == 0) return;
 
-        EnableWindow(GetDlgItem(app->raw<HWND>(offsets::kPtrHwnd), 0x190),
+        EnableWindow(GetDlgItem(app->state.hwnd, 0x190),
                      TRUE);
-        EnableWindow(GetDlgItem(app->raw<HWND>(offsets::kPtrHwnd), 0x191),
+        EnableWindow(GetDlgItem(app->state.hwnd, 0x191),
                      FALSE);
 
         BeginUndoEdit(model, cur);                     // 0x43A02F..
@@ -272,9 +272,9 @@ void Sub43A650(MMDApp* app) {
         }
         if (affected == 0) return;
 
-        EnableWindow(GetDlgItem(app->raw<HWND>(offsets::kPtrHwnd), 0x190),
+        EnableWindow(GetDlgItem(app->state.hwnd, 0x190),
                      TRUE);
-        EnableWindow(GetDlgItem(app->raw<HWND>(offsets::kPtrHwnd), 0x191),
+        EnableWindow(GetDlgItem(app->state.hwnd, 0x191),
                      FALSE);
 
         BeginUndoEdit(model, cur);                     // 0x43AB9C..
@@ -285,7 +285,7 @@ void Sub43A650(MMDApp* app) {
 
         // Auto-interpolation rebuild gate: checkbox 0x212 (0x43AFF4).
         const bool autoInterp =
-            SendMessageA(GetDlgItem(app->raw<HWND>(offsets::kPtrHwnd),
+            SendMessageA(GetDlgItem(app->state.hwnd,
                                     0x212),
                          BM_GETCHECK, 0, 0) == 1;
 

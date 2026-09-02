@@ -59,7 +59,7 @@ void AdvanceFrameRenderGate(MMDApp* app) {
     // 0x46B0B1..0x46B11D: transient render/present state machine.
     // The three gates independently restart the cycle before its 1->2->3->0
     // transition; the normal main-window path therefore enters rendering at 2.
-    auto& state = app->raw<std::uint32_t>(offsets::kDwordA0D6C);
+    auto& state = app->state.messageSeen;
     if (app->PlaybackActive() != 0)
         state = 1;
     if (app->raw<std::uint8_t>(offsets::kByteFlag672800) == 0)
@@ -375,7 +375,9 @@ void FrameDriver(MMDApp* app) {
     float& fpsElapsed = s.raw<float>(off::kFloat320);
     std::uint32_t& fpsFrames = s.raw<std::uint32_t>(off::kDword324);
     fpsElapsed += s.DeltaTime();
-    if (fpsElapsed >= 1.0f) {
+    // 0x46B132: fld1/fcompp + test $0x05/jp - reset only when elapsed is
+    // STRICTLY greater than 1.0 (equal or unordered skips).
+    if (fpsElapsed > 1.0f) {
         s.raw<std::uint32_t>(off::kDwordFps) = fpsFrames - 1;
         fpsElapsed = 0.0f;
         fpsFrames = 0;
@@ -459,11 +461,11 @@ void FrameDriver(MMDApp* app) {
     if (requireLineEnabled && LineCaptureSwitchReady() &&
         InterlockedCompareExchange(&lineModeRequested, 1, 0) == 0) {
         const bool alreadyModelMode =
-            app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0 &&
+            app->state.optflag0 == 0 &&
             app->EditMode() == ViewportEditMode::Bone;
         if (!alreadyModelMode) {
             Sub44D610(app);
-            app->raw<std::uint8_t>(offsets::kByteOptflag0) = 0;
+            app->state.optflag0 = 0;
             app->EditMode() = ViewportEditMode::Bone;
             PostLanguageSweep(app);
             PostModelReload2(app);
@@ -545,7 +547,7 @@ void FrameDriver(MMDApp* app) {
     static HRESULT hr = D3D_OK;         // stale-local equivalent
     bool presented = false;
     if (device != nullptr) {
-        if (s.raw<std::uint32_t>(off::kDwordA0D6C) != 0 &&
+        if (s.state.messageSeen != 0 &&
             s.AviStereoOutput() == 0) {
             presented = true;
             if (s.FullscreenMode() != 0) {
@@ -561,7 +563,7 @@ void FrameDriver(MMDApp* app) {
             } else if (s.FloatingWindow() != nullptr) {
                 RECT r = s.ViewportRect();                        // 0xA0D40
                 hr = device->Present(&r, &r,
-                                     s.raw<HWND>(off::kDwordA0d38),
+                                     s.state.floatingWindow,
                                      nullptr);
             } else {
                 RECT r = s.ViewportRect();                        // 0xA0D40
@@ -624,7 +626,7 @@ void FrameDriver(MMDApp* app) {
             s.raw<std::int32_t>(0x980))
             s.raw<unsigned char>(off::kByteB9edb6) = 1;
 
-        s.raw<unsigned char>(off::kByte330) = 1;
+        s.state.playbackActive = 1;
         UpdateBoneFrames(app);                                    // 0x433A40
         s.raw<std::uint32_t>(off::kDwordF9ed94) = 0;
         EnableWindow(GetDlgItem(static_cast<HWND>(s.Hwnd()), 0x198),

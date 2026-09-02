@@ -306,11 +306,11 @@ void LoadSceneV1(MMDApp* app, int fd) {
     ReleaseAccessoriesAndTracks(*s);                              // 0x459221
 
     // ---- scene-state reset run (0x45922D..0x4592F5) ----------------------
-    s->raw<std::uint32_t>(off::kDwordA0B20) = 0;
+    s->state.accessoryRenderSplitOrder = 0;
     s->SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
     s->raw<std::uint32_t>(off::kDwordA042C) = 0;
-    s->raw<std::int32_t>(off::kDwordA0430) = -1;
-    s->raw<std::uint32_t>(off::kDwordA0434) = 0;
+    s->state.cameraParentModel = -1;
+    s->state.cameraParentBone = 0;
     s->raw<std::uint32_t>(off::kDwordA043c13) = 0;               // 0xA0470
     s->raw<std::uint32_t>(off::kDwordA043c12) = 0;               // 0xA046C
     s->raw<float>(off::kDwordA043c11) = 0.0f;                    // 0xA0468
@@ -327,7 +327,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     s->raw<float>(off::kDwordA043c9) = 1.0f;                     // 0xA0460
     s->raw<float>(off::kDwordA043c3 + 4) = 1.0f;                 // 0xA044C
     s->raw<float>(off::kFloatColor16) = 1.0f;                    // 0xA0438
-    s->raw<std::uint32_t>(off::kDwordF9ed98) = 0;                // 0x9ED98
+    s->state.v9ed98 = 0;                // 0x9ED98
 
     HWND const main = reinterpret_cast<HWND>(s->Hwnd());
     unsigned char* const storage = s->storage();
@@ -351,7 +351,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     SendMessageA(GetDlgItem(main, 0x217), BM_SETCHECK, 0, 0);    // 0x45933A
 
     s->raw<std::uint32_t>(off::kByteBa0d2c) = 0x3C3851ECu;       // 0x45934D
-    s->raw<std::uint32_t>(off::kDwordA0d30) = 0;                 // 0x45935C
+    s->state.selfShadowMode = 0;                 // 0x45935C
 
     // ---- AVI teardown trio (0x459369..0x45939D) --------------------------
     if (s->AviFrameReader() != nullptr) {
@@ -383,7 +383,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         Rd(fd, &editFlag, 4);                                    // 0x459420
         // v1: no A0D3C variant - the flag lands in A06C8 only when the
         // accessory column is hidden (A0D38 == 0).
-        if (s->raw<std::int32_t>(off::kDwordA0D38) == 0)
+        if (s->state.floatingWindow == 0)
             s->raw<std::uint32_t>(off::kDwordSidebar) = editFlag;   // 0xA06C8
     }
     Rd(fd, &s->raw<std::uint32_t>(off::kFloat9e1e8), 4);          // 0x459449
@@ -505,9 +505,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 std::memset(&ofn, 0, sizeof(ofn));
                 ofn.lStructSize = 0x4C;                          // 0x459A22
                 ofn.hwndOwner =
-                    s->raw<std::int32_t>(off::kDwordA0D38)
+                    s->state.floatingWindow
                         ? reinterpret_cast<HWND>(
-                              s->raw<void*>(off::kDwordA0D38))
+                              s->state.floatingWindow)
                         : main;
                 ofn.lpstrFilter = kWFilterModel;
                 ofn.lpstrFile = ofnFile;
@@ -807,7 +807,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     std::memset(gravityKeys, 0, kTrackShadow);
     selfShadowKeys[0].mode = wrap->postProcessEnabled ? 1 : 0;   // 0x45AB29
     selfShadowKeys[0].distance = 0.0112500004f;                   // flt_52A1D8
-    s->raw<std::uint32_t>(off::kDwordA0d30) = 1;                 // 0x45AB46
+    s->state.selfShadowMode = 1;                 // 0x45AB46
     s->raw<std::uint32_t>(off::kByteA0188) = 0;
     gravityKeys[0].noise = 10;
     gravityKeys[0].acceleration = 9.8000002f;                    // 0x52A1DC
@@ -878,7 +878,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
     {
         const int frame =
             static_cast<int>(s->raw<float>(off::kFloat9e1e8));    // 0x9E1E8
-        SendMessageA(GetDlgItem(main, 0x1BF), UDM_SETRANGE32, 1,
+        // 0x405 = TBM_SETPOS (WM_USER+5, trackbar): wParam 1 = redraw,
+        // lParam = position (0x45AFBF..0x45AFCE).
+        SendMessageA(GetDlgItem(main, 0x1BF), 0x405 /*TBM_SETPOS*/, 1,
                      frame);                                     // 0x45AFCE
         HWND item = GetDlgItem(main, 0x1C0);
         SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
@@ -936,7 +938,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
             s->LightDirection()[2]};
         for (int k = 0; k < 6; ++k) {
             const double scale = k < 3 ? 256.0 : 100.0;
-            SendMessageA(GetDlgItem(main, sliderIds[k]), UDM_SETRANGE32, 1,
+            // 0x405 = TBM_SETPOS, same shape as the frame slider.
+            SendMessageA(GetDlgItem(main, sliderIds[k]),
+                         0x405 /*TBM_SETPOS*/, 1,
                          static_cast<int>(values[k] * scale));    // 0x45B3AF..
             HWND item = GetDlgItem(main, editIds[k]);
             SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
@@ -997,9 +1001,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
             std::memset(&ofn, 0, sizeof(ofn));
             ofn.lStructSize = 0x4C;                              // 0x45BA22
             ofn.hwndOwner =
-                s->raw<std::int32_t>(off::kDwordA0D38)
+                s->state.floatingWindow
                     ? reinterpret_cast<HWND>(
-                          s->raw<void*>(off::kDwordA0D38))
+                          s->state.floatingWindow)
                     : main;
             ofn.lpstrFilter =
                 s->EnglishUI() != 0 ? kWFilterAccEn : kWFilterAccJp;
@@ -1125,14 +1129,14 @@ void LoadSceneV1(MMDApp* app, int fd) {
 
     LogV1Stage("accessories-done", _tell(fd));
     // ---- config block head (0x45C48C..0x45C553) ---------------------------
-    Rd(fd, &s->raw<std::uint32_t>(off::kDword980), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kDword97C), 4);
-    Rd(fd, &s->raw<std::uint32_t>(off::kDword9E16C), 4);
+    Rd(fd, &s->state.currentFrame, 4);
+    Rd(fd, &s->state.timelineStartFrame, 4);
+    Rd(fd, &s->state.lastRegisteredFrame, 4);
     {
         HWND item = GetDlgItem(main, 0x1A1);
         SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
         sprintf_s(text, 0x100, "%d",
-                  s->raw<std::int32_t>(off::kDword980));         // 0x45C501
+                  s->state.currentFrame);         // 0x45C501
         SendMessageA(item, EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(text));
     }
@@ -1193,13 +1197,13 @@ void LoadSceneV1(MMDApp* app, int fd) {
         }
         Sub40AE00(s);                                            // 0x45CA2F
         Rd(fd, &b, 1);                                           // 0x45CA40
-        s->raw<unsigned char>(off::kByteA06CC) = b ? 1 : 0;
+        s->state.waveEnabled = b ? 1 : 0;
         Rd(fd, mbPath, 0x100);                                   // 0x45CA71
         ResolveAnsiUserFile(reinterpret_cast<unsigned char*>(wrap),
                             mbPath,
                             reinterpret_cast<wchar_t*>(storage + 0xD0),
                             0x100, paths);                        // 0x45CA9A
-        if (s->raw<unsigned char>(off::kByteA06CC) != 0)
+        if (s->state.waveEnabled != 0)
             LoadWaveFile(s);                                     // 0x45CAAA
         std::int32_t w1 = 0, w2 = 0, w3 = 0;
         Rd(fd, &w1, 4);                                          // 0x45CABE
@@ -1280,8 +1284,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
     // 0x31E / 0x31D / 0x918 menu checks (0x45CD95..0x45CF2C)
     {
         const HWND owner =
-            s->raw<std::int32_t>(off::kDwordA0D38)
-                ? reinterpret_cast<HWND>(s->raw<void*>(off::kDwordA0D38))
+            s->state.floatingWindow
+                ? reinterpret_cast<HWND>(s->state.floatingWindow)
                 : main;
         unsigned char b = 0;
         Rd(fd, &b, 1);                                           // 0x45CD95
@@ -1312,9 +1316,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
     LogV1Stage("config-done", _tell(fd));
     // FPS menu (0x45CF3F..0x45D02A); float compares against the 1000.0/30.0
     // double constants at 0x52BA60/0x52BA68.
-    Rd(fd, &s->raw<std::uint32_t>(off::kFloatFpslimit), 4);      // 0x45CF3F
+    Rd(fd, &s->state.fpsLimit, 4);      // 0x45CF3F
     {
-        const float v = s->raw<float>(off::kFloatFpslimit);
+        const float v = s->state.fpsLimit;
         if (v == 1000.0f) {
             CheckMenuItem(GetMenu(main), 0xEB, 0);
             CheckMenuItem(GetMenu(main), 0xEC, 0);
@@ -1358,13 +1362,13 @@ void LoadSceneV1(MMDApp* app, int fd) {
             break;
     }
     // physics defaults + combos (0x45D1C8..0x45D265)
-    s->raw<float>(off::kFloatGravmag) = 9.8000002f;              // 0x52A1DC
+    s->state.gravityMagnitude = 9.8000002f;              // 0x52A1DC
     s->raw<float>(off::kFloat9EDCC) = 0.0f;
-    s->raw<float>(off::kFloatGravx) = 0.0f;
-    s->raw<float>(off::kFloatGravy) = -1.0f;                     // 0x5295E8
+    s->state.gravityX = 0.0f;
+    s->state.gravityY = -1.0f;                     // 0x5295E8
     s->raw<unsigned char>(off::kByteA0CD4) = 0;
     s->raw<std::uint32_t>(off::kDword9EDC8) = 10;
-    s->raw<float>(off::kFloatGravz) = 0.0f;
+    s->state.gravityZ = 0.0f;
     s->raw<std::uint32_t>(off::kByteA0CC8) = 0;
     s->raw<std::uint32_t>(off::kDwordA0198) = 0;
     s->raw<std::uint32_t>(off::kDwordA019C) = 0;
@@ -1376,7 +1380,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     // ---- read-gated tail (0x45D278..0x45E117) ----------------------------
     // Unlike the rest of the body, this chain tests the _read results and
     // unwinds early at end-of-stream.
-    if (Rd(fd, &s->raw<std::uint32_t>(off::kDwordA0B20), 4) > 0) {  // 0x45D278
+    if (Rd(fd, &s->state.accessoryRenderSplitOrder, 4) > 0) {  // 0x45D278
         Rd(fd, &s->ProjectedShadowAmbientIntensity(), 4);       // 0x45D296
         s->SetProjectedShadowAmbient(s->ProjectedShadowAmbientIntensity());
         for (int i = 0; i < 100; ++i) {
@@ -1459,11 +1463,11 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 }
 
                 // physics reads (0x45D697..0x45D6E3)
-                Rd(fd, &s->raw<std::uint32_t>(off::kFloatGravmag), 4);
+                Rd(fd, &s->state.gravityMagnitude, 4);
                 Rd(fd, &s->raw<std::uint32_t>(off::kDword9EDC8), 4);
-                Rd(fd, &s->raw<std::uint32_t>(off::kFloatGravx), 4);
-                Rd(fd, &s->raw<std::uint32_t>(off::kFloatGravy), 4);
-                Rd(fd, &s->raw<std::uint32_t>(off::kFloatGravz), 4);
+                Rd(fd, &s->state.gravityX, 4);
+                Rd(fd, &s->state.gravityY, 4);
+                Rd(fd, &s->state.gravityZ, 4);
                 unsigned char bc = 0;
                 Rd(fd, &bc, 1);                                  // 0x45D6F4
                 s->raw<unsigned char>(off::kByteA0CD4) =
@@ -1474,14 +1478,14 @@ void LoadSceneV1(MMDApp* app, int fd) {
                     if (bd == 1 && got716 > 0) {
                         unsigned char be = 0;
                         Rd(fd, &be, 1);                          // 0x45D743
-                        s->raw<std::uint32_t>(off::kDwordA0d30) = be;
+                        s->state.selfShadowMode = be;
                         s->raw<unsigned char>(off::kByteA0188) =
                             (be != 0) ? 1 : 0;
                         Rd(fd, &s->raw<std::uint32_t>(off::kByteBa0d2c),
                            4);                                   // 0x45D76E
                         selfShadowKeys[0].mode =
                             static_cast<unsigned char>(
-                                s->raw<std::uint32_t>(off::kDwordA0d30));
+                                s->state.selfShadowMode);
                         selfShadowKeys[0].distance =
                             s->raw<float>(off::kFloatPhysicsint);
                         for (int i = 0; i < 100; ++i) {
@@ -1745,7 +1749,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         Sub411B90(s);                                             // 0x45E149
     } else {
         s->raw<unsigned char>(off::kByteA0188) = 0;
-        s->raw<std::uint32_t>(off::kDwordA0d30) = 0;
+        s->state.selfShadowMode = 0;
     }
     CheckMenuItem(GetMenu(main), 0x117,
                   s->raw<unsigned char>(off::kByteA0188) != 0 ? 8 : 0);
@@ -1754,9 +1758,9 @@ void LoadSceneV1(MMDApp* app, int fd) {
         s->raw<unsigned char>(760) == 0)
         SendMessageA(GetDlgItem(main, 0x1B8), BM_SETCHECK, 1, 0); // 0x45E1C1
     {  // light direction into the physics scene (0x45E1EF..0x45E286)
-        float dir[3] = {s->raw<float>(off::kFloatGravx),
-                        s->raw<float>(off::kFloatGravy),
-                        s->raw<float>(off::kFloatGravz)};
+        float dir[3] = {s->state.gravityX,
+                        s->state.gravityY,
+                        s->state.gravityZ};
         auto& d3dxApi = d3dx::Get();
         if (d3dxApi.Load()) {
             // Preserve d3dx9_32's reciprocal-sqrt rounding (see the v2
@@ -1773,7 +1777,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 dir[2] = static_cast<float>(dir[2] / len);
             }
         }
-        const float mag = s->raw<float>(off::kFloatGravmag);
+        const float mag = s->state.gravityMagnitude;
         // The original reaches btDynamicsWorld::setGravity through a vtable
         // slot.  That slot number is an ABI implementation detail and is not
         // valid for the x64 Bullet build.  Keep the same scene state while
@@ -1902,10 +1906,10 @@ void LoadSceneV1(MMDApp* app, int fd) {
         }
     }
     // child window refresh (0x45E7AA..0x45E7C4)
-    if (s->raw<std::int32_t>(off::kDwordA0D38) != 0) {
+    if (s->state.floatingWindow != 0) {
         Sub4290F0(s);                                             // 0x45E7AA
         InvalidateRect(
-            reinterpret_cast<HWND>(s->raw<void*>(off::kDwordA0D38)),
+            reinterpret_cast<HWND>(s->state.floatingWindow),
             nullptr, FALSE);
     }
     if (s->raw<unsigned char>(760) != 0) {

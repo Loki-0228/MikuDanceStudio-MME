@@ -242,7 +242,7 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
     if (app->TimelineSelectionChanged() == 0)
         goto L_repaint;                               // loc_44A437
     memset(app->at(0xA03EC), 0, 0x40);        // 656364 (0xA03EC)
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {   // 760 (0x2F8)
+    if (app->state.optflag0 != 0) {   // 760 (0x2F8)
         // ---- display-mode counts (0x448F2A-0x44902F) ---------------------
         // count set flags in the four record arrays (app+0x374 rigid
         // 0x54-stride flag+0x48, app+0x378 joint 0x28-stride flag+0x24,
@@ -338,7 +338,7 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
             record->undoState[1] = kf;
             auto& undo = record->undoRings[0].slots[kf];
             undo.operation = 2;
-            undo.frame = app->raw<std::int32_t>(offsets::kDword980);
+            undo.frame = app->state.currentFrame;
             auto*& bufSlot = undo.bonePose;
             if (bufSlot != nullptr) {
                 free(bufSlot);
@@ -471,7 +471,7 @@ void HandleLButtonDown(MMDApp* app) {
     // initializations below (C2362); drop it together with the
     // placeholder tail when S8 gets ported.
     {
-    const HWND hwnd = static_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));  // 657080
+    const HWND hwnd = static_cast<HWND>(app->state.hwnd);  // 657080
     RECT rc;
     GetClientRect(hwnd, &rc);
     const std::int32_t y = app->MouseY();
@@ -498,7 +498,7 @@ void HandleLButtonDown(MMDApp* app) {
     // indexes a 0x65-stride table (model+0x26D0) whose flag at +0x64 is
     // toggled.
     if (rowGateY && x > 4 && x < 0x14) {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {  // 760 (0x2F8)
+        if (app->state.optflag0 == 0) {  // 760 (0x2F8)
             unsigned char* model = app->SelectedModel();
             if (model == nullptr)
                 goto L_tail;
@@ -519,7 +519,7 @@ void HandleLButtonDown(MMDApp* app) {
     // -1-idx, -999 = "bottom" morph row) and dispatches the row-type
     // handlers (model+0x2DC0 byte); display mode goes to S4.
     if (rowGateY && x > 0x14 && x <= 0x5F) {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 760 (0x2F8)
+        if (app->state.optflag0 != 0) {  // 760 (0x2F8)
             // ---- S4: display-mode name column sub-branch (loc_44719F) ---
             if (!app->ShiftModifierActive()) {
                 // clear the accessory-slot selection flag (obj+0x4AC) of all
@@ -757,7 +757,7 @@ void HandleLButtonDown(MMDApp* app) {
         if (app->PlaybackActive() != 0)
             goto L_tail;
         app->TimelineSelectionChanged() = 0;
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 760 (0x2F8)
+        if (app->state.optflag0 != 0) {  // 760 (0x2F8)
             // ---- S5a: display-mode selection columns --------------------
             // (0x4473DA-0x4479BB) band selected by this+8, row by
             // (x-100)/13 (magic 0x4EC4EC4F, sar 2).  Selection indices are
@@ -1058,7 +1058,7 @@ void HandleLButtonDown(MMDApp* app) {
                     break;
             if (j < n) {
                 // original: sub_4A0080(ecx = model, frame = app+0x980)
-                Sub4A0080(model, app->raw<std::int32_t>(offsets::kDword980));
+                Sub4A0080(model, app->state.currentFrame);
                 modelRecord = mdl::Mdl(model);
                 flags = modelRecord->bonePhysicsState;
                 for (j = 0; j < n; ++j)
@@ -1068,13 +1068,13 @@ void HandleLButtonDown(MMDApp* app) {
         // scrollbar 0x1A1 sync (0x44A520-0x44A5BA): frame =
         // (x-100)/13 + scroll offset; EM_SETSEL (0xB1) to the end of the old
         // text, then WM_SETTEXT (0xC2) with the new frame
-        app->raw<std::int32_t>(offsets::kDword980) =
-            Div13(x - 0x64) + app->raw<std::int32_t>(offsets::kDword97C);
+        app->state.currentFrame =
+            Div13(x - 0x64) + app->state.timelineStartFrame;
         const LRESULT textLen = GetWindowTextLengthA(GetDlgItem(hwnd, 0x1A1));
         SendMessageA(GetDlgItem(hwnd, 0x1A1), 0xB1u /*EM_SETSEL*/, 0, textLen);
         char frameText[0x100];
         sprintf_s(frameText, 0x100u, "%d",
-                  app->raw<std::int32_t>(offsets::kDword980));
+                  app->state.currentFrame);
         SendMessageA(GetDlgItem(hwnd, 0x1A1), 0xC2u /*WM_SETTEXT*/, 0,
                      reinterpret_cast<LPARAM>(frameText));
         // per-slot frame apply + active-slot panel sync (0x44A5C8-0x44A606)
@@ -1085,14 +1085,14 @@ void HandleLButtonDown(MMDApp* app) {
             // original: sub_4B4260(ecx = model, frame = app+0x980,
             //            app+0xA0CC4)
             Sub4B4260(model,
-                      app->raw<std::int32_t>(offsets::kDword980),
+                      app->state.currentFrame,
                       app->PlaybackPhysicsMode());
             if (i == static_cast<int>(app->SelectedModelSlot())) {
                 Sub4A02C0(model);
             }
         }
         // mode branch (0x44A608-0x44A72B)
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 760 (0x2F8)
+        if (app->state.optflag0 != 0) {  // 760 (0x2F8)
             ReloadModels(app);                            // 0x42E640
             Sub411070(app);                               // 0x411070
             Sub411B90(app);                               // 0x411B90
@@ -1102,7 +1102,7 @@ void HandleLButtonDown(MMDApp* app) {
                     Sub413120(app, i);                    // 0x413120
             }
             Sub4134E0(app);                               // 0x4134E0
-        } else if (app->raw<std::uint8_t>(offsets::kByte9ED98) != 0) {  // 650648
+        } else if (app->state.v9ed98 != 0) {  // 650648
             app->ViewOffsetX() = 0.0f;
             app->ViewOffsetY() = 0.0f;
             ReloadModels(app);
@@ -1132,16 +1132,16 @@ void HandleLButtonDown(MMDApp* app) {
         // 0x97C = max(0, 0x980 - (sidebar-0x54)/26) with an unsigned compare
         const std::int32_t pages = (sidebar - 0x54) / 26;
         const std::uint32_t frameU =
-            static_cast<std::uint32_t>(app->raw<std::int32_t>(offsets::kDword980));
+            static_cast<std::uint32_t>(app->state.currentFrame);
         if (frameU <= static_cast<std::uint32_t>(pages))  // unsigned compare (jbe)
-            app->raw<std::int32_t>(offsets::kDword97C) = 0;
+            app->state.timelineStartFrame = 0;
         else
-            app->raw<std::int32_t>(offsets::kDword97C) =
+            app->state.timelineStartFrame =
                 static_cast<std::int32_t>(frameU - static_cast<std::uint32_t>(pages));
         PanelPaint(app);                                  // 0x414610
         // timeline strip redraw + physics sync (0x44A768-0x44A850)
-        if (app->raw<std::uint8_t>(offsets::kByteA06CC) != 0) {  // 657100 (0xA06CC)
-            TimelineDrawTicks(app->raw<std::int32_t>(offsets::kDword97C),
+        if (app->state.waveEnabled != 0) {  // 657100 (0xA06CC)
+            TimelineDrawTicks(app->state.timelineStartFrame,
                               app->SidebarWidth());
             RECT rc2;
             rc2.left = 6;
@@ -1157,7 +1157,7 @@ void HandleLButtonDown(MMDApp* app) {
                 if (gate) {
                     SetFrameNormalized(app->FrameNormalization()); // 0x4C2B80
                     const std::int32_t v31 =
-                        app->raw<std::int32_t>(offsets::kDword980) - 1;
+                        app->state.currentFrame - 1;
                     // fild + (negative ? fadd 2^32f) + fdiv 30.0 ==
                     // (double)(unsigned)v31 / 30.0
                     double t = static_cast<double>(static_cast<std::uint32_t>(v31)) / 30.0;
@@ -1191,7 +1191,7 @@ void HandleLButtonDown(MMDApp* app) {
             unsigned char* m = ActiveModel(app);
             if (m != nullptr) {
                 // original: sub_4A1510(ecx = model, frame = app+0x980)
-                Sub4A1510(m, app->raw<std::int32_t>(offsets::kDword980));
+                Sub4A1510(m, app->state.currentFrame);
             }
             app->PendingTimelineSelectionRow() = TimelineSelectionRow::Bone;
             goto L_tail;
@@ -1207,7 +1207,7 @@ void HandleLButtonDown(MMDApp* app) {
                 goto L_tail;
             unsigned char* m = ActiveModel(app);
             if (m != nullptr) {
-                Sub4A1510(m, app->raw<std::int32_t>(offsets::kDword980));
+                Sub4A1510(m, app->state.currentFrame);
             }
             app->PendingTimelineSelectionRow() = TimelineSelectionRow::Morph;
             goto L_tail;

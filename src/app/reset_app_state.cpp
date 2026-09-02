@@ -162,7 +162,7 @@ void ResetAppState(MMDApp* app) {
     // ---- camera/accessory edit state --------------------------------------
     app->ViewOffsetX() = 0.0f;
     app->ViewOffsetY() = 0.0f;
-    app->state.a0B20 = 1;
+    app->state.accessoryRenderSplitOrder = 1;
     app->CurrentFrame() = 0;
     app->CameraDistance() = -45.0f;
     app->ViewToolDragOperation() = ViewportToolAction::None;
@@ -173,7 +173,7 @@ void ResetAppState(MMDApp* app) {
     app->CameraRotation()[1] = 0.0f;
     app->state.v9da24[0] = 0;
     app->CameraRotation()[2] = 0.0f;
-    app->state.v97c = 0;
+    app->state.timelineStartFrame = 0;
     app->LastRegisteredFrame() = 0;
     app->state.v9da24[1] = 0;
     app->CaptureMode() = ScreenCaptureMode::Disabled;
@@ -282,7 +282,7 @@ void ResetAppState(MMDApp* app) {
 
     // ---- second AVI sweep + light/shadow menu defaults --------------------
     getFrame = static_cast<PGETFRAME>(app->AviFrameReader());
-    app->state.a06CC = 0;
+    app->state.waveEnabled = 0;
     if (getFrame != nullptr) {
         AVIStreamGetFrameClose(getFrame);                         // 0x44F4A2
         app->AviFrameReader() = nullptr;

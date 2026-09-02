@@ -263,7 +263,8 @@ void LoadVpdFile(const wchar_t* path) {
             regBits[i] = 1;
             std::memcpy(bone->trans, trans, 12);        // 0x419256
             std::memcpy(bone->rotQuat, quat, 16);
-            break;                                       // first match wins
+            // No break: 0x419240's bone loop keeps scanning after a match,
+            // so EVERY bone whose name equals the VPD bone gets the pose.
         }
     }
     std::fclose(fp);

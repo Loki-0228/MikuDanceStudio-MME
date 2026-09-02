@@ -68,15 +68,15 @@ std::uint32_t FindFreeAccSlot(MMDApp* app, mdl::AccessoryKey* table) {
         ++freeIndex;
         if (freeIndex >= 10000) {
             char message[0x100];
-            if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+            if (app->state.englishUI != 0) {
                 sprintf_s(message, sizeof(message),
                           "You cannot regist over %dpoint.\n"
                           "Please execute 'delete unused frame'", 10000);
-                MessageBoxA(app->raw<HWND>(offsets::kPtrHwnd), message,
+                MessageBoxA(app->state.hwnd, message,
                             "register frame", 0);
             } else {
                 sprintf_s(message, sizeof(message), kJpOverflow, 10000);
-                MessageBoxA(app->raw<HWND>(offsets::kPtrHwnd), message,
+                MessageBoxA(app->state.hwnd, message,
                             kJpTitle, 0);
             }
             return 0;
@@ -281,8 +281,8 @@ int Sub414110(MMDApp* app, void* recData, int flag) {
     }
     FillAccKeyRecord(added, src, frame);
 
-    if (frame > app->raw<std::uint32_t>(offsets::kDword9E16C)) {
-        app->raw<std::uint32_t>(offsets::kDword9E16C) = frame;
+    if (frame > app->state.lastRegisteredFrame) {
+        app->state.lastRegisteredFrame = frame;
     }
     return 1;
 }

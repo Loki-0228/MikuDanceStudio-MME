@@ -353,11 +353,11 @@ void RenderFrameScene(MMDApp* app) {
     D3DMATRIX frameWorld{};
     device->GetTransform(D3DTS_WORLD, &frameWorld);
 
-    // 0x46DB41..0x46DBFA: after the dynamic sprite VB is unlocked and
-    // immediately before Clear/BeginScene, the original updates every
-    // loaded model's deformed main/edge vertex buffers.  Leaving this call
-    // out makes the renderer draw the load-time bind pose even though the
-    // timeline, bone matrices and Bullet state are all advancing.
+    // 0x46DB41: the whole block - per-model VB update (inner gate
+    // app+0xA0665 == 0) AND the Clear - runs only when app+0xA0D6C
+    // (messageSeen) != 0; frames without a message leave both untouched.
+    if (app->state.messageSeen == 0)
+        return;
     if (app->raw<std::uint8_t>(offsets::kByteA0665) == 0) {
         for (int slot = 0; slot < 100; ++slot) {
             auto* model = app->ModelSlot(slot);
@@ -375,9 +375,6 @@ void RenderFrameScene(MMDApp* app) {
             ? D3DCOLOR_XRGB(0, 0, 0)
             : D3DCOLOR_XRGB(255, 255, 255);
     device->Clear(0, nullptr, clearFlags, clearColor, 1.0f, 0);
-
-    if (app->raw<std::uint32_t>(offsets::kDwordA0D6C) == 0)
-        return;
 
     app->raw<std::int32_t>(offsets::kDwordA0270) = 1;
     if (FAILED(device->BeginScene()))

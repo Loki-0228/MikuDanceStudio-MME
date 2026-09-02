@@ -229,7 +229,7 @@ __declspec(dllexport) char* ExpGetPmdFilename(int index) {
 __declspec(dllexport) int ExpGetPmdOrder(int index) {
     MMDApp* app = mikudancestudio::g_Block;
     int base = CountAcs(app);
-    const int pre = app->raw<std::int32_t>(mikudancestudio::offsets::kDwordA0B20);
+    const int pre = app->state.accessoryRenderSplitOrder;
     if (pre < base)
         base = pre;
     int occupied = -1;
@@ -355,7 +355,7 @@ __declspec(dllexport) int ExpGetAcsNum() { return CountAcs(mikudancestudio::g_Bl
 
 // 0x4C3780 -> 0x42A640.
 __declspec(dllexport) int ExpGetPreAcsNum() {
-    return mikudancestudio::g_Block->raw<std::int32_t>(mikudancestudio::offsets::kDwordA0B20);
+    return mikudancestudio::g_Block->state.accessoryRenderSplitOrder;
 }
 
 // 0x4C3790 -> 0x42A650: wide path (acc+0x29C) -> SJIS into app+0xA02B7.
@@ -377,7 +377,7 @@ __declspec(dllexport) int ExpGetAcsOrder(int index) {
     if (acc == nullptr)
         return 0;
     int order = acc->order + 1;
-    if (order < app->raw<std::int32_t>(mikudancestudio::offsets::kDwordA0B20) + 1)
+    if (order < app->state.accessoryRenderSplitOrder + 1)
         return -order;
     return order + mikudancestudio::GetPmdNum(app);
 }
@@ -483,8 +483,9 @@ __declspec(dllexport) float* ExpGetAcsMaterial(float* out, int index,
     const auto* acc = AcsByIndex(mikudancestudio::g_Block, index);
     if (acc == nullptr)
         return out;
-    if (static_cast<std::uint32_t>(mat) <
-        static_cast<std::uint32_t>(acc->materialCount)) {
+    // 0x4C5EE0: `cmp/jl` - SIGNED `<` (a negative index copies the
+    // out-of-bounds record before the table, exactly like the original).
+    if (mat < static_cast<std::int32_t>(acc->materialCount)) {
         const float* rec = static_cast<const float*>(acc->materials) +
                            17 * static_cast<std::size_t>(mat);
         std::memcpy(out, rec, 0x44);
@@ -506,14 +507,14 @@ __declspec(dllexport) int ExpGetCurrentObject() {
         mikudancestudio::mdl::AccessoryRecord* slot = app->AccessorySlot(i);
         if (slot == reinterpret_cast<mikudancestudio::mdl::AccessoryRecord*>(cur)) {
             int order = slot->order + 1;
-            if (order >= app->raw<std::int32_t>(mikudancestudio::offsets::kDwordA0B20) + 1)
+            if (order >= app->state.accessoryRenderSplitOrder + 1)
                 return order + mikudancestudio::GetPmdNum(app);
             return -order;
         }
     }
     // then model slots, offset by min(AcsNum, PreAcsNum)
     int base = CountAcs(app);
-    const int pre = app->raw<std::int32_t>(mikudancestudio::offsets::kDwordA0B20);
+    const int pre = app->state.accessoryRenderSplitOrder;
     if (pre < base)
         base = pre;
     for (int i = 0; i < 100; ++i) {
@@ -561,7 +562,7 @@ __declspec(dllexport) int ExpGetRenderRepeatCount() {
 
 // 0x4C3A00 -> 0x42AE10: English UI flag byte (app+0xA0B4C).
 __declspec(dllexport) int ExpGetEnglishMode() {
-    return mikudancestudio::g_Block->raw<unsigned char>(mikudancestudio::offsets::kByteEnglish);
+    return mikudancestudio::g_Block->state.englishUI;
 }
 
 // 0x4C3590 -> 0x42A0D0: physics cursor (0x9E64C) while playing, else the
@@ -569,9 +570,9 @@ __declspec(dllexport) int ExpGetEnglishMode() {
 // add) divided by 30.
 __declspec(dllexport) float ExpGetFrameTime() {
     MMDApp* app = mikudancestudio::g_Block;
-    if (app->raw<unsigned char>(mikudancestudio::offsets::kByte330) != 0)
+    if (app->state.playbackActive != 0)
         return app->raw<float>(mikudancestudio::offsets::kDwordF9e64c);
-    const std::int32_t frame = app->raw<std::int32_t>(mikudancestudio::offsets::kDword980);
+    const std::int32_t frame = app->state.currentFrame;
     // fild / fadds flt_52B9F0 (2^32) when negative / fdivl dbl_52BA68 (30.0)
     return static_cast<float>(static_cast<double>(
                                   static_cast<std::uint32_t>(frame)) /

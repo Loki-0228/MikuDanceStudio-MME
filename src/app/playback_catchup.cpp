@@ -146,7 +146,7 @@ void OrderedMorphPhysicsPass(MMDApp* app, int count, bool selSkip) {
             unsigned char* mdl = models[j];
             if (mdl == nullptr || mikudancestudio::mdl::Mdl(mdl)->comboSelIndex2 != order)
                 continue;
-            if (selSkip && s.raw<std::uint8_t>(offsets::kByteOptflag0) == 0 &&
+            if (selSkip && s.state.optflag0 == 0 &&
                 s.SelectedModelSlot() == j)
                 continue;                                   // 0x46F471
             ModelApplyMorphs(mdl);                            // 0x46F1AE
@@ -155,7 +155,7 @@ void OrderedMorphPhysicsPass(MMDApp* app, int count, bool selSkip) {
     }
 }
 
-// 0x46F1DF..0x46F204 (block 1, reverse) / 0x46F4C4..0x46F50B (block 2,
+// 0x46F1DF..0x46F204 (block 1, forward) / 0x46F4C4..0x46F50B (block 2,
 // forward, with the selected-model skip).
 void KinematicSyncPass(MMDApp* app, bool reverse, bool selSkip) {
     auto& s = *app;
@@ -167,7 +167,7 @@ void KinematicSyncPass(MMDApp* app, bool reverse, bool selSkip) {
         unsigned char* mdl = models[j];
         if (mdl == nullptr)
             continue;
-        if (selSkip && s.raw<std::uint8_t>(offsets::kByteOptflag0) == 0 &&
+        if (selSkip && s.state.optflag0 == 0 &&
             s.SelectedModelSlot() == j)
             continue;                                       // 0x46F4F1
         ModelKinematicSync(mdl);                             // 0x46F1F7
@@ -287,7 +287,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
         const int shown = static_cast<int>(
             UnsigInt(frameA) + static_cast<double>(n * 30) / fps);
         wchar_t buf[0x100];
-        if (s.raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+        if (s.state.englishUI != 0) {
             swprintf_s(buf, 0x100, L" %dframe recording(until %dframe)",
                        shown, s.AviRecordEndFrame());
         } else {
@@ -298,7 +298,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
     s.raw<std::int32_t>(offsets::kDwordF9ed94) += 1;        // 0x46EFB7
 
     // ---- 2./3. gates (0x46EFBE..0x46EFEE) --------------------------------
-    if (s.raw<std::uint32_t>(offsets::kDwordA0D6C) == 0)
+    if (s.state.messageSeen == 0)
         return;                                    // -> 0x46FEC4 (post)
     // var_14C8 = app+0xA06BC unconditionally (0x46EFDE); overwritten with
     // 1/fps when the frame-advance byte AND the frame-step flag are both
@@ -344,7 +344,9 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
                 do {
                     PlaybackPoseAdvance(app, 1);           // 0x46F16C
                     OrderedMorphPhysicsPass(app, count, false);
-                    KinematicSyncPass(app, true, false);
+                    // 0x46F1DF: `lea 0x780(%ebx),%edi; add $0x4` - FORWARD
+                    // slot order (block 2 at 0x46F4CA is forward too).
+                    KinematicSyncPass(app, false, false);
                     StepWorld(world);
                     // 0x46F226: the dt budget pays for the substep (double
                     // subtract, one rounding at the float store).

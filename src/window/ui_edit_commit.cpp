@@ -296,7 +296,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
 void Sub463640(MMDApp* app, HWND edit) {
     auto& s = *app;
     const HWND main = s.MainWindow();
-    s.raw<std::uint32_t>(offsets::kDwordBC) = 1;    // 0x463672 dword store
+    s.state.bC = 1;    // 0x463672 dword store
 
     if (edit == GetDlgItem(main, 417)) {            // frame number
         char text[256];

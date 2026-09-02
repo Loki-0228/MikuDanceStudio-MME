@@ -221,7 +221,8 @@ void VertexHistoryPushAverage(float* current, float* history, int count) {
 void ModelVertexHistoryPush(unsigned char* model, int samples) {
     const int n = samples > 30 ? 30 : samples;                   // 0x4B75CB
     float* base = reinterpret_cast<float*>(model);
-    static const struct { int current; int history; } kChannels[24] = {
+    // 0x4B75E3..0x4B77C7 makes exactly 23 calls; the table has 23 pairs.
+    static const struct { int current; int history; } kChannels[23] = {
         {3570, 84},    {3576, 264},   {3579, 354},   {3582, 444},
         {3585, 534},   {3588, 624},   {3591, 714},   {3594, 804},
         {3597, 894},   {3600, 984},   {3603, 1074},  {3606, 1164},
@@ -229,7 +230,7 @@ void ModelVertexHistoryPush(unsigned char* model, int samples) {
         {3624, 1704},  {3573, 174},   {3615, 1434},  {3627, 1794},
         {3630, 1884},  {3633, 1974},  {3636, 2064},
     };
-    for (int i = 0; i < 24; ++i)
+    for (int i = 0; i < 23; ++i)
         VertexHistoryPushAverage(base + kChannels[i].current,
                                  base + kChannels[i].history, n);
 }

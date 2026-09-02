@@ -146,14 +146,14 @@ bool InitToonTextures(MMDApp* app) {
     };
     for (int i = 0; i < 14; ++i)
         s.raw<float>(offsets::kFloatToonedge + 4 * i) = defaults[i];
-    // trailing 22 floats (655688..655748) zeroed in the original via 1.0/0.0
-    for (int i = 14; i < 30; ++i)
-        s.raw<float>(offsets::kFloatToonedge + 4 * i) =
-            (i >= 24) ? 0.0f : (i == 23 ? 0.86328101f : 1.0f);
-    s.raw<float>(offsets::kFloatToonedge + 4 * 30) = 0.76171899f;
-    s.raw<float>(offsets::kFloatToonedge + 4 * 31) = 0.671875f;
-    s.raw<float>(offsets::kFloatToonedge + 4 * 32) = 0.011719f;
-    for (int i = 33; i < 37; ++i)
+    // Trailing table (dwords 0x28052..0x28061): [14..17] pull the four
+    // rdata floats 0x52c0c0/c0bc/c0b8/c0b4 (0.863281, 0.761719, 0.671875,
+    // 0.011719); [18..29] are all 1.0.
+    const float tail[4] = {0.86328101f, 0.76171899f, 0.671875f,
+                           0.011719f};
+    for (int i = 0; i < 4; ++i)
+        s.raw<float>(offsets::kFloatToonedge + 4 * (14 + i)) = tail[i];
+    for (int i = 18; i < 30; ++i)
         s.raw<float>(offsets::kFloatToonedge + 4 * i) = 1.0f;
 
     // slots 1..10: toonNN.bmp with embedded PNG fallback, colour from pixel

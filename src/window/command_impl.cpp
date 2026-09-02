@@ -166,7 +166,7 @@ void CmdOpenScene(MMDApp* app) {
 
 // 0xCE - File: open WAV
 void CmdOpenWave(MMDApp* app) {
-    app->raw<std::uint32_t>(offsets::kDwordBC) = 1;   // 0x487754 [0x2F]=1
+    app->state.bC = 1;   // 0x487754 [0x2F]=1
     SetCurrentDirectoryW(app->ExeDir());
     wchar_t path[MAX_PATH] = L"";
     if (OpenDialog(app,
@@ -293,7 +293,7 @@ void CmdSaveMotion(MMDApp* app) {
 // 0xD5 - File: load AVI background
 void CmdLoadAvi(MMDApp* app) {
     app->raw<std::uint32_t>(0x74) = 1;                // 0x4870B4 [0x1D]=1
-    app->raw<std::uint32_t>(offsets::kDwordBC) = 1;   // 0x4870B7 [0x2F]=1
+    app->state.bC = 1;   // 0x4870B7 [0x2F]=1
     SetCurrentDirectoryW(app->ExeDir());
     wchar_t path[MAX_PATH] = L"";
     if (OpenDialog(app,
@@ -312,7 +312,7 @@ void CmdLoadAvi(MMDApp* app) {
 
 // 0xD6/0xD7/0xD8 - display toggles (menu check state in the original)
 void CmdToggleBoneDisplay(MMDApp* app) {
-    app->raw<unsigned char>(offsets::kDwordF9ed98) ^= 1;            // 650136
+    app->state.v9ed98 ^= 1;            // 650136
 }
 void CmdToggleMorphDisplay(MMDApp* app) {
     app->raw<unsigned char>(offsets::kByteB9ed99) ^= 1;            // 650137

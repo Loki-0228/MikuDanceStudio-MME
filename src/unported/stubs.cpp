@@ -58,7 +58,7 @@ void Sub432FA0(MMDApp* app);                   // VA 0x432FA0 (ui_frame_step.cpp
 void Sub464A00(MMDApp* app) {
     auto& s = *app;
     timeEndPeriod(1);                                       // 0x464A07
-    s.raw<std::uint8_t>(offsets::kByte330) = 0;             // 0x464A11
+    s.state.playbackActive = 0;             // 0x464A11
     Sub4341E0(app);                                         // 0x464A17
     unsigned char* flag = s.RecordingCompletionFlag();      // 0x464A1C
     s.raw<std::uint8_t>(offsets::kByte9ED90) = 0;           // 0x464A22

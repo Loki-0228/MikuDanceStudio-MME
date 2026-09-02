@@ -419,10 +419,13 @@ public:
         return raw<mdl::ClipboardSelectionCounts>(offsets::kDword9DA28);
     }
     std::int32_t& CurrentFrame() {
-        return raw<std::int32_t>(offsets::kDword980);
+        // The generated layout stores the frame counter unsigned; keep the
+        // historical signed view so signed comparisons at call sites are
+        // unchanged.
+        return reinterpret_cast<std::int32_t&>(state.currentFrame);
     }
     HWND& MainWindow() {
-        return raw<HWND>(offsets::kPtrHwnd);
+        return state.hwnd;
     }
     float* LightDirection() {
         return &state.lightDirection;
@@ -536,7 +539,7 @@ public:
         return state.aviFrameReader;
     }
     HWND& FloatingWindow() {
-        return raw<HWND>(offsets::kDwordA0D38);
+        return state.floatingWindow;
     }
     HWND& RecordingWindow() {
         return state.recordingWindow;
@@ -650,7 +653,8 @@ public:
         return raw<std::uint8_t>(0xA01D4);
     }
     std::int32_t& AccessoryRenderSplitOrder() {
-        return raw<std::int32_t>(offsets::kDwordA0B20);
+        // Generated field is uint32_t; preserve the signed accessor view.
+        return reinterpret_cast<std::int32_t&>(state.accessoryRenderSplitOrder);
     }
     std::uint8_t& SelectedAccessorySlot() {
         return raw<std::uint8_t>(offsets::kByte9e170);
@@ -676,7 +680,7 @@ public:
         return state.displayObjectListMatchCount;
     }
     std::uint32_t& LastRegisteredFrame() {
-        return raw<std::uint32_t>(offsets::kDword9E16C);
+        return state.lastRegisteredFrame;
     }
     IDirect3DVertexBuffer9*& OverlayVertices() {
         return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.overlayVertices);
@@ -703,7 +707,7 @@ public:
         return state.selfShadowCompositionEnabled;
     }
     std::int32_t& SelfShadowMode() {
-        return raw<std::int32_t>(offsets::kDwordA0d30);
+        return state.selfShadowMode;
     }
     std::uint8_t& DepthTextureCompositionEnabled() {
         return raw<std::uint8_t>(offsets::kByteA03DE);
@@ -751,7 +755,7 @@ public:
         return reinterpret_cast<wchar_t*>(at(offsets::kWcsWavpath));
     }
     std::uint8_t& WaveEnabled() {
-        return raw<std::uint8_t>(offsets::kByteA06CC);
+        return state.waveEnabled;
     }
     // AVI export options filled by the output dialog (0x40F2F0).
     wchar_t* AviOutputPath() {
@@ -816,19 +820,19 @@ public:
         return state.directSoundAvailable;
     }
     std::int32_t& TimelineStartFrame() {
-        return raw<std::int32_t>(offsets::kDword97C);
+        return state.timelineStartFrame;
     }
     std::uint8_t& PlaybackActive() {
-        return raw<std::uint8_t>(offsets::kByte330);
+        return state.playbackActive;
     }
     std::uint8_t PlaybackActive() const {
-        return raw<std::uint8_t>(offsets::kByte330);
+        return state.playbackActive;
     }
     std::uint8_t& PlaybackLoopEnabled() {
-        return raw<std::uint8_t>(offsets::kByte341);
+        return state.playbackLoopEnabled;
     }
     std::uint8_t PlaybackLoopEnabled() const {
-        return raw<std::uint8_t>(offsets::kByte341);
+        return state.playbackLoopEnabled;
     }
     std::uint8_t& FrameStepPlayback() {
         return raw<std::uint8_t>(offsets::kByte9ED90);
@@ -901,7 +905,7 @@ public:
         return state.fullscreenMode;
     }
     std::uint32_t& MessageSeen() {
-        return raw<std::uint32_t>(offsets::kDwordMsgseen);
+        return state.messageSeen;
     }
     std::uint8_t& WindowLayoutReady() {
         return raw<std::uint8_t>(offsets::kByteA442C);
@@ -975,10 +979,11 @@ public:
         return raw<std::uint8_t>(offsets::kByte31C);
     }
     std::int32_t& CameraParentModel() {
-        return raw<std::int32_t>(offsets::kDwordA0430);
+        // Generated field is uint32_t; preserve the signed accessor view.
+        return reinterpret_cast<std::int32_t&>(state.cameraParentModel);
     }
     std::int32_t& CameraParentBone() {
-        return raw<std::int32_t>(offsets::kDwordA0434);
+        return state.cameraParentBone;
     }
     CameraAttachmentReference& CameraReferenceMode() {
         return raw<CameraAttachmentReference>(offsets::kByte340);
@@ -999,7 +1004,7 @@ public:
         return raw<D3DMATRIX>(0xA0674);
     }
     std::int32_t& ShadowMode() {
-        return raw<std::int32_t>(offsets::kDwordA0d30);
+        return state.selfShadowMode;
     }
     float& ShadowDistance() {
         return raw<float>(offsets::kFloatPhysicsint);
@@ -1014,7 +1019,7 @@ public:
 
     // -- named fields (semantic names verified so far) -------------------
     // Main loop timing cluster (WinMain 0x004C4460)
-    float& FpsLimit()               { return raw<float>(offsets::kFloatFpslimit); }   // 657632
+    float& FpsLimit()               { return state.fpsLimit; }   // 657632
     float& DeltaTime()              { return raw<float>(offsets::kFloatDeltatime); }  // 657084
     std::uint32_t& TimeNowLow()     { return raw<std::uint32_t>(offsets::kDwordTimenowlo); }
     std::uint32_t& TimeNowHigh()    { return raw<std::uint32_t>(offsets::kDwordTimenowhi); }
@@ -1027,7 +1032,7 @@ public:
     void*& LocaleTablePtr()         { return raw<void*>(offsets::kPtrSub1d574); }    // 657092
 
     // Main window (0x0047A5B0)
-    void*& Hwnd()                   { return raw<void*>(offsets::kPtrHwnd); }        // 657080
+    void*& Hwnd()                   { return reinterpret_cast<void*&>(state.hwnd); }        // 657080
     void*& HInstance()              { return raw<void*>(0); }                        // this+0
     // Render/locale subsystem ("0x1D574 object"), allocated in
     // InitMainWindowAndD3D; layout restored in d3d_wrapper.hpp.
@@ -1045,7 +1050,7 @@ public:
     // InitMainWindowAndD3D, filled by SceneConstruct; see physics_scene.hpp.
     PhysicsScene*& Physics()        { return raw<PhysicsScene*>(offsets::kPtrSub048); }
     wchar_t* ExeDir()               { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsExedir); }
-    unsigned char& EnglishUI()      { return raw<unsigned char>(offsets::kByteEnglish); }  // 658252
+    unsigned char& EnglishUI()      { return state.englishUI; }  // 658252
 
     // User directory names (wchar_t[1000] each, 0x0047A5B0)
     wchar_t* DirModel()   { return state.dirModel; }
@@ -1057,10 +1062,10 @@ public:
     wchar_t* DirBg()      { return state.dirBg; }
 
     // Physics gravity (defaults 0.0 / -1.0 / 0.0, magnitude 9.8)
-    float& GravityX()               { return raw<float>(offsets::kFloatGravx); }
-    float& GravityY()               { return raw<float>(offsets::kFloatGravy); }
-    float& GravityZ()               { return raw<float>(offsets::kFloatGravz); }
-    float& GravityMagnitude()       { return raw<float>(offsets::kFloatGravmag); }
+    float& GravityX()               { return state.gravityX; }
+    float& GravityY()               { return state.gravityY; }
+    float& GravityZ()               { return state.gravityZ; }
+    float& GravityMagnitude()       { return state.gravityMagnitude; }
     float& PhysicsInterval()        { return raw<float>(offsets::kFloatPhysicsint); }  // 0.01125
 
     // Recent-file ANSI buffers (char[256] each)

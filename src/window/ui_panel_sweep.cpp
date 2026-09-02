@@ -149,9 +149,9 @@ void PostLanguageSweep(MMDApp* app) {
     BitBlt(panel, 0, 0, kListLeft, listH, dc, 0, 0, SRCCOPY);
     DeleteDC(dc);
 
-    std::memset(s.at(offsets::kBufBuf656632), 0, 0xC8);     // 200 flags
+    std::memset(s.state.buf656632, 0, 0xC8);     // 200 flags
 
-    if (s.raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+    if (s.state.optflag0 == 0) {
         // === bone-edit mode: current model display tree (0x42F744) ========
         unsigned char* model = CurrentModel(app, slotIdx);
         mdl::ModelRecord* const record = mdl::Mdl(model);
@@ -167,7 +167,7 @@ void PostLanguageSweep(MMDApp* app) {
         if (flagTab[rootIdx] != 0) {
             DrawPanelText(app, rootName, panel, 12, 12, 17,
                           offsets::kDwordCol656992);
-            s.raw<std::uint8_t>(offsets::kBufBuf656632) = 1;
+            s.state.buf656632[0] = 1;
         } else {
             DrawPanelText(app, rootName, panel, 12, 12, 17,
                           offsets::kDwordCol656988);
@@ -408,7 +408,7 @@ void PostLanguageSweep(MMDApp* app) {
         if (english) {
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Camera)) {
                 DrawHeader(app, panel, "camera", 17, offsets::kDwordCol656992);
-                s.raw<std::uint8_t>(offsets::kBufBuf656632) = 1;
+                s.state.buf656632[0] = 1;
             } else {
                 DrawHeader(app, panel, "camera", 17, offsets::kDwordCol656988);
             }
@@ -433,7 +433,7 @@ void PostLanguageSweep(MMDApp* app) {
         } else {
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Camera)) {
                 DrawHeader(app, panel, kJpCamera, 17, offsets::kDwordCol656992);
-                s.raw<std::uint8_t>(offsets::kBufBuf656632) = 1;
+                s.state.buf656632[0] = 1;
             } else {
                 DrawHeader(app, panel, kJpCamera, 17, offsets::kDwordCol656988);
             }

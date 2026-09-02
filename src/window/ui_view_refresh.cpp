@@ -48,14 +48,14 @@ namespace mikudancestudio {
 
 void PostLanguageSweep2(MMDApp* app) {
     // Target window: this+0xA0D38 doubles as an HWND when non-zero.
-    HWND hwnd = reinterpret_cast<HWND>(app->raw<void*>(offsets::kDwordA0D38));
+    HWND hwnd = reinterpret_cast<HWND>(app->state.floatingWindow);
     RECT client;
     int x;
     if (hwnd != nullptr) {                          // 0x40D113
         GetClientRect(hwnd, &client);
         x = 0;
     } else {                                        // 0x40D089
-        hwnd = reinterpret_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));
+        hwnd = reinterpret_cast<HWND>(app->state.hwnd);
         GetClientRect(hwnd, &client);
         x = app->raw<std::int32_t>(offsets::kDwordSidebar) + 9;  // 0xA06C8
     }
@@ -136,13 +136,13 @@ void PostLanguageSweep2(MMDApp* app) {
 // the IDA disassembly for the gimbal/zeroing constants and thresholds)
 // =========================================================================//
 void PostViewRefresh(MMDApp* app) {
-    HWND hwnd = reinterpret_cast<HWND>(app->raw<void*>(offsets::kDwordA0D38));
+    HWND hwnd = reinterpret_cast<HWND>(app->state.floatingWindow);
     if (hwnd == nullptr)                            // 0x40D157
-        hwnd = reinterpret_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));
+        hwnd = reinterpret_cast<HWND>(app->state.hwnd);
 
     char text[260];  // CHAR String[260] @ ebp-108h; sprintf_s count 0x100
 
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {   // this+0x2F8
+    if (app->state.optflag0 != 0) {   // this+0x2F8
         // ---- camera / light readout ----------------------------------------
         sprintf_s(text, 0x100, "%1.2f",
                   static_cast<double>(app->CameraPositionX()));

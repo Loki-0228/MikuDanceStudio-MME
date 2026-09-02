@@ -171,7 +171,7 @@ void ReloadModels(MMDApp* app) {
     if (keys == nullptr)
         return;
     const std::uint32_t frame =
-        s.raw<std::uint32_t>(offsets::kDword980);
+        s.state.currentFrame;
     std::uint32_t index = 0;
     while (keys[index].frame < frame) {
         const std::uint32_t next = keys[index].next;
@@ -281,8 +281,8 @@ void PlaybackPoseAdvance(MMDApp* app, int advance) {
             frame = static_cast<double>(static_cast<int>(scaled) + 1) / 1000.0;
     }
 
-    const bool editGate = s.raw<std::uint8_t>(offsets::kByteOptflag0) != 0 ||
-                          s.raw<std::uint8_t>(offsets::kDwordF9ed98) != 0;
+    const bool editGate = s.state.optflag0 != 0 ||
+                          s.state.v9ed98 != 0;
 
     // ---- 4A. camera track (0x417656..0x417A48) ----------------------------
     if (editGate && s.CameraTrackActive() != 0) {

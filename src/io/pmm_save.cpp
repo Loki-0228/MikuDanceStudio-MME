@@ -282,7 +282,8 @@ void SaveSceneFile(MMDApp* app) {
     W(fd, &s->raw<std::uint32_t>(off::kDwordRenderw), 4);      // 0x41B1D7
     W(fd, &s->raw<std::uint32_t>(off::kDwordRenderh), 4);      // 0x41B1EA
     {
-        const std::int32_t v = s->raw<std::int32_t>(off::kDwordA0d38);
+        const std::int32_t v = reinterpret_cast<const std::int32_t&>(
+            s->state.floatingWindow);
         if (v == 0)
             W(fd, &s->raw<std::uint32_t>(off::kDwordSidebar), 4);
         else
@@ -733,14 +734,14 @@ void SaveSceneFile(MMDApp* app) {
     }
 
     // ---- 7. config block (0x41DB42..0x41DF7C) ---------------------------
-    W(fd, &s->raw<std::uint32_t>(off::kDword980), 4);
-    W(fd, &s->raw<std::uint32_t>(off::kDword97C), 4);
-    W(fd, &s->raw<std::uint32_t>(off::kDword9E16C), 4);
+    W(fd, &s->state.currentFrame, 4);
+    W(fd, &s->state.timelineStartFrame, 4);
+    W(fd, &s->state.lastRegisteredFrame, 4);
     const std::int32_t savedEditMode = static_cast<std::int32_t>(s->EditMode());
     W(fd, &savedEditMode, 4);
     W(fd, &s->raw<unsigned char>(off::kByte340), 1);           // raw byte
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByte341) != 0;
+        const unsigned char b = s->state.playbackLoopEnabled != 0;
         W(fd, &b, 1);
     }
     {
@@ -760,7 +761,7 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &v2, 4);
     }
     {
-        const unsigned char b = s->raw<unsigned char>(off::kByteA06CC) != 0;
+        const unsigned char b = s->state.waveEnabled != 0;
         W(fd, &b, 1);
     }
     WideToSjisPath(text,                                       // 0x41DC85
@@ -803,9 +804,9 @@ void SaveSceneFile(MMDApp* app) {
         const unsigned char b = s->raw<unsigned char>(off::kByte918) != 0;
         W(fd, &b, 1);
     }
-    W(fd, &s->raw<std::uint32_t>(off::kFloatFpslimit), 4);     // 0xA08E0
+    W(fd, &s->state.fpsLimit, 4);     // 0xA08E0
     W(fd, &s->raw<std::uint32_t>(off::kDword9EB84), 4);
-    W(fd, &s->raw<std::uint32_t>(off::kDwordA0B20), 4);
+    W(fd, &s->state.accessoryRenderSplitOrder, 4);
     W(fd, &s->ProjectedShadowAmbientIntensity(), 4);
     {
         const unsigned char b = s->raw<unsigned char>(off::kByteB9ed9a) != 0;
@@ -813,11 +814,11 @@ void SaveSceneFile(MMDApp* app) {
     }
     W(fd, reinterpret_cast<const unsigned char*>(
               &s->PlaybackPhysicsMode()), 1);                  // raw byte
-    W(fd, &s->raw<std::uint32_t>(off::kFloatGravmag), 4);      // 0x9EDC4
+    W(fd, &s->state.gravityMagnitude, 4);      // 0x9EDC4
     W(fd, &s->raw<std::uint32_t>(off::kDword9EDC8), 4);
-    W(fd, &s->raw<std::uint32_t>(off::kFloatGravx), 4);        // 0x9EDB8
-    W(fd, &s->raw<std::uint32_t>(off::kFloatGravy), 4);        // 0x9EDBC
-    W(fd, &s->raw<std::uint32_t>(off::kFloatGravz), 4);        // 0x9EDC0
+    W(fd, &s->state.gravityX, 4);        // 0x9EDB8
+    W(fd, &s->state.gravityY, 4);        // 0x9EDBC
+    W(fd, &s->state.gravityZ, 4);        // 0x9EDC0
     {
         const unsigned char b = s->raw<unsigned char>(off::kByteA0CD4) != 0;
         W(fd, &b, 1);
@@ -927,15 +928,15 @@ void SaveSceneFile(MMDApp* app) {
         const unsigned char b = s->raw<unsigned char>(off::kByteA0194) != 0;
         W(fd, &b, 1);
     }
-    W(fd, &s->raw<std::uint32_t>(off::kDwordA0430), 4);
-    W(fd, &s->raw<std::uint32_t>(off::kDwordA0434), 4);
+    W(fd, &s->state.cameraParentModel, 4);
+    W(fd, &s->state.cameraParentBone, 4);
     W(fd, &s->raw<std::uint32_t>(off::kFloatColor16), 4);      // 0xA0438
     for (int i = 0; i < 15; ++i)                               // 0xA043C..A0474
         W(fd, &s->raw<std::uint32_t>(offsets::kDwordA043c0 +
                                      static_cast<std::size_t>(i) * 4),
           4);
     {
-        const unsigned char b = s->raw<unsigned char>(off::kDwordF9ed98) != 0;
+        const unsigned char b = s->state.v9ed98 != 0;
         W(fd, &b, 1);                                          // 0x9ED98
     }
     {
@@ -947,7 +948,7 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &b, 1);
     }
     {  // 0x22A edit readback on the alt dialog when present (0x41E69E)
-        const HWND alt = s->raw<HWND>(off::kDwordA0d38);
+        const HWND alt = s->state.floatingWindow;
         GetWindowTextA(GetDlgItem(alt != nullptr ? alt : main, 0x22A), text, 10);
         std::int32_t v = atol(text);
         if (v < 0) v = 0;

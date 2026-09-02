@@ -12,10 +12,17 @@ Modes:
   report   remaining raw< / at( call-site counts (the convergence metric)
   ledger   per-constant worklist: usage class, counts, accessor name
            (constants grouped by byte offset; aliases visible)
+  apply    codemod: rewrite raw<T>(ns::kX) / at(ns::kX) call sites to the
+           member expressions given in a map file (lines of
+           ``kConstantName = expression-with-state.``).  Only exact-offset
+           call forms are rewritten; ``kX + i`` family arithmetic is left
+           alone.  After the sweep the script reports any map constant
+           still referenced anywhere.
 
 Usage:
   python scripts/promote.py report
   python scripts/promote.py ledger [--class dead|accessor-only|src-raw]
+  python scripts/promote.py apply --map cluster_a.map
 """
 import argparse
 import os
@@ -148,14 +155,77 @@ def cmd_ledger(want_class=None):
     return 0
 
 
+def cmd_apply(map_path):
+    mapping = {}
+    with open(map_path, encoding="utf-8") as fh:
+        for ln in fh:
+            ln = ln.split("#")[0].strip()
+            if not ln:
+                continue
+            name, _, expr = ln.partition("=")
+            mapping[name.strip()] = expr.strip()
+    # expand aliases: any constant sharing a mapped constant's byte offset
+    by_value = defaultdict(list)
+    for name, value, _ in parse_offsets():
+        by_value[value].append(name)
+    expanded = dict(mapping)
+    for name, expr in mapping.items():
+        value = next((v for n, v, _ in parse_offsets() if n == name), None)
+        if value is None:
+            print(f"  WARN: {name} not in offsets.hpp")
+            continue
+        for alias in by_value[value]:
+            expanded.setdefault(alias, expr)
+
+    changed = {}
+    for path in iter_sources():
+        text = read(path)
+        orig = text
+        for name, expr in expanded.items():
+            # receiver-attached or bare call forms; exact offset only
+            ns = r'(?:mikudancestudio::)?(?:offsets|off)::'
+            for pat, rep in (
+                (r'(?:->|\.)?raw<[^>()+]*>\(' + ns + name + r'\)', expr),
+                (r'(?:->|\.)?at\(' + ns + name + r'\)', expr),
+            ):
+                text = re.sub(pat, lambda m, e=expr: _attach(m.group(0), e), text)
+        if text != orig:
+            open(path, 'w', encoding='utf-8', newline='').write(text)
+            changed[os.path.relpath(path, ROOT)] = sum(
+                1 for name in expanded
+                if re.search(r'\b' + name + r'\b', orig))
+
+    for rel in sorted(changed):
+        print(f"  {rel}")
+    left = [n for n in expanded
+            if any(re.search(r'\b' + n + r'\b', read(p))
+                   for p in iter_sources())]
+    print(f"\nrewrote {len(changed)} files; still referenced: {left}")
+    return 0
+
+
+def _attach(matched, expr):
+    """expr like ``state.foo`` -> ``->state.foo`` / ``.state.foo`` / bare."""
+    if matched.startswith('->'):
+        return '->' + expr
+    if matched.startswith('.'):
+        return '.' + expr
+    return expr
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cmd", choices=["report", "ledger"])
+    ap.add_argument("cmd", choices=["report", "ledger", "apply"])
     ap.add_argument("--class", dest="klass",
                     choices=["dead", "accessor-only", "src-raw"])
+    ap.add_argument("--map", dest="map_path")
     args = ap.parse_args()
     if args.cmd == "report":
         return cmd_report()
+    if args.cmd == "apply":
+        if not args.map_path:
+            ap.error("apply requires --map FILE")
+        return cmd_apply(args.map_path)
     return cmd_ledger(args.klass)
 
 

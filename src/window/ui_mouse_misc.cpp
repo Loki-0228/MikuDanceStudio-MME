@@ -92,7 +92,7 @@ void HandleLButtonDblClk(MMDApp* app) {
     if (app->FullscreenMode() != 0)                             // 655988 (0xA0274)
         return;
 
-    const HWND hwnd = static_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));  // 657080
+    const HWND hwnd = static_cast<HWND>(app->state.hwnd);  // 657080
     app->CameraAttachmentTransformSuppressed() = 0;
     RECT rect;
     GetClientRect(hwnd, &rect);                                 // output never read in the original
@@ -122,7 +122,7 @@ void HandleLButtonDblClk(MMDApp* app) {
             }
             if (idx < flagCount) {
                 // original: sub_4A0080(ecx = model, stack = app+2432 frame)
-                Sub4A0080(model, app->raw<std::int32_t>(offsets::kDword980));
+                Sub4A0080(model, app->state.currentFrame);
                 for (int j = 0;
                      j < static_cast<int>(mdl::Mdl(model)->boneCount); ++j)
                     mdl::Mdl(model)->bonePhysicsState[j] = 0;
@@ -131,13 +131,13 @@ void HandleLButtonDblClk(MMDApp* app) {
 
         // ---- 2. frame number -> edit box (control 0x1A1 = 417) ------------
         // this+0x980 = this+0x97C + (this+4 - 100) / 13
-        app->raw<std::int32_t>(offsets::kDword980) =
-            app->raw<std::int32_t>(offsets::kDword97C) + (app->MouseX() - 100) / 13;
+        app->state.currentFrame =
+            app->state.timelineStartFrame + (app->MouseX() - 100) / 13;
         const LRESULT textLen = GetWindowTextLengthA(GetDlgItem(hwnd, 417));
         SendMessageA(GetDlgItem(hwnd, 417), 0xB1u /*EM_SETSEL*/, 0, textLen);
         char frameText[256];                                    // 0x100
         sprintf_s(frameText, 0x100u, "%d",
-                  app->raw<std::int32_t>(offsets::kDword980));
+                  app->state.currentFrame);
         SendMessageA(GetDlgItem(hwnd, 417), 0xC2u /*WM_SETTEXT*/, 0,
                      reinterpret_cast<LPARAM>(frameText));
 
@@ -149,7 +149,7 @@ void HandleLButtonDblClk(MMDApp* app) {
             // original: sub_4B4260(ecx = model, frame = app+2432,
             //            app+0xA0CC4)
             Sub4B4260(model,
-                      app->raw<std::int32_t>(offsets::kDword980),
+                      app->state.currentFrame,
                       app->PlaybackPhysicsMode());
             if (i == static_cast<int>(app->SelectedModelSlot())) {
                 // original: sub_4A02C0(ecx = model)
@@ -158,7 +158,7 @@ void HandleLButtonDblClk(MMDApp* app) {
         }
 
         // ---- 4. mode branch: model row / accessory row / light row --------
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 760 (0x2F8)
+        if (app->state.optflag0 != 0) {  // 760 (0x2F8)
             ReloadModels(app);                                    // 0x42E640
             Sub411070(app);                                       // 0x411070
             Sub411B90(app);                                       // 0x411B90
@@ -168,7 +168,7 @@ void HandleLButtonDblClk(MMDApp* app) {
                     Sub413120(app, i);                            // 0x413120
             }
             Sub4134E0(app);                                       // 0x4134E0
-        } else if (app->raw<std::uint8_t>(offsets::kByte9ED98) != 0) {  // 650648
+        } else if (app->state.v9ed98 != 0) {  // 650648
             app->ViewOffsetX() = 0.0f;
             app->ViewOffsetY() = 0.0f;
             ReloadModels(app);                                    // 0x42E640
@@ -200,17 +200,17 @@ void HandleLButtonDblClk(MMDApp* app) {
         const std::int32_t pages =
             (app->SidebarWidth() - 84) / 26;
         const std::uint32_t frameU =
-            static_cast<std::uint32_t>(app->raw<std::int32_t>(offsets::kDword980));
+            static_cast<std::uint32_t>(app->state.currentFrame);
         if (frameU <= static_cast<std::uint32_t>(pages))          // unsigned compare (jbe)
-            app->raw<std::int32_t>(offsets::kDword97C) = 0;       // 2428 (0x97C)
+            app->state.timelineStartFrame = 0;       // 2428 (0x97C)
         else
-            app->raw<std::int32_t>(offsets::kDword97C) =
+            app->state.timelineStartFrame =
                 static_cast<std::int32_t>(frameU - static_cast<std::uint32_t>(pages));
         PanelPaint(app);                                          // 0x414610
 
         // ---- 6. timeline strip redraw + normalized-time seek ---------------
-        if (app->raw<std::uint8_t>(offsets::kByteA06CC) != 0) {   // 657100 (0xA06CC)
-            TimelineDrawTicks(app->raw<std::int32_t>(offsets::kDword97C),
+        if (app->state.waveEnabled != 0) {   // 657100 (0xA06CC)
+            TimelineDrawTicks(app->state.timelineStartFrame,
                               app->SidebarWidth());
             RECT rc;
             rc.left = 6;
@@ -226,7 +226,7 @@ void HandleLButtonDblClk(MMDApp* app) {
                 if (gate) {
                     SetFrameNormalized(app->FrameNormalization());  // 0x4C2B80
                     const std::int32_t v31 =
-                        app->raw<std::int32_t>(offsets::kDword980) - 1;
+                        app->state.currentFrame - 1;
                     // fild + (negative ? fadd 2^32f) + fdiv 30.0 ==
                     // (double)(unsigned)v31 / 30.0
                     double t = static_cast<double>(static_cast<std::uint32_t>(v31)) / 30.0;
@@ -289,7 +289,7 @@ void HandleLButtonDblClk(MMDApp* app) {
 //   MikuMikuDance.exe 0x4632F0.
 // =========================================================================//
 void HandleMouseActivate(MMDApp* app) {
-    const HWND hwnd = static_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));  // 657080
+    const HWND hwnd = static_cast<HWND>(app->state.hwnd);  // 657080
     RECT rect;
     GetClientRect(hwnd, &rect);
     if (app->PlaybackActive() != 0)
@@ -298,7 +298,7 @@ void HandleMouseActivate(MMDApp* app) {
     const HWND fg = GetForegroundWindow();
     const HWND cached = app->FloatingWindow();  // 658744 (0xA0D38)
 
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {    // 760 (0x2F8)
+    if (app->state.optflag0 != 0) {    // 760 (0x2F8)
         // mode row: keep the combo selection in sync with the panel state
         if (fg == cached || app->MouseY() <= rect.bottom - 158) {
             SendMessageA(GetDlgItem(hwnd, 436), 0x14Eu /*CB_SETCURSEL*/,

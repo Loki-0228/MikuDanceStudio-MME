@@ -392,7 +392,7 @@ HWND MainHwnd(MMDApp* app) {
 // variant): undo record, panel repaint, selection re-eval, dirty flag.
 void FramePurgeTail(MMDApp* app) {
     unsigned char* model = ActiveModel(app);
-    Sub4B4260(model, app->raw<std::int32_t>(offsets::kDword980),
+    Sub4B4260(model, app->state.currentFrame,
               app->PlaybackPhysicsMode());
     PanelPaint(app);      // 0x414610
     SelectionReeval(app); // 0x430510
@@ -646,7 +646,7 @@ INT_PTR __stdcall Sub40F2F0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                      (LPARAM)text);
         EnableWindow(GetDlgItem(hDlg, 0x264), FALSE);
         EnableWindow(GetDlgItem(hDlg, 0x265), FALSE);
-        if (app->raw<std::uint8_t>(offsets::kByteA06CC) != 0) {
+        if (app->state.waveEnabled != 0) {
             SendMessageA(GetDlgItem(hDlg, 0x266), 0xF1 /*BM_SETCHECK*/, 1, 0);
         } else {
             EnableWindow(GetDlgItem(hDlg, 0x266), FALSE);
@@ -780,7 +780,7 @@ INT_PTR __stdcall Sub42DFF0(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         break;
     case WM_HSCROLL: {
-        app->raw<std::int32_t>(offsets::kDwordA0D6C) = 1;  // flag set first
+        app->state.messageSeen = 1;  // flag set first
         const float v = static_cast<float>(
             static_cast<double>(SendMessageA(GetDlgItem(hDlg, 0x271),
                                              0x400 /*TBM_GETPOS*/, 0, 0)) /
@@ -846,7 +846,7 @@ INT_PTR __stdcall Sub44CA40(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         Sub439C90(app, g_accOrderCount);
         sprintf_s(text, 0x64, "%d",
-                  app->raw<std::int32_t>(offsets::kDwordA0B20));
+                  app->state.accessoryRenderSplitOrder);
         SetWindowTextA(GetDlgItem(hDlg, 0x27B), text);
         SendMessageA(GetDlgItem(hDlg, 0x274), 0x186 /*LB_SETCURSEL*/,
                      0xFFFFFFFF, 0);
@@ -897,7 +897,7 @@ INT_PTR __stdcall Sub44CA40(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         case 0x278: {  // OK: commit the new order
             GetWindowTextA(GetDlgItem(hDlg, 0x27B), text, 256);
-            app->raw<std::int32_t>(offsets::kDwordA0B20) = atol(text);
+            app->state.accessoryRenderSplitOrder = atol(text);
             Sub439D00(app, g_accOrderCount, hDlg);
             const HWND main = MainHwnd(app);
             SendMessageA(GetDlgItem(main, 0x1D7), 0x14B /*CB_RESETCONTENT*/, 0, 0);
@@ -1149,7 +1149,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // (cancel).  On OK the whole model/render chain is re-initialised.
     // ------------------------------------------------------------------
     case 212: {
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;  // 0xBC
+        app->state.bC = 1;  // 0xBC
         const std::intptr_t result = DialogBoxParamA(
             static_cast<HINSTANCE>(app->raw<void*>(0)),  // this+0 hInstance
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x28D : 0x25F),
@@ -1182,11 +1182,11 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // frame counter exceeds the bone count.
     // ------------------------------------------------------------------
     case 219: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
         app->raw<std::uint32_t>(kOff48) = 1;
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const std::intptr_t result = DialogBoxParamA(
             static_cast<HINSTANCE>(app->raw<void*>(0)),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x28B : 0x258),
@@ -1195,7 +1195,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             break;
         }
         unsigned char* model = ActiveModel(app);
-        Sub4A1510(model, app->raw<std::int32_t>(offsets::kDword980));
+        Sub4A1510(model, app->state.currentFrame);
         std::int32_t frameIdx = 0;  // ebx: counts frames (incl. skipped)
         for (std::size_t frameIdx = 0;
              frameIdx < mdl::kBoneKeyCapacity; ++frameIdx) {
@@ -1212,8 +1212,9 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                     } while (bone >= boneCount);
                 }
                 const mdl::BoneRecord* const bones = mdl::Bones(model);
-                // root bone only (parent == -1)
-                if (bones[0].parent == -1) {
+                // root bone only (parent == -1); 0x48824B tests the
+                // RESOLVED bone (uVar22 after the previous-chain walk)
+                if (bones[bone].parent == -1) {
                     key.position[0] += app->raw<float>(offsets::kFloatFpsa);
                     key.position[1] += app->raw<float>(offsets::kFloatFpsb);
                     key.position[2] += app->raw<float>(offsets::kFloatFpsc);
@@ -1223,7 +1224,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         PanelPaint(app);      // 0x414610
         SelectionReeval(app); // 0x430510
         model = ActiveModel(app);
-        Sub4B4260(model, app->raw<std::int32_t>(offsets::kDword980),
+        Sub4B4260(model, app->state.currentFrame,
                   app->PlaybackPhysicsMode());
         app->SceneModified() = 1;
         app->PhysicsResetPending() = 1;
@@ -1259,7 +1260,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // reports the count.
     // ------------------------------------------------------------------
     case 222: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
         app->raw<std::uint32_t>(kOff40) = 1;
@@ -1484,7 +1485,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
 
         // ---- purge marked frames and report --------------------------
         Sub4316B0(app);                              // 0x4316B0
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         char text[0x100];
         if (app->EnglishUI() != 0) {
             sprintf_s(text, 0x100, "%d point was deleted.", deleted);
@@ -1506,15 +1507,15 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     case 224: {
         SetCurrentDirectoryW(app->ExeDir());
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         wchar_t path[0x100];
         swprintf_s(path, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = 0x4C;
         ofn.hwndOwner =
-            app->raw<std::int32_t>(offsets::kDwordA0d38) != 0
-                ? reinterpret_cast<HWND>(app->raw<void*>(offsets::kDwordA0d38))
+            app->state.floatingWindow != 0
+                ? reinterpret_cast<HWND>(app->state.floatingWindow)
                 : MainHwnd(app);
         ofn.lpstrFilter = L"vsq files(*.vsq)\0*.vsq\0";
         ofn.lpstrFile = path;
@@ -1544,7 +1545,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     case 223: {
         app->raw<std::uint32_t>(0x3C) = 1;
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         SetCurrentDirectoryW(app->ExeDir());
         wchar_t path[0x100];
         swprintf_s(path, 0x100, kFmt529688, L"", L"");
@@ -1578,7 +1579,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             Sub42AE20(app->DirUser(), dir);   // 0x42AE20
         }
         CopyPathW(app->AviOutputPath(), path);  // 0x42AE40
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const std::intptr_t r = DialogBoxParamA(
             static_cast<HINSTANCE>(app->raw<void*>(0)),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x28E : 0x260),
@@ -1604,10 +1605,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // the shifted value turns positive; the chain tail ends the walk.
     // ------------------------------------------------------------------
     case 225: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const std::intptr_t r = DialogBoxParamA(
             static_cast<HINSTANCE>(app->raw<void*>(0)),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x28F : 0x267),
@@ -1697,10 +1698,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // MB_TOPMOST, then PurgeMorphFrames(app, 3) and the shared purge tail.
     // ------------------------------------------------------------------
     case 226: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const int r = MessageBoxA(
             MainHwnd(app),
             app->EnglishUI() != 0
@@ -1727,7 +1728,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // morph via Sub49EEE0, using the app+0x9EB7F blink-phase byte.
     // ------------------------------------------------------------------
     case 227: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
         unsigned char* model = ActiveModel(app);
@@ -1745,7 +1746,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             }
         }
         if (blinkMorph < 0) {
-            app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+            app->state.bC = 1;
             MessageBoxA(
                 MainHwnd(app),
                 app->EnglishUI() != 0
@@ -1757,7 +1758,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 0x40000);  // MB_TOPMOST
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const std::intptr_t r = DialogBoxParamA(
             static_cast<HINSTANCE>(app->raw<void*>(0)),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x290 : 0x269),
@@ -1815,7 +1816,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         if (app->raw<std::int32_t>(kOff9E16C) < frameCount) {
             app->raw<std::int32_t>(kOff9E16C) = frameCount;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         char text[0x100];
         if (app->EnglishUI() != 0) {
             sprintf_s(text, 0x100, "%d blinking is registerd", count);
@@ -1832,10 +1833,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // 228 (0x004890A7): delete all eyes frames - PurgeMorphFrames(app, 2).
     // ------------------------------------------------------------------
     case 228: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const int r = MessageBoxA(
             MainHwnd(app),
             app->EnglishUI() != 0
@@ -1866,7 +1867,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     case 250: {
         app->raw<std::uint32_t>(0x6C) = 1;
-        const std::uint8_t opt = app->raw<std::uint8_t>(offsets::kByteOptflag0);
+        const std::uint8_t opt = app->state.optflag0;
         const bool isAcc = opt != 0;
         const auto& clipboardCounts = app->ClipboardCounts();
         if (isAcc ? clipboardCounts.accessories == 0
@@ -1885,7 +1886,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         const char* cap = app->EnglishUI() != 0 ? "paste to difference flame"
                                                 : kCaptionPasteJp;
         const std::uint32_t flags =
-            app->raw<std::int32_t>(offsets::kDwordA0d38) != 0 ? 0x40001u : 1u;
+            app->state.floatingWindow != 0 ? 0x40001u : 1u;
         if (MessageBoxA(MainHwnd(app), msg, cap, flags) != 1) {
             break;
         }
@@ -1898,7 +1899,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                     app->EnglishUI() != 0 ? "Please select bone."
                                           : kMsgSelectBoneJp,
                     cap,
-                    app->raw<std::int32_t>(offsets::kDwordA0d38) != 0
+                    app->state.floatingWindow != 0
                         ? 0x40000u
                         : 0u);
                 break;
@@ -1938,7 +1939,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             mdl::UndoRecord& undo =
                 mdl::Mdl(model)->undoRings[0].slots[idx];
             undo.operation = 2;
-            undo.frame = app->raw<std::int32_t>(offsets::kDword980);
+            undo.frame = app->state.currentFrame;
             if (undo.bonePose != nullptr) {
                 free(undo.bonePose);
                 undo.bonePose = nullptr;
@@ -1996,7 +1997,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                     memcpy(stackRec, src, 0x54);
                     model = ActiveModel(app);
                     if (!Sub49D880(model, stackRec,
-                                   app->raw<std::int32_t>(offsets::kDword980),
+                                   app->state.currentFrame,
                                    1)) {
                         break;
                     }
@@ -2005,7 +2006,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             PanelPaint(app);
             SelectionReeval(app);
             model = ActiveModel(app);
-            Sub4B4260(model, app->raw<std::int32_t>(offsets::kDword980),
+            Sub4B4260(model, app->state.currentFrame,
                       app->PlaybackPhysicsMode());
             app->PhysicsResetPending() = 1;
             break;
@@ -2018,7 +2019,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 app->EnglishUI() != 0 ? "Please select accessary."
                                       : kMsgSelectAccJp,
                 cap,
-                app->raw<std::int32_t>(offsets::kDwordA0d38) != 0 ? 0x40000u
+                app->state.floatingWindow != 0 ? 0x40000u
                                                                   : 0u);
             break;
         }
@@ -2076,7 +2077,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // beyond belongs to the out-of-scope 282..287 cases.)
     // ------------------------------------------------------------------
     case 229: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
         app->SceneModified() = 1;
@@ -2105,7 +2106,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             for (std::uint16_t m = 0; static_cast<std::int32_t>(m) < morphCount;
                  ++m) {
                 model = ActiveModel(app);
-                Sub49EEE0(model, m, app->raw<std::int32_t>(offsets::kDword980));
+                Sub49EEE0(model, m, app->state.currentFrame);
                 model = ActiveModel(app);
                 const std::int32_t frameCount = *reinterpret_cast<std::int32_t*>(
                     model + kOff31B0);
@@ -2115,7 +2116,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             }
         }
         model = ActiveModel(app);
-        Sub4B4260(model, app->raw<std::int32_t>(offsets::kDword980),
+        Sub4B4260(model, app->state.currentFrame,
                   app->PlaybackPhysicsMode());
         PanelPaint(app);      // 0x414610
         SelectionReeval(app); // 0x430510
@@ -2134,7 +2135,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // repaint - the case ends here (0x48DACB..0x48DBFA).
     // ------------------------------------------------------------------
     case 230: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
         unsigned char* model = ActiveModel(app);
@@ -2163,10 +2164,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // PurgeMorphFrames(app, 1).
     // ------------------------------------------------------------------
     case 231: {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+        if (app->state.optflag0 != 0) {  // 0x2F8
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const int r = MessageBoxA(
             MainHwnd(app),
             app->EnglishUI() != 0
@@ -2216,17 +2217,20 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 }
             }
             Sub4134E0(app);                                // 0x4134E0
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {  // 0x2F8
+            if (app->state.optflag0 == 0) {  // 0x2F8
                 app->CameraAttachmentTransformSuppressed() = 0;
                 PostModelReload(app);                      // 0x41A650
             }
+            // 0x489F4F/0x489F56: the shared tail runs for BOTH branches.
+            PostViewRefresh(app);                          // 0x40D130
+            PostLanguageSweep2(app);                       // 0x40D070
         } else {
             // ---- disable undo ----
             app->raw<std::uint8_t>(0x9ED98) = 0;
             CheckMenuItem(GetMenu(MainHwnd(app)), 0xF7, MF_UNCHECKED);
             SendMessageA(GetDlgItem(MainHwnd(app), 0x217), 0xF1 /*BM_SETCHECK*/,
                          0, 0);
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
+            if (app->state.optflag0 != 0) {  // 0x2F8
                 PostViewRefresh(app);                      // 0x40D130
                 PostLanguageSweep2(app);                   // 0x40D070
                 break;
@@ -2255,7 +2259,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // Sub4337A0 (picture load) and the dirty flag.
     // ------------------------------------------------------------------
     case 232: {
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         SetCurrentDirectoryW(app->ExeDir());
         wchar_t path[0x100];
         swprintf_s(path, 0x100, kFmt529688, L"", L"");
@@ -2263,8 +2267,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = 0x4C;
         ofn.hwndOwner =
-            app->raw<std::int32_t>(offsets::kDwordA0d38) != 0
-                ? reinterpret_cast<HWND>(app->raw<void*>(offsets::kDwordA0d38))
+            app->state.floatingWindow != 0
+                ? reinterpret_cast<HWND>(app->state.floatingWindow)
                 : MainHwnd(app);
         if (app->EnglishUI() != 0) {
             ofn.lpstrFilter =
@@ -2344,21 +2348,21 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // flip the 0xEA / 0xEB / 0xEC menu checks (unchecked 0, checked 8).
     // ------------------------------------------------------------------
     case 234:  // 0xEA: no cap (1000.0 = flt_52FCE8)
-        app->raw<float>(offsets::kFloatFpslimit) = 1000.0f;
+        app->state.fpsLimit = 1000.0f;
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEB, MF_UNCHECKED);
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEC, MF_UNCHECKED);
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEA, MF_CHECKED);
         break;
 
     case 235:  // 0xEB: 30 fps (flt_52997C)
-        app->raw<float>(offsets::kFloatFpslimit) = 30.0f;
+        app->state.fpsLimit = 30.0f;
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEA, MF_UNCHECKED);
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEC, MF_UNCHECKED);
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEB, MF_CHECKED);
         break;
 
     case 236:  // 0xEC: 60 fps (flt_52A1E0)
-        app->raw<float>(offsets::kFloatFpslimit) = 60.0f;
+        app->state.fpsLimit = 60.0f;
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEB, MF_UNCHECKED);
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEA, MF_UNCHECKED);
         CheckMenuItem(GetMenu(MainHwnd(app)), 0xEC, MF_CHECKED);
@@ -2372,10 +2376,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     case 242: {
         app->raw<std::uint32_t>(0x4C) = 1;
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {  // 0x2F8
+        if (app->state.optflag0 == 0) {  // 0x2F8
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         DialogBoxParamA(
             static_cast<HINSTANCE>(app->raw<void*>(0)),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x291 : 0x26F),
@@ -2461,11 +2465,10 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
 
     case 241: {  // 0xF1: all 255 accessory frame tables
         app->raw<std::uint32_t>(0x44) = 1;
-        std::int32_t esi = 0;  // global record counter (per-table in the
-                               // original inner loop)
         for (int tbl = 0; tbl < 0xFF; ++tbl) {
             unsigned char* frames = reinterpret_cast<unsigned char*>(
                 app->AccessoryKeys(tbl));
+            std::int32_t esi = 0;  // iVar18 resets PER TABLE (0x4834E4)
             for (std::size_t off = 0; off < 0x927C0u; off += 0x3C) {
                 frames[off + 0x18] = 0;
                 const bool used =
@@ -2551,7 +2554,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     case 249: {
         app->raw<std::uint32_t>(kOff50) = 1;
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         const std::intptr_t r = DialogBoxParamA(
             static_cast<HINSTANCE>(app->raw<void*>(0)),
             MAKEINTRESOURCEA(app->EnglishUI() != 0 ? 0x293 : 0x273),

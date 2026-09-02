@@ -150,7 +150,7 @@ void DrawBandList(MMDApp* app, HDC panel, HDC icons, Key* keys,
     // ported yet, so guard until it lands.
     if (keys == nullptr)
         return;
-    const std::int32_t scroll = app->raw<std::int32_t>(offsets::kDword97C);
+    const std::int32_t scroll = app->state.timelineStartFrame;
     const std::int32_t limit = scroll + rowCount;
     if (static_cast<std::int32_t>(keys[0].frame) >= limit)
         return;
@@ -181,7 +181,7 @@ void PanelPaint(MMDApp* app) {
     const std::int32_t listW = sub->screenWidth;   // sub+0x1D4E4 "list width"
     const std::int32_t listH = sub->screenHeight;  // sub+0x1D4E8 "list height"
     HDC panel = app->PanelDC();
-    const std::int32_t scroll = app->raw<std::int32_t>(offsets::kDword97C);
+    const std::int32_t scroll = app->state.timelineStartFrame;
 
     // --- 1. restore list region from the panel bitmap (0x414638) ----------
     HDC dc = CreateCompatibleDC(nullptr);
@@ -197,7 +197,7 @@ void PanelPaint(MMDApp* app) {
         app->ThemeColor(UiThemeColor::PanelHeader));
     HGDIOBJ oldPen = SelectObject(panel, pen);
     HGDIOBJ oldBrush = SelectObject(panel, brush);
-    unsigned char* flags = app->at(offsets::kBufBuf656632) + 1;
+    unsigned char* flags = app->state.buf656632 + 1;
     for (int y = 30; y < kBandLastY; y += kBandH * 2, flags += 2) {
         if (*flags)
             Rectangle(panel, kListLeft, y, listW, y + kRowH);
@@ -214,7 +214,7 @@ void PanelPaint(MMDApp* app) {
         app->ThemeColor(UiThemeColor::PanelBody));
     SelectObject(panel, pen2);
     SelectObject(panel, brush2);
-    flags = app->at(offsets::kBufBuf656632);
+    flags = app->state.buf656632;
     for (int y = 16; y < kBandLastY; y += kBandH * 2, flags += 2) {
         if (*flags)
             Rectangle(panel, kListLeft, y, listW, y + kRowH);
@@ -235,7 +235,7 @@ void PanelPaint(MMDApp* app) {
         for (int idx = 0; idx < rows; ++idx) {
             const std::int32_t n = scroll + idx;
             COLORREF color;
-            if (n == app->raw<std::int32_t>(offsets::kDword980)) {
+            if (n == app->state.currentFrame) {
                 sprintf_s(sel, sizeof(sel), "%-4d", n);
                 DrawGlyph(app, sel, panel, 12, x - 3, 3,
                           app->raw<std::uint8_t>(offsets::kDwordCol656976),
@@ -326,7 +326,7 @@ void PanelPaint(MMDApp* app) {
         if (nMax < a) nMax = a;
         if (nMax < b) nMax = b;
         const std::uint32_t mid =
-            static_cast<std::uint32_t>(app->raw<std::int32_t>(offsets::kDword980)) +
+            static_cast<std::uint32_t>(app->state.currentFrame) +
             static_cast<std::uint32_t>(rows / 2);
         if (nMax < mid) nMax = mid;
         scrollInfo.nMax = static_cast<int>(nMax) - 1;
@@ -367,7 +367,7 @@ void PanelPaint(MMDApp* app) {
         InvalidateRect(static_cast<HWND>(app->Hwnd()), &rc, FALSE);
     };
 
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         // --- 6a. display mode: four fixed bands + accessory bands ----------
         const std::int32_t limit = scroll + rows;
         DrawBandList(app, panel, icons,

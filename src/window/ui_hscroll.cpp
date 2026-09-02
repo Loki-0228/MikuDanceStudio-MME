@@ -94,11 +94,13 @@ void HandleBoneSlider(MMDApp* app, HWND hwnd, int sliderId,
                       std::size_t lane, int echoId) {
     unsigned char* model = app->SelectedModel();
     const std::int32_t boneIdx = mdl::Mdl(model)->selectedMorphs[lane];
-    // gate: index > 0 (the original's extra ">= 0" check is implied by
-    // "> 0") and PMX physics byte model+0x38FE == 2
-    if (boneIdx <= 0 ||
-        *reinterpret_cast<std::uint8_t*>(model + offsets::kBytePhysicsMode) !=
-            2) {
+    // Gate (0x44AF11): proceed iff (physics == 2 || boneIdx > 0) &&
+    // boneIdx >= 0 - the original ORs the physics byte with a positive
+    // index; only a negative index unconditionally skips.
+    if (boneIdx < 0 ||
+        (boneIdx <= 0 &&
+         *reinterpret_cast<std::uint8_t*>(
+              model + offsets::kBytePhysicsMode) != 2)) {
         return;
     }
 
@@ -296,7 +298,7 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
             if (app->FloatingWindow() != nullptr ||
                 app->MouseX() <=
                     app->raw<std::int32_t>(offsets::kDwordHideRight)) {
-                --app->raw<std::int32_t>(offsets::kDword97C);
+                --app->state.timelineStartFrame;
             } else {
                 app->CameraDistance() = static_cast<float>(
                     static_cast<double>(app->CameraDistance()) + 1.0);
@@ -306,22 +308,22 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
             if (app->FloatingWindow() != nullptr ||
                 app->MouseX() <=
                     app->raw<std::int32_t>(offsets::kDwordHideRight)) {
-                ++app->raw<std::int32_t>(offsets::kDword97C);
+                ++app->state.timelineStartFrame;
             } else {
                 app->CameraDistance() = static_cast<float>(
                     static_cast<double>(app->CameraDistance()) - 1.0);
             }
             break;
         case 2:  // SB_PAGEUP
-            app->raw<std::int32_t>(offsets::kDword97C) -=
+            app->state.timelineStartFrame -=
                 app->raw<std::int32_t>(0x970);  // timeline SCROLLINFO nPage
             break;
         case 3:  // SB_PAGEDOWN
-            app->raw<std::int32_t>(offsets::kDword97C) +=
+            app->state.timelineStartFrame +=
                 app->raw<std::int32_t>(0x970);
             break;
         case 5:  // SB_THUMBPOSITION
-            app->raw<std::int32_t>(offsets::kDword97C) +=
+            app->state.timelineStartFrame +=
                 static_cast<std::int32_t>(HIWORD(wParam)) -
                 app->raw<std::int32_t>(0x974);  // timeline SCROLLINFO nMin
             break;
@@ -329,13 +331,13 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
             break;
         }
         // unsigned wrap (asm: cmp/jbe against 0xFFFEF920)
-        if (static_cast<std::uint32_t>(app->raw<std::int32_t>(offsets::kDword97C)) >
+        if (static_cast<std::uint32_t>(app->state.timelineStartFrame) >
             0xFFFEF920u) {
-            app->raw<std::int32_t>(offsets::kDword97C) = 0;
+            app->state.timelineStartFrame = 0;
         }
         PanelPaint(app);                                        // 0x414610
-        if (app->raw<std::uint8_t>(offsets::kByteA06CC) != 0) {
-            TimelineDrawTicks(app->raw<std::int32_t>(offsets::kDword97C),
+        if (app->state.waveEnabled != 0) {
+            TimelineDrawTicks(app->state.timelineStartFrame,
                               app->SidebarWidth());
             RECT rc;
             rc.left = 6;

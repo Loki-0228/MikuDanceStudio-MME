@@ -206,7 +206,7 @@ void Sub41A650(MMDApp* app) {
 
 void PostModelReload2(MMDApp* app) {  // 0x40D940
     const bool cameraMode =
-        app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0;
+        app->state.optflag0 != 0;
 
     const struct {
         int first;
@@ -255,14 +255,14 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     // paste and reverse-paste remain disabled.  A successful copy command
     // enables both controls and stores the record count at 0x9DA24.
     if (!cameraMode &&
-        app->raw<std::uint8_t>(offsets::kByteOptflag5) != 0 &&
+        app->state.optflag5 != 0 &&
         app->raw<std::int32_t>(offsets::kDword9DA24) == 0) {
         EnableWindow(MainControl(app, 497), FALSE);
         EnableWindow(MainControl(app, 498), FALSE);
     }
 
     HWND viewportWindow =
-        app->raw<HWND>(offsets::kDwordA0D38);
+        app->state.floatingWindow;
     if (viewportWindow == nullptr)
         viewportWindow = static_cast<HWND>(app->Hwnd());
 
@@ -298,7 +298,7 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
 }
 
 void Sub44D610(MMDApp* app) {  // 0x44D610
-    app->raw<std::uint8_t>(offsets::kByteOptflag0) = 0;
+    app->state.optflag0 = 0;
     HWND combo = MainControl(app, 433);
     SendMessageA(combo, CB_DELETESTRING, 5, 0);
     SendMessageA(combo, CB_DELETESTRING, 4, 0);
@@ -307,7 +307,7 @@ void Sub44D610(MMDApp* app) {  // 0x44D610
     if (app->raw<std::uint32_t>(0x9ED9C) == 2)
         app->raw<std::uint32_t>(0x9ED9C) = 0;
 
-    if (app->raw<std::uint8_t>(offsets::kByte9ED98) != 0) {
+    if (app->state.v9ed98 != 0) {
         app->ViewOffsetX() = 0.0f;
         app->ViewOffsetY() = 0.0f;
         ReloadModels(app);
@@ -325,7 +325,7 @@ void Sub44D610(MMDApp* app) {  // 0x44D610
     PostModelReload(app);
     SelectionReeval(app);
 
-    if (app->raw<std::uint8_t>(offsets::kByte9ED98) == 0) {
+    if (app->state.v9ed98 == 0) {
         D3DLIGHT9& light = app->SceneLight();
         D3DVECTOR& direction = *reinterpret_cast<D3DVECTOR*>(
             app->LightDirection());
@@ -356,7 +356,7 @@ void Sub44D780(MMDApp* app) {  // 0x44D780
     // Rebuild the camera-mode transform combo exactly as the original does.
     // Item four is the model-mode "all" entry; the three camera entries are
     // appended in its place.
-    app->raw<std::uint8_t>(offsets::kByteOptflag0) = 1;
+    app->state.optflag0 = 1;
     HWND combo = MainControl(app, 433);
     SendMessageA(combo, CB_DELETESTRING, 4, 0);
     if (app->EnglishUI() != 0) {
@@ -408,7 +408,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
     };
 
     if (selection == 0) {
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) == 0) {
+        if (app->state.optflag0 == 0) {
             SendMessageA(GetDlgItem(hwnd, 443), CB_RESETCONTENT, 0, 0);
             HWND frameCombo = GetDlgItem(hwnd, 434);
             SendMessageA(frameCombo, CB_RESETCONTENT, 0, 0);
@@ -444,7 +444,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
             SendMessageA(frameCombo, CB_SETCURSEL, 0, 0);
             SendMessageA(GetDlgItem(hwnd, 439), BM_SETCHECK, BST_UNCHECKED, 0);
             Sub44D780(app);
-            app->raw<std::uint8_t>(offsets::kByteOptflag0) = 1;
+            app->state.optflag0 = 1;
             PostModelReload2(app);
             HandleWindowSize(app);
             app->EditMode() = ViewportEditMode::None;
@@ -498,14 +498,14 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
             mdl::Mdl(model)->legIkXOffset = 1.0f;
         }
 
-        if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        if (app->state.optflag0 != 0) {
             Sub44D610(app);
-            app->raw<std::uint8_t>(offsets::kByteOptflag0) = 0;
+            app->state.optflag0 = 0;
             PostModelReload2(app);
             HandleWindowSize(app);
             InvalidateRect(hwnd, nullptr, FALSE);
         } else if (app->CameraParentModel() >= 0 &&
-                   app->raw<std::uint8_t>(offsets::kByte9ED98) != 0) {
+                   app->state.v9ed98 != 0) {
             const int oldSelection =
                 app->raw<std::int32_t>(offsets::kDwordA042C);
             int oldSlot = 0;
@@ -579,7 +579,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
                       : MFS_ENABLED);
     }
 
-    if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+    if (app->state.optflag0 != 0) {
         EnableWindow(GetDlgItem(hwnd, 400), FALSE);
         EnableWindow(GetDlgItem(hwnd, 401), FALSE);
     } else {

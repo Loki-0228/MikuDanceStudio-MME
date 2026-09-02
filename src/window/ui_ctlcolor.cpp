@@ -73,7 +73,7 @@ LRESULT HandleCtlColor(HWND control, HDC dc) {
     MMDApp* app = g_Block;
     (void)dc;
     const HWND ctrl = control;
-    const HWND main = reinterpret_cast<HWND>(app->raw<void*>(offsets::kPtrHwnd));  // 657080
+    const HWND main = reinterpret_cast<HWND>(app->state.hwnd);  // 657080
     const auto brushResult = [app](int index) {
         return static_cast<LRESULT>(
             reinterpret_cast<std::intptr_t>(app->UiBrush(index)));

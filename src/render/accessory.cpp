@@ -659,7 +659,7 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
     while (slot < 255 && app->AccessorySlot(slot) != nullptr)
         ++slot;
     if (slot >= 255) {
-        app->raw<std::int32_t>(offsets::kDwordBC) = 1;
+        app->state.bC = 1;
         char text[256];
         sprintf_s(text, "You cannot add accessory over %d", 255);
         MessageBoxA(static_cast<HWND>(app->Hwnd()), text, "load accessory",

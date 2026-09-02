@@ -82,7 +82,7 @@ void PollKey(MMDApp* app, std::int32_t& keyState, int virtualKey) {
         state = 2;
     keyState = state;
     if (state == 1 || state == 2)
-        app->raw<std::uint32_t>(offsets::kDwordA0D6C) = 1;
+        app->state.messageSeen = 1;
 }
 
 float DragScale(MMDApp* app) {
@@ -153,7 +153,7 @@ int ViewportToolAtPoint(MMDApp* app) {
     const RECT view = app->ViewportRect();
     HWND window = app->FloatingWindow();
     if (window == nullptr)
-        window = app->raw<HWND>(offsets::kPtrHwnd);
+        window = app->state.hwnd;
     RECT client{};
     GetClientRect(window, &client);
 
@@ -193,7 +193,7 @@ int ViewportToolAtPoint(MMDApp* app) {
             column = 2;
         if (column >= 0) {
             const bool modelPanel =
-                app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0;
+                app->state.optflag0 != 0;
             const std::uint32_t axisMode =
                 app->raw<std::uint32_t>(offsets::kDword32C);
             if (fy > upperTop && fy < upperBottom) {
@@ -262,7 +262,7 @@ int ViewportToolAtPoint(MMDApp* app) {
 HWND ViewportWindow(MMDApp* app) {
     HWND window = app->FloatingWindow();
     if (window == nullptr)
-        window = app->raw<HWND>(offsets::kPtrHwnd);
+        window = app->state.hwnd;
     return window;
 }
 
@@ -301,7 +301,7 @@ void RestoreViewportToolCursor(MMDApp* app, int operation) {
     const float scale = ViewportScale(app);
     POINT point{};
     if (operation == 1 || operation == 2) {
-        HWND mainWindow = app->raw<HWND>(offsets::kPtrHwnd);
+        HWND mainWindow = app->state.hwnd;
         RECT client{};
         GetClientRect(mainWindow, &client);
         point.x = client.right - (operation == 1 ? 48 : 18);
@@ -553,7 +553,7 @@ void MouseInteractionBegin(MMDApp* app) {
     // is null.
     HWND active = app->FloatingWindow();
     if (active == nullptr)
-        active = app->raw<HWND>(offsets::kPtrHwnd);
+        active = app->state.hwnd;
     char forceInput[2]{};
     const bool forced = GetEnvironmentVariableA(
         "MIKUDANCESTUDIO_AB_FORCE_INPUT", forceInput, sizeof(forceInput)) != 0;
@@ -576,7 +576,7 @@ void MouseInteractionBegin(MMDApp* app) {
             app->CameraDistance() -= static_cast<float>(dy) * 0.1f;
             ViewRefreshGate(app);
         } else if (viewMode == ViewportToolAction::CameraPan) {
-            if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0)
+            if (app->state.optflag0 != 0)
                 PanCameraPosition(app, dx, dy);
             else {
                 app->ViewOffsetX() -= static_cast<float>(dx) * DragScale(app);
@@ -685,7 +685,7 @@ void ModeCameraAdjust(MMDApp* app, int axis) {
     else if (SelB3(app)) scale = g_MouseScaleB;       // 0x52E9C0
     else scale = g_MouseScaleC;                       // 0x52D738
     if (target == 2 &&
-        app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        app->state.optflag0 != 0) {
         unsigned char* slot = RegSlotOf(app);
         if (slot != nullptr) {
             float& value = *reinterpret_cast<float*>(slot + kSlotOff[axis]);
@@ -741,7 +741,7 @@ void ModeAngleAdjust(MMDApp* app, int axis) {
     else if (SelB3(app)) scale = 0.0020000000949949026;
     else scale = g_Scale52E8C8;                       // 0x52E8C8
     if (target == 2 &&
-        app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {
+        app->state.optflag0 != 0) {
         unsigned char* slot = RegSlotOf(app);
         if (slot != nullptr) {
             float& value = *reinterpret_cast<float*>(slot + kSlotOff[axis]);

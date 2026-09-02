@@ -279,14 +279,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 0 / 1, then PostModelReload2 + HandleWindowSize + InvalidateRect.
     // ------------------------------------------------------------------
     case 453:
-        app->raw<std::uint8_t>(offsets::kByteOptflag1) = 0;
+        app->state.optflag1 = 0;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
         break;
 
     case 454:
-        app->raw<std::uint8_t>(offsets::kByteOptflag1) = 1;
+        app->state.optflag1 = 1;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -297,14 +297,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 0 / 1, same refresh chain.
     // ------------------------------------------------------------------
     case 469:
-        app->raw<std::uint8_t>(offsets::kByteOptflag2) = 0;
+        app->state.optflag2 = 0;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
         break;
 
     case 470:
-        app->raw<std::uint8_t>(offsets::kByteOptflag2) = 1;
+        app->state.optflag2 = 1;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -315,14 +315,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 0 / 1, same refresh chain.
     // ------------------------------------------------------------------
     case 488:
-        app->raw<std::uint8_t>(offsets::kByteOptflag3) = 0;
+        app->state.optflag3 = 0;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
         break;
 
     case 489:
-        app->raw<std::uint8_t>(offsets::kByteOptflag3) = 1;
+        app->state.optflag3 = 1;
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -335,7 +335,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     case 452: {
         ClearFrameSelection(app);
         RefreshRequest(-1);
-        Sub410560(app, app->raw<std::int32_t>(offsets::kDword980));
+        Sub410560(app, app->state.currentFrame);
         PanelPaint(app);
         SelectionReeval(app);
         break;
@@ -403,7 +403,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     case 468: {
         ClearFrameSelection(app);
         RefreshRequest(-2);
-        Sub411630(app, app->raw<std::int32_t>(offsets::kDword980));
+        Sub411630(app, app->state.currentFrame);
         PanelPaint(app);
         break;
     }
@@ -421,11 +421,11 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = 0x4C;
-        ofn.hwndOwner = app->raw<std::int32_t>(offsets::kDwordA0d38) != 0
+        ofn.hwndOwner = app->state.floatingWindow != 0
                             ? reinterpret_cast<HWND>(
-                                  app->raw<void*>(offsets::kDwordA0d38))
+                                  app->state.floatingWindow)
                             : hwnd;
-        if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+        if (app->state.englishUI != 0) {
             ofn.lpstrFilter = L"accessory files(*.x,*.vac)\0*.x;*.vac\0";
             ofn.lpstrTitle = L"open file";
         } else {
@@ -482,11 +482,11 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (found < 0) {
             break;
         }
-        app->raw<std::uint32_t>(offsets::kDwordBC) = 1;  // 0xBC
+        app->state.bC = 1;  // 0xBC
         mdl::AccessoryRecord* acc = app->AccessorySlot(found);
 
         char text[0x100];
-        if (app->raw<std::uint8_t>(offsets::kByteEnglish) != 0) {
+        if (app->state.englishUI != 0) {
             sprintf_s(text, 0x100,
                       "Trying to delete Accessory(%s).\n"
                       "All flame data about this accessory will be deleted "
@@ -497,8 +497,8 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                       acc->name);
         }
         const std::uint32_t flags =
-            app->raw<std::int32_t>(offsets::kDwordA0d38) != 0 ? 0x40001u : 1u;
-        const char* caption = app->raw<std::uint8_t>(offsets::kByteEnglish) != 0
+            app->state.floatingWindow != 0 ? 0x40001u : 1u;
+        const char* caption = app->state.englishUI != 0
                                   ? "delete accessory"
                                   : kCaptionDelAccessoryJp;
         if (MessageBoxA(hwnd, text, caption, flags) != IDOK) {
@@ -652,7 +652,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         }
         ClearFrameSelection(app);
         RefreshRequest(idx);
-        Sub413CB0(app, app->raw<std::int32_t>(offsets::kDword980), idx);
+        Sub413CB0(app, app->state.currentFrame, idx);
         PanelPaint(app);
         break;
     }

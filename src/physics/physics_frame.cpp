@@ -914,14 +914,14 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // (dbl_52C170 = 10.0).  The wind block above jumps to 0x46F7DB -
     // right past this setGravity - and physics-off (A0CC4<=0) skips both.
     if (count > 0 && !windRan) {
-        float dir[3] = {s.raw<float>(offsets::kFloatGravx),
-                        s.raw<float>(offsets::kFloatGravy),
-                        s.raw<float>(offsets::kFloatGravz)};
+        float dir[3] = {s.state.gravityX,
+                        s.state.gravityY,
+                        s.state.gravityZ};
         if (dir[0] == 0.0f && dir[1] == 0.0f && dir[2] == 0.0f)
             dir[1] = 0.1f;                                    // flt 0x529624
         D3dxVec3Normalize(dir, dir);                          // 0x46F741
         const double mag =
-            static_cast<double>(s.raw<float>(offsets::kFloatGravmag));
+            static_cast<double>(s.state.gravityMagnitude);
         world->setGravity(btVector3(
             static_cast<float>((mag * dir[0]) * 10.0),
             static_cast<float>((mag * dir[1]) * 10.0),
@@ -1062,10 +1062,14 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             DumpFrameEntryState(app, "physics_sync.json", false);
 
         // 0x46FDBB..0x46FDCA: the single-step path pushes var_14C8 as
-        // timeStep (fixedTimeStep stays flt_52EA00 = 1/60).
+        // timeStep (fixedTimeStep stays flt_52EA00 = 1/60).  In the
+        // moved && count==3 path (0x46FD7F) BOTH the main and extra
+        // steps push flt_52EA00 - var_14C8 is skipped entirely there.
+        const float mainDt =
+            (moved && count == 3) ? (1.0f / 60.0f) : mainTimeStep;
         if (stepCount < 16) stepLabels[stepCount] = "main";
         ++stepCount;
-        world->stepSimulation(mainTimeStep, 10, 1.0f / 60.0f);
+        world->stepSimulation(mainDt, 10, 1.0f / 60.0f);
         if (moved && count == 3)
             stepWorld("extra");                              // 0x46FD97
         if (captureStages)
