@@ -372,6 +372,9 @@ void Sub411070(MMDApp* app);                                 // VA 0x00411070
 void TraceSceneLightState(MMDApp* app, const char* stage);
 void Sub442EB0(MMDApp* app);                                 // VA 0x00442EB0
 void Sub4A4850(MMDApp* model, int r, int g, int b);          // VA 0x004A4850
+void Sub4220C0(MMDApp* app);                                 // VA 0x004220C0 (model_frame_seek.cpp)
+void Sub41EC10(MMDApp* app, const wchar_t* path);            // VA 0x0041EC10 (enhance_model_io.cpp)
+void Sub4076E0(void* locale);                              // VA 0x004076E0 (enhance_model_io.cpp)
 bool Sub49F190(unsigned char* model, const unsigned char rec[40], int frame);  // 0x0049F190
 void Sub49EEE0(unsigned char* model, int morph, int frame);          // 0x0049EEE0
 bool Sub49F8C0(unsigned char* model, int frame, unsigned char view, int cnt,

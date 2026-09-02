@@ -37,3 +37,7 @@ CMakeUserPresets.json
 # Local reverse-engineering tooling / crash-iteration artifacts
 .mcp.json
 crashdump/
+
+# Smoke-test artifacts
+_smoke_dump/
+_smoke_*.txt

@@ -161,6 +161,10 @@ add_library(mikudancestudio_core STATIC
     src/window/ui_palette.cpp
     src/window/command_file_menu.cpp
     src/window/command_view_menu.cpp
+    src/window/physics_model_dialog.cpp
+    src/window/model_edge_dialog.cpp
+    src/window/enhance_model_io.cpp
+    src/window/misc_dialogs.cpp
     src/window/command_control_400.cpp
     src/window/command_control_450.cpp
     src/window/command_control_500.cpp
