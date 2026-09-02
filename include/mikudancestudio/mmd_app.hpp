@@ -10,13 +10,12 @@
 //   addresses fields through fixed byte offsets (see offsets.hpp).
 //
 // Restoration strategy ("1:1"):
-//   * The class owns exactly one `unsigned char m_storage[0xA4530]` so the
-//     in-memory layout is identical to the original by construction.
-//   * Named accessors are thin reinterpret_casts onto verified offsets
-//     (decimal ground truth; hex computed by scripts/gen_offsets.py).
-//   * Unportable-yet fields are reached through raw<T>(offset) until their
-//     semantics are recovered; the goal is for raw<T>() to disappear as
-//     porting converges.
+//   * The class owns one MMDAppState (app_layout.hpp) whose layout is
+//     pinned to the original binary by static_asserts.
+//   * Named accessors return typed members; fields whose semantics are
+//     still being recovered are reached through raw<T>(offset) until
+//     they are promoted to members.  The goal is for raw<T>() to
+//     disappear entirely (scripts/promote.py tracks the remainder).
 // ===========================================================================
 #pragma once
 

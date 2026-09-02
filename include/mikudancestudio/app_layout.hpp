@@ -1,15 +1,18 @@
 // ===========================================================================
-// MikuDanceStudio - the application state object (GENERATED - do not edit)
+// MikuDanceStudio - the application state object
 // ===========================================================================
-// Regenerate: python scripts/gen_app_layout.py
-// Sources: build-x64/ab/offtab/app_fields.json (field DB),
-//          match_x64_offsets.ANCHORS (instruction-level x64 pins).
+// Hand-maintained.  Placeholders (v<off>/f<off>/pad*) are promoted to real
+// names as field semantics are recovered; keep each member's size/arch
+// split intact while doing so - the offset pins below are the safety net:
 //
-// Every field's x86 offset is pinned by static_assert against the x86
-// original (offsets.hpp ground truth).  x64 offsets are pinned only
-// for anchor/family entries; other members keep their spacing relative
-// to the last anchor.  Buffer widths are arch-invariant.  Unknown
-// regions are byte arrays - never guessed.
+//   * x86: every member's offset is pinned by static_assert against the
+//     original binary layout (the ground truth this port mirrors).
+//   * x64: anchor members are pinned; the rest keep their spacing relative
+//     to the last anchor, and promoted members additionally carry an
+//     xlate-sync assert so raw<T>(offset) callers keep landing correctly.
+//
+// Buffer widths are arch-invariant.  Unknown regions are byte arrays -
+// never guessed.  Promotion worklist: python scripts/promote.py ledger
 // ===========================================================================
 #pragma once
 
