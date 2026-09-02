@@ -43,7 +43,6 @@
 #include "mikudancestudio/bottom_panel_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 

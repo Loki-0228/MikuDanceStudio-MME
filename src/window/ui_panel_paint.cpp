@@ -97,7 +97,6 @@ constexpr int kSheetAltX = 11;    // 0x0B  SRCPAINT alternate column
 constexpr int kSheetOffX = 0;     //      SRCPAINT "disabled" column
 
 // --- row-hit map base (200 ints per band/row) ----------------------------
-constexpr std::size_t kMapAcc = 0x76904;    // accessory band maps (y=73+14k)
 
 // --- model object offsets (bone-edit mode) --------------------------------
 constexpr std::size_t kModelMorphCnt = 0x2D80;  // morph list count
@@ -180,7 +179,7 @@ void PanelPaint(MMDApp* app) {
         app->ThemeColor(UiThemeColor::PanelHeader));
     HGDIOBJ oldPen = SelectObject(panel, pen);
     HGDIOBJ oldBrush = SelectObject(panel, brush);
-    unsigned char* flags = app->state.buf656632 + 1;
+    unsigned char* flags = app->PanelRowFlags() + 1;
     for (int y = 30; y < kBandLastY; y += kBandH * 2, flags += 2) {
         if (*flags)
             Rectangle(panel, kListLeft, y, listW, y + kRowH);
@@ -197,7 +196,7 @@ void PanelPaint(MMDApp* app) {
         app->ThemeColor(UiThemeColor::PanelBody));
     SelectObject(panel, pen2);
     SelectObject(panel, brush2);
-    flags = app->state.buf656632;
+    flags = app->PanelRowFlags();
     for (int y = 16; y < kBandLastY; y += kBandH * 2, flags += 2) {
         if (*flags)
             Rectangle(panel, kListLeft, y, listW, y + kRowH);
@@ -279,7 +278,7 @@ void PanelPaint(MMDApp* app) {
         std::int32_t* const band1Map = app->state.rowHitBand1;
         std::int32_t* const band2Map = app->state.rowHitBand2;
         std::int32_t* const band3Map = app->state.rowHitBand3;
-        unsigned char* acc = app->at(kMapAcc);
+        unsigned char* acc = reinterpret_cast<unsigned char*>(app->state.rowHitAcc);
         for (int row = 0; row < 200; ++row) {
             band0Map[row] = -1;
             band1Map[row] = -1;
@@ -402,9 +401,8 @@ void PanelPaint(MMDApp* app) {
                         // region (the x86 blob reserves 200 rows of 200 ints
                         // here), and the x64 xlate carries element entries
                         // only for the first 800 ints.
-                        app->raw<std::int32_t>(
-                            kMapAcc + 4 * static_cast<unsigned>(band + 200 * row)) =
-                            record;
+                        app->state.rowHitAcc[static_cast<unsigned>(band) +
+                                             200u * row] = record;
                     }
                     const int next = static_cast<int>(key.next);
                     record = next;

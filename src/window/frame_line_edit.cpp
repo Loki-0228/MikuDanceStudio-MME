@@ -40,7 +40,6 @@
 #include <cstring>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
@@ -48,7 +47,7 @@
 namespace mikudancestudio {
 namespace {
 
-// App-field offsets (file-local; several already in offsets.hpp).
+// App-field offsets (file-local).
 
 unsigned char* ActiveModel(MMDApp* app) {
     return app->SelectedModel();

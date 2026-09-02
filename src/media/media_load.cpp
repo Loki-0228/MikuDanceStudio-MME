@@ -154,7 +154,6 @@ void CopyPathW(wchar_t* dest, const wchar_t* src) {
 // ---------------------------------------------------------------------------
 void LoadAviFile(MMDApp* app) {
     auto& s = *app;
-    unsigned char* st = app->storage();
     HWND hwnd = static_cast<HWND>(s.Hwnd());
 
     // release any previously open AVI 0x433269..0x4332B6
@@ -332,7 +331,6 @@ void LoadAviFile(MMDApp* app) {
 // ---------------------------------------------------------------------------
 void LoadBackgroundPicture(MMDApp* app) {
     auto& s = *app;
-    unsigned char* st = app->storage();
     HWND hwnd = static_cast<HWND>(s.Hwnd());
     wchar_t* stored = s.PictureBackgroundPath();
 

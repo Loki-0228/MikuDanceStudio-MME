@@ -148,7 +148,7 @@
 //     flt_52E900 = +PI/2, flt_52E8FC = -PI/2, flt_52B738 = PI,
 //     flt_52B9F0 = 4294967296.0 (fild negative fixup), dbl_52BA68 = 30.0,
 //     dbl_52BB20 = PI/180, flt_52BB28 = 100000.0.
-//   * App/model offsets follow offsets.hpp where named; the frame-table and
+//   * App/model members are named state fields; the frame-table and
 //     colour-row offsets used by this family are declared below as
 //     file-local constants.
 //
@@ -171,15 +171,14 @@
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
 namespace mikudancestudio {
 
 // ---------------------------------------------------------------------------
-// App-state offsets used by this family but not yet registered in
-// offsets.hpp (kept file-local until gen_offsets.py catches up).
+// App-state offsets used by this family, kept file-local (never
+// promoted to the shared layout headers).
 // ---------------------------------------------------------------------------
 
 // Model-field offsets (model = slot array app+0x780 [byte app+0x910]).

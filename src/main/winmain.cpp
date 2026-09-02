@@ -141,7 +141,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     if (app == nullptr)
         return 0;  // original would proceed on null only if new failed;
                    // ctor/defaults below are guarded by early exit.
-    std::memset(app->storage(), 0, MMDApp::kSize);
+    app->state = MMDAppState{};  // original: memset(p, 0, 0xA4530)
     app->InitDefaults();                                          // 0x40A730
 
     if (*lpCmdLine != '\0') {

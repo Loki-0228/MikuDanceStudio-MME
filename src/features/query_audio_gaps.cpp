@@ -23,8 +23,8 @@
 //     line 138, WaveStreamFeed line 192).
 //
 // Model-object offsets used by the 0x4A4A50/0x4A5690/0x4A6520 family
-// (literal hex where no offsets.hpp entry exists; effect_api.cpp and
-// key_registrars.cpp agree on the shared ones):
+// (literal hex; effect_api.cpp and key_registrars.cpp agree on the
+// shared ones):
 //   model+0x0000    HWND owner (message box parent)
 //   model+0x0040    (+64)  upper-body base quaternion          (0x4A6520)
 //   model+0x0050    (+80)  neck quaternion                     (0x4A6520)

@@ -88,7 +88,6 @@ namespace {
 
 // --- deferred: the accessory hit grid stays offset-addressed -------
 // (x64 xlate only carries its first 800 element entries)
-constexpr std::size_t kMapAcc = 0x76904;     // accessory map [row][band]
 
 // --- layout constants -------------------------------------------------------
 constexpr int kRowPitch = 13;     // 0x0D  hover row pitch
@@ -523,7 +522,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                     auto* gravityKeys = app->GravityKeys();
                     int* bandMaps = app->state.rowHitBand1;
                     int* accWalk =
-                        reinterpret_cast<int*>(app->at(kMapAcc) + 4);
+                        app->state.rowHitAcc + 1;
                     for (int row_i = 0; row_i < 200; ++row_i) {
                         const int b0 = bandMaps[-200];  // band0 map
                         if (b0 >= 0)
@@ -617,7 +616,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 }
                 // accessory grid rows x columns (0x4464A1..0x446534)
                 if (rowStart < rowEnd) {
-                    int* acc = reinterpret_cast<int*>(app->at(kMapAcc)) +
+                    int* acc = app->state.rowHitAcc +
                                (colStart + 200 * rowStart);
                     int rows = rowEnd - rowStart;
                     do {

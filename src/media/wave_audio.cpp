@@ -10,7 +10,7 @@
 // The WAV open/play chain behind menu 0xCE ("load WAV file").
 //
 // 0x025C audio/timeline context object (reached as app+0xCC,
-// offsets::kPtrSub025c; ctor 0x4C2450, DirectSound init 0x4C2470 =
+// app+0xCC (sub025c); ctor 0x4C2450, DirectSound init 0x4C2470 =
 // InitTimelineAudio in src/window/ui_init.cpp).  Field map recovered from
 // sub_4C2660/4C26F0/4C2760/4C2960/4C2F70:
 //   +0x00/+0x04  waveform max/min byte arrays (malloc'd, +0x250 entries;

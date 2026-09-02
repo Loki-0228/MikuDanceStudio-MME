@@ -110,7 +110,6 @@
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/scene_ownership.hpp"
 
@@ -295,7 +294,6 @@ const char kJpCannotOpenAcc[] =
 
 void LoadSceneV1(MMDApp* app, int fd) {
     auto* s = app;
-    namespace off = offsets;
 
     // ---- dispose models + tracks + accessories (0x45916D..0x459257) ------
     unsigned char** const slots = s->ModelSlots();

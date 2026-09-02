@@ -42,7 +42,6 @@
 #include <cstdlib>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -105,7 +104,6 @@ void FontSubInit(MMDApp* app, const wchar_t* directory) {
 void LoadSceneFile() {
 
     MMDApp* app = g_Block;
-    namespace off = offsets;
     char box[0x100];
 
     app->SceneModified() = 0;                                  // 0x458FE6

@@ -81,7 +81,6 @@
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -97,10 +96,11 @@ void HandleBoneSlider(MMDApp* app, HWND hwnd, int sliderId,
     // Gate (0x44AF11): proceed iff (physics == 2 || boneIdx > 0) &&
     // boneIdx >= 0 - the original ORs the physics byte with a positive
     // index; only a negative index unconditionally skips.
+    constexpr std::size_t kModelPhysicsMode = 0x38FE;  // model+14590
     if (boneIdx < 0 ||
         (boneIdx <= 0 &&
          *reinterpret_cast<std::uint8_t*>(
-              model + offsets::kBytePhysicsMode) != 2)) {
+              model + kModelPhysicsMode) != 2)) {
         return;
     }
 

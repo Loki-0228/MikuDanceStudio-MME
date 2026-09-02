@@ -103,7 +103,6 @@
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/scene_ownership.hpp"
 #include "mikudancestudio/model.hpp"
@@ -364,7 +363,6 @@ constexpr std::size_t kGlobalKeyCapacity = mdl::kTimelineKeyCapacity;
 
 void Sub450000(MMDApp* app, int fd) {
     auto* s = app;
-    namespace off = offsets;
 
     // ---- prologue: dispose models (0x450040..0x450093) -------------------
     unsigned char** const slots = s->ModelSlots();

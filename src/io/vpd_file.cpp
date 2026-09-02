@@ -50,7 +50,6 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 
 namespace mikudancestudio {
 namespace {

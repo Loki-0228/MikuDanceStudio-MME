@@ -13,7 +13,6 @@
 
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
@@ -214,7 +213,7 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
         int collapsed;
         int flagIndex;
     } cameraGroups[] = {
-        {446, 453, 454, offsets::kByteOptflag1},
+        {446, 453, 454, 1},
         {455, 469, 470, 2},
         {471, 488, 489, 3},
         {560, 566, 567, 6},

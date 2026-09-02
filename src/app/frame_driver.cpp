@@ -371,7 +371,6 @@ void FrameDriver(MMDApp* app) {
     if (requireLineEnabled && lineModeRequested != 0)
         DumpFrameEntryState(app, "frame_state_line.json");
     auto& s = *app;
-    namespace off = offsets;
 
     // 0x46B118..0x46B17B: one-second render-frame counter.  The original
     // snaps the two common cap-adjacent values to their nominal rates.

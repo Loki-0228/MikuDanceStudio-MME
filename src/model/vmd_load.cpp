@@ -76,7 +76,6 @@
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -143,9 +142,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     unsigned int scratch;    // k
     unsigned short word;     // v68
 
-    const HWND hwnd = reinterpret_cast<HWND>(
-        *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(&s) +
-                                  offsets::kPtrHwnd));
+    const HWND hwnd = s.state.hwnd;
     const bool english = s.state.englishUI != 0;
 
     const errno_t openErr =

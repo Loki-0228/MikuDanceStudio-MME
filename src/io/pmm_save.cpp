@@ -122,7 +122,6 @@
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -226,7 +225,6 @@ const char kJpCannotOpenText[] =      // 0x52BD80
 
 void SaveSceneFile(MMDApp* app) {
     auto* s = app;
-    namespace off = offsets;
 
     // The scratch CHAR buffer (stack "Text").  The original leaves this
     // uninitialized, so every 0x100 fixed-width path field it feeds carries

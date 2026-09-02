@@ -118,16 +118,15 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
 namespace mikudancestudio {
 
 // ---------------------------------------------------------------------------
-// No app-state raw<T>() accesses remain in this file.  The one file-local
-// offset below is a MODEL-object field (not app state), still reached
-// through model pointer arithmetic.
+// No offset-style app-state accesses remain in this file.  The one
+// file-local offset below is a MODEL-object field (not app state),
+// reached through model pointer arithmetic.
 // ---------------------------------------------------------------------------
 constexpr std::size_t kOff31B0 = 0x31B0;    // model frame-count field (0xE3)
 

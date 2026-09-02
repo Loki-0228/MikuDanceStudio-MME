@@ -31,7 +31,7 @@ namespace mikudancestudio {
 // ---------------------------------------------------------------------------
 // Shared layout note for 0x407660 / 0x407830 / 0x407470 (also 0x4076E0 and
 // 0x406BE0): `this` (ecx) is the 0x1D574 render/locale wrapper object kept
-// at app+0xA06C4 (offsets::kPtrSub1d574), restored as mikudancestudio::D3DRenderer.
+// at app+0xA06C4, restored as mikudancestudio::D3DRenderer.
 // Its first 120000 bytes are the 10000-entry resourcePool with a 12-byte
 // stride (entry i @ wrapper + 4 + 12*i):
 //     .heapBuffer  wchar_t* name (null slot terminates the table)

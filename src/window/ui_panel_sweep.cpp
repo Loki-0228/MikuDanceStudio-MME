@@ -147,7 +147,7 @@ void PostLanguageSweep(MMDApp* app) {
     BitBlt(panel, 0, 0, kListLeft, listH, dc, 0, 0, SRCCOPY);
     DeleteDC(dc);
 
-    std::memset(s.state.buf656632, 0, 0xC8);     // 200 flags
+    std::memset(s.PanelRowFlags(), 0, 0xC8);     // 200 flags
 
     if (s.state.optflag[0] == 0) {
         // === bone-edit mode: current model display tree (0x42F744) ========
@@ -165,7 +165,7 @@ void PostLanguageSweep(MMDApp* app) {
         if (flagTab[rootIdx] != 0) {
             DrawPanelText(app, rootName, panel, 12, 12, 17,
                           s.state.themeColors[34]);
-            s.state.buf656632[0] = 1;
+            s.PanelRowFlags()[0] = 1;
         } else {
             DrawPanelText(app, rootName, panel, 12, 12, 17,
                           s.state.themeColors[33]);
@@ -234,7 +234,7 @@ void PostLanguageSweep(MMDApp* app) {
                         if (((v72 == 1) & *reinterpret_cast<std::uint8_t*>(model + kModelSelFlag)) != 0) {
                             DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
                                           s.state.themeColors[34]);
-                            s.state.buf656632[v21] = 1;
+                            s.PanelRowFlags()[v21] = 1;
                         }
                         if (record->facialFrameCount != 0 && v72 == 2) {
                             // frame 2: highlight when any face flag (+44) is
@@ -247,7 +247,7 @@ void PostLanguageSweep(MMDApp* app) {
                             }
                             DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
                                           s.state.themeColors[34]);
-                            s.state.buf656632[v21] = 1;
+                            s.PanelRowFlags()[v21] = 1;
                         }
                     lab76:
                         // highlight when a rigid group of this frame is visible (0x42FD26)
@@ -261,7 +261,7 @@ void PostLanguageSweep(MMDApp* app) {
                                 }
                                 DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
                                               s.state.themeColors[34]);
-                                s.state.buf656632[v21] = 1;
+                                s.PanelRowFlags()[v21] = 1;
                             }
                         }
                     lab86:
@@ -326,7 +326,7 @@ void PostLanguageSweep(MMDApp* app) {
                                     if (flagTab[rigid.targetIndex] != 0) {
                                         DrawRecordName(app, rigid, panel, v58,
                                                        s.state.themeColors[34]);
-                                        s.state.buf656632[v21] = 1;
+                                        s.PanelRowFlags()[v21] = 1;
                                     } else {
                                         DrawRecordName(app, rigid, panel, v58,
                                                        s.state.themeColors[33]);
@@ -388,7 +388,7 @@ void PostLanguageSweep(MMDApp* app) {
                 DrawPanelText(app, face.name, panel,
                               12, 15, v47, s.state.themeColors[34]);
             }
-            s.state.buf656632[v21] = 1;
+            s.PanelRowFlags()[v21] = 1;
         lab122:
             *reinterpret_cast<std::int32_t*>(model + v86) =
                 -1 - face.targetIndex;
@@ -406,24 +406,24 @@ void PostLanguageSweep(MMDApp* app) {
         if (english) {
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Camera)) {
                 DrawHeader(app, panel, "camera", 17, s.state.themeColors[34]);
-                s.state.buf656632[0] = 1;
+                s.PanelRowFlags()[0] = 1;
             } else {
                 DrawHeader(app, panel, "camera", 17, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Light)) {
                 DrawHeader(app, panel, "light", 31, s.state.themeColors[34]);
-                s.state.buf656632[1] = 1;
+                s.PanelRowFlags()[1] = 1;
             } else {
                 DrawHeader(app, panel, "light", 31, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::SelfShadow)) {
-                s.state.buf656632[2] = 1;
+                s.PanelRowFlags()[2] = 1;
                 DrawHeader(app, panel, "s shadow", 45, s.state.themeColors[34]);
             } else {
                 DrawHeader(app, panel, "s shadow", 45, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Gravity)) {
-                s.state.buf656632[3] = 1;
+                s.PanelRowFlags()[3] = 1;
                 DrawHeader(app, panel, "gravity", 59, s.state.themeColors[34]);
             } else {
                 DrawHeader(app, panel, "gravity", 59, s.state.themeColors[33]);
@@ -431,24 +431,24 @@ void PostLanguageSweep(MMDApp* app) {
         } else {
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Camera)) {
                 DrawHeader(app, panel, kJpCamera, 17, s.state.themeColors[34]);
-                s.state.buf656632[0] = 1;
+                s.PanelRowFlags()[0] = 1;
             } else {
                 DrawHeader(app, panel, kJpCamera, 17, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Light)) {
                 DrawHeader(app, panel, kJpLight, 31, s.state.themeColors[34]);
-                s.state.buf656632[1] = 1;
+                s.PanelRowFlags()[1] = 1;
             } else {
                 DrawHeader(app, panel, kJpLight, 31, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::SelfShadow)) {
-                s.state.buf656632[2] = 1;
+                s.PanelRowFlags()[2] = 1;
                 DrawHeader(app, panel, kJpShadow, 45, s.state.themeColors[34]);
             } else {
                 DrawHeader(app, panel, kJpShadow, 45, s.state.themeColors[33]);
             }
             if (s.GlobalTrackSelected(GlobalTimelineTrack::Gravity)) {
-                s.state.buf656632[3] = 1;
+                s.PanelRowFlags()[3] = 1;
                 DrawHeader(app, panel, kJpGravity, 59, s.state.themeColors[34]);
             } else {
                 DrawHeader(app, panel, kJpGravity, 59, s.state.themeColors[33]);
@@ -474,7 +474,7 @@ void PostLanguageSweep(MMDApp* app) {
                         DrawPanelText(app,
                                       reinterpret_cast<const char*>(joint + kJointName),
                                       panel, 12, 12, v7, s.state.themeColors[34]);
-                        s.state.buf656632[4 + v5] = 1;
+                        s.PanelRowFlags()[4 + v5] = 1;
                     } else {
                         DrawPanelText(app,
                                       reinterpret_cast<const char*>(joint + kJointName),

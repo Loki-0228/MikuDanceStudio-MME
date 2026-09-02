@@ -67,7 +67,6 @@
 #include <cstdlib>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/dshow_recorder.hpp"
 
@@ -101,17 +100,6 @@ inline void FreeField(unsigned char* base, std::size_t off) {
     if (*p != nullptr) {
         std::free(*p);
         *p = nullptr;
-    }
-}
-
-// The one remaining offset-only teardown slot (0x350 / state.v350, a
-// 4-byte blob member with no x64-safe pointer accessor yet) still goes
-// through raw<T>() here; every other field below uses named accessors.
-inline void FreeAppField(MMDApp& app, std::size_t x86Offset) {
-    void*& field = app.raw<void*>(x86Offset);
-    if (field != nullptr) {
-        std::free(field);
-        field = nullptr;
     }
 }
 
@@ -558,9 +546,8 @@ void ShutdownCleanup(MMDApp* app) {
     s.AccessoryClipboard() = nullptr;
     std::free(s.BoneClipboard());                               // 0x46312A
     s.BoneClipboard() = nullptr;
-    // 0x350 is the last blob-only clipboard slot (state.v350): no named
-    // accessor exists, so the raw-offset helper stays for this one call.
-    FreeAppField(s, offsets::kDword350);                        // 0x463143
+    std::free(s.V350Clipboard());                               // 0x463143
+    s.V350Clipboard() = nullptr;
 
     // ---- 13: selection-record buffers -------------------------------------
     FreeTimelineSelectionRecords(s, TimelineSelectionBand::Accessory);   // 0x46315C

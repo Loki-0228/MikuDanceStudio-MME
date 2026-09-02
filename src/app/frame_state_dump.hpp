@@ -34,14 +34,21 @@ inline void DumpFrameEntryState(MMDApp* app,
     if (fopen_s(&stream, path, "wb") != 0 || stream == nullptr)
         return;
 
-    const auto u8 = [app](std::size_t offset) {
-        return static_cast<unsigned>(app->raw<std::uint8_t>(offset));
+    // Diagnostic-only legacy-offset dump: JSON keys stay frozen to the
+    // original x86 offsets.  Reads are arch-native now (the xlate table is
+    // gone) - on x86 they hit the pinned members; on x64 the numbered keys
+    // report that architecture's blob at the same address, exactly as the
+    // old identity fallback did for unmapped offsets.
+    const unsigned char* blob =
+        reinterpret_cast<const unsigned char*>(&app->state);
+    const auto u8 = [blob](std::size_t offset) {
+        return static_cast<unsigned>(blob[offset]);
     };
-    const auto i32 = [app](std::size_t offset) {
-        return app->raw<std::int32_t>(offset);
+    const auto i32 = [blob](std::size_t offset) {
+        return *reinterpret_cast<const std::int32_t*>(blob + offset);
     };
-    const auto bits = [app](std::size_t offset) {
-        return app->raw<std::uint32_t>(offset);
+    const auto bits = [blob](std::size_t offset) {
+        return *reinterpret_cast<const std::uint32_t*>(blob + offset);
     };
     const std::size_t byteOffsets[] = {
         0xC8, 0x2F8, 0x2F9, 0x2FA, 0x2FB, 0x2FC, 0x2FD, 0x2FE,

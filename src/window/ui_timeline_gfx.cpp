@@ -9,7 +9,7 @@
 //
 // Original signature: BOOL __thiscall sub_4C2A00(HDC* this, int x, char* ho)
 //   ECX (this) = app+0xCC  -> the 0x25C wave/timeline subsystem object
-//                (offsets::kPtrSub025c; ctor 0x4C2450 zeroes +0x00/+0x04).
+//                (app+0xCC sub025c; ctor 0x4C2450 zeroes +0x00/+0x04).
 //   x  = frame offset - callers pass app+2428 (current frame, kDword97C).
 //   ho = timeline strip width - callers pass app+657096 (sidebar width,
 //        kDwordSidebar).  The project placeholder signature types this
@@ -47,14 +47,13 @@
 #include <cstdint>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
 
 void TimelineDrawTicks(int frameOffset, int width) {
     // param mapping (original __thiscall sub_4C2A00(HDC* this, int x, char* ho)):
-    //   this -> g_Block->raw<void*>(0xCC)  (Sub025C wave/timeline subsystem)
+    //   this -> g_Block->state.sub025c    (Sub025C wave/timeline subsystem)
     //   x    -> frameOffset (current frame)
     //   ho   -> strip width (sidebar width)
     MMDApp* app = g_Block;
@@ -143,7 +142,7 @@ void TimelineDrawTicks(int frameOffset, int width) {
 // =========================================================================//
 void SetFrameNormalized(int frame) {
     // param mapping (original __thiscall sub_4C2B80(_DWORD* this, int a2)):
-    //   this -> g_Block->raw<void*>(0xCC)  (Sub025C wave/timeline subsystem)
+    //   this -> g_Block->state.sub025c    (Sub025C wave/timeline subsystem)
     //   a2   -> frame (position in 1/100 units)
     MMDApp* app = g_Block;
     WaveAudioContext* audio = app->Audio();

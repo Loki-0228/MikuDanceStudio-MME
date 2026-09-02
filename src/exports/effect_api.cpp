@@ -55,7 +55,6 @@
 
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/model.hpp"
 
 // VA 0x00407910 - wide -> Shift-JIS; real body in src/window/ui_dropfiles.cpp.

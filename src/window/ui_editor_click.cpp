@@ -40,7 +40,6 @@
 #include <new>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
@@ -258,7 +257,7 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
     app->SelectionBoxAnchorY() = y - 0x91;
     if (app->TimelineSelectionChanged() == 0)
         goto L_repaint;                               // loc_44A437
-    memset(app->at(0xA03EC), 0, 0x40);        // 656364 (0xA03EC)
+    memset(app->TimelineSelectionRegion(), 0, 0x40);        // 656364 (0xA03EC)
     if (app->state.optflag[0] != 0) {   // 760 (0x2F8)
         // ---- display-mode counts (0x448F2A-0x44902F) ---------------------
         // count set flags in the four record arrays (app+0x374 rigid
@@ -508,16 +507,16 @@ TimelineSelectionRecord* g_timelineSelectionRecords[8] = {};
 std::int64_t g_tlCanary[8];
 bool g_tlCanaryArmed = false;
 void TimelineCanaryArm(MMDApp* app) {
-    std::memcpy(g_tlCanary, app->at(0xA03EC), 0x40);
+    std::memcpy(g_tlCanary, app->TimelineSelectionRegion(), 0x40);
     g_tlCanaryArmed = true;
 }
 void TimelineCanaryCheck(MMDApp* app) {
     if (!g_tlCanaryArmed)
         return;
-    if (std::memcmp(g_tlCanary, app->at(0xA03EC), 0x40) != 0) {
+    if (std::memcmp(g_tlCanary, app->TimelineSelectionRegion(), 0x40) != 0) {
         for (int i = 0; i < 8; ++i) {
             const std::int64_t now =
-                reinterpret_cast<const std::int64_t*>(app->at(0xA03EC))[i];
+                reinterpret_cast<const std::int64_t*>(app->TimelineSelectionRegion())[i];
             if (now != g_tlCanary[i])
                 std::fprintf(stderr,
                              "CANARY slot[%d] (app+0x%zX): %016llX -> %016llX"

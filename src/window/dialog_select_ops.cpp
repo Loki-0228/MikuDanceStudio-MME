@@ -40,7 +40,6 @@
 
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
@@ -58,7 +57,7 @@ void Sub43D2E0(MMDApp* app, HWND hDlg, int keepSelection); // VA 0x0043D2E0
 
 namespace {
 
-// ---- app offsets not yet registered in offsets.hpp --------------------------
+// ---- app offsets, kept file-local -------------------------------------------
 
 // ---- model-object offsets (on the unsigned char* model pointer) -------------
 constexpr std::size_t kMdlVertSel = 0x26E0;  // vertex select-buffer ptr (stride 0x168)

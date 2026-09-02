@@ -67,7 +67,7 @@ void MMDApp::InitDefaults() {
         state.lightD[i] = 127;
     }
 
-    state.v350 = 0;
+    state.v350Clipboard = nullptr;
     for (std::int32_t& v : state.v9da24)
         v = 0;
     s.CameraKeys() = nullptr;

@@ -51,7 +51,6 @@
 #include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 
 namespace mikudancestudio {
 namespace {

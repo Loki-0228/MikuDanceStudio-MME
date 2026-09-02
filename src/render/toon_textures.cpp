@@ -98,9 +98,11 @@ bool InitToonTextures(MMDApp* app) {
                     std::fprintf(fp, "app=%p\n", app);
                     for (int row = 654700; row < 655000; row += 16) {
                         std::fprintf(fp, "%06X:", row);
+                        const unsigned char* blob = reinterpret_cast<
+                            const unsigned char*>(&app->state);
                         for (int b = 0; b < 16; ++b)
                             std::fprintf(fp, " %02X",
-                                app->storage()[row + b]);
+                                blob[row + b]);
                         std::fprintf(fp, "\n");
                     }
                     std::fclose(fp);

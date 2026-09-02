@@ -835,7 +835,6 @@ void ModePhysicsBody(MMDApp* app, int) {
 //   else:   origin = (0, 0, 0)
 // ---------------------------------------------------------------------------
 void Sub41ACD0(MMDApp* app, int mode) {
-    unsigned char* st = app->storage();
     auto& api = d3dx::Get();
     if (!(api.Load() && api.rotX && api.rotY && api.rotZ && api.multiply &&
           api.translation))

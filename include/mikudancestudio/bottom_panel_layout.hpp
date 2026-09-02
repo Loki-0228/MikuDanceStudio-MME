@@ -3,7 +3,6 @@
 #include <cstdint>
 
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 
 namespace mikudancestudio {
 

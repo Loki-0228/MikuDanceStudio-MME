@@ -81,7 +81,6 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     (void)nShowCmd;
     HINSTANCE hInstance = static_cast<HINSTANCE>(hInstanceIn);
     auto& s = *app;
-    namespace off = offsets;
 
     // ---- phase 1: subsystem allocations (ctor chains are no-ops) -------
     // 0x47A5F2: allocation size follows the restored D3DRenderer layout

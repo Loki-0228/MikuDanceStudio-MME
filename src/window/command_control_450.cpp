@@ -95,9 +95,9 @@
 //     float stores).  Constants: flt_52964C = -0.5f, flt_5295E8 = -1.0f,
 //     flt_52960C = 0.5f, flt_52C9A4 = 0.6f, flt_52A1E4 = 10.0f,
 //     flt_52A1E8 = -45.0f, dbl_52B9E8 = 256.0, dbl_52B8E0 = 100.0.
-//   * App-state offsets follow offsets.hpp where named; the accessory /
-//     model field offsets used by this family are not yet in offsets.hpp and
-//     are declared below as file-local constants.
+//   * App-state members are named state fields; the accessory / model
+//     field offsets used by this family are declared below as
+//     file-local constants.
 //
 // Reference: ../translated/MikuMikuDance/fcn_0047e8a0.cpp
 //   (the translated file covers only cases 200..0xDC; this port follows the
@@ -116,7 +116,6 @@
 
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/offsets.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
@@ -889,10 +888,8 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         EnableWindow(GetDlgItem(hwnd, 0x1F1), TRUE);
         EnableWindow(GetDlgItem(hwnd, 0x1F2), TRUE);
         app->state.v9da24[0] = count;
-        // app+0x350 = state.v350: 4-byte blob slot holding the x86
-        // bone-copy record array pointer (0x350..0x380 clipboard/track
-        // pointer cluster - deferred to the final layout flip).
-        auto& records = reinterpret_cast<BoneCopyRecord*&>(app->state.v350);
+        auto& records =
+            reinterpret_cast<BoneCopyRecord*&>(app->V350Clipboard());
         if (records != nullptr) {
             free(records);
             records = nullptr;
@@ -982,7 +979,8 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             pasteBlob);
         memset(pasteBlob, 0, static_cast<std::size_t>(count) * 0x24u);
 
-        auto& records = reinterpret_cast<BoneCopyRecord*&>(app->state.v350);
+        auto& records =
+            reinterpret_cast<BoneCopyRecord*&>(app->V350Clipboard());
         for (std::int32_t j = 0; j < count; ++j) {
             model = ActiveModel(app);
             modelRecord = mikudancestudio::mdl::Mdl(model);
@@ -1077,7 +1075,8 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             pasteBlob);
         memset(pasteBlob, 0, static_cast<std::size_t>(count) * 0x24u);
 
-        auto& records = reinterpret_cast<BoneCopyRecord*&>(app->state.v350);
+        auto& records =
+            reinterpret_cast<BoneCopyRecord*&>(app->V350Clipboard());
         for (std::int32_t j = 0; j < count; ++j) {
             model = ActiveModel(app);
             modelRecord = mikudancestudio::mdl::Mdl(model);
