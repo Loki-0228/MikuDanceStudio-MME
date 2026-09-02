@@ -636,7 +636,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
     if (!playback) {
         float targetV0 = 0.470705f;
         float targetV1 = 0.52734601f;
-        const int target = app->raw<std::int32_t>(offsets::kDword9ED9C);
+        const int target = app->state.v9ed9c;
         if (target == 1) {
             targetV0 = 0.52929902f;
             targetV1 = 0.58594f;

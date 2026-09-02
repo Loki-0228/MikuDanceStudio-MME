@@ -212,16 +212,16 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
         int first;
         int last;
         int collapsed;
-        std::size_t flag;
+        int flagIndex;
     } cameraGroups[] = {
         {446, 453, 454, offsets::kByteOptflag1},
-        {455, 469, 470, offsets::kByteOptflag2},
-        {471, 488, 489, offsets::kByteOptflag3},
-        {560, 566, 567, offsets::kByteOptflag6},
+        {455, 469, 470, 2},
+        {471, 488, 489, 3},
+        {560, 566, 567, 6},
     };
     for (const auto& group : cameraGroups) {
         const bool expanded = cameraMode &&
-            app->raw<std::uint8_t>(group.flag) != 0;
+            app->state.optflag[group.flagIndex] != 0;
         ShowControlRange(app, group.first, group.last, expanded);
         ShowWindow(MainControl(app, group.collapsed),
                    cameraMode && !expanded ? SW_SHOWNORMAL : SW_HIDE);
@@ -238,14 +238,14 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
         int first;
         int last;
         int collapsed;
-        std::size_t flag;
+        int flagIndex;
     } modelGroups[] = {
-        {490, 502, 503, offsets::kByteOptflag4},
-        {504, 528, 529, offsets::kByteOptflag5},
+        {490, 502, 503, 4},
+        {504, 528, 529, 5},
     };
     for (const auto& group : modelGroups) {
         const bool expanded = !cameraMode &&
-            app->raw<std::uint8_t>(group.flag) != 0;
+            app->state.optflag[group.flagIndex] != 0;
         ShowControlRange(app, group.first, group.last, expanded);
         ShowWindow(MainControl(app, group.collapsed),
                    !cameraMode && !expanded ? SW_SHOWNORMAL : SW_HIDE);
@@ -304,8 +304,8 @@ void Sub44D610(MMDApp* app) {  // 0x44D610
     SendMessageA(combo, CB_DELETESTRING, 4, 0);
     SendMessageA(combo, CB_SETCURSEL, 3, 0);
 
-    if (app->raw<std::uint32_t>(0x9ED9C) == 2)
-        app->raw<std::uint32_t>(0x9ED9C) = 0;
+    if (app->state.v9ed9c == 2)
+        app->state.v9ed9c = 0;
 
     if (app->state.v9ed98 != 0) {
         app->ViewOffsetX() = 0.0f;
@@ -456,7 +456,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
                            sizeof(kModeCommands) / sizeof(kModeCommands[0]),
                            MF_GRAYED);
         EnableMenuItem(menu, 250,
-                       app->raw<std::int32_t>(offsets::kDword9DA44) != 0
+                       app->ClipboardCounts().accessories != 0
                            ? MF_ENABLED
                            : MF_GRAYED);
         for (int id = 224; id <= 231; ++id)
@@ -468,11 +468,11 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
 
         EnableWindow(GetDlgItem(hwnd, 424), FALSE);
         const bool canRegister =
-            app->raw<std::int32_t>(offsets::kDword9DA44) != 0 ||
-            app->raw<std::int32_t>(offsets::kDword9DA38) != 0 ||
-            app->raw<std::int32_t>(offsets::kDword9DA3C) != 0 ||
-            app->raw<std::int32_t>(offsets::kDword9DA34) != 0 ||
-            app->raw<std::int32_t>(offsets::kDword9DA40) != 0;
+            app->ClipboardCounts().accessories != 0 ||
+            app->ClipboardCounts().lights != 0 ||
+            app->ClipboardCounts().shadows != 0 ||
+            app->ClipboardCounts().cameras != 0 ||
+            app->ClipboardCounts().gravity != 0;
         EnableWindow(GetDlgItem(hwnd, 421), canRegister ? TRUE : FALSE);
         EnableWindow(GetDlgItem(hwnd, 422), FALSE);
         SendMessageA(GetDlgItem(hwnd, 440), BM_SETCHECK, BST_UNCHECKED, 0);
@@ -484,8 +484,8 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
         }
         SetPhysicsMenuState(hwnd, MFS_DISABLED);
     } else {
-        if (app->raw<std::int32_t>(offsets::kDword9ED9C) == 2)
-            app->raw<std::int32_t>(offsets::kDword9ED9C) = 0;
+        if (app->state.v9ed9c == 2)
+            app->state.v9ed9c = 0;
 
         const int selectedSlot = FindModelSlotByComboId(app, selection);
         if (selectedSlot >= 0) {
@@ -537,7 +537,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
                            sizeof(kModeCommands) / sizeof(kModeCommands[0]),
                            MF_ENABLED);
         EnableMenuItem(menu, 250,
-                       app->raw<std::int32_t>(offsets::kDword9DA28) != 0
+                       app->ClipboardCounts().bones != 0
                            ? MF_ENABLED
                            : MF_GRAYED);
         for (int id = 224; id <= 231; ++id)
@@ -550,10 +550,10 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
         EnableWindow(GetDlgItem(hwnd, 424), TRUE);
         EnableWindow(GetDlgItem(hwnd, 421), FALSE);
         const bool hasMainSelection =
-            app->raw<std::int32_t>(offsets::kDword9DA28) != 0;
+            app->ClipboardCounts().bones != 0;
         const bool hasOtherSelection =
-            app->raw<std::int32_t>(offsets::kDword9DA2C) != 0 ||
-            app->raw<std::int32_t>(offsets::kDword9DA30) != 0;
+            app->ClipboardCounts().morphs != 0 ||
+            app->ClipboardCounts().displays != 0;
         EnableWindow(GetDlgItem(hwnd, 421),
                      (hasOtherSelection || hasMainSelection) ? TRUE : FALSE);
         EnableWindow(GetDlgItem(hwnd, 422),

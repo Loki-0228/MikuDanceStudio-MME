@@ -134,10 +134,10 @@ void GrowRenderTarget(MMDApp* app, std::int32_t w, std::int32_t h) {
     D3DRenderer* r = s.Renderer();
     if (r == nullptr)
         return;
-    s.raw<std::int32_t>(offsets::kDwordA02ac) = r->screenWidth;
-    s.raw<std::int32_t>(offsets::kDwordA02b0) = r->screenHeight;
-    if (w > s.raw<std::int32_t>(offsets::kDwordA02ac) ||
-        h > s.raw<std::int32_t>(offsets::kDwordA02b0)) {
+    s.state.recRTW = r->screenWidth;
+    s.state.recRTH = r->screenHeight;
+    if (w > s.state.recRTW ||
+        h > s.state.recRTH) {
         r->presentParameters.BackBufferWidth = w;
         r->presentParameters.BackBufferHeight = h;
         r->screenWidth = w;
@@ -193,7 +193,7 @@ void RecordStartTail(MMDApp* app) {
             fclose(tf);
         }
     }
-    s.raw<std::int32_t>(offsets::kDwordF9eddc) =
+    s.state.f9eddc =
         s.state.currentFrame;               // 0x45EC35
     if (s.AviRecordStartFrame() !=
         s.state.currentFrame) {
@@ -202,7 +202,7 @@ void RecordStartTail(MMDApp* app) {
         Sub432FA0(app);                                        // 0x432FA0
         PostViewRefresh(app);                                  // 0x40D130
     }
-    s.raw<std::uint8_t>(offsets::kByte9EDD8) = 1;              // 0x45EC52
+    s.state.v9edd8 = 1;              // 0x45EC52
     timeBeginPeriod(1);                                        // 0x45EC58
     Sub401BD0(app);                                            // 0x401BD0
     if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
@@ -373,11 +373,11 @@ void Sub4629D0(MMDApp* app) {
             s.SeparateWindowSidebarWidth() = s.SidebarWidth();
         } else {
             SaveFlagSubsystem(app);                              // 0x461FA0
-            s.raw<std::uint8_t>(offsets::kByteA02A8) = 1;
+            s.state.a02A8 = 1;
         }
         GetWindowPlacement(main,
-                           &s.raw<WINDOWPLACEMENT>(offsets::kDwordA027C));
-        s.raw<HMENU>(offsets::kDwordA0278) = GetMenu(main);
+                           &s.SavedPlacement());
+        s.state.savedMenu = GetMenu(main);
         SetWindowLongA(main, GWL_STYLE, 0x90000000);             // 0x462A44
         SetWindowPos(main, reinterpret_cast<HWND>(static_cast<LONG_PTR>(
                                0xFFFFFFFE /*HWND_NOTOPMOST*/)),
@@ -396,23 +396,23 @@ void Sub4629D0(MMDApp* app) {
             r->presentParameters.BackBufferHeight = rc.bottom;
             r->presentParameters.Windowed = 0;
         }
-        s.raw<std::uint8_t>(offsets::kByteA02B4) = 1;
+        s.state.a02B4 = 1;
         return;
     }
 
     // Restore (0x462AF5..0x462BDF).
-    if (s.raw<std::uint8_t>(offsets::kByteA02A8) != 0) {
-        s.raw<std::uint8_t>(offsets::kByteA02A8) = 0;
+    if (s.state.a02A8 != 0) {
+        s.state.a02A8 = 0;
         InitFlagSubsystem(app);                                  // 0x461E00
     }
     s.SidebarWidth() = s.SeparateWindowSidebarWidth();
     SetWindowLongA(main, GWL_STYLE, 0x12CF0000);                 // 0x462B44
     SetWindowPlacement(main,
-                       &s.raw<WINDOWPLACEMENT>(offsets::kDwordA027C));
+                       &s.SavedPlacement());
     SetWindowPos(main, reinterpret_cast<HWND>(static_cast<LONG_PTR>(
                            0xFFFFFFFE /*HWND_NOTOPMOST*/)),
                  0, 0, 0, 0, 0x43 /*NOSIZE|NOMOVE|SHOWWINDOW*/); // 0x462B71
-    SetMenu(main, s.raw<HMENU>(offsets::kDwordA0278));
+    SetMenu(main, s.state.savedMenu);
     for (int id = 400; id <= 0x213; ++id) {                      // 0x462BA2
         ShowWindow(GetDlgItem(main, id), SW_SHOW);
     }
@@ -429,8 +429,8 @@ void Sub4629D0(MMDApp* app) {
         r->presentParameters.Windowed = 1;
         r->presentParameters.FullScreen_RefreshRateInHz = 0;
     }
-    s.raw<std::uint8_t>(offsets::kByteA02B5) = 0;
-    s.raw<std::uint8_t>(offsets::kByteA02B4) = 0;
+    s.state.a02B5 = 0;
+    s.state.a02B4 = 0;
 }
 
 }  // namespace mikudancestudio

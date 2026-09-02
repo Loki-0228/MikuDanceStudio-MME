@@ -180,7 +180,7 @@ void MMDApp::InitDefaults() {
     state.activeRenderPass = 0;
     state.a0270 = 0;
     s.FullscreenMode() = 0;
-    state.a027COrBuf_bytes = 44;
+    s.SavedPlacement().length = sizeof(WINDOWPLACEMENT);  // 44
     state.a02A8 = 0;
     state.a02B5 = 0;
     state.a02B4 = 0;

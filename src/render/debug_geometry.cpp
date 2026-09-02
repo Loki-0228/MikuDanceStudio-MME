@@ -255,7 +255,7 @@ void Sub04B0Init(void* object) {
 }
 
 bool InitAxisMesh(MMDApp* app) {
-    void* axis = app->raw<void*>(offsets::kPtrSub04b0);
+    void* axis = app->state.sub04b0OrUint32;
     ReleaseCom(At<void*>(axis, 0));
     At<void*>(axis, 0) = nullptr;
 
@@ -329,9 +329,11 @@ void DrawPhysicsCollisionDebug(PhysicsScene* scene) {
 void DrawAccessoryDebug(MMDApp* app) {
     auto& api = d3dx::Get();
     PhysicsScene* scene = app->Physics();   // +650672 (kPtrSub048)
-    auto* records = app->raw<unsigned char*>(0xA0B7C);
-    auto* links = app->raw<unsigned char*>(0xA0C30);
-    const bool dialogSelection = app->raw<std::uint8_t>(0x9EDB4) != 0;
+    unsigned char* records =
+        static_cast<unsigned char*>(app->state.cameraRecordArray);
+    unsigned char* links =
+        static_cast<unsigned char*>(app->state.boneRecordArray);
+    const bool dialogSelection = app->state.a9edb4 != 0;
     for (int index = 0; index < 10000; ++index) {
         unsigned char* record = records + 172 * index;
         if (At<std::int32_t>(record, 84) >= 0) {
@@ -349,14 +351,14 @@ void DrawAccessoryDebug(MMDApp* app) {
 
             bool selected = false;
             if (dialogSelection) {
-                const int linkIndex = app->raw<std::int32_t>(0xA0CC0);
+                const int linkIndex = app->state.sel8c;
                 if (linkIndex >= 0) {
                     unsigned char* link = links + 140 * linkIndex;
                     selected = index == At<std::int32_t>(link, 28) ||
                                index == At<std::int32_t>(link, 32);
                 }
             } else {
-                selected = index == app->raw<std::int32_t>(0xA0C2C);
+                selected = index == app->state.selAcc;
             }
             if (selected)
                 SetDebugColor(scene, 255, dialogSelection ? 75 : 0,
@@ -397,11 +399,11 @@ void DrawAccessoryDebug(MMDApp* app) {
         api.multiply(&world, &world, &oldWorld);
         device->SetTransform(D3DTS_WORLD,
                              reinterpret_cast<const D3DMATRIX*>(&world));
-        if (dialogSelection && index == app->raw<std::int32_t>(0xA0CC0)) {
+        if (dialogSelection && index == app->state.sel8c) {
             device->SetRenderState(D3DRS_ZENABLE, TRUE);
             device->SetRenderState(D3DRS_LIGHTING, TRUE);
             device->Clear(0, nullptr, D3DCLEAR_ZBUFFER, 0x00FFFFFF, 1.0f, 0);
-            DrawAxisMesh(app->raw<void*>(offsets::kPtrSub04b0),
+            DrawAxisMesh(app->state.sub04b0OrUint32,
                          app->Renderer());
             device->SetRenderState(D3DRS_ZENABLE, FALSE);
             device->SetRenderState(D3DRS_LIGHTING, FALSE);
@@ -435,7 +437,7 @@ void DrawBoneOperationAxis(MMDApp* app, const float frameMatrix[16]) {
     Matrix translation;
     api.translation(&translation, bone->position[0], bone->position[1],
                     bone->position[2]);
-    if (app->raw<std::int32_t>(0x9ED9C) == 1) {
+    if (app->state.v9ed9c == 1) {
         api.multiply(&world, &translation, BoneMatrix(bone));
         const float x = world.m[3][0];
         const float y = world.m[3][1];
@@ -479,7 +481,7 @@ void DrawBoneOperationAxis(MMDApp* app, const float frameMatrix[16]) {
     const float dy = ty - app->ViewOffsetY();
     const float dz = tz - app->CameraDistance();
     const float scale = std::sqrt(dx * dx + dy * dy + dz * dz) *
-                        (app->raw<float>(0x9E1E8) * 0.001f);
+                        (app->CameraFov() * 0.001f);
     Matrix scaleMatrix;
     api.scaling(&scaleMatrix, scale, scale, scale);
     api.multiply(&world, &scaleMatrix, &world);
@@ -487,7 +489,7 @@ void DrawBoneOperationAxis(MMDApp* app, const float frameMatrix[16]) {
     device->SetTransform(D3DTS_WORLD,
                          reinterpret_cast<const D3DMATRIX*>(&world));
     device->Clear(0, nullptr, D3DCLEAR_ZBUFFER, 0x00FFFFFF, 1.0f, 0);
-    DrawAxisMesh(app->raw<void*>(offsets::kPtrSub04b0), app->Renderer());
+    DrawAxisMesh(app->state.sub04b0OrUint32, app->Renderer());
 }
 
 void SetupFrameWorldTransform(MMDApp* app) {
@@ -538,8 +540,8 @@ void SetupFrameWorldTransform(MMDApp* app) {
     api.rotZ(&rotationZ, app->CameraRoll());
     api.multiply(&rotation, &rotation, &rotationZ);
 
-    if (app->raw<std::uint8_t>(0x9ED98) != 0 ||
-        app->raw<std::uint8_t>(0x2F8) != 0) {
+    if (app->state.v9ed98 != 0 ||
+        app->state.optflag[0] != 0) {
         if (target != nullptr &&
             app->CameraAttachmentTransformSuppressed() == 0) {
             std::memcpy(&attachment, BoneMatrix(reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(target)), sizeof(attachment));
@@ -581,7 +583,7 @@ void SetupFrameWorldTransform(MMDApp* app) {
     // 0x46BC20..0x46BC9F: the alternate projection used by the orthographic
     // view mode.  The normal perspective projection remains the one written
     // by Sub42C810.
-    if (app->raw<std::uint8_t>(796) != 0) {
+    if (app->state.cameraPerspective != 0) {
         Matrix projection{};
         projection.m[0][0] = -2.0f / app->CameraDistance();
         projection.m[1][1] =

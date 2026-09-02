@@ -61,7 +61,7 @@ void Sub464A00(MMDApp* app) {
     s.state.playbackActive = 0;             // 0x464A11
     Sub4341E0(app);                                         // 0x464A17
     unsigned char* flag = s.RecordingCompletionFlag();      // 0x464A1C
-    s.raw<std::uint8_t>(offsets::kByte9ED90) = 0;           // 0x464A22
+    s.state.v9ed90 = 0;           // 0x464A22
     if (flag != nullptr)
         *flag = 1;                                          // 0x464A28
     TeardownDShowGraph(s.Recorder());                       // 0x464A31
@@ -75,14 +75,14 @@ void Sub464A00(MMDApp* app) {
         if (r->multisampleAvailable == 0)
             device->SetRenderTarget(0, *backBuffer);        // 0x464A81
     }
-    if (s.raw<std::uint8_t>(658785) != 0) {                 // 0xA0B41 dialog
-        s.raw<std::uint8_t>(655988) = 0;                    // 0x464B0B
+    if (s.state.aviStereoOutput != 0) {                     // 0xA0D61
+        s.state.fullscreenMode = 0;                    // 0x464B0B
         Sub4629D0(app);                                     // 0x464B11
         PostDeviceReset(app);                               // 0x464B18
-        s.raw<std::uint8_t>(658785) = 0;                    // 0x464B1D
+        s.state.aviStereoOutput = 0;                    // 0x464B1D
     } else {
-        const std::int32_t winW = s.raw<std::int32_t>(656044);
-        const std::int32_t winH = s.raw<std::int32_t>(656048);
+        const std::int32_t winW = s.state.recRTW;
+        const std::int32_t winH = s.state.recRTH;
         if (r != nullptr &&
             (r->screenWidth > winW || r->screenHeight > winH)) {
             r->presentParameters.BackBufferWidth = winW;   // 0x1D4FC
@@ -98,23 +98,23 @@ void Sub464A00(MMDApp* app) {
     Sub42C810(app);                                         // 0x464B46
     Sub432FA0(app);                                         // 0x464B4D
     PostViewRefresh(app);                                   // 0x464B54
-    if (void* com = s.raw<void*>(650120)) {                 // 0x464B69
+    if (void* com = s.state.captureRenderTarget) {                 // 0x464B69
         (*reinterpret_cast<void(__stdcall**)(void*)>(
             *reinterpret_cast<void***>(com) + 8))(com);
-        s.raw<void*>(650120) = nullptr;
+        s.state.captureRenderTarget = nullptr;
     }
-    if (void* com = s.raw<void*>(650124)) {                 // 0x464B81
+    if (void* com = s.state.v9eb8c) {                 // 0x464B81
         (*reinterpret_cast<void(__stdcall**)(void*)>(
             *reinterpret_cast<void***>(com) + 8))(com);
-        s.raw<void*>(650124) = nullptr;
+        s.state.v9eb8c = nullptr;
     }
-    if (void* buf = s.raw<void*>(652084)) {                 // 0x464B94
+    if (void* buf = s.state.captureReadbackPixels) {                 // 0x464B94
         free(buf);
-        s.raw<void*>(652084) = nullptr;
+        s.state.captureReadbackPixels = nullptr;
     }
-    if (s.raw<std::uint8_t>(658785) == 0) {                 // 0x464BA2
+    if (s.state.aviStereoOutput == 0) {                 // 0x464BA2
         ShowWindow(static_cast<HWND>(s.Hwnd()), SW_SHOW);   // 5
-        HWND separate = s.raw<HWND>(658744);
+        HWND separate = s.FloatingWindow();
         if (separate != nullptr)
             ShowWindow(separate, SW_SHOW);                  // 0x464BC8
     }
@@ -335,7 +335,7 @@ INT_PTR CALLBACK DialogFuncStub(HWND hDlg, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_INITDIALOG) {                                    // 0x410014
         MMDApp* app = g_Block;
         SetWindowTextA(GetDlgItem(hDlg, 0x2AE),
-                       &app->raw<char>(0xA442D));
+                       app->state.statusText);
         return 0;
     }
     if (msg == WM_COMMAND) {                                       // 0x40FF98

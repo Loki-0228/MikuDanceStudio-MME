@@ -145,7 +145,7 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     auto& s = *app;
     HWND hwnd = static_cast<HWND>(s.Hwnd());                     // 0xa06b8
 
-    SetCurrentDirectoryW(&s.raw<wchar_t>(offsets::kWcsExedir));   // 0x429cbe
+    SetCurrentDirectoryW(s.state.exeDir);   // 0x429cbe
 
     // 0x429cc4..0x429ce4: probe the DLL with _wsopen_s (CRT 0x50747B).
     int fd = -1;
@@ -162,7 +162,7 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     _close(fd);                                                    // 0x506b88
 
     HMODULE module = LoadLibraryA("Data\\DxOpenNI.dll");           // 0x429d3d
-    s.raw<HMODULE>(offsets::kDwordA03BC) = module;
+    s.state.a03BC = module;
     if (module == nullptr) {
         ShowWin32ErrorMessage(app, "GetProcAddress", GetLastError());
         KinMessageBox(app,
@@ -172,26 +172,27 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     }
 
     // 0x429da6..0x429e86: seven GetProcAddress fills + any-null test.
-    std::size_t slotBase = offsets::kDwordA03C0;
+    // The slots are the 0xA03C0..0xA03DC pointer row (OniExportSlot maps
+    // the heterogeneous blob members behind one index).
     for (int i = 0; i < 7; ++i)
-        s.raw<void*>(slotBase + i * 4) =
+        s.OniExportSlot(i) =
             reinterpret_cast<void*>(GetProcAddress(module, kOniExports[i]));
     bool anyNull = false;
     for (int i = 0; i < 7; ++i)
-        anyNull = anyNull || s.raw<void*>(slotBase + i * 4) == nullptr;
+        anyNull = anyNull || s.OniExportSlot(i) == nullptr;
     if (anyNull) {
         KinMessageBox(app,
             "\"DxOpenNI.dll\" version is wrong.\n"
             "(Version1.30 is necessary)",                           // 0x52c2d8
             kJpOniVersion130);                                      // 0x52c298
         FreeLibrary(module);                                        // 0x42a008
-        s.raw<HMODULE>(offsets::kDwordA03BC) = nullptr;
+        s.state.a03BC = nullptr;
         return;
     }
 
     // 0x429ed4..0x429f2d: version gate (1.30 / 1.40 / 1.50 bit-exact).
     auto getVersion = reinterpret_cast<void(__stdcall*)(float*)>(
-        s.raw<void*>(offsets::kDwordA03D8));
+        s.state.a03D8);
     float version = 0.0f;
     getVersion(&version);
     std::uint8_t versionCode;
@@ -207,20 +208,20 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
             "(Version1.30 or 1.40 or 1.50 is necessary)",           // 0x52c240
             kJpOniVersionRange);                                    // 0x52c1f8
         FreeLibrary(module);
-        s.raw<HMODULE>(offsets::kDwordA03BC) = nullptr;
+        s.state.a03BC = nullptr;
         return;
     }
-    s.raw<std::uint8_t>(offsets::kByteA03ea) = versionCode;
+    s.state.openniVersion = versionCode;
 
     // 0x429f2f..0x429f5b: OpenNIInit(hwnd, english, device, exedir, path).
     auto init = reinterpret_cast<OpenNiInitFn>(
-        s.raw<void*>(offsets::kDwordA03C0));
+        s.state.a03C0);
     const unsigned char ok = init(hwnd, s.EnglishUI(), OniRenderDevice(app),
-                                  &s.raw<wchar_t>(offsets::kWcsExedir),
+                                  s.state.exeDir,
                                   sjisPath);
     if (ok == 0) {
         FreeLibrary(module);                                        // 0x42a001
-        s.raw<HMODULE>(offsets::kDwordA03BC) = nullptr;
+        s.state.a03BC = nullptr;
         return;
     }
 
@@ -233,10 +234,10 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     }
 
     // 0x429fa0..0x429fbc: save the fps limit; a capture file caps it to 30.
-    s.raw<float>(offsets::kFloatA03e0) =
+    s.state.fpsLimitSaved =
         s.state.fpsLimit;
     if (sjisPath != nullptr) {
-        s.raw<std::uint8_t>(offsets::kByteA03DF) = 1;
+        s.state.a03DF = 1;
         s.state.fpsLimit = 30.0f;              // 0x52997c
     }
     s.state.autoRepeat = 0;                   // 0x429fc4
@@ -254,7 +255,7 @@ void DisableKinect(MMDApp* app) {
     // Unconditional call through the stored OpenNIClean pointer, exactly
     // like the original (reachable only after a successful OpenNiInit).
     auto clean = reinterpret_cast<void(__stdcall*)()>(
-        s.raw<void*>(offsets::kDwordA03C4));
+        s.state.a03C4);
     clean();                                                        // 0x42a074
 
     s.state.depthDeviceEnabled = 0;                   // 0x42a084
@@ -266,9 +267,9 @@ void DisableKinect(MMDApp* app) {
                   s.PlaybackPhysicsMode());
 
     s.state.fpsLimit =                         // 0x42a0ac
-        s.raw<float>(offsets::kFloatA03e0);
+        s.state.fpsLimitSaved;
     s.PhysicsResetPending() = 1;                                   // 0x42a0b9
-    s.raw<std::uint8_t>(offsets::kByteA03DF) = 0;                   // 0x42a0c0
+    s.state.a03DF = 0;                   // 0x42a0c0
 }
 
 }  // namespace mikudancestudio

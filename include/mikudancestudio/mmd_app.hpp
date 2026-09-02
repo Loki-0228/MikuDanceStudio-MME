@@ -1287,6 +1287,35 @@ public:
         return state.openniTrackingCallback;  // 0xA03D4
 #endif
     }
+    // The seven DxOpenNI.dll export slots (0xA03C0..0xA03DC, one pointer
+    // each in the x86 blob).  Slots 2/4 sit in 4-byte uint32 blob members,
+    // so x64 reinterprets would clobber neighbours - mirrors there.
+    void*& OniExportSlot(int index) {
+        switch (index) {
+        case 0: return state.a03C0;
+        case 1: return state.a03C4;
+#if defined(_M_X64)
+        case 2: return m_oniExportSlot2;
+#else
+        case 2: return reinterpret_cast<void*&>(state.a03C8);
+#endif
+        case 3: return state.depthTextureCallback;
+#if defined(_M_X64)
+        case 4: return m_oniExportSlot4;
+#else
+        case 4: return reinterpret_cast<void*&>(state.a03D0);
+#endif
+        case 5: return OpenniTrackingCallback();
+        default: return state.a03D8;
+        }
+    }
+    WINDOWPLACEMENT& SavedPlacement() {
+#if defined(_M_X64)
+        return m_savedPlacement;
+#else
+        return state.savedPlacement;  // 0xA027C
+#endif
+    }
     // Render/locale subsystem ("0x1D574 object"), allocated in
     // InitMainWindowAndD3D; layout restored in d3d_wrapper.hpp.
     D3DRenderer*& Renderer()        { return reinterpret_cast<D3DRenderer*&>(state.rendererOrLocaleTable); }
@@ -1302,7 +1331,7 @@ public:
     // Physics scene wrapper ("0x48 object"), allocated in
     // InitMainWindowAndD3D, filled by SceneConstruct; see physics_scene.hpp.
     PhysicsScene*& Physics()        { return reinterpret_cast<PhysicsScene*&>(state.physicsScene); }
-    wchar_t* ExeDir()               { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsExedir); }
+    wchar_t* ExeDir()               { return state.exeDir; }
     unsigned char& EnglishUI()      { return state.englishUI; }  // 658252
 
     // User directory names (wchar_t[1000] each, 0x0047A5B0)
@@ -1364,6 +1393,9 @@ private:
     D3DMATRIX m_lightViewProjectionMatrix{};
     D3DMATRIX m_worldViewProjectionMatrix{};
     std::uint8_t m_accessoryTrackActive[55] = {};
+    void* m_oniExportSlot2 = nullptr;
+    void* m_oniExportSlot4 = nullptr;
+    WINDOWPLACEMENT m_savedPlacement{};
 
     // This scratch workspace is 3,536 bytes in the original x86 state.  The
     // provisional x64 blob reserves only 3,240 bytes before the next live

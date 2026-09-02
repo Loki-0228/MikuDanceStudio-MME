@@ -59,9 +59,6 @@ void Sub43D2E0(MMDApp* app, HWND hDlg, int keepSelection); // VA 0x0043D2E0
 namespace {
 
 // ---- app offsets not yet registered in offsets.hpp --------------------------
-constexpr std::size_t kByteA0664 = 656996;   // 0xA0664 select-state-changed flag
-constexpr std::size_t kPtrA0B1C = 658204;    // 0xA0B1C model-order int[] (slot per combo-673 item)
-constexpr std::size_t kPtrA0B24 = 658212;    // 0xA0B24 bone-id int[] (per combo-677 item)
 
 // ---- model-object offsets (on the unsigned char* model pointer) -------------
 constexpr std::size_t kMdlVertSel = 0x26E0;  // vertex select-buffer ptr (stride 0x168)
@@ -167,7 +164,7 @@ LPARAM StrParam(const void* s) {
 // VA 0x00466630 - Sub466630: fill the select dialog on WM_INITDIALOG
 // ===========================================================================
 void Sub466630(MMDApp* app, HWND hDlg) {
-    app->raw<unsigned char>(kByteA0664) = 0;                     // 0x46665D
+    app->AccessoryApplyGate() = 0;                     // 0x46665D
     if (app->state.a0668OrUint32 != nullptr) {      // 0x466664
         free(app->state.a0668OrUint32);             // j_j__free_0
         app->state.a0668OrUint32 = nullptr;
@@ -226,13 +223,13 @@ void Sub466630(MMDApp* app, HWND hDlg) {
         static_cast<HWND>(app->state.hwnd), 436); // 0x4668A0
     const int modelCount =
         static_cast<int>(SendMessageA(mainCombo, 0x146, 0, 0)) - 1;  // 0x4668B1
-    if (app->raw<void*>(kPtrA0B1C) != nullptr) {                    // 0x4668AB
-        free(app->raw<void*>(kPtrA0B1C));
-        app->raw<void*>(kPtrA0B1C) = nullptr;
+    if (app->AccessoryOrderArray() != nullptr) {                    // 0x4668AB
+        free(app->AccessoryOrderArray());
+        app->AccessoryOrderArray() = nullptr;
     }
     int* const order = static_cast<int*>(
         operator new(static_cast<std::size_t>(4 * modelCount)));     // 0x4668DE
-    app->raw<void*>(kPtrA0B1C) = order;
+    app->AccessoryOrderArray() = order;
 
     char Buffer[256];                                                // 0x466906
     int nOrder = 0;
@@ -283,7 +280,7 @@ void Sub461C20(MMDApp* app, HWND hDlg) {
         const int n = static_cast<int>(
                          SendMessageA(combo673, 0x146 /*CB_GETCOUNT*/, 0, 0)) - 2;
         if (n > 0) {                                                 // 0x461C86
-            const int* order = static_cast<int*>(app->raw<void*>(kPtrA0B1C));
+            const int* order = static_cast<int*>(app->AccessoryOrderArray());
             int idx = 0;
             while (attach != order[idx]) {
                 ++idx;
@@ -321,7 +318,7 @@ void Sub43D2E0(MMDApp* app, HWND hDlg, int keepSelection) {
         return;
     }
 
-    const int modelSlot = static_cast<int*>(app->raw<void*>(kPtrA0B1C))[attach - 2];
+    const int modelSlot = static_cast<int*>(app->AccessoryOrderArray())[attach - 2];
     rec->targetModelSlot = modelSlot;                                // 0x43D3B1
     SendMessageA(combo677, 0x14B, 0, 0);                             // 0x43D3B5
 
@@ -337,13 +334,13 @@ void Sub43D2E0(MMDApp* app, HWND hDlg, int keepSelection) {
             ++nSelectable;
     }
 
-    if (app->raw<void*>(kPtrA0B24) != nullptr) {                     // 0x43D40A
-        free(app->raw<void*>(kPtrA0B24));
-        app->raw<void*>(kPtrA0B24) = nullptr;
+    if (app->AccessoryEditArray() != nullptr) {                     // 0x43D40A
+        free(app->AccessoryEditArray());
+        app->AccessoryEditArray() = nullptr;
     }
     int* const boneIds = static_cast<int*>(
         operator new(static_cast<std::size_t>(4 * nSelectable)));    // 0x43D441
-    app->raw<void*>(kPtrA0B24) = boneIds;
+    app->AccessoryEditArray() = boneIds;
 
     int n = 0;                                                       // 0x43D454
     for (int i = 0; i < boneCount; ++i) {                            // 0x43D4EA
@@ -387,7 +384,7 @@ void Sub43D560(MMDApp* app, HWND hDlg) {
         const int pick = static_cast<int>(SendMessageA(
             GetDlgItem(hDlg, 677), 0x147, 0, 0));                    // 0x43D5DF
         rec->targetBoneIndex =
-            static_cast<int*>(app->raw<void*>(kPtrA0B24))[pick];
+            static_cast<int*>(app->AccessoryEditArray())[pick];
     } else {
         rec->targetBoneIndex = 0;                                    // 0x43D5B0
     }
@@ -449,7 +446,7 @@ void Sub4256C0(MMDApp* app) {
         app->LastRegisteredFrame() = registeredFrames;
 
     PanelPaint(app);                                                 // 0x414610
-    app->raw<unsigned char>(kByteA0664) = 1;                         // 0x42595D
+    app->AccessoryApplyGate() = 1;                         // 0x42595D
 }
 
 // ===========================================================================
@@ -541,7 +538,7 @@ void Sub43D610(MMDApp* app, HWND hDlg) {
 
     PanelPaint(app);                                                 // 0x414610
     SelectionReeval(app);                                            // 0x430510
-    app->raw<unsigned char>(kByteA0664) = 1;                         // 0x43DAB5
+    app->AccessoryApplyGate() = 1;                         // 0x43DAB5
 }
 
 // ---------------------------------------------------------------------------
@@ -581,7 +578,7 @@ void Sub4250C0(MMDApp* app, HWND hDlg) {
     unsigned char* model = s.SelectedModel();
     mikudancestudio::mdl::BoneRecord* bones =
         mikudancestudio::mdl::Bones(model);
-    unsigned char* recs = s.raw<unsigned char*>(657000);         // 0xA0668
+    unsigned char* recs = static_cast<unsigned char*>(s.state.a0668OrUint32);         // 0xA0668
     unsigned char* rec = recs + 20 * sel;
     const std::int32_t boneId =
         *reinterpret_cast<std::int32_t*>(rec);

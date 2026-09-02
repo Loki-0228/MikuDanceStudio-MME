@@ -533,11 +533,14 @@ struct MMDAppState {
     RawPad<3> pad217;
 #endif
     HMENU savedMenu;
-    std::uint32_t a027COrBuf_bytes;
 #if defined(_M_X64)
+    std::uint32_t a027COrBuf_bytes;  // blob slot unused; the placement lives
+                                     // in the MMDApp mirror m_savedPlacement
     RawPad<22> pad219;
 #else
-    RawPad<40> pad219;
+    // 0xA027C: the window placement saved across fullscreen recording
+    // (GetWindowPlacement/SetWindowPlacement; .length is init 44)
+    WINDOWPLACEMENT savedPlacement;
 #endif
     unsigned char a02A8;
 #if defined(_M_X64)
@@ -1381,8 +1384,10 @@ static_assert(offsetof(MMDAppState, fullscreenMode) == 655988,
               "fullscreenMode x86");
 static_assert(offsetof(MMDAppState, savedMenu) == 655992,
               "savedMenu x86");
-static_assert(offsetof(MMDAppState, a027COrBuf_bytes) == 655996,
-              "a027COrBuf_bytes x86");
+#ifndef _M_X64
+static_assert(offsetof(MMDAppState, savedPlacement) == 655996,
+              "savedPlacement x86");
+#endif
 static_assert(offsetof(MMDAppState, a02A8) == 656040,
               "a02A8 x86");
 static_assert(offsetof(MMDAppState, recRTW) == 656044,

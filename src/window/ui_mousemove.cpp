@@ -316,25 +316,25 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
     const int Y = mouseY;                              // a3 (high word)
 
     // --- 1. hide-rect gates (0x444CC6) -------------------------------------
-    if (app->raw<std::uint8_t>(kByteA06B5) != 0) {
+    if (app->state.a06B5 != 0) {
         D3DRenderer* sub = app->Renderer();
         const int ratio = static_cast<int>(
             sub->viewScale * 200.0);  // viewScale = sub+0x1D4F0 float ratio
-        if (X > static_cast<int>(app->raw<std::int32_t>(app->state.hideLeft)) - ratio)
+        if (X > static_cast<int>(app->state.hideLeft) - ratio)
             return;
-        app->raw<std::uint8_t>(kByteA06B5) = 0;
+        app->state.a06B5 = 0;
     }
-    if (app->raw<std::uint8_t>(kByteA06B4) != 0) {
-        if (Y > app->raw<std::int32_t>(app->state.hideBottom))
+    if (app->state.a06B4 != 0) {
+        if (Y > app->state.hideBottom)
             return;
-        app->raw<std::uint8_t>(kByteA06B4) = 0;
+        app->state.a06B4 = 0;
     }
-    if (app->raw<std::uint8_t>(kByteA06B6) != 0) {
-        if (X > app->raw<std::int32_t>(app->state.hideLeft) ||
-            X < app->raw<std::int32_t>(app->state.hideRight))
+    if (app->state.a06B6 != 0) {
+        if (X > app->state.hideLeft ||
+            X < app->state.hideRight)
             return;
         // Original stores (X < 0xA0D40), which is false on this path (0x444D55).
-        app->raw<std::uint8_t>(kByteA06B6) = 0;
+        app->state.a06B6 = 0;
     }
 
     // --- 2. position store + cursor switching (0x444D5B) -------------------
@@ -345,15 +345,15 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
             app->MouseX() = X - 0x10000;
         if (Y > 0xEA60)
             app->MouseY() = Y - 0x10000;
-        if (app->raw<std::uint8_t>(kByte9F12C) != 0) {
+        if (app->state.v9f12c != 0) {
             const int x0 = app->MouseX();
             const int y0 = app->MouseY();
             if (std::abs(app->PreviousMouseX() - x0) > 50 ||
                 std::abs(app->PreviousMouseY() - y0) > 50)
-                app->raw<std::uint8_t>(kByteB6568483) = 1;
+                app->state.b6568483 = 1;
             app->PreviousMouseX() = x0;
             app->PreviousMouseY() = y0;
-            app->raw<std::uint8_t>(kByte9F12C) = 0;
+            app->state.v9f12c = 0;
         }
         RECT rc;
         GetClientRect(static_cast<HWND>(app->Hwnd()), &rc);
@@ -408,7 +408,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                  app->SelectionBoxAnchorX() - 6) /
                 kRowPitch;  // v15 == v257 (magic /13 = truncating)
             app->SceneModified() = 1;
-            if (app->raw<std::uint8_t>(kByteOptflag0) == 0) {
+            if (app->state.optflag[0] == 0) {
                 // ---- bone-edit mode (0x445887..0x446065) ------------------
                 unsigned char* model = CurrentModel(app);
                 mdl::ModelRecord& record = *mdl::Mdl(model);
@@ -446,7 +446,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 // dword0xA0CC4).
                 Sub4B4260(model,
                           app->state.currentFrame,
-                          app->raw<std::int32_t>(0xA0CC4));
+                          app->state.playbackPhysicsMode);
             } else {
                 // ---- display mode (0x444F8A..0x44587D) --------------------
                 // four fixed band lists (84/40/24/36-byte records)
@@ -531,7 +531,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 colEnd += 1;
 
             const unsigned char flag = HoverFlag(app);
-            if (app->raw<std::uint8_t>(kByteOptflag0) != 0) {
+            if (app->state.optflag[0] != 0) {
                 // ---- display-mode hover (0x4461B3) ------------------------
                 if (!app->ShiftModifierActive()) {
                     // clear band visibility flags for all 200 rows
