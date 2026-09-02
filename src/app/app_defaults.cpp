@@ -140,7 +140,7 @@ void MMDApp::InitDefaults() {
     s.RecordingCompletionFlag() = nullptr;
     m_state.v9edd8 = 0;
     m_state.groundGridIndices = nullptr;
-    m_state.v9ee10 = 0;
+    m_state.spriteOverlayPrimitiveCount = 0;
     m_state.v9ee0cOrUint32 = nullptr;
     m_state.toonTextures[10] = nullptr;
     sprintf_s(RecentFile(0), 0x100, "%s", g_Locale);
@@ -189,7 +189,7 @@ void MMDApp::InitDefaults() {
     m_state.a03C0 = nullptr;
     m_state.a03C4 = nullptr;
     m_state.a03C8 = 0;
-    m_state.a03CC = nullptr;
+    m_state.depthTextureCallback = nullptr;
     m_state.a03D0 = 0;
     m_state.a03D4 = 0;
     m_state.a03DC = 1;

@@ -241,12 +241,10 @@ public:
         return ModelSlots()[index];
     }
     unsigned char** ModelSlots() {
-        return reinterpret_cast<unsigned char**>(
-            at(offsets::kBufBuf0780));
+        return reinterpret_cast<unsigned char**>(m_state.modelSlots);
     }
     unsigned char* const* ModelSlots() const {
-        return reinterpret_cast<unsigned char* const*>(
-            at(offsets::kBufBuf0780));
+        return reinterpret_cast<unsigned char* const*>(m_state.modelSlots);
     }
     void ClearModelSlots() {
         for (int index = 0; index < 100; ++index)
@@ -332,22 +330,22 @@ public:
             raw<std::uint8_t>(offsets::kByteA03E4 + index) = 0;
     }
     std::uint8_t& TimelineSelectionChanged() {
-        return raw<std::uint8_t>(offsets::kByteA03EB);
+        return m_state.timelineSelectionChanged;
     }
     std::uint8_t TimelineSelectionChanged() const {
-        return raw<std::uint8_t>(offsets::kByteA03EB);
+        return m_state.timelineSelectionChanged;
     }
     std::uint8_t& SceneModified() {
-        return raw<std::uint8_t>(offsets::kByteA0B0D);
+        return m_state.sceneModified;
     }
     std::uint8_t SceneModified() const {
-        return raw<std::uint8_t>(offsets::kByteA0B0D);
+        return m_state.sceneModified;
     }
     TimelineSelectionRow& PendingTimelineSelectionRow() {
-        return raw<TimelineSelectionRow>(offsets::kByte9DA09);
+        return reinterpret_cast<TimelineSelectionRow&>(m_state.pendingTimelineSelectionRow);
     }
     TimelineSelectionRow PendingTimelineSelectionRow() const {
-        return raw<TimelineSelectionRow>(offsets::kByte9DA09);
+        return static_cast<TimelineSelectionRow>(m_state.pendingTimelineSelectionRow);
     }
     std::uint8_t& SelectionBoxDragging() { return raw<std::uint8_t>(0xA0189); }
     std::int32_t& MouseX() { return raw<std::int32_t>(0x4); }
@@ -355,7 +353,7 @@ public:
     std::int32_t& PreviousMouseX() { return raw<std::int32_t>(0xC); }
     std::int32_t& PreviousMouseY() { return raw<std::int32_t>(0x10); }
     std::uint8_t& ViewportInputActive() {
-        return raw<std::uint8_t>(offsets::kByte9EDD1);
+        return m_state.viewportInputActive;
     }
     std::int32_t& ShiftModifierState() { return raw<std::int32_t>(0x24); }
     std::int32_t& CtrlModifierState() { return raw<std::int32_t>(0xC0); }
@@ -366,7 +364,7 @@ public:
         return raw<std::int32_t>(0xC0) == 3;
     }
     std::uint8_t& SidebarResizeDragging() {
-        return raw<std::uint8_t>(offsets::kByteC8);
+        return m_state.sidebarResizeDragging;
     }
     std::int32_t& LeftMouseButtonState() { return raw<std::int32_t>(0x84); }
     std::int32_t& RightMouseButtonState() { return raw<std::int32_t>(0x88); }
@@ -412,10 +410,10 @@ public:
         return raw<HWND>(offsets::kPtrHwnd);
     }
     float* LightDirection() {
-        return &raw<float>(offsets::kFloat9e174);
+        return &m_state.lightDirection;
     }
     float* LightColor() {
-        return &raw<float>(offsets::kFloat9E1A4);
+        return &m_state.lightColor;
     }
     D3DLIGHT9& SceneLight() {
 #if defined(_M_X64)
@@ -457,10 +455,11 @@ public:
         return raw<IDirect3DIndexBuffer9*>(772);
     }
     ViewportEditMode& EditMode() {
-        return raw<ViewportEditMode>(offsets::kDword914);
+        return reinterpret_cast<ViewportEditMode&>(m_state.editMode);
     }
     const ViewportEditMode& EditMode() const {
-        return raw<ViewportEditMode>(offsets::kDword914);
+        return const_cast<const ViewportEditMode&>(
+            reinterpret_cast<const ViewportEditMode&>(m_state.editMode));
     }
     bool UsesViewportTool() const {
         return static_cast<std::int32_t>(EditMode()) >=
@@ -472,7 +471,7 @@ public:
         return raw<std::uint32_t>(offsets::kDwordToolhover);
     }
     ViewportToolAction& ViewportToolOperation() {
-        return raw<ViewportToolAction>(offsets::kDword92C);
+        return reinterpret_cast<ViewportToolAction&>(m_state.viewportToolOperation);
     }
     ViewportToolAction& ViewToolDragOperation() {
         return raw<ViewportToolAction>(offsets::kDwordViewdragmode);
@@ -481,15 +480,15 @@ public:
         return raw<ViewportDragMode>(offsets::kDwordInteractionmode);
     }
     std::int32_t& ViewportToolDragOriginX() {
-        return raw<std::int32_t>(offsets::kDwordDragOx);
+        return m_state.dragOriginX;
     }
     std::int32_t& ViewportToolDragOriginY() {
-        return raw<std::int32_t>(offsets::kDwordDragOy);
+        return m_state.dragOriginY;
     }
     std::int32_t& BoneBoxStartX() { return raw<std::int32_t>(2360); }
     std::int32_t& BoneBoxStartY() { return raw<std::int32_t>(2364); }
     std::int32_t& BoneBoxSelectionActive() {
-        return raw<std::int32_t>(offsets::kDword940);
+        return m_state.boneBoxSelectionActive;
     }
     D3DMATRIX& LightViewProjection() {
         return raw<D3DMATRIX>(655848);  // 0xA0188
@@ -504,28 +503,28 @@ public:
         return raw<D3DMATRIX>(655912);
     }
     IDirect3DTexture9*& AviBackgroundTexture() {
-        return raw<IDirect3DTexture9*>(offsets::kDword9E3F0);
+        return reinterpret_cast<IDirect3DTexture9*&>(m_state.aviBackgroundTexture);
     }
     IDirect3DSurface9*& AviBackgroundSurface() {
-        return raw<IDirect3DSurface9*>(offsets::kFloat9E3F4);
+        return reinterpret_cast<IDirect3DSurface9*&>(m_state.aviBackgroundSurface);
     }
     void*& AviDrawDib() {
         return raw<void*>(offsets::kDword9e3ec);
     }
     void*& AviFile() {
-        return raw<void*>(offsets::kDword9E3FC);
+        return m_state.aviFile;
     }
     void*& AviStream() {
         return raw<void*>(offsets::kDword9E400);
     }
     void*& AviFrameReader() {
-        return raw<void*>(offsets::kDword9E404);
+        return m_state.aviFrameReader;
     }
     HWND& FloatingWindow() {
         return raw<HWND>(offsets::kDwordA0D38);
     }
     HWND& RecordingWindow() {
-        return raw<HWND>(offsets::kDwordFpscapoff);
+        return m_state.recordingWindow;
     }
     IDirect3DTexture9*& ToonTexture(int index) {
         return raw<IDirect3DTexture9*>(offsets::kPtrToontex + 4 * index);
@@ -537,7 +536,7 @@ public:
 #if defined(_M_X64)
         return m_overlayVertexBuffers.avi;
 #else
-        return raw<IDirect3DVertexBuffer9*>(offsets::kDword9E3F8);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.v9e3f8OrPtr);
 #endif
     }
     IDirect3DTexture9*& PictureBackgroundTexture() {
@@ -547,45 +546,45 @@ public:
 #if defined(_M_X64)
         return m_overlayVertexBuffers.picture;
 #else
-        return raw<IDirect3DVertexBuffer9*>(offsets::kDword9E430);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.v9e430OrPtr);
 #endif
     }
     wchar_t* AviBackgroundPath() {
         return reinterpret_cast<wchar_t*>(at(offsets::kWcs9e1ec));
     }
     wchar_t* PictureBackgroundPath() {
-        return reinterpret_cast<wchar_t*>(at(offsets::kWcs9e448));
+        return m_state.pictureBackgroundPath;
     }
     std::int32_t& AviStreamStartFrame() {
-        return raw<std::int32_t>(offsets::kDword9e408);
+        return m_state.aviStreamStart;
     }
     std::int32_t& AviStreamEndFrame() {
-        return raw<std::int32_t>(offsets::kDword9e40c);
+        return m_state.aviStreamEnd;
     }
     std::uint8_t& AviUsesThirtyFpsTiming() {
-        return raw<std::uint8_t>(offsets::kByte9E410);
+        return m_state.aviUsesThirtyFpsTiming;
     }
-    std::int32_t& AviOffsetX() { return raw<std::int32_t>(offsets::kDword9e414); }
-    std::int32_t& AviOffsetY() { return raw<std::int32_t>(offsets::kDword9e418); }
-    float& AviScale() { return raw<float>(offsets::kDword9e41c); }
-    std::int32_t& AviFrameWidth() { return raw<std::int32_t>(offsets::kDword9e420); }
-    std::int32_t& AviFrameHeight() { return raw<std::int32_t>(offsets::kDword9e424); }
+    std::int32_t& AviOffsetX() { return m_state.aviOffsetX; }
+    std::int32_t& AviOffsetY() { return m_state.aviOffsetY; }
+    float& AviScale() { return m_state.aviScale; }
+    std::int32_t& AviFrameWidth() { return m_state.aviFrameWidth; }
+    std::int32_t& AviFrameHeight() { return m_state.aviFrameHeight; }
     std::uint8_t& PictureBackgroundEnabled() {
         return raw<std::uint8_t>(offsets::kByte9E428);
     }
-    std::int32_t& PictureOffsetX() { return raw<std::int32_t>(offsets::kDword9e434); }
-    std::int32_t& PictureOffsetY() { return raw<std::int32_t>(offsets::kDword9e438); }
-    float& PictureScale() { return raw<float>(offsets::kDword9e43c); }
-    std::int32_t& PictureWidth() { return raw<std::int32_t>(offsets::kDword9e440); }
-    std::int32_t& PictureHeight() { return raw<std::int32_t>(offsets::kDword9e444); }
+    std::int32_t& PictureOffsetX() { return m_state.pictureOffsetX; }
+    std::int32_t& PictureOffsetY() { return m_state.pictureOffsetY; }
+    float& PictureScale() { return m_state.pictureScale; }
+    std::int32_t& PictureWidth() { return m_state.pictureWidth; }
+    std::int32_t& PictureHeight() { return m_state.pictureHeight; }
     std::uint32_t& AviBackgroundEnabled() {
         return raw<std::uint32_t>(offsets::kDword91C);
     }
     IDirect3DTexture9*& CaptureTexture() {
-        return raw<IDirect3DTexture9*>(offsets::kDword9EB80);
+        return reinterpret_cast<IDirect3DTexture9*&>(m_state.captureTexture);
     }
     IDirect3DSurface9*& CaptureRenderTarget() {
-        return raw<IDirect3DSurface9*>(offsets::kDword9EB88);
+        return reinterpret_cast<IDirect3DSurface9*&>(m_state.captureRenderTarget);
     }
     IDirect3DSurface9*& CaptureSystemSurface() {
         return raw<IDirect3DSurface9*>(650124);  // original +0x9EB8C
@@ -594,19 +593,19 @@ public:
         return raw<ScreenCaptureMode>(offsets::kDword9EB84);
     }
     void*& CaptureReadbackPixels() {
-        return raw<void*>(offsets::kDword9F334);
+        return m_state.captureReadbackPixels;
     }
     std::uint8_t*& RecordingCompletionFlag() {
-        return raw<std::uint8_t*>(offsets::kDword9EDD4);
+        return reinterpret_cast<std::uint8_t*&>(m_state.recordingCompletionFlag);
     }
     IDirect3DTexture9*& OverlayTexture() {
-        return raw<IDirect3DTexture9*>(offsets::kDword9EE14);
+        return reinterpret_cast<IDirect3DTexture9*&>(m_state.overlayTexture);
     }
     IDirect3DVertexBuffer9*& SpriteOverlayVertices() {
         return raw<IDirect3DVertexBuffer9*>(offsets::kDword9EE0C);
     }
     std::uint32_t& SpriteOverlayPrimitiveCount() {
-        return raw<std::uint32_t>(offsets::kDword9EE10);
+        return m_state.spriteOverlayPrimitiveCount;
     }
     IDirect3DTexture9*& ProjectedShadowRestoreTexture() {
         return raw<IDirect3DTexture9*>(offsets::kDword9F130);
@@ -650,43 +649,43 @@ public:
         return raw<std::uint8_t>(offsets::kByte9e170);
     }
     std::int32_t& DisplayObjectListScrollPosition() {
-        return raw<std::int32_t>(offsets::kDword9DA48);
+        return m_state.displayObjectListScrollPosition;
     }
     std::int32_t DisplayObjectListScrollPosition() const {
-        return raw<std::int32_t>(offsets::kDword9DA48);
+        return m_state.displayObjectListScrollPosition;
     }
     std::int32_t& DisplayObjectListMatchCount() {
-        return raw<std::int32_t>(offsets::kDword9DA4C);
+        return m_state.displayObjectListMatchCount;
     }
     std::int32_t DisplayObjectListMatchCount() const {
-        return raw<std::int32_t>(offsets::kDword9DA4C);
+        return m_state.displayObjectListMatchCount;
     }
     std::uint32_t& LastRegisteredFrame() {
         return raw<std::uint32_t>(offsets::kDword9E16C);
     }
     IDirect3DVertexBuffer9*& OverlayVertices() {
-        return raw<IDirect3DVertexBuffer9*>(offsets::kDword9EE18);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.overlayVertices);
     }
     std::uint32_t& TextOverlayPrimitiveCount() {
-        return raw<std::uint32_t>(offsets::kDword9EE1C);
+        return m_state.textOverlayPrimitiveCount;
     }
     IDirect3DTexture9*& TextOverlayTexture() {
-        return raw<IDirect3DTexture9*>(offsets::kDword9EE20);
+        return reinterpret_cast<IDirect3DTexture9*&>(m_state.sceneFontTexture);
     }
     std::uint32_t& LineOverlayPrimitiveCount() {
-        return raw<std::uint32_t>(offsets::kDword9F124);
+        return m_state.lineOverlayPrimitiveCount;
     }
     IDirect3DVertexBuffer9*& GroundPlaneVertices() {
         return raw<IDirect3DVertexBuffer9*>(offsets::kDword9F128);
     }
     IDirect3DVertexBuffer9*& LeftViewportVertices() {
-        return raw<IDirect3DVertexBuffer9*>(offsets::kDwordA0108);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.leftViewportVertices);
     }
     IDirect3DVertexBuffer9*& RightViewportVertices() {
-        return raw<IDirect3DVertexBuffer9*>(offsets::kDwordA010C);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(m_state.rightViewportVertices);
     }
     std::uint8_t& SelfShadowCompositionEnabled() {
-        return raw<std::uint8_t>(offsets::kByteA0D28);
+        return m_state.selfShadowCompositionEnabled;
     }
     std::int32_t& SelfShadowMode() {
         return raw<std::int32_t>(offsets::kDwordA0d30);
@@ -698,44 +697,41 @@ public:
         return raw<std::uint8_t>(offsets::kByteA03B8);
     }
     DepthTextureProvider& DepthTextureCallback() {
-        return raw<DepthTextureProvider>(offsets::kDwordA03CC);
+        return reinterpret_cast<DepthTextureProvider&>(m_state.depthTextureCallback);
     }
-    HDC& PanelDC() { return raw<HDC>(offsets::kPtrHdc724); }
-    HDC& TimelineDC() { return raw<HDC>(offsets::kPtrHdc736); }
-    HDC& CurveDC() { return raw<HDC>(offsets::kPtrHdc744); }
-    HBITMAP& PanelBitmap() { return raw<HBITMAP>(offsets::kPtrBmp728); }
-    HBITMAP& PanelSpareBitmap() { return raw<HBITMAP>(offsets::kPtrBmp732); }
-    HBITMAP& TimelineBitmap() { return raw<HBITMAP>(offsets::kPtrBmp740); }
-    HBITMAP& CurveBitmap() { return raw<HBITMAP>(offsets::kPtrBmp748); }
+    HDC& PanelDC() { return m_state.hdcMainPanel; }
+    HDC& TimelineDC() { return m_state.hdcTimeline; }
+    HDC& CurveDC() { return m_state.hdcInterpCurve; }
+    HBITMAP& PanelBitmap() { return reinterpret_cast<HBITMAP&>(m_state.bmpPanel); }
+    HBITMAP& PanelSpareBitmap() { return reinterpret_cast<HBITMAP&>(m_state.bmpPanelSpare); }
+    HBITMAP& TimelineBitmap() { return reinterpret_cast<HBITMAP&>(m_state.bmpTimelineStrip); }
+    HBITMAP& CurveBitmap() { return reinterpret_cast<HBITMAP&>(m_state.bmpInterpCurve); }
     HBRUSH UiBrush(int index) const {
-        const std::uint32_t value = raw<std::uint32_t>(
-            offsets::kDwordBrushes + sizeof(std::uint32_t) * index);
-        return reinterpret_cast<HBRUSH>(static_cast<std::uintptr_t>(value));
+        // brush handles are kept in 32-bit slots, as in the original state
+        return reinterpret_cast<HBRUSH>(
+            static_cast<std::uintptr_t>(m_state.brushes[index]));
     }
     void SetUiBrush(int index, HBRUSH brush) {
-        raw<std::uint32_t>(offsets::kDwordBrushes +
-                           sizeof(std::uint32_t) * index) =
+        m_state.brushes[index] =
             static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(brush));
     }
     COLORREF& ThemeColor(UiThemeColor color) {
-        return raw<COLORREF>(offsets::kDwordCol656856 +
-                             sizeof(COLORREF) * static_cast<int>(color));
+        return reinterpret_cast<COLORREF&>(
+            m_state.themeColors[static_cast<int>(color)]);
     }
     const COLORREF& ThemeColor(UiThemeColor color) const {
-        return raw<COLORREF>(offsets::kDwordCol656856 +
-                             sizeof(COLORREF) * static_cast<int>(color));
+        return reinterpret_cast<const COLORREF&>(
+            m_state.themeColors[static_cast<int>(color)]);
     }
     COLORREF& ThemeColorAt(int index) {
-        return raw<COLORREF>(offsets::kDwordCol656856 +
-                             sizeof(COLORREF) * index);
+        return reinterpret_cast<COLORREF&>(m_state.themeColors[index]);
     }
     const COLORREF& ThemeColorAt(int index) const {
-        return raw<COLORREF>(offsets::kDwordCol656856 +
-                             sizeof(COLORREF) * index);
+        return reinterpret_cast<const COLORREF&>(m_state.themeColors[index]);
     }
-    std::uint8_t& UiTextRed() { return raw<std::uint8_t>(offsets::kByteUir); }
-    std::uint8_t& UiTextGreen() { return raw<std::uint8_t>(offsets::kByteUig); }
-    std::uint8_t& UiTextBlue() { return raw<std::uint8_t>(offsets::kByteUib); }
+    std::uint8_t& UiTextRed() { return m_state.uiTextRed; }
+    std::uint8_t& UiTextGreen() { return m_state.uiTextGreen; }
+    std::uint8_t& UiTextBlue() { return m_state.uiTextBlue; }
     wchar_t* WavePath() {
         return reinterpret_cast<wchar_t*>(at(offsets::kWcsWavpath));
     }
@@ -744,57 +740,65 @@ public:
     }
     // AVI export options filled by the output dialog (0x40F2F0).
     wchar_t* AviOutputPath() {
-        return reinterpret_cast<wchar_t*>(at(offsets::kWcsAviOutput));
+#if defined(_M_X64)
+        return m_aviOutputPath;
+#else
+        return m_state.aviOutputPath;
+#endif
     }
     std::int32_t& AviRecordStartFrame() {
-        return raw<std::int32_t>(offsets::kFloatFa0b00);
+        return m_state.aviRecordStartFrame;
     }
     std::int32_t& AviRecordEndFrame() {
-        return raw<std::int32_t>(offsets::kFloatFa0b04);
+        return m_state.aviRecordEndFrame;
     }
-    float& AviRecordFps() { return raw<float>(offsets::kFloatA0B08); }
+    float& AviRecordFps() { return m_state.aviRecordFps; }
     std::uint8_t& AviIncludeWave() {
-        return raw<std::uint8_t>(offsets::kByteA0b0c);
+        return m_state.aviIncludeWave;
     }
     std::int32_t& AviCodecSelection() {
-        return raw<std::int32_t>(offsets::kDwordA0cd8);
+#if defined(_M_X64)
+        return m_aviCodecSelection;
+#else
+        return m_state.aviCodecSelection;
+#endif
     }
     std::uint8_t& AviStereoOutput() {
-        return raw<std::uint8_t>(offsets::kByteA0D61);
+        return m_state.aviStereoOutput;
     }
     std::int32_t& AviStereoWidthMultiplier() {
-        return raw<std::int32_t>(offsets::kDwordA0D64);
+        return m_state.aviStereoWidthMultiplier;
     }
     float& ProjectedShadowDiffuseAlpha() {
-        return raw<float>(offsets::kFloatA0cec);
+        return m_state.projectedShadowDiffuseAlpha;
     }
     float& ProjectedShadowAmbientIntensity() {
-        return raw<float>(offsets::kDwordA0cf0);
+        return m_state.projectedShadowAmbientIntensity;
     }
     void SetProjectedShadowAmbientRgb(float intensity) {
         ProjectedShadowAmbientIntensity() = intensity;
-        raw<float>(offsets::kFloatA0cf4) = intensity;
-        raw<float>(offsets::kFloatA0cf8) = intensity;
+        m_state.projectedShadowAmbientG = intensity;
+        m_state.projectedShadowAmbientB = intensity;
     }
     void SetProjectedShadowAmbient(float intensity) {
         SetProjectedShadowAmbientRgb(intensity);
-        raw<float>(offsets::kFloatA0cfc) = intensity;
+        m_state.projectedShadowAmbientA = intensity;
     }
     float& ProjectedShadowSpecularAlpha() {
-        return raw<float>(offsets::kFloatA0d0c);
+        return m_state.projectedShadowSpecularAlpha;
     }
     D3DMATERIAL9 ProjectedShadowMaterial() const {
         D3DMATERIAL9 material{};
-        material.Diffuse.a = raw<float>(offsets::kFloatA0cec);
-        material.Ambient = {raw<float>(offsets::kDwordA0cf0),
-                            raw<float>(offsets::kFloatA0cf4),
-                            raw<float>(offsets::kFloatA0cf8),
-                            raw<float>(offsets::kFloatA0cfc)};
-        material.Specular.a = raw<float>(offsets::kFloatA0d0c);
+        material.Diffuse.a = m_state.projectedShadowDiffuseAlpha;
+        material.Ambient = {m_state.projectedShadowAmbientIntensity,
+                            m_state.projectedShadowAmbientG,
+                            m_state.projectedShadowAmbientB,
+                            m_state.projectedShadowAmbientA};
+        material.Specular.a = m_state.projectedShadowSpecularAlpha;
         return material;
     }
     std::uint8_t& DirectSoundAvailable() {
-        return raw<std::uint8_t>(offsets::kByte2D0);
+        return m_state.directSoundAvailable;
     }
     std::int32_t& TimelineStartFrame() {
         return raw<std::int32_t>(offsets::kDword97C);
@@ -827,28 +831,28 @@ public:
         return raw<float>(offsets::kFloatF9e658);
     }
     std::uint32_t& PlaybackClockAnchorLow() {
-        return raw<std::uint32_t>(offsets::kDword9EDA8);
+        return m_state.playbackClockAnchorLow;
     }
     std::uint32_t& PlaybackClockAnchorHigh() {
-        return raw<std::uint32_t>(offsets::kDword9EDAC);
+        return m_state.playbackClockAnchorHigh;
     }
     std::int32_t& SavedPlaybackPhysicsMode() {
-        return raw<std::int32_t>(offsets::kDwordA0670);
+        return m_state.savedPlaybackPhysicsMode;
     }
     std::uint8_t& PlaybackStartsAtCurrentFrame() {
         return raw<std::uint8_t>(offsets::kByte9ED99);
     }
     std::uint8_t& PlaybackFrameChanged() {
-        return raw<std::uint8_t>(offsets::kByte9EDB6);
+        return m_state.playbackFrameChanged;
     }
     std::uint8_t& PhysicsResetPending() {
-        return raw<std::uint8_t>(offsets::kByte9EDB5);
+        return m_state.physicsResetPending;
     }
     std::uint8_t PhysicsResetPending() const {
-        return raw<std::uint8_t>(offsets::kByte9EDB5);
+        return m_state.physicsResetPending;
     }
     std::int32_t& PlaybackPhysicsMode() {
-        return raw<std::int32_t>(offsets::kDwordA0CC4);
+        return m_state.playbackPhysicsMode;
     }
     std::int32_t& SidebarWidth() {
         return raw<std::int32_t>(offsets::kDwordSidebar);
@@ -858,17 +862,17 @@ public:
     std::int32_t& SeparateWindowSidebarWidth() {
         return raw<std::int32_t>(offsets::kDwordV658748);
     }
-    std::int32_t& SeparateWindowX() { return raw<std::int32_t>(offsets::kDwordWinx); }
-    std::int32_t& SeparateWindowY() { return raw<std::int32_t>(offsets::kDwordWiny); }
-    std::int32_t& SeparateWindowWidth() { return raw<std::int32_t>(offsets::kDwordWinw); }
-    std::int32_t& SeparateWindowHeight() { return raw<std::int32_t>(offsets::kDwordWinh); }
+    std::int32_t& SeparateWindowX() { return m_state.separateWindowX; }
+    std::int32_t& SeparateWindowY() { return m_state.separateWindowY; }
+    std::int32_t& SeparateWindowWidth() { return m_state.separateWindowWidth; }
+    std::int32_t& SeparateWindowHeight() { return m_state.separateWindowHeight; }
     std::uint8_t& SeparateWindowMaximized() {
-        return raw<std::uint8_t>(offsets::kByteWinflag);
+        return m_state.separateWindowMaximized;
     }
     std::uint8_t& FrameVolumeControlEnabled() {
         return raw<std::uint8_t>(offsets::kByteFlag672800);
     }
-    float& SidebarRatio() { return raw<float>(offsets::kFloatRatio672808); }
+    float& SidebarRatio() { return m_state.sidebarRatio; }
     std::int32_t& FrameNormalization() {
         return raw<std::int32_t>(offsets::kDwordVal672804);
     }
@@ -879,7 +883,7 @@ public:
         return raw<RECT>(offsets::kDwordHideRight);
     }
     std::uint8_t& FullscreenMode() {
-        return raw<std::uint8_t>(offsets::kByteA0274);
+        return m_state.fullscreenMode;
     }
     std::uint32_t& MessageSeen() {
         return raw<std::uint32_t>(offsets::kDwordMsgseen);
@@ -921,10 +925,10 @@ public:
         return raw<std::uint8_t>(offsets::kByteA03E9);
     }
     WNDPROC& OriginalEditProc() {
-        return raw<WNDPROC>(offsets::kPtrOrigEditProc);
+        return reinterpret_cast<WNDPROC&>(m_state.origEditProc);
     }
     WNDPROC& OriginalTrackbarProc() {
-        return raw<WNDPROC>(offsets::kPtrOrigTrackProc);
+        return reinterpret_cast<WNDPROC&>(m_state.origTrackProc);
     }
     std::uint32_t& CameraTrackCursor() { return raw<std::uint32_t>(648796); }
     std::uint8_t& CameraTrackActive() { return raw<std::uint8_t>(648800); }
@@ -999,7 +1003,7 @@ public:
     float& DeltaTime()              { return raw<float>(offsets::kFloatDeltatime); }  // 657084
     std::uint32_t& TimeNowLow()     { return raw<std::uint32_t>(offsets::kDwordTimenowlo); }
     std::uint32_t& TimeNowHigh()    { return raw<std::uint32_t>(offsets::kDwordTimenowhi); }
-    float& MilliToSec()             { return raw<float>(offsets::kFloatMillitosec); }  // 0.001
+    float& MilliToSec()             { return m_state.milliToSec; }  // 0.001
 
     // Environment / startup scene file (wchar_t[256] @ 657664)
     wchar_t* EnvFileName()          { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsEnvfile); }
@@ -1029,13 +1033,13 @@ public:
     unsigned char& EnglishUI()      { return raw<unsigned char>(offsets::kByteEnglish); }  // 658252
 
     // User directory names (wchar_t[1000] each, 0x0047A5B0)
-    wchar_t* DirModel()   { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsDirModel); }
-    wchar_t* DirUser()    { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsDirUser); }
-    wchar_t* DirAccs()    { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsDirAccs); }
-    wchar_t* DirMotion()  { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsDirMotion); }
-    wchar_t* DirPose()    { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsDirPose); }
-    wchar_t* DirWave()    { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsDirWave); }
-    wchar_t* DirBg()      { return reinterpret_cast<wchar_t*>(storage() + offsets::kWcsDirBg); }
+    wchar_t* DirModel()   { return m_state.dirModel; }
+    wchar_t* DirUser()    { return m_state.dirUser; }
+    wchar_t* DirAccs()    { return m_state.dirAccs; }
+    wchar_t* DirMotion()  { return m_state.dirMotion; }
+    wchar_t* DirPose()    { return m_state.dirPose; }
+    wchar_t* DirWave()    { return m_state.dirWave; }
+    wchar_t* DirBg()      { return m_state.dirBg; }
 
     // Physics gravity (defaults 0.0 / -1.0 / 0.0, magnitude 9.8)
     float& GravityX()               { return raw<float>(offsets::kFloatGravx); }
@@ -1046,9 +1050,9 @@ public:
 
     // Recent-file ANSI buffers (char[256] each)
     char* RecentFile(int index) {
-        static constexpr std::size_t bases[3] = {
-            offsets::kWcsRecent0, offsets::kWcsRecent1, offsets::kWcsRecent2};
-        return reinterpret_cast<char*>(storage() + bases[index]);
+        return index == 0 ? reinterpret_cast<char*>(m_state.recentFile0)
+             : index == 1 ? reinterpret_cast<char*>(m_state.recentFile1)
+                          : reinterpret_cast<char*>(m_state.recentFile2);
     }
 
     unsigned char* storage() { return reinterpret_cast<unsigned char*>(&m_state); }
@@ -1088,6 +1092,13 @@ private:
         IDirect3DVertexBuffer9* avi = nullptr;
         IDirect3DVertexBuffer9* picture = nullptr;
     } m_overlayVertexBuffers;
+
+    // The x86 blob holds the AVI output path (wchar_t[256] at 0x9EE80) and
+    // the codec selection (int at 0xA0CD8) inline.  The provisional x64
+    // blob reserves less room before the next live field in both regions,
+    // so these dialog-local values live outside the compat blob on x64.
+    wchar_t m_aviOutputPath[256]{};
+    std::int32_t m_aviCodecSelection{};
 #endif
 };
 
