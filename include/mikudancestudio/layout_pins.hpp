@@ -540,10 +540,8 @@ static_assert(offsetof(MMDAppState, modelOutlineColorBlue) == 655776,
               "modelOutlineColorBlue x86");
 static_assert(offsetof(MMDAppState, buf655780) == 655780,
               "buf655780 x86");
-static_assert(offsetof(MMDAppState, wireframeRenderingEnabled) == 655828,
+static_assert(offsetof(MMDAppState, wireframeRenderingEnabled) == 655844,
               "wireframeRenderingEnabled x86");
-static_assert(offsetof(MMDAppState, a01E4) == 655844,
-              "a01E4 x86");
 static_assert(offsetof(MMDAppState, lightViewProjectionMatrix) == 655848,
               "lightViewProjectionMatrix x86");
 static_assert(offsetof(MMDAppState, worldViewProjectionMatrix) == 655912,

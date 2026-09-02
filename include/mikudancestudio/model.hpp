@@ -21,7 +21,16 @@ namespace mikudancestudio::mdl {
 // tables and architecture-specific bookkeeping, so in-memory allocation must
 // follow the compiled ABI rather than the Win32 byte count.
 constexpr std::size_t kSize = sizeof(ModelRecord);
+// The x64 E build doubled the bone-key pool: the model allocates
+// 0x2255100 bytes (600000 x 0x3C) at model+0x2790, sweeps end at byte
+// 0x2255100 / record 0x927C0, and the overflow box prints 600000
+// (x64 0x7FF7CB4D213D alloc, 0x7FF7CB47B16D box).  The x86 original
+// keeps 300000 (0x493E0).
+#ifdef _M_X64
+constexpr std::size_t kBoneKeyCapacity = 600000;
+#else
 constexpr std::size_t kBoneKeyCapacity = 300000;
+#endif
 constexpr std::size_t kMorphKeyCapacity = 20000;
 constexpr std::size_t kDisplayKeyCapacity = 1000;
 

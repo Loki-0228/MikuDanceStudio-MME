@@ -10,7 +10,9 @@
 //   4. slots 1..10: data\toon%02d.bmp via D3DXCreateTextureFromFileExA
 //      (fmt 21 = A8R8G8B8, pool 1 = MANAGED); on failure fall back to the
 //      embedded PNG resource (id+103); on success read the bottom-left
-//      pixel via LockRect and store B/G/R * (1/256) into the same table.
+//      pixel via LockRect and store R/G/B * (1/256) into entries
+//      [3*(N-1) .. 3*(N-1)+2] of the same table (stride three floats
+//      per toon texture; x64 0x7FF7CB4BA522..0x7FF7CB4BA567).
 //
 // D3DX fidelity: the original imports d3dx9_32.dll specifically; the port
 // LoadLibrary's the very same DLL and resolves the two entry points, so no
@@ -183,15 +185,20 @@ bool InitToonTextures(MMDApp* app) {
                              static_cast<DWORD>(-1), 0, nullptr, nullptr,
                              slot);
         } else {
-            // sample the bottom-left pixel -> B/G/R * (1/256) into the table
+            // x64 sub_7FF7CB4BA130+0x3F2..0x437 (0x7FF7CB4BA522..0x7FF7CB4BA567):
+            // the bottom-left pixel of toon%02d.bmp (A8R8G8B8 lock order
+            // B,G,R,A) fills table entry 3*(N-1)..3*(N-1)+2 as R,G,B
+            // (*entry = row[2]/256, entry[1] = row[1]/256, entry[2] =
+            // row[0]/256); the entry pointer then advances by three floats
+            // per texture (add r12,0Ch @0x7FF7CB4BA563).
             D3DLOCKED_RECT rect;
             if (SUCCEEDED((*slot)->LockRect(0, &rect, nullptr, 0))) {
                 auto* row = static_cast<unsigned char*>(rect.pBits) +
                             rect.Pitch * (info.Height - 1);
-                float* out = &s.state.toonEdgeTable[i];
-                out[1] = row[0] * 0.00390625f;     // G? original: [0]->v7[1]
-                out[0] = row[1] * 0.00390625f;
-                out[-1] = row[2] * 0.00390625f;
+                float* out = &s.state.toonEdgeTable[3 * (i - 1)];
+                out[0] = row[2] * 0.00390625f;     // R
+                out[1] = row[1] * 0.00390625f;     // G
+                out[2] = row[0] * 0.00390625f;     // B
                 (*slot)->UnlockRect(0);
             }
         }

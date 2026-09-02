@@ -236,7 +236,7 @@ void CmdSaveMotion(MMDApp* app) {
     // camera (0x374/+0x48, stride 0x54) and light (0x378/+0x24, stride
     // 0x28) tables (cap 10000 each), the shadow table (0x37C/+0x14,
     // stride 0x18 - a hit there proceeds directly), and the active
-    // model's bone (0x26E0/+0x38, stride 0x3C, cap 300000), morph
+    // model's bone (0x26E0/+0x38, stride 0x3C, cap kBoneKeyCapacity), morph
     // (0x26E4/+0x10, stride 0x14, cap 0x4E20 = 20000 - NOT 300000;
     // both builds keep allocated-but-unselected garbage past 20000) and
     // IK (0x26E8/+0x14, stride 0x1C, cap 1000) selection tables.

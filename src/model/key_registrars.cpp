@@ -29,7 +29,8 @@
 //     - position is stored only for bone types 0/1/2.
 //     - insert: walk next-links from the bone index, exact frame =
 //       overwrite in place, else allocate + splice (prev/next), append
-//       when the chain ends; overflow at 300000 records raises the
+//       when the chain ends; overflow at kBoneKeyCapacity records (the
+//       x64 E build's 600000; the x86 original's 300000) raises the
 //       "You cannot regist over %d point" box (EN/JP by model+12740) and
 //       returns 0; model+12720 max-frame bump (exact/insert paths bump
 //       the RAW frameOffset - an original quirk kept).
@@ -50,7 +51,7 @@
 //     array.  VMD load passes cnt2 = 0.
 //
 //   Sub4A4940(model)  resets model+8768 to the bone count, then skips
-//     occupied (frame != 0) 60-byte records (cap 300000).
+//     occupied (frame != 0) 60-byte records (cap kBoneKeyCapacity).
 //   Sub4A49A0(model)  reseeds model+8768 to the morph count and skips
 //     occupied 20-byte records (cap 20000).
 //
@@ -119,13 +120,19 @@ const char kJpFrameRegTitle[] =  // 0x52B908 "フレーム登録"
 // HWND is read from model+0
 void OverflowBox(unsigned char* m, int limit) {
     char text[256];
-    if (mikudancestudio::mdl::Mdl(m)->physicsFlags != 0)
+    // x64 sub_7FF7CB4E9390 @0x7FF7CB4E9D4B: language byte selects both the
+    // format and the caption ("register frame" / フレーム登録).
+    if (mikudancestudio::mdl::Mdl(m)->physicsFlags != 0) {
         sprintf_s(text, 0x100,
                   "You cannot regist over %d point\n"
                   "Please execute 'delete unused frame'", limit);
-    else
+        MessageBoxA(*reinterpret_cast<HWND*>(m), text,
+                    "register frame", 0);
+    } else {
         sprintf_s(text, 0x100, kJpOverflow, limit);
-    MessageBoxA(*reinterpret_cast<HWND*>(m), text, "register frame", 0);
+        MessageBoxA(*reinterpret_cast<HWND*>(m), text,
+                    kJpFrameRegTitle, 0);
+    }
 }
 
 // copy the parsed bone-key fields into a 60-byte record (the exact-
@@ -176,9 +183,12 @@ int FindMirroredBone(unsigned char* model, const unsigned char* rec) {
         return -1;
     };
 
-    int index = findOpposite(kRight, kLeft);
+    // x64 sub_7FF7CB4E9DB0: first 左 in the source name (0x7FF7CB4E9DE6,
+    // strstr @0x7FF7CB4E9DF7) -> bones containing 右; only when the name
+    // lacks 左 does the 右-in-source -> 左-in-bones pass run (0x7FF7CB4E9E7C).
+    int index = findOpposite(kLeft, kRight);
     if (index >= 0) return index;
-    index = findOpposite(kLeft, kRight);
+    index = findOpposite(kRight, kLeft);
     if (index >= 0) return index;
     for (int i = 0; i < boneCount; ++i) {
         if (std::strcmp(name, bones[i].name) == 0)
@@ -237,7 +247,8 @@ void Sub4A4940(unsigned char* model) {
     cursor = static_cast<int>(mdl::Mdl(m)->boneCount);
     if (keys[cursor].frame != 0) {
         do {
-            if (++cursor >= 0x493E0) break;
+            if (++cursor >= static_cast<int>(mdl::kBoneKeyCapacity))
+                break;
         } while (keys[cursor].frame != 0);
     }
 }
@@ -419,8 +430,8 @@ bool Sub49D880(unsigned char* model, unsigned char* rec, int frameOffset,
                 for (;;) {
                     ++mdl::Mdl(m)->searchCursor;
                     ++free_;
-                    if (60 * free_ >= 18000000) {
-                        OverflowBox(m, 300000);
+                    if (free_ >= static_cast<int>(mdl::kBoneKeyCapacity)) {
+                        OverflowBox(m, static_cast<int>(mdl::kBoneKeyCapacity));
                         return false;
                     }
                     if (keys[free_].frame == 0) break;
@@ -450,8 +461,8 @@ bool Sub49D880(unsigned char* model, unsigned char* rec, int frameOffset,
             for (;;) {
                 ++mdl::Mdl(m)->searchCursor;
                 ++free_;
-                if (60 * free_ >= 18000000) {
-                    OverflowBox(m, 300000);
+                if (free_ >= static_cast<int>(mdl::kBoneKeyCapacity)) {
+                    OverflowBox(m, static_cast<int>(mdl::kBoneKeyCapacity));
                     return false;
                 }
                 if (keys[free_].frame == 0) break;
@@ -548,8 +559,8 @@ bool Sub49E310(unsigned char* model, unsigned char* rec, int frameOffset) {
                 for (;;) {
                     ++mdl::Mdl(m)->searchCursor;
                     ++free_;
-                    if (60 * free_ >= 18000000) {
-                        OverflowBox(m, 300000);
+                    if (free_ >= static_cast<int>(mdl::kBoneKeyCapacity)) {
+                        OverflowBox(m, static_cast<int>(mdl::kBoneKeyCapacity));
                         return false;
                     }
                     if (keys[free_].frame == 0) break;
@@ -576,8 +587,8 @@ bool Sub49E310(unsigned char* model, unsigned char* rec, int frameOffset) {
             for (;;) {
                 ++mdl::Mdl(m)->searchCursor;
                 ++free_;
-                if (60 * free_ >= 18000000) {
-                    OverflowBox(m, 300000);
+                if (free_ >= static_cast<int>(mdl::kBoneKeyCapacity)) {
+                    OverflowBox(m, static_cast<int>(mdl::kBoneKeyCapacity));
                     return false;
                 }
                 if (keys[free_].frame == 0) break;

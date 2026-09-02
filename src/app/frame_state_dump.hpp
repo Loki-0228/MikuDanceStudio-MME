@@ -299,7 +299,7 @@ inline void DumpFrameEntryState(MMDApp* app,
                 }
                 std::fputs("]}", stream);
                 const int next = static_cast<int>(typedKey->next);
-                if (next == 0 || next < 0 || next >= 300000 ||
+                if (next == 0 || next < 0 || next >= static_cast<int>(mdl::kBoneKeyCapacity) ||
                     next == keyIndex)
                     break;
                 keyIndex = next;

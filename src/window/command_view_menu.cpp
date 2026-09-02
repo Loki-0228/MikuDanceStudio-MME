@@ -2123,10 +2123,12 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         for (std::size_t o = 0; o < 0x6D60u; o += 0x1C) {
             of[o + 0x14] = 0;
         }
-        // bone display frames
+        // bone display frames (0x112A880 bytes on x86; the x64 E build
+        // doubles the pool, so the bound follows kBoneKeyCapacity)
         unsigned char* bf =
             *reinterpret_cast<unsigned char**>(model + kModelBoneFrames);
-        for (std::size_t o = 0; o < 0x112A880u; o += 0x3C) {
+        for (std::size_t o = 0;
+             o < sizeof(mdl::BoneKey) * mdl::kBoneKeyCapacity; o += 0x3C) {
             bf[o + 0x38] = 0;
         }
         // mark visible bones + parent chains
@@ -2464,12 +2466,12 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 287 (0x0048B8CF): toggle byte app+0xA01E4 with CheckMenuItem 0x11F.
     // ------------------------------------------------------------------
     case 287: {
-        if (app->state.a01E4 != 0) {
+        if (app->WireframeRenderingEnabled() != 0) {
             CheckMenuItem(GetMenu(hwnd), 0x11F, MF_UNCHECKED);
-            app->state.a01E4 = 0;
+            app->WireframeRenderingEnabled() = 0;
         } else {
             CheckMenuItem(GetMenu(hwnd), 0x11F, MF_CHECKED);
-            app->state.a01E4 = 1;
+            app->WireframeRenderingEnabled() = 1;
         }
         return;
     }

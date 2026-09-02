@@ -52,7 +52,9 @@
 //   model+0x31BC    (+12732)/(+12733) pose-registration flags
 //   model+0x38FD    (+14589, signed char) model-spec gate (>=14 / >=15)
 //   model+0x38F8    (+14584) physics-pose slot count
-//   model+0x3908    (+14596) 300000-byte marker array (memset 0)
+//   model+0x3908    (+14596) bone-key marker array, one byte per record
+//                   (memset 0 over kBoneKeyCapacity bytes; x64 twin at
+//                   +0x3CAC per the model+0x2790 pool doubling)
 //   model+0x38E4    (+14568) computed leg length (cache, -1 = unset)
 //   model+0x37CC..0x38F0 (+14284..14568) standard-bone probe positions
 //                   (float triples, -999.0 = bone not found)
@@ -130,15 +132,18 @@ const char kJpOverflow[] =
     "\x8d\x73\x82\xb5\x82\xc4\x89\xba\x82\xb3\x82\xa2";
 const char kJpFrameRegTitle[] = "\xcc\xda\xb0\xd1\x93\x6f\x98\x5e";
 
-// 0x4A4C22: overflow box, limit is always 300000 here.
-void OverflowBox300k(unsigned char* m) {
+// 0x4A4C22: overflow box; the limit is the bone-key capacity (the x64
+// E build's sprintf arg is 0x927C0 = 600000, the x86 original's 300000).
+void OverflowBoxBoneKey(unsigned char* m) {
     char text[256];
     if (mikudancestudio::mdl::Mdl(m)->physicsFlags != 0)
         sprintf_s(text, 0x100,
                   "You cannot regist over %d point\n"
-                  "Please execute 'delete unused frame'", 300000);
+                  "Please execute 'delete unused frame'",
+                  static_cast<int>(mdl::kBoneKeyCapacity));
     else
-        sprintf_s(text, 0x100, kJpOverflow, 300000);
+        sprintf_s(text, 0x100, kJpOverflow,
+                  static_cast<int>(mdl::kBoneKeyCapacity));
     // Caption 0x4A4C22: JP 0x52B908 when the JP flag is clear, "register
     // frame" when set (the JP constant was previously unused).
     MessageBoxA(*reinterpret_cast<HWND*>(m), text,
@@ -282,8 +287,8 @@ bool Sub4A4A50(unsigned char* m, int boneIdx, int srcIdx, int mode,
     if (keys[scan].frame != 0) {
         do {
             ++scan;
-            if (scan >= 0x493E0) {                                // 0x4A4AFC
-                OverflowBox300k(m);                               // 0x4A4C22
+            if (scan >= static_cast<int>(mdl::kBoneKeyCapacity)) {  // 0x4A4AFC
+                OverflowBoxBoneKey(m);                            // 0x4A4C22
                 return false;
             }
         } while (keys[scan].frame != 0);
@@ -329,11 +334,13 @@ bool Sub4A4A50(unsigned char* m, int boneIdx, int srcIdx, int mode,
                     for (;;) {
                         ++scan;
                         cand = scan;                              // 0x4A5578
-                        if (scan >= 0x493E0) break;               // 0x4A557C
+                        if (scan >=
+                            static_cast<int>(mdl::kBoneKeyCapacity))
+                            break;                   // 0x4A557C
                         if (keys[scan].frame == 0) break;
                     }
-                    if (scan >= 0x493E0) {
-                        OverflowBox300k(m);                       // 0x4A5636
+                    if (scan >= static_cast<int>(mdl::kBoneKeyCapacity)) {
+                        OverflowBoxBoneKey(m);                   // 0x4A5636
                         return false;                             // 0x4A55FB
                     }
                 }
@@ -367,7 +374,8 @@ bool Sub4A4A50(unsigned char* m, int boneIdx, int srcIdx, int mode,
 void Sub4A5690(unsigned char* m, std::uint32_t frame) {
     mdl::ModelRecord& model = *mdl::Mdl(m);
     mdl::BoneKey* const boneKeys = mdl::BoneKeys(m);
-    for (int i = 0; i < 300000; ++i) boneKeys[i].allocated = 0;
+    for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i)
+        boneKeys[i].allocated = 0;
     mdl::MorphKey* const morphKeys = mdl::MorphKeys(m);
     for (int i = 0; i < 20000; ++i) morphKeys[i].allocated = 0;
     mdl::DisplayKey* const masterKeys = mdl::DisplayKeys(m);
@@ -433,7 +441,8 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
         ::operator new(3456 * static_cast<std::size_t>(model.matMisc))); // 0x4A5995
     std::memset(poseSrc, 0,
                 3456 * static_cast<std::size_t>(model.matMisc));   // 0x4A59C2
-    std::memset(m + 14596, 0, 0x493E0);                            // 0x4A59D5
+    std::memset(mdl::Mdl(m)->keyVisitMap, 0,
+                sizeof(mdl::Mdl(m)->keyVisitMap));               // 0x4A59D5
 
     // standard-bone probes (order and srcIdx/mode pairs from the original)
     int i;

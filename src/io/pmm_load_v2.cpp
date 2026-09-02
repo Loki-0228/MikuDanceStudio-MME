@@ -1873,8 +1873,8 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
             ofn.Flags = 0x1000;
             ofn.lpstrInitialDir =
                 (GetMenuState(GetMenu(main), 0x12D, 0) & 8)
-                    ? reinterpret_cast<LPCWSTR>(s->state.dirModel)
-                    : kWUserAcc;
+                    ? reinterpret_cast<LPCWSTR>(s->state.dirAccs)
+                    : kWUserAcc;                     // 0x7FF7CB49F294
             ofn.lpstrDefExt = L"x";
             ofn.nMaxFileTitle = 0x100;
             ofn.lpstrFileTitle = ofnTitle;
@@ -1892,8 +1892,8 @@ strcpy_s(text, 0x100, "");                                  // 0x450331
                 wchar_t* d = ExtractDirFromPath(
                     paths.projectDirectory,
                     ofnFile);
-                wcscpy_s(reinterpret_cast<wchar_t*>(s->state.dirModel),
-                         0x3E8, d);
+                wcscpy_s(reinterpret_cast<wchar_t*>(s->state.dirAccs),
+                         0x3E8, d);                  // 0x7FF7CB49F33C
             }
             if (!LoadAccessoryObject(s, accs[accSlot], ofnFile)) {
                 _close(fd);                                     // 0x456764

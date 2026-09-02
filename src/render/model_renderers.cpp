@@ -1192,7 +1192,12 @@ void DrawModelOutlines(MMDApp* app, bool effectEdge) {
     // x64 inlines this walk into both callers with 0xFF bounds: fixed pass
     // sub_7FF7CB4BFB20+0x4C09E0 (cmp edi,0FFh @0x4C0A74 / cmp r8d,0FFh
     // @0x4C0A0D), effect pass sub_7FF7CB4C1E60+0x4C37A0 (@0x4C38FE /
-    // @0x4C37CE).
+    // @0x4C37CE).  The outline-suppression byte (app+0xA1105) is checked
+    // only by the effect frame's copy (0x7FF7CB4C3815, after the
+    // edgeScale/postLoad/camera gates); the fixed frame's copy has no
+    // reference to it anywhere in sub_7FF7CB4BFB20.
+    const bool suppressed = effectEdge &&
+        app->ModelOutlineRenderingSuppressed() != 0;
     for (int order = 0; order < kModelSlotCount; ++order) {
         unsigned char* model = nullptr;
         for (int slot = 0; slot < kModelSlotCount; ++slot) {
@@ -1203,7 +1208,7 @@ void DrawModelOutlines(MMDApp* app, bool effectEdge) {
                 break;
             }
         }
-        if (model == nullptr || app->ModelOutlineRenderingSuppressed() != 0)
+        if (model == nullptr)
             continue;
         const mdl::ModelRecord& state = *mdl::Mdl(model);
         if (state.edgeScale <= 0.0f || state.postLoadFlag2 != 0)
@@ -1211,6 +1216,8 @@ void DrawModelOutlines(MMDApp* app, bool effectEdge) {
         const bool cameraGate = app->PlaybackActive() != 0 ||
             app->UsesViewportTool();
         if (!cameraGate)
+            continue;
+        if (suppressed)
             continue;
         app->ActiveRenderObject() = model;
         if (effectEdge) {
@@ -1355,6 +1362,10 @@ void RenderModelsFixed(MMDApp* app) {                         // 0x425D20
     if (materialCapture)
         EndMaterialStateCapture();
 
+    // Edge preamble, x64 sub_7FF7CB4BFB20 @0x7FF7CB4C0930..0x7FF7CB4C09C8
+    // (inside the wireframe gate): pass=4, SetTexture(0,null),
+    // LIGHTING(137)=FALSE, ALPHABLENDENABLE(27)=TRUE, CULLMODE(22)=CW(2),
+    // ZFUNC(23)=LESS(2); then the model walk.
     if (app->WireframeRenderingEnabled() == 0) {
         app->ActiveRenderPass() = AccessoryRenderPass::ModelOutline;
         device->SetTexture(0, nullptr);
@@ -1363,21 +1374,26 @@ void RenderModelsFixed(MMDApp* app) {                         // 0x425D20
         device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CW);
         device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESS);
         DrawModelOutlines(app, false);
-        device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
-        device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
-        device->SetRenderState(D3DRS_LIGHTING, TRUE);
     }
-    // 0x426930..0x4269F8: second accessory range preamble - cull/zfunc/
-    // lighting restore, stage-0 passthrough reset, wrap samplers (blend
-    // on comes from RenderAccessoriesFixedRange's entry).
+    // Second accessory range preamble, x64 0x7FF7CB4C0A87..0x7FF7CB4C0B89 -
+    // runs unconditionally (wireframe-on jumps straight here from the gate):
+    // pass=1, CULLMODE=CCW(3), ZFUNC=LESSEQUAL(4), LIGHTING=TRUE,
+    // stage-0 passthrough reset, wrap samplers, then ALPHABLENDENABLE=TRUE.
+    app->ActiveRenderPass() = AccessoryRenderPass::FixedFunction;
+    device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
+    device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+    device->SetRenderState(D3DRS_LIGHTING, TRUE);
     device->SetTextureStageState(0, D3DTSS_TEXTURETRANSFORMFLAGS, 0);
     device->SetTextureStageState(0, D3DTSS_TEXCOORDINDEX, 0);
     device->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
     device->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
+    device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     RenderAccessoriesFixedRange(app, accessorySplit, 255);
-    // 0x426C93..0x426CB1: frame tail.
+    // Frame tail, x64 sub_7FF7CB4BFB20 @0x7FF7CB4C0FC3/0x7FF7CB4C0FE3:
+    // DESTBLEND(20)=INVSRCALPHA then FILLMODE(8)=SOLID.  No ZENABLE write
+    // here in the original.
     device->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
-    device->SetRenderState(D3DRS_ZENABLE, D3DZB_TRUE);
+    device->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
     app->ActiveRenderPass() = AccessoryRenderPass::None;
 }
 
@@ -1468,15 +1484,30 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
         }
     }
     FxSetInt(effect, "transp", 0);
+    // x64 sub_7FF7CB4C1E60 @0x7FF7CB4C3711: ALPHABLENDENABLE=TRUE is set
+    // before the wireframe gate, so blending stays on when the edge pass
+    // is skipped.  The gate jumps straight to the restore sequence
+    // (@0x7FF7CB4C395D); this preamble has no ZFUNC write - the edge
+    // geometry keeps the LESSEQUAL comparison restored earlier, and the
+    // edge draw itself (sub_7FF7CB4D82A0) sets no comparison state.
+    device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     if (app->WireframeRenderingEnabled() == 0) {
         app->ActiveRenderPass() = AccessoryRenderPass::ModelOutline;
-        device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
         device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CW);
-        device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESS);
         DrawModelOutlines(app, true);
-        device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
-        device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
     }
+    // Restore sequence, x64 0x7FF7CB4C395D..0x7FF7CB4C3A3C (unconditional;
+    // the wireframe gate enters here directly): CULLMODE=CCW(3),
+    // ZFUNC=LESSEQUAL(4), LIGHTING=TRUE, then the same stage-0 passthrough
+    // reset and wrap samplers as the fixed frame.  No trailing
+    // ALPHABLENDENABLE here - it was already set before the gate.
+    device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
+    device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+    device->SetRenderState(D3DRS_LIGHTING, TRUE);
+    device->SetTextureStageState(0, D3DTSS_TEXTURETRANSFORMFLAGS, 0);
+    device->SetTextureStageState(0, D3DTSS_TEXCOORDINDEX, 0);
+    device->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
+    device->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
     RenderAccessoriesEffectRange(app, accessorySplit, 255);
     device->SetVertexShader(nullptr);
     device->SetPixelShader(nullptr);
@@ -1623,18 +1654,25 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
     std::memcpy(&app->LightViewProjection(), &shadowMatrix,
                 sizeof(shadowMatrix));
 
-    Matrix wvp;
-    Multiply(&worldView, reinterpret_cast<const Matrix*>(frameMatrix), &view);
-    Multiply(&wvp, &worldView, &projection);
-    std::memcpy(&app->WorldViewProjection(), &wvp, sizeof(wvp));
-    FxSetMatrix(effect, "matLightViewProj", &shadowMatrix);
-    FxSetMatrix(effect, "matWorldViewProj", &wvp);
     UINT passes = 0;
     app->ActiveRenderPass() = AccessoryRenderPass::ModelEffect;
     if (SUCCEEDED(FxBegin(effect, &passes))) {
-        // x64 twin sub_7FF7CB4C1030+0x4C1CC0: slot walk is a 255-count
-        // do/while over app+0xBE8 (mov r13d,0FFh @0x4C198C, dec r13/jnz),
-        // toonFlag read at model+0x3B68.
+        // x64 sub_7FF7CB4C1030 order inside the Begin/End block: the
+        // accessory shadow casters come first (0x7FF7CB4C1992..0x7FF7CB4C1BD4,
+        // sub_7FF7CB4FDCB0 per slot), then matLightViewProj is set
+        // (0x7FF7CB4C1BF9), then matWorldViewProj is computed from
+        // frame*view*proj and set (0x7FF7CB4C1C0E..0x7FF7CB4C1C86) between
+        // the two loops, and only then does the model slot walk run
+        // (0x7FF7CB4C1CB5..0x7FF7CB4C1CF4, sub_7FF7CB4D8520; 255-count
+        // do/while over app+0xBE8, mov r13d,0FFh @0x4C198C / dec r13/jnz,
+        // toonFlag read at model+0x3B68).
+        RenderAccessoriesShadow(app);
+        FxSetMatrix(effect, "matLightViewProj", &shadowMatrix);
+        Matrix wvp;
+        Multiply(&worldView, reinterpret_cast<const Matrix*>(frameMatrix), &view);
+        Multiply(&wvp, &worldView, &projection);
+        std::memcpy(&app->WorldViewProjection(), &wvp, sizeof(wvp));
+        FxSetMatrix(effect, "matWorldViewProj", &wvp);
         for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* model = app->ModelSlot(slot);
             if (model == nullptr || mdl::Mdl(model)->toonFlag == 0)
@@ -1643,7 +1681,6 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
             DrawModelMaterials(app, model, true, true);
             app->ActiveRenderObject() = nullptr;
         }
-        RenderAccessoriesShadow(app);
         FxEnd(effect);
     }
     app->ActiveRenderPass() = AccessoryRenderPass::None;
@@ -1659,7 +1696,9 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
     device->SetViewport(&oldViewport);
     device->SetTransform(D3DTS_PROJECTION,
                          reinterpret_cast<const D3DMATRIX*>(&projection));
-    device->SetRenderState(D3DRS_NORMALIZENORMALS, TRUE);
+    // x64 sub_7FF7CB4C1030 tail @0x7FF7CB4C1E1D/0x7FF7CB4C1E43:
+    // ALPHABLENDENABLE(27)=TRUE, then CULLMODE(22)=CCW(3).
+    device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
 }
 

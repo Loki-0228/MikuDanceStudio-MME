@@ -415,7 +415,9 @@ void Sub4A1510(unsigned char* model, int frame) {
         return;
     mdl::BoneKey* const keys = mdl::BoneKeys(model);
     std::int32_t selectedCount = 0;
-    for (std::int32_t group = 0; group < 0xC350; ++group) {
+    for (std::int32_t group = 0;
+         group < static_cast<std::int32_t>(mdl::kBoneKeyCapacity / 6);
+         ++group) {
         for (int lane = 0; lane < 6; ++lane) {
             if (keys[group * 6 + lane].allocated != 0)
                 ++selectedCount;

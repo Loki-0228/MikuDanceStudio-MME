@@ -179,6 +179,11 @@ void ReloadModels(MMDApp* app) {
     const std::uint32_t currentFrame = current.frame;
     if (currentFrame <= frame) {
         CopyCameraKey(app, current);
+        // Exact-hit and terminal-key copies both clear the view offset
+        // mid-payload (x64 *(_QWORD*)(app+0x340) = 0 at 0x7FF7CB479CFC and
+        // 0x7FF7CB479EF9; x86 0x308/0x30C).
+        s.state.viewOffsetX = 0.0f;
+        s.state.viewOffsetY = 0.0f;
         s.CameraParentModel() = current.parentModel;
         s.CameraParentBone() = current.parentBone;
     } else {
@@ -186,6 +191,10 @@ void ReloadModels(MMDApp* app) {
         const std::uint32_t previousFrame = previous.frame;
         if (currentFrame - 1 == previousFrame) {
             CopyCameraKey(app, previous);
+            // x64 runs this case through the interpolator, whose view-
+            // offset clear (0x7FF7CB47A537) applies unchanged here.
+            s.state.viewOffsetX = 0.0f;
+            s.state.viewOffsetY = 0.0f;
         } else {
             const float t = static_cast<float>(
                 static_cast<double>(frame - previousFrame) /
@@ -222,6 +231,10 @@ void ReloadModels(MMDApp* app) {
                         (static_cast<double>(b) - static_cast<double>(a)) +
                     static_cast<double>(a));
             }
+            // View offset clear inside the interpolation stores
+            // (x64 0x7FF7CB47A537; x86 0x308/0x30C).
+            s.state.viewOffsetX = 0.0f;
+            s.state.viewOffsetY = 0.0f;
         }
         s.CameraParentModel() = previous.parentModel;
         s.CameraParentBone() = previous.parentBone;
@@ -369,12 +382,12 @@ void PlaybackPoseAdvance(MMDApp* app, int advance) {
     }
 
     // ---- 4B. light track (0x417A62..0x417DB5) ------------------------------
-    // Gate check: unlike the camera section at 0x417640, the original's
-    // light section at 0x417A62 tests ONLY the active flag [esi+9E668] -
-    // no 0x2F8/0x9ED98 editGate.  During normal playback (0x2F8 == 0) this
-    // section still runs and re-issues SetLight(0, ...) every pass, which
-    // restores the D3D light if any other path disturbed it.
-    if (s.LightTrackActive() != 0) {
+    // Gate check: x64 sub_7FF7CB489A20 re-tests the same (0x2F8 || 0x9ED98)
+    // edit gate as the camera/shadow/gravity sections before the light
+    // active flag (0x7FF7CB489F71..0x7FF7CB489F7C).  An earlier note here
+    // claimed an active-only gate - that was the x86 reading, wrong for the
+    // x64 baseline: during plain playback the light track stays parked.
+    if (editGate && s.LightTrackActive() != 0) {
         mdl::LightKey* keys = s.LightKeys();
         while (true) {
             const mdl::LightKey& key = keys[s.LightTrackCursor()];

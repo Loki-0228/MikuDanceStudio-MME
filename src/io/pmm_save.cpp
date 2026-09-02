@@ -29,7 +29,8 @@
 //             (+0x1C..+0x34), W1 bool +0x38/+0x39 - the dense loop counter
 //             is 16-bit in the original and its record offset wraps with
 //             it), then the sparse half: signed (count*0x3C <= off <
-//             18000000) scan counting frame!=0 records, W4 count, then the
+//             60*kBoneKeyCapacity bytes) scan counting frame!=0 records,
+//             W4 count, then the
 //             same records prefixed by W4(frame index); morph keys
 //             (0x14-stride at *0x26E4, dense + sparse to 20000), rigid/IK
 //             keys (0x1C-stride at *0x26E8: W4 +0/+4/+8 + W1 bool +0xC
@@ -409,17 +410,19 @@ void SaveSceneFile(MMDApp* app) {
                 WritePmmBoneKey(fd, dispKeys[i]);
             }
         }
-        // sparse half: signed scan count*0x3C <= off < 18000000
+        // sparse half: signed scan count*0x3C <= off < 60*kBoneKeyCapacity
         {                                                      // 0x41BACC
             std::int32_t cnt = 0;
-            if (dispCount < 300000) {
-                for (std::int32_t i = dispCount; i < 300000; ++i)
+            if (dispCount < static_cast<std::int32_t>(mdl::kBoneKeyCapacity)) {
+                for (std::int32_t i = dispCount;
+                     i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i)
                     if (dispKeys[i].frame != 0)
                         ++cnt;
             }
             W(fd, &cnt, 4);                                    // 0x41BB2D
-            if (dispCount < 300000) {                          // 0x41BB44
-                for (std::int32_t i = dispCount; i < 300000; ++i) {
+            if (dispCount < static_cast<std::int32_t>(mdl::kBoneKeyCapacity)) {                          // 0x41BB44
+                for (std::int32_t i = dispCount;
+                     i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
                     if (dispKeys[i].frame == 0)
                         continue;
                     W(fd, &i, 4);                              // 0x41BB92

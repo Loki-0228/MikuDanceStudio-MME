@@ -699,6 +699,7 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
         const std::int32_t parent = bone.parent;
         const std::int32_t extIdx = bone.slotIndex;
         bool handled = false;
+        bool viaGlobalExt = false;
         if (extIdx >= 0) {
             const std::int32_t slot = extTable[extIdx].linkedModel;
             if (slot >= 0) {                           // 0x4945FE
@@ -721,15 +722,25 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                 ext.m[3][3] = 1.0f;
                 std::memcpy(bone.matWorld, &ext, sizeof(ext));
                 handled = true;
-            } else if (slot == -1 && parent >= 0) {
-                WorldFromParent(bone, boneRecords[parent], &d3);
-                handled = true;
+            } else if (slot == -1) {
+                if (parent >= 0) {
+                    WorldFromParent(bone, boneRecords[parent], &d3);
+                    handled = true;
+                } else {
+                    viaGlobalExt = true;
+                }
             }
         } else if (parent >= 0) {
             WorldFromParent(bone, boneRecords[parent], &d3);
             handled = true;
         } else {
-            // LABEL_80 (0x49488F): global external parent from the table
+            viaGlobalExt = true;
+        }
+        if (viaGlobalExt) {
+            // LABEL_80 (0x49488F): global external parent from the table.
+            // x64: both the extIdx<0,parent<0 route (0x7FF7CB4DB0CD) and the
+            // slot==-1,parent<0 route (0x7FF7CB4DB015) converge on the same
+            // extTable[0].linkedModel test at 0x7FF7CB4DB0D8.
             if (extTable[0].linkedModel >= 0) {
                 unsigned char* model2 = modelSlots[extTable[0].linkedModel];
                 mdl::BoneRecord* bones2 = mdl::Bones(model2);
@@ -968,7 +979,8 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                 MatRotQuat(&rotM, lq);
                 if (pmx2 && link.twistEnable != 0) {
                     // euler decomposition + limit clamp + rebuild
-                    // (0x495921..0x496429)
+                    // (0x495921..0x496429; x64 0x7FF7CB4DC2D3..DC845: the
+                    // off-axis angles come from atan2f(elem/c, elem/c))
                     float eX = 0.0f, eY = 0.0f, eZ = 0.0f;
                     D3DXMATRIXF final;
                     if (link.ikLimitMin[0] > -kHalfPi &&
@@ -980,8 +992,8 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                             c = std::cos(a);
                         }
                         eX = a;
-                        eY = rotM.m[2][0] / c;
-                        eZ = rotM.m[1][0] / c;
+                        eY = std::atan2(rotM.m[2][0] / c, rotM.m[2][2] / c);
+                        eZ = std::atan2(rotM.m[0][1] / c, rotM.m[1][1] / c);
                         ClampEuler(eX, link.ikLimitMin[0], link.ikLimitMax[0],
                                    iter >= twist);
                         ClampEuler(eY, link.ikLimitMin[1], link.ikLimitMax[1],
@@ -1003,8 +1015,8 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                             c = std::cos(a);
                         }
                         eY = a;
-                        eX = rotM.m[1][2] / c;
-                        eZ = rotM.m[0][1] / c;
+                        eX = std::atan2(rotM.m[1][2] / c, rotM.m[2][2] / c);
+                        eZ = std::atan2(rotM.m[0][1] / c, rotM.m[0][0] / c);
                         ClampEuler(eX, link.ikLimitMin[0], link.ikLimitMax[0],
                                    iter >= twist);
                         ClampEuler(eY, link.ikLimitMin[1], link.ikLimitMax[1],
@@ -1026,8 +1038,8 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                             c = std::cos(a);
                         }
                         eZ = a;
-                        eX = rotM.m[1][2] / c;
-                        eY = rotM.m[2][0] / c;
+                        eX = std::atan2(rotM.m[1][2] / c, rotM.m[1][1] / c);
+                        eY = std::atan2(rotM.m[2][0] / c, rotM.m[0][0] / c);
                         ClampEuler(eX, link.ikLimitMin[0], link.ikLimitMax[0],
                                    iter >= twist);
                         ClampEuler(eY, link.ikLimitMin[1], link.ikLimitMax[1],
@@ -1048,8 +1060,10 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                     link.rotQuat2[1] = nq[1];
                     link.rotQuat2[2] = nq[2];
                     link.rotQuat2[3] = nq[3];
-                } else if (!pmx2 && IsKnee(link) && rotM.m[2][1] < 0.0f) {
-                    // PMD knee hinge flip (0x4964DD)
+                } else if (!pmx2 && IsKnee(link) &&
+                           std::atan2(rotM.m[2][1], rotM.m[2][2]) < 0.0f) {
+                    // PMD knee hinge flip (0x4964DD; x64 0x7FF7CB4DCAF2
+                    // gates on the sign of atan2f(m[2][1], m[2][2]))
                     rotM.m[1][2] = -rotM.m[1][2];
                     rotM.m[2][1] = -rotM.m[2][1];
                     link.rotQuat2[0] = -link.rotQuat2[0];

@@ -188,9 +188,14 @@ struct ModelRecord {
     unsigned char physicsMode;  // 14590  (SetMenuItemInfo gate)
     RawPad<1> gap25;  // 14591..14592 (unrecovered)
     std::uint32_t displayRootBone;  // 14592 (x64 0x3CA8; first PMX display-frame bone)
-    unsigned char keyVisitMap[300000];  // 14596  (undo snapshot deduplication)
+    // Undo snapshot deduplication.  The x64 E build doubles the array to
+    // 600000 bytes at model+0x3CAC (memset 0x927C0, x64 0x7FF7CB4E819F);
+    // the four alignment bytes before boneOrderTable (x64 0x96470) come
+    // from pointer alignment, so the tail anchors below still hold.
 #ifdef _M_X64
-    RawPad<300000> x64KeyVisitStorage;  // twin-verified tail growth
+    unsigned char keyVisitMap[600000];  // 15532 (0x3CAC)
+#else
+    unsigned char keyVisitMap[300000];  // 14596
 #endif
     void* boneOrderTable;  // 314596  (20-byte slots; x64 0x96470)
     std::uint32_t boneOrderCount;  // 314600  (x64 0x96478)
@@ -464,6 +469,8 @@ static_assert(offsetof(ModelRecord, selectedBone) == 0x311C,
               "selectedBone x64");
 static_assert(offsetof(ModelRecord, selectedMorphs) == 0x3130,
               "selectedMorphs x64");
+static_assert(offsetof(ModelRecord, keyVisitMap) == 0x3CAC,
+              "keyVisitMap x64");
 static_assert(offsetof(ModelRecord, boneOrderTable) == 0x96470,
               "boneOrderTable x64");
 static_assert(offsetof(ModelRecord, boneOrderCount) == 0x96478,

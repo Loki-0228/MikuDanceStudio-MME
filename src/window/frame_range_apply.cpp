@@ -73,7 +73,7 @@ int TrackOwner(const Key* keys, int index, int rootCount) {
 }
 
 void ClearBoneMarks(mdl::BoneKey* keys) {
-    for (int i = 0; i < 300000; ++i)
+    for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i)
         keys[i].allocated = 0;
 }
 
@@ -106,7 +106,7 @@ void ScaleBoneKeys(MMDApp* app, unsigned char* model, HWND hDlg,
     const int boneCount = static_cast<int>(mdl::Mdl(model)->boneCount);
 
     int count = 0;
-    for (int i = 0; i < 300000; ++i) {
+    for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) {
         mdl::BoneKey& key = keys[i];
         key.allocated = 0;
         const std::uint32_t frame = key.frame;
@@ -125,7 +125,7 @@ void ScaleBoneKeys(MMDApp* app, unsigned char* model, HWND hDlg,
     std::vector<std::array<unsigned char, 84>> copies(
         static_cast<std::size_t>(count));
     int outIndex = 0;
-    for (int i = 0; i < 300000; ++i) {
+    for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) {
         const mdl::BoneKey& key = keys[i];
         if (key.allocated == 0)
             continue;

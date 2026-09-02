@@ -23,15 +23,16 @@
 //         "カメラ・照明" is rejected with its own message, anything else
 //         prompts OK/CANCEL), then:
 //           * all three key arrays' allocation marks are cleared
-//             (bone +56 of 300000x60B records, morph +16 of 20000x20B,
-//             IK master +20 of 1000x28B),
+//             (bone +56 of kBoneKeyCapacity x60B records, morph +16 of
+//             20000x20B, IK master +20 of 1000x28B),
 //           * the 30-slot undo/motion ring at model+9964 (28B slots
 //             {+0 type=2, +4 zeroed, +12 current frame, +16 ptr to a
 //             36B-per-bone initial-pose snapshot, +20 ptr to 192B-per-key
 //             raw storage}) advances model+12724 (wraps at 30) and refills
 //             the slot; the snapshot copies each bone's +320 position,
 //             +332 quaternion and a byte from the model+11672 array,
-//           * model+14596 (300000 bytes) is zeroed, sub_4A4940 resets the
+//           * keyVisitMap (model+14596 x86 / +0x3CAC x64, one byte per
+//             bone-key record) is zeroed, sub_4A4940 resets the
 //             key allocator,
 //           * bone keys: 15-byte name (LF stripped), frame, position,
 //             quaternion, then a 4-channel interpolation block - channel
@@ -328,7 +329,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     mikudancestudio::mdl::BoneKey* const bkeys = mikudancestudio::mdl::BoneKeys(model);
     mikudancestudio::mdl::MorphKey* const mkeys = mikudancestudio::mdl::MorphKeys(model);
     mikudancestudio::mdl::DisplayKey* const ikeys = mikudancestudio::mdl::DisplayKeys(model);
-    for (int i = 0; i < 300000; ++i) bkeys[i].allocated = 0;
+    for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) bkeys[i].allocated = 0;
     for (int i = 0; i < 20000; ++i) mkeys[i].allocated = 0;
     for (int i = 0; i < 1000; ++i) ikeys[i].allocated = 0;
 
@@ -371,7 +372,8 @@ int Sub434B60(MMDApp* app, const char* fileName) {
         operator new(192 * boneKeyCount));
     undo.auxiliaryPose = rawKeys;
     std::memset(rawKeys, 0, 192 * boneKeyCount);
-    std::memset(model + 14596, 0, 0x493E0);
+    std::memset(mdl::Mdl(model)->keyVisitMap, 0,
+                sizeof(mdl::Mdl(model)->keyVisitMap));
     Sub4A4940(model);
     (void)rawKeys;  // consumed by the registrar family (0x49D880 et al.)
 

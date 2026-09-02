@@ -218,8 +218,6 @@ static void FillSelectionRecords(MMDApp* app, unsigned char* arr, int recStride,
     app->TimelineSelectionRecords(band) =
         reinterpret_cast<TimelineSelectionRecord*>(out);
     // TEMP(debug, keyframe-drag crash)
-    std::int32_t written = 0;
-    std::int32_t* outBase = out;
     int recIdx = 2;
     // The original advances recIdx by five and stops when recIdx-2 reaches
     // 0x2710.  recStride already spans five timeline records, so this is
@@ -232,16 +230,10 @@ static void FillSelectionRecords(MMDApp* app, unsigned char* arr, int recStride,
                 out[3] = *reinterpret_cast<std::int32_t*>(
                     arr + i * recStride + k * flagStride);
                 out += 4;
-                ++written;  // TEMP(debug, keyframe-drag crash)
             }
         }
         recIdx += 5;
     }
-    // TEMP(debug, keyframe-drag crash)
-    std::fprintf(stderr, "FILL band=%d cnt=%d written=%d arr=%p out=%p\n",
-                 static_cast<int>(band), cnt, written, static_cast<void*>(arr),
-                 static_cast<void*>(outBase));
-    std::fflush(stderr);
     qsort(app->TimelineSelectionRecords(band), static_cast<std::size_t>(cnt), 0x10,
           CompareFunction);
 }
@@ -289,16 +281,6 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
         }
         // count/ptr pairs: rigid 0xA03EC/0xA03F0, joint 0xA03F4/0xA03F8,
         // IK 0xA03FC/0xA0400, morph 0xA0404/0xA0408
-        // TEMP(debug, keyframe-drag crash)
-        std::fprintf(stderr,
-                     "COUNT cam=%d lig=%d shd=%d grv=%d acc=%p\n",
-                     app->TimelineSelectionCount(TimelineSelectionBand::Camera),
-                     app->TimelineSelectionCount(TimelineSelectionBand::Light),
-                     app->TimelineSelectionCount(TimelineSelectionBand::SelfShadow),
-                     app->TimelineSelectionCount(TimelineSelectionBand::Gravity),
-                     static_cast<void*>(reinterpret_cast<unsigned char*>(
-                         app->AccessoryKeys(0))));
-        std::fflush(stderr);
         FillSelectionRecords(app, rarr, 0x1A4, 0x48, 0x54,
                              TimelineSelectionBand::Camera);
         FillSelectionRecords(app, jarr, 0xC8, 0x24, 0x28,
@@ -395,7 +377,8 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
             }
             dataSlot = ::operator new(static_cast<std::size_t>(boneCnt) * 0x40);
             memset(dataSlot, 0, static_cast<std::size_t>(boneCnt) * 0x40);
-            memset(m + 0x3904, 0, 0x493E0);
+            memset(mikudancestudio::mdl::Mdl(m)->keyVisitMap, 0,
+                    sizeof(mikudancestudio::mdl::Mdl(m)->keyVisitMap));
             // feed every set bone flag to 0x49D410 (0x449CF0-0x449D1C)
             for (std::size_t i = 0; i < mikudancestudio::mdl::kBoneKeyCapacity; ++i)
                 if (bones[i].allocated != 0)
@@ -407,7 +390,7 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
             app->TimelineSelectionRecords(TimelineSelectionBand::ModelIk) =
                 reinterpret_cast<TimelineSelectionRecord*>(bout);
             int idx = 2;
-            for (int i = 0; i < 0xC350; ++i) {
+            for (std::size_t i = 0; i < mikudancestudio::mdl::kBoneKeyCapacity / 6; ++i) {
                 for (int k = 0; k < 6; ++k) {
                     mikudancestudio::mdl::BoneKey& key = bones[i * 6 + k];
                     if (key.allocated != 0) {

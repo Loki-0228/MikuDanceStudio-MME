@@ -1154,6 +1154,18 @@ public:
     std::int32_t& PlaybackPhysicsMode() {
         return state.playbackPhysicsMode;
     }
+    // x64-only pump counter (app+0xA1E18): refreshed from playing /
+    // idle-suppress-off / physics-dialog-open at the main-pump prologue,
+    // walks 1->2->3->0, and gate 0x7FF7CB44B8E7 skips the whole physics
+    // section once it hits 0.  The x86 layout has no such field, so this
+    // lives outside the compatibility blob (see PhysicsFrame for the full
+    // ladder and the port's trigger coverage).
+    std::int32_t& PhysicsPumpCounter() {
+        return m_physicsPumpCounter;
+    }
+    std::int32_t PhysicsPumpCounter() const {
+        return m_physicsPumpCounter;
+    }
     std::int32_t& SidebarWidth() {
         return state.sidebarWidth;
     }
@@ -1425,6 +1437,11 @@ public:
 
 
 private:
+
+    // x64 app+0xA1E18 pump physics-enable counter (see PhysicsPumpCounter).
+    // Initialised to 1 like the original constructor write at 0x7FF7CB42CA53;
+    // the x86 layout has no counterpart field.
+    std::int32_t m_physicsPumpCounter = 1;
 
 #if defined(_M_X64)
     // In the original x86 blob, 0x9E180 is a D3DLIGHT9 overlay spanning

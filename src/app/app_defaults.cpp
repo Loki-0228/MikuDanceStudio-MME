@@ -175,7 +175,7 @@ void MMDApp::InitDefaults() {
     state.modelOutlineColorGreen = 0;
     state.modelOutlineColorBlue = 0;
     std::memset(state.buf655780, 0, 0x40);
-    state.a01E4 = 0;
+    state.wireframeRenderingEnabled = 0;
     state.activeRenderObject = nullptr;
     state.activeRenderPass = 0;
     state.a0270 = 0;

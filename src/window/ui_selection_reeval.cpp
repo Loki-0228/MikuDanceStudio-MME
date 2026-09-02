@@ -12,6 +12,12 @@
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
+
+// x64 0x7FF7CB482BB0 - the selection re-evaluation body, ported in
+// misc_dialogs.cpp as CurvePanelRepaint (same original as the x86
+// 0x00430510 entry this file used to carry inline).
+void CurvePanelRepaint(MMDApp* app);
+
 namespace {
 
 struct Curve {
@@ -20,11 +26,6 @@ struct Curve {
     int x2;
     int y2;
 };
-
-bool operator==(const Curve& left, const Curve& right) {
-    return left.x1 == right.x1 && left.y1 == right.y1 &&
-           left.x2 == right.x2 && left.y2 == right.y2;
-}
 
 void DrawCurve(MMDApp* app, const Curve& curve) {  // 0x415E90
     HDC dc = app->CurveDC();
@@ -92,27 +93,6 @@ void DrawControlPoints(MMDApp* app, const Curve& curve) {  // 0x416090
     DeleteObject(guide);
 }
 
-Curve ReadCurve(const unsigned char* record, int channel,
-                int x1Base, int y1Base, int x2Base, int y2Base) {
-    const auto value = [record](int offset) {
-        return static_cast<int>(*reinterpret_cast<const std::int8_t*>(
-            record + offset));
-    };
-    return {value(x1Base + channel), value(y1Base + channel),
-            value(x2Base + channel), value(y2Base + channel)};
-}
-
-void AcceptCurve(MMDApp* app, const Curve& curve, bool& found,
-                 bool& uniform, Curve& baseline) {
-    DrawCurve(app, curve);
-    if (!found) {
-        baseline = curve;
-        found = true;
-    } else if (!(curve == baseline)) {
-        uniform = false;
-    }
-}
-
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -128,7 +108,7 @@ void AcceptCurve(MMDApp* app, const Curve& curve, bool& found,
 //                       combo 433 selection >= 6, else only the selected
 //                       channel), == 2 edits x2/y2 (+52/+58); curve drawn
 //                       with the opposite group's bytes.
-//   else             -> selected model's BoneKey records (300000 entries):
+//   else             -> selected model's BoneKey records (kBoneKeyCapacity entries):
 //                       mode 1 edits interpolation x1/y1, mode 2 edits
 //                       x2/y2 (four channels).
 // The original passes uninitialized stack values to the draw calls when no
@@ -214,7 +194,7 @@ void Sub416280(MMDApp* app) {
         mdl::BoneKey* records = model != nullptr
             ? mdl::BoneKeys(model) : nullptr;
         if (records != nullptr) {
-            for (int index = 0; index < 300000; ++index) {
+            for (int index = 0; index < static_cast<int>(mdl::kBoneKeyCapacity); ++index) {
                 mdl::BoneKey& record = records[index];
                 if (record.allocated == 0)
                     continue;
@@ -276,88 +256,14 @@ void Sub416280(MMDApp* app) {
     InvalidateRect(window, &dirty, FALSE);                       // 0x4168BC
 }
 
-void SelectionReeval(MMDApp* app) {  // 0x430510
-    app->state.interpCurveUniformFound = 0;
-    HDC dc = app->CurveDC();
-    HPEN whitePen = CreatePen(PS_SOLID, 1, 0x00FFFFFFu);
-    HBRUSH whiteBrush = CreateSolidBrush(0x00FFFFFFu);
-    HGDIOBJ oldPen = SelectObject(dc, whitePen);
-    HGDIOBJ oldBrush = SelectObject(dc, whiteBrush);
-    Rectangle(dc, 0, 0, 128, 128);
-    SelectObject(dc, oldPen);
-    SelectObject(dc, oldBrush);
-    DeleteObject(whitePen);
-    DeleteObject(whiteBrush);
-
-    const HWND window = static_cast<HWND>(app->Hwnd());
-    const int selectedChannel = static_cast<int>(SendMessageA(
-        GetDlgItem(window, 433), CB_GETCURSEL, 0, 0));
-    bool found = false;
-    bool uniform = true;
-    Curve baseline{};
-
-    if (app->state.optflag[0] != 0) {
-        unsigned char* records =
-            reinterpret_cast<unsigned char*>(app->CameraKeys());
-        if (records != nullptr) {
-            for (int index = 0; index < 10000; ++index) {
-                const unsigned char* record = records + 84 * index;
-                if (record[72] == 0)
-                    continue;
-                if (selectedChannel < 6) {
-                    AcceptCurve(app,
-                        ReadCurve(record, selectedChannel, 40, 46, 52, 58),
-                        found, uniform, baseline);
-                } else {
-                    for (int channel = 0; channel < 6; ++channel) {
-                        AcceptCurve(app,
-                            ReadCurve(record, channel, 40, 46, 52, 58),
-                            found, uniform, baseline);
-                    }
-                }
-            }
-        }
-    } else {
-        unsigned char* model = app->SelectedModel();
-        mdl::BoneKey* records = model != nullptr
-            ? mdl::BoneKeys(model) : nullptr;
-        if (records != nullptr) {
-            for (int index = 0; index < 300000; ++index) {
-                const mdl::BoneKey& record = records[index];
-                if (record.allocated == 0)
-                    continue;
-                if (selectedChannel < 4) {
-                    AcceptCurve(app,
-                        ReadCurve(record.interpolation, selectedChannel,
-                                  0, 4, 8, 12),
-                        found, uniform, baseline);
-                } else {
-                    for (int channel = 0; channel < 4; ++channel) {
-                        AcceptCurve(app,
-                            ReadCurve(record.interpolation, channel,
-                                      0, 4, 8, 12),
-                            found, uniform, baseline);
-                    }
-                }
-            }
-        }
-    }
-
-    if (found && uniform) {
-        app->state.interpCurveUniformFound = 1;
-        DrawControlPoints(app, baseline);
-    }
-    EnableWindow(GetDlgItem(window, 430), uniform ? TRUE : FALSE);
-    EnableWindow(GetDlgItem(window, 432), found ? TRUE : FALSE);
-    EnableWindow(GetDlgItem(window, 431),
-        found &&
-            reinterpret_cast<const std::int8_t&>(app->state.lightA[0]) >= 0
-            ? TRUE : FALSE);
-
-    RECT client{};
-    GetClientRect(window, &client);
-    RECT dirty{8, client.bottom - 135, 137, client.bottom - 6};
-    InvalidateRect(window, &dirty, FALSE);
+// The x86 original (0x430510) compared every channel curve against a
+// single baseline, so button 430 went grey whenever the X/Y interpolation
+// curves differed from each other.  The x64 E build (0x7FF7CB482BB0,
+// CurvePanelRepaint) seeds per-channel baselines and keeps 430 enabled
+// while each channel stays self-consistent - that is the behavioral
+// baseline, so every caller funnels through the x64 body.
+void SelectionReeval(MMDApp* app) {  // 0x430510 / x64 0x7FF7CB482BB0
+    CurvePanelRepaint(app);
 }
 
 }  // namespace mikudancestudio

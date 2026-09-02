@@ -762,7 +762,7 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
 
     // ---- 0x437F50: clear the keyframe mark bytes --------------------
     mdl::BoneKey* const boneKeys = mdl::BoneKeys(model);
-    for (int i = 0; i < 300000; ++i)
+    for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i)
         boneKeys[i].allocated = 0;
     mdl::MorphKey* const morphKeys = mdl::MorphKeys(model);
     for (int i = 0; i < 20000; ++i)

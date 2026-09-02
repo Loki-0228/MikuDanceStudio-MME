@@ -187,7 +187,7 @@ void Sub439E40(MMDApp* app) {
         mdl::BoneKey* keys = mdl::BoneKeys(model);
 
         int affected = 0;  // stack0xfffffff8 (0x439E75..0x439F9D)
-        for (int i = 0; i < 300000; ++i) {
+        for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) {
             const std::uint32_t f = keys[i].frame;
             if (f != 0 && i >= boneCount && f >= cur) ++affected;
         }
@@ -202,9 +202,10 @@ void Sub439E40(MMDApp* app) {
         SnapshotPose(model);                           // 0x43A275..
         AllocUndoKeys(model,                           // 0x43A4DE..
                       static_cast<std::size_t>(boneCount) * 0x40);
-        std::memset(mdl::Mdl(model)->keyVisitMap, 0, 300000);  // 0x43A555
+        std::memset(mdl::Mdl(model)->keyVisitMap, 0,
+                  sizeof(mdl::Mdl(model)->keyVisitMap));  // 0x43A555
 
-        for (int i = 0; i < 300000; ++i) {             // 0x43A56D..
+        for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) {             // 0x43A56D..
             mdl::BoneKey& key = keys[i];
             const std::uint32_t f = key.frame;
             if (f != 0 && i >= boneCount && f >= cur) {
@@ -256,7 +257,7 @@ void Sub43A650(MMDApp* app) {
         // frame consumes three snapshot slots (prev/self/next), a key
         // above it one.
         int affected = 0;  // uStack_c
-        for (int i = 0; i < 300000; ++i) {
+        for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) {
             const std::uint32_t f = keys[i].frame;
             if (i >= boneCount && f != 0) {
                 if (f == cur) affected += 3;
@@ -274,7 +275,8 @@ void Sub43A650(MMDApp* app) {
         SnapshotPose(model);                           // 0x43ACF2..
         AllocUndoKeys(model,                           // 0x43AF60..
                       static_cast<std::size_t>(affected) * 0x40);
-        std::memset(mdl::Mdl(model)->keyVisitMap, 0, 300000);  // 0x43AFD3
+        std::memset(mdl::Mdl(model)->keyVisitMap, 0,
+                  sizeof(mdl::Mdl(model)->keyVisitMap));  // 0x43AFD3
 
         // Auto-interpolation rebuild gate: checkbox 0x212 (0x43AFF4).
         const bool autoInterp =
@@ -282,7 +284,7 @@ void Sub43A650(MMDApp* app) {
                                     0x212),
                          BM_GETCHECK, 0, 0) == 1;
 
-        for (int i = 0; i < 300000; ++i) {             // 0x43B018..
+        for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) {             // 0x43B018..
             mdl::BoneKey& key = keys[i];
             const std::uint32_t f = key.frame;
 
@@ -541,10 +543,10 @@ void SelectFrameGroup(MMDApp* app, int group) {
     unsigned char* model = ActiveModel(app);
 
     if (group == 0) {
-        // 0xD9: all bone frames (0x26E0 table, 0x3C x 300000)
+        // 0xD9: all bone frames (0x26E0 table, 0x3C x kBoneKeyCapacity)
         mdl::BoneKey* keys = mdl::BoneKeys(model);
         const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
-        for (int i = 0; i < 300000; ++i) {
+        for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) {
             mdl::BoneKey& key = keys[i];
             key.allocated = 0;
             if (i < boneCount || key.frame != 0) {

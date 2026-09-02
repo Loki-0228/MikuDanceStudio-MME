@@ -85,7 +85,7 @@ void SaveVmdFile(const wchar_t* path) {
 
     if (!cameraMode) {
         const mdl::BoneKey* keys = mdl::BoneKeys(model);
-        for (unsigned int i = 0; i < 300000; ++i) {
+        for (unsigned int i = 0; i < static_cast<unsigned int>(mdl::kBoneKeyCapacity); ++i) {
             if (keys[i].allocated != 0) {
                 ++boneCnt;
                 const std::uint32_t f = keys[i].frame;
@@ -170,7 +170,7 @@ void SaveVmdFile(const wchar_t* path) {
     Wr(fd, &v32, 4);                                             // 0x419889
     if (!cameraMode) {
         const mdl::BoneKey* keys = mdl::BoneKeys(model);
-        for (unsigned int idx = 0; idx < 300000; ++idx) {
+        for (unsigned int idx = 0; idx < static_cast<unsigned int>(mdl::kBoneKeyCapacity); ++idx) {
             const mdl::BoneKey& rec = keys[idx];
             if (rec.allocated == 0) continue;
             unsigned int boneIdx = idx;                          // 0x4198E0

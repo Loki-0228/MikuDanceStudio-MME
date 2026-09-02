@@ -1564,8 +1564,9 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
 
     // ---- animation pools -------------------------------------------------------
     model.boneKeys = static_cast<mdl::BoneKey*>(
-        operator new(sizeof(mdl::BoneKey) * 300000));
-    std::memset(model.boneKeys, 0, sizeof(mdl::BoneKey) * 300000);
+        operator new(sizeof(mdl::BoneKey) * mdl::kBoneKeyCapacity));
+    std::memset(model.boneKeys, 0,
+                  sizeof(mdl::BoneKey) * mdl::kBoneKeyCapacity);
     model.morphKeys = static_cast<mdl::MorphKey*>(
         operator new(sizeof(mdl::MorphKey) * 20000));
     std::memset(model.morphKeys, 0, sizeof(mdl::MorphKey) * 20000);

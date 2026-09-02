@@ -160,7 +160,8 @@ constexpr std::size_t kModelFramesAcc = 0x26E8;  // accessory/camera/light
 constexpr std::size_t kModelCamCnt = 0x4CCE8;   // camera record count
 
 // Frame-table byte counts (stride x slot count).
-constexpr std::size_t kBoneFrameBytes = 0x112A880u;  // 300000 x 0x3C
+constexpr std::size_t kBoneFrameBytes =
+    sizeof(mdl::BoneKey) * mdl::kBoneKeyCapacity;  // cap x 0x3C
 constexpr std::size_t kMorphFrameBytes = 0x61A80u;   // 200000 x 0x14
 constexpr std::size_t kAccFrameBytes = 0x6D60u;      // 1000 x 0x1C
 
@@ -1994,7 +1995,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             model = ActiveModel(app);
             undo.auxiliaryPose = blob2;
             memset(blob2, 0, static_cast<std::size_t>(3 * recCount) * 0x40u);
-            memset(model + 0x3904, 0, 0x493E0);
+            memset(mdl::Mdl(model)->keyVisitMap, 0,
+                    sizeof(mdl::Mdl(model)->keyVisitMap));
             Sub4A4940(model);
             if (recCount > 0) {
                 for (std::int32_t j = 0; j < recCount; ++j) {
@@ -2074,7 +2076,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // ------------------------------------------------------------------
     // 229 (0x0048B4DF): clear all frames (0xE5).  Gate app+0x2F8; dirty;
     // the used flags of every bone/morph/accessory frame record are
-    // cleared (bone +0x38 0x3C-stride 0x112A880, morph +0x10 0x14-stride
+    // cleared (bone +0x38 0x3C-stride over kBoneKeyCapacity x 0x3C
+    // bytes, morph +0x10 0x14-stride
     // 0x61A80, acc +0x14 0x1C-stride 0x6D60); then, while the morph count
     // (model+0x2D80) is positive, each morph gets a frame-0 keyframe at
     // the current frame (Sub49EEE0, model re-derived per step, 16-bit

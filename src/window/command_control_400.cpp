@@ -825,7 +825,8 @@ void SelectGlobalFrameRange(Key* keys, std::uint32_t from,
 // First marked bone key; returns -1 when none is present.
 std::int32_t FirstSelectedBoneKey(unsigned char* model) {
     mdl::BoneKey* keys = mdl::BoneKeys(model);
-    for (std::int32_t i = 0; i < 0x493E0; ++i) {
+    for (std::int32_t i = 0;
+         i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
         if (keys[i].allocated != 0) {
             return i;
         }
@@ -1352,7 +1353,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // cursor selects the source row; the source frame is the first frame
     // whose selection mark is set (0x2F8 != 0: app+0x374 table, 0x54
     // stride, mark +0x48, 0x2710 limit; 0x2F8 == 0: model+0x26E0, 0x3C
-    // stride, mark +0x38, 0x493E0 limit).  With cursor < 6 (or < 4) a
+    // stride, mark +0x38, kBoneKeyCapacity limit).  With cursor < 6 (or < 4) a
     // single frame is copied into all rows, otherwise the first 6 (4)
     // frames are copied row by row.  Colour bytes: R/G/B/aux at +0x28/
     // +0x2E/+0x34/+0x3A (0x54-stride) or +0x0C/+0x10/+0x14/+0x18
@@ -1435,7 +1436,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             // original: Sub4A1510(ecx = model, frame = dword app+0x980)
             Sub4A1510(model, app->state.currentFrame);
             mdl::BoneKey* keys = mdl::BoneKeys(model);
-            for (std::int32_t i = 0; i < 300000; ++i) {
+            for (std::int32_t i = 0; i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
                 mdl::BoneKey& key = keys[i];
                 if (key.allocated == 0) {
                     continue;
@@ -1488,7 +1489,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             // original: Sub4A1510(ecx = model, frame = dword app+0x980)
             Sub4A1510(model, app->state.currentFrame);
             mdl::BoneKey* keys = mdl::BoneKeys(model);
-            for (std::int32_t i = 0; i < 300000; ++i) {
+            for (std::int32_t i = 0; i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
                 mdl::BoneKey& key = keys[i];
                 if (key.allocated == 0) {
                     continue;
@@ -1761,7 +1762,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     case 438: {
         app->SceneModified() = 1;
         unsigned char* model = ActiveModel(app);
-        ClearModelKeyMarks(mdl::BoneKeys(model), 300000);
+        ClearModelKeyMarks(mdl::BoneKeys(model), mdl::kBoneKeyCapacity);
         ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
         ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
         Sub49F480(model, app->state.currentFrame);
@@ -1950,7 +1951,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
                 {
                     unsigned char* model = ActiveModel(app);
                     SelectModelFrameRange(
-                        mdl::BoneKeys(model), 300000,
+                        mdl::BoneKeys(model), mdl::kBoneKeyCapacity,
                         mdl::Mdl(model)->boneCount,
                         static_cast<std::uint32_t>(from),
                         static_cast<std::uint32_t>(to));
@@ -1991,7 +1992,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
                 // bone sweep only (loc_482FF2..483064)
                 unsigned char* model = ActiveModel(app);
                 SelectModelFrameRange(
-                    mdl::BoneKeys(model), 300000,
+                    mdl::BoneKeys(model), mdl::kBoneKeyCapacity,
                     mdl::Mdl(model)->boneCount,
                     static_cast<std::uint32_t>(from),
                     static_cast<std::uint32_t>(to));
@@ -2115,7 +2116,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             mdl::DisplayKey* displayKeys = mdl::DisplayKeys(model);
 
             // loop A: bone marks -> bone/morph/camera
-            for (std::uint32_t keyIndex = 0; keyIndex < 300000; ++keyIndex) {
+            for (std::uint32_t keyIndex = 0; keyIndex < static_cast<std::uint32_t>(mdl::kBoneKeyCapacity); ++keyIndex) {
                 if (boneKeys[keyIndex].allocated != 0) {
                     const std::uint32_t frame = boneKeys[keyIndex].frame;
                     if (modelRecord->boneCount > 0) {
@@ -2286,7 +2287,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             {
                 unsigned char* model = ActiveModel(app);
                 clipboardCounts.bones = CountMarkedModelKeys(
-                    mdl::BoneKeys(model), 300000, minFrame);
+                    mdl::BoneKeys(model), mdl::kBoneKeyCapacity, minFrame);
                 clipboardCounts.morphs = CountMarkedModelKeys(
                     mdl::MorphKeys(model), 20000, minFrame);
                 clipboardCounts.displays = CountMarkedModelKeys(
@@ -2371,7 +2372,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
                 const std::uint32_t boneCount = mdl::Mdl(model)->boneCount;
                 auto* dst = app->BoneClipboard();
                 std::uint32_t cnt = 0;
-                for (std::uint32_t recordIndex = 0; recordIndex < 300000;
+                for (std::uint32_t recordIndex = 0; recordIndex < static_cast<std::uint32_t>(mdl::kBoneKeyCapacity);
                      ++recordIndex) {
                     const mdl::BoneKey& key = boneKeys[recordIndex];
                     if (key.allocated == 0) {
@@ -2686,7 +2687,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             unsigned char* model = ActiveModel(app);
             TraceModelPaste("active model=%p frame=%d", model, frame);
             // clear all model-mode marks (loc_4849C0..)
-            ClearModelKeyMarks(mdl::BoneKeys(model), 300000);
+            ClearModelKeyMarks(mdl::BoneKeys(model), mdl::kBoneKeyCapacity);
             ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
             ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
             if (boneSel != 0) {
@@ -2977,7 +2978,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             app->state.currentFrame;
         unsigned char* model = ActiveModel(app);
         // clear all model-mode marks (loc_485D60..)
-        ClearModelKeyMarks(mdl::BoneKeys(model), 300000);
+        ClearModelKeyMarks(mdl::BoneKeys(model), mdl::kBoneKeyCapacity);
         ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
         ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
         // undo-table entry (loc_485D88..) - identical shape to 421

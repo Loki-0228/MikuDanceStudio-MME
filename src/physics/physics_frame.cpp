@@ -43,12 +43,23 @@
 //     cursor 0x9E64C driven by 0x9E654 + wall clock, clamped by 0x9E658)
 //     live in playback_catchup.cpp (PlaybackCatchup), called by FrameDriver
 //     right before this settle section.
-//   - 0x4B3460 and 0x4B25D0 reset both the current and interpolation state.
-//     The port uses the matching public Bullet setters rather than writing
+//   - 0x4B3460 / x64 sub_7FF7CB4E45D0 resets only the CURRENT transform
+//     plus the four velocity slots (linear/angular, current and
+//     interpolation); the interpolation world transform is NOT rewritten
+//     and neither clearForces nor the motion state nor activation is
+//     touched (write sequence 0x7FF7CB4E4856..0x7FF7CB4E4927).  The port
+//     uses the matching public Bullet setters rather than writing
 //     implementation-private members.
 //   - The original guards the "not playing -> settle" set with a
 //     selection-UI local (var_14A1 && app+0x2F8==0 && app+0x9ED90==0);
 //     the port applies it unconditionally at section entry.
+//   - x64 gates the flow twice where x86 (the outline above) gates once:
+//     gate A 0x7FF7CB44B8E7 (pump counter app+0xA1E18 == 0) skips the
+//     whole section, gate B 0x7FF7CB44C65B (accessory dialog app+0xA166D
+//     != 0) skips only the pose passes / world pass / readback / moved
+//     clear.  On x64 the readback loop and the moved clear sit INSIDE the
+//     settle gate (0x7FF7CB44C73D jumps past them to 0x7FF7CB44C85F),
+//     unlike the x86 0x46FE34 layout above; the port follows x64.
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -357,22 +368,36 @@ inline btRigidBody* BodyOf(const mdl::RigidRecord& rigid) {
     return static_cast<btRigidBody*>(rigid.body);
 }
 
-// A reset in the original clears both the simulation state and Bullet's
-// interpolation state.  Keeping only the current transform leaves the next
-// synchronizeMotionStates pass to blend from an obsolete pose, which is most
-// visible on chained hair rigid bodies.
+// VA 0x004B3460 / x64 sub_7FF7CB4E45D0 - the settle reseat.  The x64 write
+// sequence (0x7FF7CB4E4856..0x7FF7CB4E4927) is:
+//   body+0x10..0x4F  <- follow transform (m_worldTransform, 4x16B rows)
+//   body+0x150 = 0   (m_linearVelocity, 16B)
+//   body+0x160 = 0   (m_angularVelocity, 16B)
+//   body+0x90  = 0   (m_interpolationLinearVelocity, 16B)
+//   body+0xA0  = 0   (m_interpolationAngularVelocity, 16B)
+// and NOTHING else: the interpolation world transform (+0x50) keeps its old
+// pose, clearForces is not called, the motion state is not written and the
+// body is not activated.  (The earlier "resets both the current and
+// interpolation transforms" claim came from the x86 notes and is wrong.)
 void ReseatRigidBody(btRigidBody* body, const btTransform& transform) {
     const btVector3 zero(0.0f, 0.0f, 0.0f);
     body->setWorldTransform(transform);
-    body->setInterpolationWorldTransform(transform);
     body->setLinearVelocity(zero);
     body->setAngularVelocity(zero);
     body->setInterpolationLinearVelocity(zero);
     body->setInterpolationAngularVelocity(zero);
-    body->clearForces();
-    if (btMotionState* motionState = body->getMotionState())
-        motionState->setWorldTransform(transform);
-    body->activate(true);
+}
+
+// The over-stretch teleport inside the readback (x64 sub_7FF7CB4E3470,
+// inline sequence 0x7FF7CB4E3798..0x7FF7CB4E384C) is a SMALLER reset: the
+// world transform rows (+0x10..0x40) are stored and only the current
+// velocity slots are zeroed (+0x150, +0x160).  The interpolation velocity
+// slots (+0x90/+0xA0) are left alone - this is NOT sub_7FF7CB4E45D0.
+void StopBodyAt(btRigidBody* body, const btTransform& transform) {
+    const btVector3 zero(0.0f, 0.0f, 0.0f);
+    body->setWorldTransform(transform);
+    body->setLinearVelocity(zero);
+    body->setAngularVelocity(zero);
 }
 
 template <typename T>
@@ -537,9 +562,10 @@ void ModelKinematicSync(unsigned char* m) {
     }
 }
 
-// VA 0x004B3460 - reseat dynamic rigid bodies onto their bone-follow pose.
-// Teleports every mode>0 body to the follow transform and stops it (the
-// original zeroes both its current and interpolation transforms/velocities.
+// VA 0x004B3460 / x64 sub_7FF7CB4E45D0 - reseat dynamic rigid bodies onto
+// their bone-follow pose.  Teleports every mode>0 body to the follow
+// transform and stops it (current transform + the four velocity slots only;
+// see ReseatRigidBody for the exact x64 write set).
 void ModelDynamicReseat(unsigned char* m) {
     const int count = mdl::Mdl(m)->rigidCount;
     if (count <= 0)
@@ -639,7 +665,7 @@ void ModelPhysicsReadback(unsigned char* m) {
                 reinterpret_cast<const D3DXMATRIXF*>(t));
         btTransform tr = bodyB->getWorldTransform();
         tr.setOrigin(btVector3(ma[12], ma[13], ma[14]));
-        ReseatRigidBody(bodyB, tr);
+        StopBodyAt(bodyB, tr);   // x64 inline reset, see StopBodyAt
     }
 
     // ---- part 2: dynamic bodies drive the bone world matrices ---------
@@ -800,8 +826,36 @@ void ModelPhysicsReadback(unsigned char* m) {
 // dynamic result is read back after the settle iterations.
 void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     auto& s = *app;
-    if (s.state.a0665 != 0)
-        return;                                   // physics turned off
+    // ---- gate A: the pump physics-enable counter (x64 app+0xA1E18) ------
+    // Refreshed at the main-pump prologue (0x7FF7CB44755E..0x7FF7CB4475DD):
+    // the counter is set to 1 while playing ([app+0x368]), while the
+    // idle-physics suppress toggle is OFF ([app+0xA54CC] == 0) or while the
+    // modeless physics dialog is open ([app+0xA1B98] != 0); afterwards it
+    // walks 1->2->3->0.  0x7FF7CB44B8E7 (`cmp [app+0xA1E18],0 / jz ->
+    // 0x7FF7CB44C8D6`) skips the ENTIRE physics section - wind, gravity,
+    // settle request, pose passes, world pass and readback - once it has
+    // decayed to 0, i.e. two pump passes after the last trigger dropped.
+    // The port has neither the suppress toggle nor the modeless physics
+    // dialog yet, so the second trigger is permanently true here and the
+    // gate cannot close today; the ladder is kept 1:1 so porting either
+    // trigger reactivates it without touching this function again.
+    // (PlaybackCatchup is not behind this gate in the port: the x64
+    // catch-up blocks share it but can only run while playing, which
+    // already holds the counter open.)
+    const bool physicsIdleSuppressed = false;  // x64 app+0xA54CC toggle
+    const bool physicsDialogOpen = false;      // x64 app+0xA1B98 dialog
+    std::int32_t& pumpCounter = s.PhysicsPumpCounter();   // x64 0xA1E18
+    if (s.PlaybackActive() != 0 || !physicsIdleSuppressed ||
+        physicsDialogOpen)
+        pumpCounter = 1;
+    if (pumpCounter == 1)
+        pumpCounter = 2;
+    else if (pumpCounter == 2)
+        pumpCounter = 3;
+    else if (pumpCounter == 3)
+        pumpCounter = 0;
+    if (pumpCounter == 0)
+        return;                       // 0x7FF7CB44B8E7 -> 0x7FF7CB44C8D6
     PhysicsScene* scene = s.Physics();
     if (scene == nullptr)
         return;
@@ -821,15 +875,24 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     //   axis     = (rand()*0.2/32767.0 - 0.100000001490116 + [0x9EDBx])
     //              * strength   (x87 doubles, float stores; constants
     //                          0x52C170/0x52E9F8/0x52E9F0/0x52BEA8)
+    // x64 (0x7FF7CB44BECF..0x7FF7CB44BF98) computes the same chain in
+    // single precision (cvtdq2ps + mulss/divss/addss) with float
+    // constants: divisor 0x7FF7CB552D30 = 0x46FFFE00 = 32767.0f EXACTLY
+    // (an earlier audit note read this as 32768.0f/0x47000000 - that is a
+    // misread; the bytes are 00 FE FF 46), 0.2f at 0x7FF7CB552D2C, 0.1f
+    // at 0x7FF7CB552B38 and 10.0f preloaded from 0x7FF7CB552980.  The
+    // divisor below therefore stays 32767.0 in BOTH paths; only the
+    // arithmetic precision differs (see the #if paths).
     // Vector element order is (0x9EDB8, 0x9EDBC, 0x9EDC0, 0).
     bool windRan = false;
     if (count > 0 && s.state.a0CD4 != 0) {
-        const double timer = static_cast<double>(
-                                 s.state.v9edcc) +
-                             static_cast<double>(
-                                 s.DeltaTime());
-        s.state.v9edcc = static_cast<float>(timer);
-        if (timer >= 0.5) {                                   // flt_52960C
+        // x64 0x7FF7CB44BEA4..0x7FF7CB44BEC9: the timer accumulates with a
+        // single float add (addss, result stored back unconditionally) and
+        // the compare is `comiss xmm0,[0x7FF7CB55298C=0.5f]; jbe skip` -
+        // the perturbation fires only when the timer is STRICTLY greater
+        // than 0.5; an exactly-0.5 timer does not fire.
+        s.state.v9edcc = s.state.v9edcc + s.DeltaTime();
+        if (s.state.v9edcc > 0.5f) {                          // flt_52960C
 #if defined(_MSC_VER) && defined(_M_IX86)
             // x87 transcription of 0x46F5BA..0x46F66E: every intermediate
             // stays extended; strength is stored to a FLOAT slot at
@@ -975,6 +1038,16 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             s.PhysicsResetPending() = 1;
     }
 
+    // ---- gate B: accessory-edit dialog flag (x64 0x7FF7CB44C65B) --------
+    // `cmp [app+0xA166D],0 / jnz -> 0x7FF7CB44C8D6` (the same landing label
+    // gate A jumps to) skips ONLY the two pose passes, the world pass, the
+    // readback and the moved-flag clear below.  The gravity/wind blocks and
+    // the settle request above have already run by then - the previous
+    // top-of-function early return on a0665 (which also killed gravity and
+    // the settle request) did not match x64.
+    if (s.state.a0665 != 0)
+        return;                       // 0x7FF7CB44C65B -> 0x7FF7CB44C8D6
+
     int stepCount = 0;
     const char* stepLabels[16]{};
     const bool traceSteps = getenv("MIKUDANCESTUDIO_TRACE_STEPS") != nullptr;
@@ -1038,8 +1111,9 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     if (captureStages)
         DumpFrameEntryState(app, "physics_pose0.json", false);
 
-    // Settle section gate (0x46FCEF): moved | settle | frame advanced,
-    // model count 1..3, no seek pending.
+    // Settle section gate (0x46FCEF; x64 0x7FF7CB44C6E5..0x7FF7CB44C73D,
+    // `test eax,edx / jz 0x7FF7CB44C85F`): moved | settle | frame advanced,
+    // model count 1..3, no seek pending (frameCopyDialog app+0xA1BC8 == 0).
     const bool moved = s.state.a066C != 0;
     const bool settle = s.PhysicsResetPending() != 0;
     const bool frameAdv = s.PlaybackActive() != 0;           // 0x330
@@ -1109,19 +1183,23 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             DumpRigidBodyState(app, "physics_settle.rigids.json");
         if (captureStages)
             DumpFrameEntryState(app, "physics_settle.json", false);
+
+        // 0x46FE34..0x46FE58: on x86 the readback loop and the 0xA066C
+        // clear sit AFTER the world-pass gate (label 0x46FE34) and run
+        // even when the gate skipped every step.  x64 MOVED both inside:
+        // the settle-gate failure at 0x7FF7CB44C73D jumps to
+        // 0x7FF7CB44C85F - PAST the 255-slot readback walk (mov edi,0FFh
+        // at 0x7FF7CB44C83C, sub_7FF7CB4E3470 per model) and past the
+        // moved clear (`mov byte [app+0xA1678],0` at 0x7FF7CB44C857).
+        for (int j = 0; j < kModelSlotCount; ++j)
+            if (models[j] != nullptr)
+                ModelPhysicsReadback(models[j]);            // 0x46FE49
+        if (captureStages)
+            DumpRigidBodyState(app, "physics_readback.rigids.json");
+        if (captureStages)
+            DumpFrameEntryState(app, "physics_readback.json", false);
+        s.state.a066C = 0;                       // 0x7FF7CB44C857
     }
-    // 0x46FE34..0x46FE58: the readback loop and the 0xA066C clear sit
-    // AFTER the world-pass gate (label 0x46FE34) - they run even when the
-    // gate skipped every step (including A0CC4 == 0, physics off).
-    // x64 twin: 255 count-down walk (mov edi, 0FFh at 0x7FF7CB44C83C).
-    for (int j = 0; j < kModelSlotCount; ++j)
-        if (models[j] != nullptr)
-            ModelPhysicsReadback(models[j]);                // 0x46FE49
-    if (captureStages)
-        DumpRigidBodyState(app, "physics_readback.rigids.json");
-    if (captureStages)
-        DumpFrameEntryState(app, "physics_readback.json", false);
-    s.state.a066C = 0;
 
     if (traceSteps && stepCount > 0) {
         fprintf(stderr, "PHYSFRAME steps=%d settle=%d moved=%d count=%d labels=",
@@ -1132,8 +1210,10 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         fprintf(stderr, "\n");
     }
 
-    // Second pose pass with a2 = 1 and a4 = model count (0x46FE5F; morph
-    // call at 0x46FE93, SetPhysicsMode pushes 1 at 0x46FEAD).
+    // Second pose pass with a2 = 1 and a4 = model count (0x46FE5F; x64
+    // 0x7FF7CB44C85F..0x7FF7CB44C8D4, morph call / SetPhysicsMode twin at
+    // 0x7FF7CB44C8A8/0x7FF7CB44C8C7).  x64 keeps this pass INSIDE gate B -
+    // it is skipped while the accessory-edit dialog holds physics.
     for (int order = 0; order < kModelSlotCount; ++order) {
         for (int j = 0; j < kModelSlotCount; ++j) {
             unsigned char* mdl = models[j];

@@ -537,9 +537,12 @@ struct MMDAppState {
     std::int32_t modelOutlineColorGreen;
     std::int32_t modelOutlineColorBlue;
     unsigned char buf655780[48];
-    unsigned char wireframeRenderingEnabled;  // +0xA01D4 wireframe fill mode
-    RawPad<15> pad209;
-    unsigned char a01E4;
+    RawPad<16> pad209;  // +0xA01D4: unreferenced in both originals
+    // +0xA01E4 (x64 twin +0xA1154, written/read 6+6 sites): the "wire frame"
+    // menu toggle (command 287).  Both render frames gate D3DRS_FILLMODE on
+    // this single byte - fixed sub_7FF7CB4BFB20 (3 reads) and effect
+    // sub_7FF7CB4C1E60 (3 reads).
+    unsigned char wireframeRenderingEnabled;
 #if defined(_M_X64)
     RawPad<99> pad213;  // the two projection matrices live in MMDApp
                         // mirrors here - the x64 blob region ends 32

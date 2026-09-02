@@ -51,7 +51,7 @@
 //   523  bone rot combo next 0x20B: axis 0x2DA8, row 0x207/0x208/0x209
 //                                                            0x48D550-0x48D84C
 //   524  frame-register X 0x20C: dirty, clear bone(0x26E0 +0x38/0x3C-step
-//        0x112A880)/morph(0x26E4 +0x10/0x14-step 0x61A80)/IK(0x26E8 +0x14/
+//        kBoneKeyCapacity x 0x3C bytes)/morph(0x26E4 +0x10/0x14-step 0x61A80)/IK(0x26E8 +0x14/
 //        0x1C-step 0x6D60) flags, sub_49EEE0(model, 0x2DA0, frame), 0x9E16C
 //        max, PanelPaint                                       0x4803B1-0x48048C
 //   525  frame-register X 0x20D: same with axis 0x2D9C
@@ -478,7 +478,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 524..527: frame-register buttons 0x20C..0x20F (per-axis) -------
     // Each clears the active model's bone (0x26E0, flag +0x38, 0x3C-step
-    // over 0x112A880), morph (0x26E4, flag +0x10, 0x14-step over 0x61A80)
+    // over kBoneKeyCapacity x 0x3C bytes), morph (0x26E4, flag +0x10, 0x14-step over 0x61A80)
     // and IK (0x26E8, flag +0x14, 0x1C-step over 0x6D60) selection flags,
     // then registers a keyframe via sub_49EEE0(model, axisIdx, frame 0x980),
     // updates 0x9E16C against model+0x31B0 and repaints the panel.
@@ -490,7 +490,9 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         const std::size_t lane =
             (id == 525) ? 0 : (id == 524) ? 1 : (id == 527) ? 2 : 3;
         app->SceneModified() = 1;
-        for (std::size_t off = 0; off < 0x112A880; off += 0x3C) {
+        for (std::size_t off = 0;
+             off < sizeof(mdl::BoneKey) * mdl::kBoneKeyCapacity;
+             off += 0x3C) {
             unsigned char* m = ActiveModel(app);
             unsigned char* bones =
                 *reinterpret_cast<unsigned char**>(m + 0x26E0);
