@@ -573,10 +573,13 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
                     segAdd(tick, tempoTable[ci].tempo);
                     break;
                 }
-                const int t = tempoTable[ci + 1].time;              // 0x436DD7
+                // 0x436DD7: the crossed segment is accumulated with the
+                // CURRENT entry's tempo - piVar1[1] is read before the
+                // table pointer advances to piVar16 (= &table[ci+1]).
+                const int t = tempoTable[ci + 1].time;
+                segAdd(t, tempoTable[ci].tempo);
                 tick -= t;
                 ++ci;
-                segAdd(t, tempoTable[ci].tempo);
                 if (ci >= tempoCount)
                     break;
             }

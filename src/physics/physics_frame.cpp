@@ -1047,7 +1047,11 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // idle substep evolution that follows it.
     const bool idleNoStep = getenv("MIKUDANCESTUDIO_IDLE_NO_STEP") != nullptr &&
         !(moved || settle || frameAdv);
-    if (runWorldPass && !idleNoStep && !windRan &&
+    // NOTE: the wind block's jump (0x46F6B4 -> 0x46F7DB) skips only the
+    // normal setGravity (handled by the !windRan gate above).  The world
+    // pass itself runs identically with or without wind - do NOT add
+    // !windRan here, that freezes physics while the noise mode is active.
+    if (runWorldPass && !idleNoStep &&
         s.raw<std::uint32_t>(offsets::kDwordA0B74) == 0) {
         for (int j = 0; j < 100; ++j)
             if (models[j] != nullptr)

@@ -78,6 +78,12 @@ static bool InitTimelineAudio(MMDApp* app, HWND hwnd, HDC timeline,
     audio->englishUI = english ? 1 : 0;
     audio->mainWindow = hwnd;
 
+    // Debug escape hatch: MSVC ASAN's CreateThread wrapper crashes the
+    // DSOUND worker thread that DirectSoundCreate spawns (null read inside
+    // GetDeviceID), so sanitizer builds can run without timeline audio.
+    if (std::getenv("MIKUDANCESTUDIO_SKIP_DSOUND") != nullptr)
+        return false;
+
     IDirectSound*& directSound = audio->directSound;
     if (FAILED(DirectSoundCreate(nullptr, &directSound, nullptr))) {
         MessageBoxA(hwnd,

@@ -102,8 +102,10 @@ void AviFailTail(MMDApp* app) {
 // Shared aspect computation of 0x4336A8 (AVI) and 0x433965 (picture):
 //   w     = hideRect[+0xA0D48] - hideRect[+0xA0D40]
 //   h2    = (hideRect[+0xA0D4C] - hideRect[+0xA0D44]) / 2   (int div)
-//   scale = (float)(w / ratio * 1.2 / width)                 (x87, 1:1)
-//   out   = (int)(h2 - 1.2 / (height * scale * ratio) * 0.5)
+//   scale = (float)(width / ((w / ratio) * 1.2))             (x87, 1:1)
+//   out   = (int)(1.2 / (height * scale * ratio) * 0.5 - h2)
+// (0x433703 fdivrp divides the product INTO width; 0x43372A fsubrp
+// subtracts h2 FROM the 0.5 term - both reversed operands matter.)
 void MediaAspect(MMDApp* app, std::int32_t width, std::int32_t height,
                  float& scaleOut, std::int32_t& posOut) {
     auto& s = *app;
@@ -116,13 +118,13 @@ void MediaAspect(MMDApp* app, std::int32_t width, std::int32_t height,
     const std::int32_t h2 = h / 2;                                  // 0x4336E9
     const float ratio = s.Renderer()->viewScale;                    // 0x4336E0
     const float scale = static_cast<float>(
-        (static_cast<double>(w) / ratio * kDbl52BA20) /
-        static_cast<double>(width));                                // 0x4336F5..
+        static_cast<double>(width) /
+        ((static_cast<double>(w) / ratio) * kDbl52BA20));           // 0x4336F5..
     scaleOut = scale;
     posOut = static_cast<std::int32_t>(
-        static_cast<double>(h2) -
         kDbl52BA20 / (static_cast<double>(height) * scale * ratio) *
-            kDbl52B8F0);                                            // 0x43370D..
+            kDbl52B8F0 -
+        static_cast<double>(h2));                                   // 0x43370D..
 }
 
 }  // namespace

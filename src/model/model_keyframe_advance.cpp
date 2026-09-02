@@ -422,7 +422,7 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                 // terminal key (0x4A3B1C)
                 active[b] = 0;
                 for (int c = 0; c < 4; ++c)
-                    bone->rotQuat2[c] = rec.rotation[c];
+                    bone->rotQuat[c] = rec.rotation[c];  // +0x14C
                 for (int c = 0; c < 3; ++c)
                     bone->trans[c] = rec.position[c];
                 const unsigned char mode = rec.physicsDisabled;
@@ -484,7 +484,7 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                     for (int c = 0; c < 3; ++c)
                         bone->ikWorkingPos[c] = bone->ikBackup[c];
                     for (int c = 0; c < 4; ++c)
-                        bone->rotQuat2[c] = bone->ikBackup[3 + c];
+                        bone->rotQuat[c] = bone->ikBackup[3 + c];  // +0x14C <- +0x194
                     for (int c = 0; c < 3; ++c)
                         bone->trans[c] = bone->ikBackup[c];
                 }

@@ -943,7 +943,23 @@ void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
                 }
                 ResetSphereStageAfterDraw(device, material);
             } else {
-                device->SetMaterial(&d3dMaterial);
+                if (shadowOnly) {
+                    // 0x492938..0x492952: per-material CULLMODE - the
+                    // doubleSided flag (material+0x4A9) selects CCW(3) when
+                    // clear, NONE(1) when set.  No SetMaterial here: the
+                    // original shadow loop does not set one.
+                    device->SetRenderState(
+                        D3DRS_CULLMODE,
+                        record.doubleSided == 0 ? D3DCULL_CCW
+                                                : D3DCULL_NONE);
+                    // 0x492954: BeginPass(effect, 0) per material; the
+                    // enclosing FxBegin was issued by RenderShadowMap
+                    // before the model loop (its FxEnd closes it).
+                    if (effectPass && effect != nullptr)
+                        FxBeginPass(effect, 0);
+                } else {
+                    device->SetMaterial(&d3dMaterial);
+                }
                 if (effectPass && effect != nullptr && !shadowOnly) {
                     device->SetRenderState(D3DRS_CULLMODE,
                         record.diffuse[3] >= 1.0f ||

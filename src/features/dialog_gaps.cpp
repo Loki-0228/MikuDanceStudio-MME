@@ -26,8 +26,9 @@
 //   0x00492860  shadow material pass absorbed into DrawModelMaterials
 //               (shadowOnly path, src/render/model_renderers.cpp:844-848) and
 //               reached from the RenderShadowMap port (:1392, 0x426CD0);
-//               NOTE: the port's skip test omits the original's PMX
-//               `(material[2240] >> 2) == 0` shadow-cast-bit term (0x492925).
+//               the skip test includes the original's PMX shadow-cast-bit
+//               term (~(flags>>2) & pmx, 0x492914..0x492927) in
+//               model_renderers.cpp DrawModelMaterials.
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -90,8 +91,8 @@ inline const T& At(const unsigned char* p, std::size_t offset) {
 float* QuaternionNlerp(float* out, float q0x, float q0y, float q0z, float q0w,
                        float q1x, float q1y, float q1z, float q1w, float t) {
     const double dot =
-        (double)q1w * (double)q0z + (double)q1y * (double)q0y +
-        (double)q1z * (double)q0w + (double)q1x * (double)q0x;  // 0x499A23
+        (double)q1x * (double)q0x + (double)q1w * (double)q0w +
+        (double)q1y * (double)q0y + (double)q1z * (double)q0z;  // 0x499A23
     const float dotF = (float)dot;
     float tt;                                                   // st(6) mirror
     if (dotF >= 0.0f) {                                         // 0x499A36
@@ -294,10 +295,14 @@ int SavePmdFile(unsigned char* model, char* path, void* /*localeTable*/) {
         _write(fh, &edge, 1);
     }
 
-    // Indices (0x490505).
+    // Indices (0x490505): the original walks a DWORD-strided table
+    // (lea (%edx,%edi,4)) and writes the low 16 bits of each element.
     _write(fh, &state.indexCount, sizeof(state.indexCount));
-    for (std::uint32_t i = 0; i < state.indexCount; ++i)
-        _write(fh, &mdl::Indices(model)[i], sizeof(mdl::Indices(model)[i]));
+    for (std::uint32_t i = 0; i < state.indexCount; ++i) {
+        const std::uint16_t index =
+            static_cast<std::uint16_t>(mdl::PmxIndices(model)[i]);
+        _write(fh, &index, sizeof(index));
+    }
 
     // Materials (0x490547..0x49079C), 2292-byte records at model+32.
     _write(fh, &state.materialCount, sizeof(state.materialCount));
@@ -306,6 +311,7 @@ int SavePmdFile(unsigned char* model, char* path, void* /*localeTable*/) {
         _write(fh, &mat.diffuse[0], sizeof(mat.diffuse[0]));
         _write(fh, &mat.diffuse[1], sizeof(mat.diffuse[1]));
         _write(fh, &mat.diffuse[2], sizeof(mat.diffuse[2]));
+        _write(fh, &mat.diffuse[3], sizeof(mat.diffuse[3]));  // 0x490598
         _write(fh, &mat.specularPower, sizeof(mat.specularPower));
         _write(fh, mat.specular, sizeof(mat.specular));
         _write(fh, mat.ambient, sizeof(mat.ambient));
@@ -446,14 +452,14 @@ int SavePmdFile(unsigned char* model, char* path, void* /*localeTable*/) {
     for (int i = 0; i < 10; ++i)
         _write(fh, mdl::PmdToonFileNames(model)[i], 100);
 
-    // Rigid bodies (0x490DFB..0x490FF2).  The extra 32-bit body token is
-    // deliberately retained: it is part of the original writer's stream.
+    // Rigid bodies (0x490DFB..0x490FF2): name(20), bone(2)@+0x1C,
+    // group(1)@+0x20, noc(2)@+0x22, shape(1)@+0x24, 14 floats
+    // (+0x28..+0x4C, +0x58..+0x64), then 1 byte mode@+0x50.  No pointer
+    // write exists in the original stream.
     _write(fh, &state.rigidCount, sizeof(state.rigidCount));
     for (int i = 0; i < state.rigidCount; ++i) {
         const mdl::RigidRecord& rigid = mdl::Rigids(model)[i];
         const std::int16_t boneIndex = static_cast<std::int16_t>(rigid.boneIndex);
-        const std::uint32_t bodyToken = static_cast<std::uint32_t>(
-            reinterpret_cast<std::uintptr_t>(rigid.body));
         _write(fh, rigid.name, sizeof(rigid.name));
         _write(fh, &boneIndex, sizeof(boneIndex));
         _write(fh, &rigid.group, sizeof(rigid.group));
@@ -467,7 +473,6 @@ int SavePmdFile(unsigned char* model, char* path, void* /*localeTable*/) {
         _write(fh, &rigid.angularDamping, sizeof(rigid.angularDamping));
         _write(fh, &rigid.restitution, sizeof(rigid.restitution));
         _write(fh, &rigid.friction, sizeof(rigid.friction));
-        _write(fh, &bodyToken, sizeof(bodyToken));
         _write(fh, &rigid.mode, sizeof(rigid.mode));
     }
 

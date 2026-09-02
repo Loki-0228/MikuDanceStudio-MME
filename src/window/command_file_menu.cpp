@@ -1250,11 +1250,13 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // 222 (0x0048835D): delete unused frames.  Clears the used flag of
     // every frame (bone +0x38 / morph +0x10 / acc +0x14), then walks the
     // per-bone/per-morph/per-accessory frame chains and marks a frame when
-    // its transform (or frame number / IK-name list / camera records) is
-    // "<= both neighbours" - the x87 fucompp idiom of the original emits 1
-    // iff ST0 <= ST1 (NaN -> 0), i.e. a plain float <= per component, so
-    // duplicates of the neighbours are marked.  Sub4316B0 then purges the
-    // marked frames and a MessageBox reports the count.
+    // its transform (or frame number / IK-name list / camera records)
+    // EQUALS both neighbours: each component test is
+    //   flag=1; fucompp; test $0x44; jnp keep-1; flag=0
+    // i.e. equal (C3 alone -> odd parity -> keep 1), unequal or unordered
+    // (NaN -> 0); all 14 per-component flags AND to 1 only for exact
+    // duplicates.  Sub4316B0 then purges the marked frames and a MessageBox
+    // reports the count.
     // ------------------------------------------------------------------
     case 222: {
         if (app->raw<std::uint8_t>(offsets::kByteOptflag0) != 0) {  // 0x2F8
@@ -1333,12 +1335,14 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 const float nQy = *reinterpret_cast<float*>(frames + 0x3C * next + 0x2C);
                 const float nQz = *reinterpret_cast<float*>(frames + 0x3C * next + 0x30);
                 const float nQw = *reinterpret_cast<float*>(frames + 0x3C * next + 0x34);
-                const bool all = (curX <= pX) && (curY <= pY) && (curZ <= pZ) &&
-                                 (curQx <= pQx) && (curQy <= pQy) &&
-                                 (curQz <= pQz) && (curQw <= pQw) &&
-                                 (curX <= nX) && (curY <= nY) && (curZ <= nZ) &&
-                                 (curQx <= nQx) && (curQy <= nQy) &&
-                                 (curQz <= nQz) && (curQw <= nQw);
+                // 0x4884AB: equality per component (NaN -> false), all 14
+                // flags ANDed (0x488660..0x4886a4).
+                const bool all = (curX == pX) && (curY == pY) && (curZ == pZ) &&
+                                 (curQx == pQx) && (curQy == pQy) &&
+                                 (curQz == pQz) && (curQw == pQw) &&
+                                 (curX == nX) && (curY == nY) && (curZ == nZ) &&
+                                 (curQx == nQx) && (curQy == nQy) &&
+                                 (curQz == nQz) && (curQw == nQw);
                 if (all) {
                     ++deleted;
                     frames[0x3C * cur + 0x38] = 1;
@@ -1377,10 +1381,11 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             for (;;) {
                 const std::int32_t prev = *reinterpret_cast<std::int32_t*>(
                     frames + 0x14 * cur + 4);
+                // Same equality idiom as the bone walk (0x48862F area).
                 const bool hit =
-                    (*reinterpret_cast<float*>(frames + 0x14 * cur + 0xC) <=
+                    (*reinterpret_cast<float*>(frames + 0x14 * cur + 0xC) ==
                      *reinterpret_cast<float*>(frames + 0x14 * prev + 0xC)) &&
-                    (*reinterpret_cast<float*>(frames + 0x14 * cur + 0xC) <=
+                    (*reinterpret_cast<float*>(frames + 0x14 * cur + 0xC) ==
                      *reinterpret_cast<float*>(frames + 0x14 * next + 0xC));
                 if (hit) {
                     ++deleted;

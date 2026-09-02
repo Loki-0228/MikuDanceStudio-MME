@@ -346,9 +346,11 @@ bool WaveLoadFile(void* obj, const wchar_t* path,
                 if (maxV < v2) maxV = v2;
                 if (minV > v2) minV = v2;
             }
-            // 0x4C33AF..0x4C33F6: value*25, >>7 (blockAlign != 0) or >>15,
-            // + 25; max -> ctx+0x00 array, min -> ctx+0x04 array.
-            const int shift = blockAlign != 0 ? 7 : 15;
+            // 0x4C33AF..0x4C33F6: value*25, >>7 (8-bit modes k==0/k==2) or
+            // >>15 (16-bit k==1/k==3), + 25; max -> ctx+0x00 array, min ->
+            // ctx+0x04 array.  The 0x4C3242 flag is (k==2)|(k==0), NOT a
+            // blockAlign test.
+            const int shift = (k == 0 || k == 2) ? 7 : 15;
             arrMax[i] = static_cast<unsigned char>(
                 (maxV * 0x19 >> shift) + 0x19);
             arrMin[i] = static_cast<unsigned char>(
