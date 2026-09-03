@@ -178,7 +178,9 @@ void AccessoryPlacement(MMDApp* app, void* accessory, Matrix* world) {
     api.multiply(world, world, &part);
 
     const int modelSlot = mdl::Accessory(accessory)->parentModel;
-    if (modelSlot < 0 || modelSlot >= 100)
+    // x64 0x7FF7CB4C19F3 只判 parentModel == -1（cmp dword[r10+240h],-1），
+    // 无上界检查；这里的上界取槽容量防止越界索引槽数组
+    if (modelSlot < 0 || modelSlot >= kModelSlotCount)
         return;
     auto* model = app->ModelSlot(modelSlot);
     if (model == nullptr)
@@ -939,6 +941,13 @@ void RenderAccessoriesProjectedGroundShadowGeometry(MMDApp* app) {
     const D3DMATERIAL9 shadowMaterial = app->ProjectedShadowMaterial();
     device->SetMaterial(&shadowMaterial);
     device->SetTexture(0, app->ProjectedShadowRestoreTexture());
+    // x64 0x7FF7CB4C06FF：配件投射循环结束、SetMaterial/SetTexture 复位
+    // （0x7FF7CB4C06A5..0x7FF7CB4C06DD）之后、模型影走查（0x7FF7CB4C0710..）
+    // 之前，按"transparent ground shadow(&T)"开关（app+0x9FCA2）重写
+    // ALPHABLENDENABLE；pass 起始段不写 RS(27)。该字节即 PMM 存档里的
+    // projectedShadowBlendEnabled（保存点 0x7FF7CB498408）。
+    device->SetRenderState(D3DRS_ALPHABLENDENABLE,
+                           app->ProjectedShadowBlendEnabled());
 }
 
 void RenderAccessoriesShadow(MMDApp* app) {                     // 0x4C52D0

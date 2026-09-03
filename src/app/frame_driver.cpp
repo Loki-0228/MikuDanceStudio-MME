@@ -533,7 +533,19 @@ void FrameDriver(MMDApp* app) {
 
     // ---- 6. playback catch-up + physics (0x46EEE0..0x46FEB8) ------------
     PlaybackCatchup(app, selActive);
+    // ---- 6.5 Kinect 骨架驱动泵块（x64 0x7FF7CB44C12E..0x7FF7CB44C656）----
+    // 原版位于物理帧内部：settle 上升沿请求（0x7FF7CB44C12E）之后、gate B
+    // （0x7FF7CB44C65B）之前。settle 请求已移植在 physics_frame.cpp，该文件
+    // 本轮冻结，故此处按同一三重门先行调用（门输入互不影响；块尾与
+    // DisableKinect 都会补置 settle，先后次序无观测差异）。
+    // oni_skeleton_pump.cpp 含完整地址锚点。
+    PumpKinectSkeleton(app, selActive);
     PhysicsFrame(app, selActive);
+    // x64 0x7FF7CB456F21（泵尾，紧随 previousMouse 回写 0x7FF7CB456F08..F17）:
+    // 把本趟 selActive 滞留进 app+0xA137C；下一趟物理帧的 settle 请求
+    // （0x7FF7CB44C12E）读它做上升沿判定。物理帧已消费完上一趟的值，
+    // 此处回写不影响本趟。
+    s.state.selectionActiveLatch = selActive;
 
     // The original produces text at 0x46FECF and resets/rebuilds the
     // selection line batch at 0x4757C3. Both are consumed on the next frame.

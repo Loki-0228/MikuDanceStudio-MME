@@ -325,9 +325,11 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
                 app->state.timelineScrollNPage;
             break;
         case 5:  // SB_THUMBPOSITION
+            // x64 0x7FF7CB45EF76：读的是内嵌 SCROLLINFO 的 nPos（app+0x1444）
+            // 而非 nMin——按住滑块拖动时按增量 abs 新位置 - 上次位置移动。
             app->state.timelineStartFrame +=
                 static_cast<std::int32_t>(HIWORD(wParam)) -
-                app->state.timelineScrollNMin;  // timeline SCROLLINFO nMin
+                app->state.timelineScrollNPos;  // timeline SCROLLINFO nPos
             break;
         default:
             break;

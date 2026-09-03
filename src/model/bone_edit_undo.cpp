@@ -41,8 +41,12 @@ void PushBoneEditUndo(MMDApp* app) {  // was Sub42D6E0, VA 0x0042D6E0
     EnableWindow(GetDlgItem(window, panel::kUndoButton), TRUE);
     EnableWindow(GetDlgItem(window, panel::kRedoButton), FALSE);
 
-    model[12732] = 1;
-    model[12733] = 0;
+    // x64 0x7FF7CB447074/0x7FF7CB44708A：undo/redo 脏标志 = model+0x3558/
+    // +0x3559，紧跟 undoState 环游标（+0x3550，环深 30）。x86 旧偏移
+    // 12732/12733 在 x64 落进 gap15 死垫片会让 Ctrl+Z/Y 门失效，必须走
+    // typed 字段（双架构偏移由 model_layout.hpp 钉死）。
+    mikudancestudio::mdl::Mdl(model)->undoDirty = 1;
+    mikudancestudio::mdl::Mdl(model)->redoDirty = 0;
     auto& ringIndex = mikudancestudio::mdl::Mdl(model)->undoState[0];
     if (++ringIndex >= 30)
         ringIndex = 0;

@@ -1362,6 +1362,12 @@ public:
         return state.openniTrackingCallback;  // 0xA03D4
 #endif
     }
+    // Kinect 捕获阶段字节（x64 0xA1E14；菜单 0x124 的自动帧录制状态机，
+    // 0x7FF7CB45F550 置 1、定时器 0x7FF7CB4FBBF0 递增到 4、泵块
+    // 0x7FF7CB44C560 以 ==4 判“录制中”、满 12600 样本时清零）。x86 槽位
+    // 未定谳，双 ABI 走镜像；无 DxOpenNI.dll 时恒 0。
+    std::uint8_t& KinectCaptureStage() { return m_kinectCaptureStage; }
+    std::uint8_t KinectCaptureStage() const { return m_kinectCaptureStage; }
     // The seven DxOpenNI.dll export slots (0xA03C0..0xA03DC, one pointer
     // each in the x86 blob).  Slots 2/4 sit in 4-byte uint32 blob members,
     // so x64 reinterprets would clobber neighbours - mirrors there.
@@ -1535,6 +1541,11 @@ private:
     wchar_t m_captureSavePath[256] = {};
     unsigned char m_boneFrameScratch[140] = {};
 #endif
+
+    // Kinect 捕获阶段字节（x64 0xA1E14）。x86 槽位未定谳，双 ABI 统一走
+    // 类成员镜像（同 m_openniTrackingCallback 的处理思路）；无
+    // DxOpenNI.dll 时恒 0。
+    std::uint8_t m_kinectCaptureStage = 0;
 };
 
 static_assert(sizeof(MMDApp) >= sizeof(MMDAppState),

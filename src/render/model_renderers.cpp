@@ -1167,12 +1167,13 @@ void SetProjectedStencil(D3DRenderer* sub, IDirect3DDevice9* device,
 void BeginProjectedShadowPass(D3DRenderer* sub, IDirect3DDevice9* device) {
     // Original frame trace: NORMALIZENORMALS is cleared by the preceding
     // accessory pass, then the projected geometry uses stencil value 2,
-    // no culling, and strict depth comparison.
+    // no culling, and strict depth comparison.  x64 pass 起始段
+    // （0x7FF7CB4C0319..0x7FF7CB4C0402）不写 ALPHABLENDENABLE：混合态由配件
+    // 投射循环逐配件重写，循环收尾再按透明地面影开关统一重写。
     device->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
     SetProjectedStencil(sub, device, true);
     device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
     device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESS);
-    device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     device->SetTexture(0, nullptr);
 }
 
@@ -1335,16 +1336,25 @@ bool UseEffectModelRenderer(MMDApp* app) {
 void RenderModelsFixed(MMDApp* app) {                         // 0x425D20
     D3DRenderer* sub = app->Renderer();
     auto* device = sub->device;
-    DisableSphereTextureStage(device);
+    // x64 帧头 0x7FF7CB4BFC08 仅一条 SetTextureStageState(2, TEXCOORDINDEX,
+    // D3DTSS_TCI_CAMERASPACENORMAL)：不解绑纹理 2、不写 COLOROP/TTF。完整的
+    // 球面贴图级联关闭保留在 ConfigureMaterialStages 的逐材质循环里
+    // （0x491470.. 的逐材质行为）。
+    device->SetTextureStageState(2, D3DTSS_TEXCOORDINDEX,
+                                 D3DTSS_TCI_CAMERASPACENORMAL);
     if (sub->d3dInitialized != 0) {
         device->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_ALWAYS);
         device->SetRenderState(D3DRS_STENCILREF, 1);
         device->SetRenderState(D3DRS_STENCILPASS, D3DSTENCILOP_REPLACE);
     }
-    device->SetRenderState(D3DRS_FILLMODE,
-        app->WireframeRenderingEnabled() == 0 ? D3DFILL_SOLID : D3DFILL_WIREFRAME);
     DrawPreModelQuads(app, device);
     DrawGroundGeometry(app, device);
+    // FILLMODE 排在背景图/AVI 四边形与地面之后：x64 sub_7FF7CB4BFB20 先画
+    // 背景四边形（0x7FF7CB4BFC74 图片 / 0x7FF7CB4BFD4A AVI）、地面
+    // （0x7FF7CB4BFE20），然后才在 0x7FF7CB4BFE88..0x7FF7CB4BFEA8 按线框开关
+    // 写 RS(8) 并紧跟 RS(137)=1——线框模式下背景与地面仍实体填充。
+    device->SetRenderState(D3DRS_FILLMODE,
+        app->WireframeRenderingEnabled() == 0 ? D3DFILL_SOLID : D3DFILL_WIREFRAME);
     device->SetRenderState(D3DRS_LIGHTING, TRUE);
 
     const int accessorySplit = std::max(0, std::min(

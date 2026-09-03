@@ -714,9 +714,10 @@ bool RegisterDisplayKeyFromRecord(unsigned char* model, int frameArg,
     mdl::DisplayKey* const keys = mdl::DisplayKeys(m);
     const std::uint32_t frame =
         static_cast<std::uint32_t>(frameOffset + frameArg);
-    // The timeline navigation commands use this independent existence flag
-    // to avoid treating the allocated root record as an authored key.
-    mdl::Mdl(m)->displayKeyframesPresent = 1;
+    // 注意：x64（sub_7FF7CB4EB3C0 完整反编译）注册显示键时 *不* 写
+    // displayKeyframesPresent。该字段是左面板 表示/IK 行的轨道选中开关，
+    // 只在行点击时翻转（0x7FF7CB45A2DD..0x7FF7CB45A2EA，port 见
+    // ui_editor_click.cpp），控制关键帧跳转命令的搜索范围。
 
     // fill the per-IK byte array and the selector pair array of the
     // record at index (shared by all three insert paths)
@@ -850,7 +851,9 @@ void RegisterDisplayKeyCurrent(unsigned char* model, int frameArg) {
     unsigned char* const m = model;
     mdl::DisplayKey* const keys = mdl::DisplayKeys(m);
     const std::uint32_t frame = static_cast<std::uint32_t>(frameArg);
-    mdl::Mdl(m)->displayKeyframesPresent = 1;
+    // 同上：x64（sub_7FF7CB4EAF80）此处也不写 displayKeyframesPresent——
+    // 它是左面板 表示/IK 行的选中开关（点击翻转，0x7FF7CB45A2DD..EA），
+    // 不是“模型拥有显示键”的存在标志。
 
     const auto fill = [&](int index) {
         mdl::DisplayKey& rec = keys[index];

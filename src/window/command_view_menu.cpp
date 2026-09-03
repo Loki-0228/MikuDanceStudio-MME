@@ -877,7 +877,7 @@ INT_PTR CALLBACK BoneFrameMultiplyDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         for (int i = 0; i < 12; i += 2) {
             PrefillEdit(hDlg, panel::kBoneMulPosXScaleEdit + i, "1.0");
         }
@@ -915,7 +915,7 @@ INT_PTR CALLBACK FacialMultiplyDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         PrefillEdit(hDlg, panel::kMorphMulScaleEdit, "1.0");
         PrefillEdit(hDlg, panel::kMorphMulOffsetEdit, "0.0");
         SelectAllEdit(hDlg, panel::kMorphMulScaleEdit);
@@ -953,7 +953,7 @@ INT_PTR CALLBACK EdgeThicknessDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     MMDApp* app = g_Block;
     switch (msg) {
     case WM_INITDIALOG: {
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         app->EdgeThicknessEditProc() =
             reinterpret_cast<WNDPROC>(
                 GetWindowLongPtrA(GetDlgItem(hDlg, panel::kEdgeThicknessEdit), GWLP_WNDPROC));
@@ -1010,7 +1010,7 @@ INT_PTR CALLBACK EnhanceModelDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         FillEnhanceModelNameEdits(app, hDlg);  // 0x41E9C0
         return 0;
     }
@@ -1189,7 +1189,7 @@ INT_PTR CALLBACK ModelCalculateOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         g_calculateOrderDialogCount = static_cast<int>(
             SendMessageA(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
                          CB_GETCOUNT, 0, 0)) -
@@ -1282,7 +1282,7 @@ INT_PTR CALLBACK GravitySettingDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     MMDApp* app = g_Block;
     const HWND hCtrl = reinterpret_cast<HWND>(lParam);
     if (msg == WM_INITDIALOG) {
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         // accessory-frame dialog reuses bone-scratch +28 for the saved
         // wndproc (original blob-reuse semantics)
         reinterpret_cast<WNDPROC&>(app->BoneFrameScratch()[28]) =
@@ -1437,7 +1437,7 @@ INT_PTR CALLBACK CameraNumericInputDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         static const std::size_t kEditIds[7] = {637, 638, 639, 640, 641, 642, 644};
         char buf[20];
         for (int i = 0; i < 7; ++i) {
@@ -1479,7 +1479,7 @@ INT_PTR CALLBACK BoneNumericInputDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         static const std::size_t kEditIds[6] = {637, 638, 639, 640, 641, 642};
         char buf[20];
         for (int i = 0; i < 6; ++i) {
@@ -1527,7 +1527,7 @@ INT_PTR CALLBACK ModelDisplayOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
-        MakeDialogTopIfRequested(app, hDlg);
+        MakeDialogTopmostIfRequested(app, hDlg);
         const int count = static_cast<int>(
             SendMessageA(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
                          CB_GETCOUNT, 0, 0));
@@ -1892,7 +1892,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         fileBuf[0] = L'\0';
         OPENFILENAMEW ofn;
         std::memset(&ofn, 0, sizeof(ofn));
-        ofn.lStructSize = 0x4C;
+        ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner = hwnd;
         ofn.nFilterIndex = 1;
         ofn.lpstrFilter =
@@ -2211,7 +2211,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         fileBuf[0] = L'\0';
         OPENFILENAMEW ofn;
         std::memset(&ofn, 0, sizeof(ofn));
-        ofn.lStructSize = 0x4C;
+        ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner = hwnd;
         ofn.lpstrFilter = english
             ? L"All picture format\x00\x00"
@@ -2434,7 +2434,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->state.enterKeyState = 1;
         CHOOSECOLORA cc;
         std::memset(&cc, 0, sizeof(cc));
-        cc.lStructSize = 0x24;
+        cc.lStructSize = sizeof(cc);
         cc.hwndOwner = hwnd;
         const std::uint8_t r =
             app->state.modelOutlineColorRed;
@@ -2541,12 +2541,11 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
             SetTimer(hwnd, 0x65, 0x5DC, nullptr);
             app->PhysicsResetPending() = 1;
             // x64 dispatcher twin (0x7FF7CB470326..0x7FF7CB47034F) walks all
-            // 255 slots (model+0x3CA5 <- app+0xA137E on x64).
+            // 255 slots (movzx eax,[rbx+0A137Eh]; mov [rcx+3CA5h],al).
             for (int i = 0; i < kModelSlotCount; ++i) {
                 unsigned char* model = app->ModelSlot(i);
                 if (model != nullptr) {
-                    model[0x38FD] =
-                        app->state.openniVersion;
+                    mdl::Mdl(model)->openniVersion = app->state.openniVersion;
                 }
             }
         } else {
@@ -2623,7 +2622,7 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         fileBuf[0] = L'\0';
         OPENFILENAMEW ofn;
         std::memset(&ofn, 0, sizeof(ofn));
-        ofn.lStructSize = 0x4C;
+        ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner = app->state.floatingWindow != 0
                             ? app->state.floatingWindow
                             : hwnd;

@@ -229,9 +229,12 @@ int LoadVmdMotion(MMDApp* app, const char* fileName) {  // was Sub434B60, VA 0x0
                 _read(fileHandle, rec + 45, 1);
                 _read(fileHandle, rec + 39, 1);
                 _read(fileHandle, rec + 51, 1);
-                for (int c = 0; c < 6; ++c) {     // expand to all channels
-                    rec[34 + c] = rec[33]; rec[46 + c] = rec[45];
-                    rec[40 + c] = rec[39]; rec[52 + c] = rec[51];
+                // x64 @0x7FF7CB48D5A5..0x7FF7CB48D5EF: 每个共享字节只填充
+                // 其后的 5 字节（20 次赋值，rec+33/39/45/51 起各成一组
+                // 6 字节均匀曲线）；rec[57] 保持清零不被触碰
+                for (int c = 1; c <= 5; ++c) {
+                    rec[33 + c] = rec[33]; rec[45 + c] = rec[45];
+                    rec[39 + c] = rec[39]; rec[51 + c] = rec[51];
                 }
                 *reinterpret_cast<int*>(rec + 28) = 45;  // fov default
                 rec[32] = 0;                             // view flag
@@ -350,21 +353,27 @@ int LoadVmdMotion(MMDApp* app, const char* fileName) {  // was Sub434B60, VA 0x0
     if (undo.bonePose != nullptr)
         free(undo.bonePose);
     const int boneCnt = static_cast<int>(record.boneCount);
-    unsigned char* const snap = static_cast<unsigned char*>(
-        operator new(36 * boneCnt));
-    undo.bonePose = reinterpret_cast<mikudancestudio::mdl::BonePoseSnapshot*>(snap);
-    std::memset(snap, 0, 36 * boneCnt);
+    // x64 @0x7FF7CB48DE70..0x7FF7CB48E013: 每骨骼一个 36 字节槽位
+    // (boneIndex / trans / rotQuat / 物理标志)，源端等价于按
+    // BoneRecord 类型化字段读取（x64 骨骼表 624 字节 stride 下
+    // trans@+328、rotQuat@+340），物理标志取 model+12584[b]
+    auto* const snap = static_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
+        operator new(boneCnt * sizeof(mikudancestudio::mdl::BonePoseSnapshot)));
+    undo.bonePose = snap;
+    std::memset(snap, 0,
+                static_cast<std::size_t>(boneCnt) *
+                    sizeof(mikudancestudio::mdl::BonePoseSnapshot));
     if (boneCnt > 0) {
-        mikudancestudio::mdl::BoneRecord* const bones = mikudancestudio::mdl::Bones(model);
-        unsigned char* const flags =
+        mikudancestudio::mdl::BoneRecord* const bones =
+            mikudancestudio::mdl::Bones(model);
+        const unsigned char* const flags =
             mikudancestudio::mdl::Mdl(model)->bonePhysicsState;
-        int off = 0, boff = 0;
         for (int b = 0; b < boneCnt; ++b) {
-            *reinterpret_cast<int*>(snap + off) = b;
-            std::memcpy(snap + off + 4, bones + boff + 320, 12);
-            std::memcpy(snap + off + 16, bones + boff + 332, 16);
-            snap[off + 32] = flags[b];
-            off += 36; boff += 604;
+            mikudancestudio::mdl::BonePoseSnapshot& slot = snap[b];
+            slot.boneIndex = b;
+            std::memcpy(slot.position, bones[b].trans, sizeof slot.position);
+            std::memcpy(slot.rotation, bones[b].rotQuat, sizeof slot.rotation);
+            slot.physicsDisabled = flags[b];
         }
     }
     if (undo.auxiliaryPose != nullptr)

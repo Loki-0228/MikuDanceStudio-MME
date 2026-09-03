@@ -204,7 +204,7 @@ void MMDApp::InitDefaults() {
     state.globalTrackSelected[1] = 0;
     state.globalTrackSelected[2] = 0;
     state.globalTrackSelected[3] = 0;
-    state.a03E8 = 0;
+    state.selectionActiveLatch = 0;   // x64 0x7FF7CB42CA4C: `mov [app+0xA137C], di`
     state.automaticFrameAdvanceEnabled = 0;
     state.messageSeen = 1;
     s.TimelineSelectionChanged() = 0;

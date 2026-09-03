@@ -1,7 +1,8 @@
 // ===========================================================================
 // VA 0x00460430 - LoadModelFile / AddModel  (original: sub_460430)
 // ===========================================================================
-// Model-slot orchestrator: finds a free slot among the 100 at this+1920,
+// Model-slot orchestrator: finds a free slot among the kModelSlotCount at
+// this+1920,
 // allocates the 0x4CCF4 block (operator new + memset + default init
 // 0x4A8DC0), runs the loader 0x4BF3E0, and on success registers the model
 // name in the three comboboxes (436/474/449 via CB_ADDSTRING), selects it
@@ -9,7 +10,7 @@
 // resets the manipulation radios (BM_SETCHECK), enables the model-dependent
 // menu items, and toggles the physics menu-item state (SetMenuItemInfoA).
 // On failure the model is disposed (0x48F830) and the slot cleared.
-// When all 100 slots are taken the original shows
+// When all kModelSlotCount slots are taken the original shows
 // "you cannot add models over %d!" (JP: 0x52E198/0x52E18C).
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
@@ -39,14 +40,15 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
     int slot = 0;
     while (app->ModelSlot(slot) != nullptr) {
         ++slot;
-        if (slot >= 100) {
+        if (slot >= kModelSlotCount) {  // x64 槽扫描界 255 @0x7FF7CB4B6705
             app->state.enterKeyState = 1;
             char text[256];
             if (app->EnglishUI() == 0) {
-                sprintf_s(text, 0x100, kMsgModelLimitJp, 100);
+                sprintf_s(text, 0x100, kMsgModelLimitJp, kModelSlotCount);
                 MessageBoxA(hwnd, text, kTitleAddModelJp, 0);
             } else {
-                sprintf_s(text, 0x100, "you cannot add models over %d!", 100);
+                sprintf_s(text, 0x100, "you cannot add models over %d!",
+                          kModelSlotCount);  // 255 @0x7FF7CB4B6733
                 MessageBoxA(hwnd, text, "add model", 0);
             }
             return;
@@ -113,19 +115,23 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
             EnableMenuItem(GetMenu(hwnd), j, 0);
         for (UINT k = 273; k <= 275; ++k)
             EnableMenuItem(GetMenu(hwnd), k, 0);
-        EnableMenuItem(GetMenu(hwnd), 1, 0);
-        static const UINT kDisable[] = {0xEE, 0xEF, 0xF0, 0xF1, 0xF2};
+        // x64 在 273..275 启用循环后从 0xED 起依次禁用 237..242
+        // (@0x7FF7CB4B6CBC..0x4B6D75)，无 EnableMenuItem(menu, 1, 0) 调用。
+        static const UINT kDisable[] = {0xED, 0xEE, 0xEF, 0xF0, 0xF1, 0xF2};
         for (UINT item : kDisable)
             EnableMenuItem(GetMenu(hwnd), item, 1);
         EnableWindow(GetDlgItem(hwnd, panel::kExpandShrinkButton), 1);
 
-        MENUITEMINFOA mii;
-        std::memset(&mii, 0, sizeof(mii));
-        mii.cbSize = 48;
-        mii.fMask = 1;  // MIIM_TYPE (original literal)
+        // x64 @0x7FF7CB4B6DBD..0x4B6DFC：cbSize=80(=sizeof on x64)、fMask=MIIM_STATE，
+        // fState 按 physicsMode==2 置 MFS_GRAYED|MFS_DISABLED，按位置 2 寻址。
+        MENUITEMINFOA mii{};
+        mii.cbSize = sizeof(mii);
+        mii.fMask = MIIM_STATE;
         unsigned char* curModel = app->SelectedModel();
-        mii.fType = mdl::Mdl(curModel)->physicsMode != 2 ? 0 : 3;
-        SetMenuItemInfoA(GetSubMenu(GetMenu(hwnd), 7), 2, FALSE, &mii);
+        mii.fState = mdl::Mdl(curModel)->physicsMode == 2
+                         ? (MFS_GRAYED | MFS_DISABLED)
+                         : 0;
+        SetMenuItemInfoA(GetSubMenu(GetMenu(hwnd), 7), 2, TRUE, &mii);
         DrawMenuBar(hwnd);
 
         EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), 0);

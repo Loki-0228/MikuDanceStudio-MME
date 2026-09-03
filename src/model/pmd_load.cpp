@@ -804,16 +804,9 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
                     std::sqrt(ax * ax + ay * ay + az * az);
                 const float distB =
                     std::sqrt(bx * bx + by * by + bz * bz);
-                joint.radiusBound = distA + distB;
-                // radius bound
-                float r1 = std::fabs(joint.limits[0]);
-                float r2 = std::fabs(joint.limits[3]);
-                if (r2 > r1) r1 = r2;
-                r2 = std::fabs(joint.limits[4]);
-                if (r2 > std::fabs(joint.limits[1])) r1 = r2;
-                r2 = std::sqrt(r1 * r1 + std::fabs(joint.limits[0]) *
-                                 std::fabs(joint.limits[0]));
-                joint.radiusBound += r2;
+                // 过拉伸限位半径：限位范数叠加两锚点距离
+                // （x64 @0x7FF7CB4D51B0..0x4D526D，见 JointRadiusBound）
+                joint.radiusBound = JointRadiusBound(joint.limits, distA, distB);
                 d3dx->rotZ(&rot, joint.rotation[2]);
                 D3DXMATRIXF t2;
                 d3dx->rotX(&t2, joint.rotation[0]);

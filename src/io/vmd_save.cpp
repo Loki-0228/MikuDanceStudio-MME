@@ -157,12 +157,23 @@ void SaveVmdFile(const wchar_t* path) {
         Wr(fd, buf, 20);                                         // 0x41984F
     }
 
-    const int boneCount = mdl::Mdl(model)->boneCount;
-    const int morphCount = mdl::Mdl(model)->morphCount;
-    const int ikChainCount = mdl::Mdl(model)->ikChainCount;
-    mikudancestudio::mdl::BoneRecord* const bones = mikudancestudio::mdl::Bones(model);
-    mikudancestudio::mdl::MorphRecord* const morphs = mikudancestudio::mdl::Morphs(model);
-    mikudancestudio::mdl::IkChain* const ikChains = mikudancestudio::mdl::IkChains(model);
+    // x64 sub_7FF7CB48C450：相机/照明模式（app+808 != 0）下完全不碰 model
+    // 指针——模型名取常量"カメラ・照明"，bone/morph/IK 三段直接写 0 计数
+    // 并跳过循环（计数全来自全局键表 app+976/984/992）。这些 model 侧的
+    // 计数与表指针只在模型模式读取；相机模式下 model 可能为空。
+    int boneCount = 0, morphCount = 0, ikChainCount = 0;
+    mikudancestudio::mdl::BoneRecord* bones = nullptr;
+    mikudancestudio::mdl::MorphRecord* morphs = nullptr;
+    mikudancestudio::mdl::IkChain* ikChains = nullptr;
+    if (!cameraMode) {
+        auto* const rec = mdl::Mdl(model);
+        boneCount = rec->boneCount;
+        morphCount = rec->morphCount;
+        ikChainCount = rec->ikChainCount;
+        bones = mikudancestudio::mdl::Bones(model);
+        morphs = mikudancestudio::mdl::Morphs(model);
+        ikChains = mikudancestudio::mdl::IkChains(model);
+    }
 
     std::uint32_t outDword;
     // ---- bone keys --------------------------------------------------------

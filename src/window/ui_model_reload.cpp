@@ -287,8 +287,12 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     }
 
     auto* model = app->SelectedModel();
-    EnableWindow(MainControl(app, 400), model[12732] != 0);
-    EnableWindow(MainControl(app, 401), model[12733] != 0);
+    // undoDirty/redoDirty（x64 model+0x3558/+0x3559，0x7FF7CB447074/86）：
+    // 撤消/重做按钮的开门标志。
+    EnableWindow(MainControl(app, 400),
+                 mdl::Mdl(model)->undoDirty != 0);
+    EnableWindow(MainControl(app, 401),
+                 mdl::Mdl(model)->redoDirty != 0);
     if (app->EnglishUI() != 0) {
         SetWindowTextA(MainControl(app, 407), "camer");
         SetWindowTextA(GetDlgItem(viewportWindow, panel::kModelEditToggle), "To camera");
@@ -589,9 +593,11 @@ void ApplyModelComboSelection(MMDApp* app) {  // was Sub44D940, 0x44D940
     } else {
         unsigned char* model = app->SelectedModel();
         EnableWindow(GetDlgItem(hwnd, panel::kUndoButton),
-                     model != nullptr && model[12732] != 0);
+                     model != nullptr &&
+                         mdl::Mdl(model)->undoDirty != 0);
         EnableWindow(GetDlgItem(hwnd, panel::kRedoButton),
-                     model != nullptr && model[12733] != 0);
+                     model != nullptr &&
+                         mdl::Mdl(model)->redoDirty != 0);
     }
     PostLanguageSweep(app);
     PostLanguageSweep2(app);

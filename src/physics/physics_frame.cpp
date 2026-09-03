@@ -993,7 +993,11 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
                         s.state.gravityY,
                         s.state.gravityZ};
         if (dir[0] == 0.0f && dir[1] == 0.0f && dir[2] == 0.0f)
-            dir[1] = 0.1f;                                    // flt 0x529624
+            // x64 0x7FF7CB44C03A: 三轴 ucomiss 判全零后
+            // `mov dword ptr [app+0x9FCC8], 3DCCCCCDh` - 0.1f 直接写回
+            // 重力 Y 状态字段，不只是本地副本：后续风力 Y 基准、PMM 保存、
+            // 重力对话框读到的都是被拨正后的 0.1。
+            s.state.gravityY = dir[1] = 0.1f;                  // flt 0x529624
         D3dxVec3Normalize(dir, dir);                          // 0x46F741
         const double mag =
             static_cast<double>(s.state.gravityMagnitude);
@@ -1045,8 +1049,11 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     if (selActive != 0 &&
         s.state.optflag[0] == 0 &&        // 0x2F8 model-mode flag
         s.state.frameStepPlayback == 0) {     // 0x9ED90 frame-step flag
-        // 0x46F7FF: while not playing, request the settle pass.
-        if (s.state.a03E8 == 0)
+        // 0x46F7FF / x64 0x7FF7CB44C12E: `cmp [app+0xA137C],0 / jnz` -
+        // 0xA137C 是上一趟泵的 selActive 滞留闩锁（泵尾 0x7FF7CB456F21
+        // 写回，App 初始化 0x7FF7CB42CA4C 清零）。settle 只在上升沿
+        // （上一趟未激活）请求一次；跟踪持续激活期间闩锁抑制重复请求。
+        if (s.state.selectionActiveLatch == 0)
             s.PhysicsResetPending() = 1;
     }
 

@@ -83,8 +83,11 @@ void __cdecl WaveFeedThread(void* ctx) {
     DWORD l1 = 0;
     DWORD l2 = 0;
     if (lock(0, &p1, &l1, &p2, &l2) >= 0) {                    // 0x4C2D0D
-        WaveStreamFeed(ctx, p1, static_cast<int>(l1), p2,
-                       static_cast<int>(l2));                  // 0x4C2D69
+        // x64 0x7FF7CB4FADFA..0x7FF7CB4FAE1A：两段读任一失败，本回合只
+        // 自增一次 failureCount（计数在调用方，不在 feed 里）。
+        if (!WaveStreamFeed(ctx, p1, static_cast<int>(l1), p2,
+                            static_cast<int>(l2)))              // 0x4C2D69
+            ++audio->failureCount;                              // 0x7FF7CB4FAE1A
         buffer->Unlock(p1, l1, p2, l2);                        // 0x4C2D8B
         buffer->Play(0, 0, DSBPLAY_LOOPING);                   // 0x4C2D9C
         bool wrapped = false;                                  // 0x4C2DA7
@@ -98,8 +101,9 @@ void __cdecl WaveFeedThread(void* ctx) {
                     buffer->Unlock(p1, 0, p2, 0);              // 0x4C2F24
                     break;
                 }
-                WaveStreamFeed(ctx, p1, static_cast<int>(l1), p2,
-                               static_cast<int>(l2));          // 0x4C2E3C
+                if (!WaveStreamFeed(ctx, p1, static_cast<int>(l1), p2,
+                                    static_cast<int>(l2)))      // 0x4C2E3C
+                    ++audio->failureCount;                      // 0x7FF7CB4FAF35
                 buffer->Unlock(p1, l1, p2, l2);                // 0x4C2E5E
                 if (audio->failureCount > 2) {                  // 0x4C2E67
                     buffer->Stop();                            // 0x4C2F31

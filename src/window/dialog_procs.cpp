@@ -11,9 +11,10 @@
 // (EM_SETSEL 0..len, after a transient focus to 605 + EM_SETSEL 0..3,
 // verbatim).  OK (id 1) applies through sub_43E970 then EndDialog(1);
 // Cancel (id 2) EndDialog(2).  When the alternate-dialog slot
-// app+0xA0D38 is non-null the dialog is moved to the bottom of the z
-// order (SetWindowPos HWND_BOTTOM, NOSIZE|NOMOVE - the Hex-Rays
-// "HWND_MESSAGE|2" rendering is wrong; asm pushes -1, 3).
+// app+0xA0D38 is non-null the dialog is raised to the top of the z
+// order (SetWindowPos HWND_TOPMOST, NOSIZE|NOMOVE; the Hex-Rays
+// "HWND_MESSAGE|2" rendering is wrong, x64 0x7FF7CB475FE5 is
+// or rdx,-1 with flags 3).
 //
 // sub_47A3F0 is the selection-list navigation dialog proc (case 402,
 // 0x0048A990 CreateDialogParamA family): WM_INITDIALOG fills the list
@@ -65,8 +66,8 @@ INT_PTR CALLBACK FrameRangeDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lP
     if (Msg == WM_INITDIALOG) {                     // 0x44C5F8
         MMDApp* app = g_Block;
         if (app->state.floatingWindow != 0)   // 0xA0D38
-            SetWindowPos(hDlg, HWND_BOTTOM, 0, 0, 0, 0,
-                         SWP_NOSIZE | SWP_NOMOVE);  // asm: -1, flags 3
+            SetWindowPos(hDlg, HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOSIZE | SWP_NOMOVE);  // x64 0x7FF7CB475FE5: or rdx,-1, flags 3
 
         const HWND main = reinterpret_cast<HWND>(
             app->state.hwnd);

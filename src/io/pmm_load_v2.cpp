@@ -1080,7 +1080,7 @@ static bool LoadSceneV2_ModelBlock(PmmV2LoadContext& ctx, int fd,
                     swprintf_s(ofnFile, 0x100, L"%s", ofnFile); // quirk
                     OPENFILENAMEW ofn;
                     std::memset(&ofn, 0, sizeof(ofn));
-                    ofn.lStructSize = 0x4C;
+                    ofn.lStructSize = sizeof(ofn);
                     ofn.hwndOwner =
                         s->state.floatingWindow
                             ? reinterpret_cast<HWND>(
@@ -1322,6 +1322,12 @@ static bool LoadSceneV2_ModelBlock(PmmV2LoadContext& ctx, int fd,
                         MAKEINTRESOURCEA(s->EnglishUI() != 0 ? 0x331
                                                            : 0x330),
                         main, DialogFuncStub, 0);
+                    // x64 分派表（0x7FF7CB49AA72..0x7FF7CB49BB78）：
+                    //   r==2/r==5 -> 中止装载（0x49AA88 jnz 0x49D73F）
+                    //   r==3      -> 丢弃当前模型、弹文件对话框重载（0x49AA8E）
+                    //   r==4      -> 跳过该模型（0x49B29D cmp 4）
+                    //   其余值    -> 0x49B2A1 jnz 0x49BB78，与双匹配成立时
+                    //                （0x49AA2F 的 jz）同一出口：继续状态装载
                     if (r == 2 || r == 5) { AbortV2Load(s, fd, workspaces, modelCount); return false; }
                     if (r == 4) {                                // 0x45231C
                         if (model != nullptr) {
@@ -1335,7 +1341,9 @@ static bool LoadSceneV2_ModelBlock(PmmV2LoadContext& ctx, int fd,
                         firstPass = false;  // r==4: counts/names consumed
                         break;
                     }
-                    // r == 3 (and anything else): re-load a different file
+                    if (r != 3)
+                        break;  // 非 3 非 4：直接走状态装载，不重载
+                    // r == 3: re-load a different file
                     if (model != nullptr) {                      // 0x451A5A
                         ModelDispose(model);
                         free(model);
@@ -1355,7 +1363,7 @@ static bool LoadSceneV2_ModelBlock(PmmV2LoadContext& ctx, int fd,
                     {
                         OPENFILENAMEW ofn;
                         std::memset(&ofn, 0, sizeof(ofn));
-                        ofn.lStructSize = 0x4C;
+                        ofn.lStructSize = sizeof(ofn);
                         ofn.hwndOwner =
                             s->state.floatingWindow
                                 ? reinterpret_cast<HWND>(
@@ -1901,7 +1909,7 @@ static bool LoadSceneV2_AccessoryBlock(PmmV2LoadContext& ctx, int fd) {
             swprintf_s(ofnFile, 0x100, L"%s", ofnFile);         // quirk
             OPENFILENAMEW ofn;
             std::memset(&ofn, 0, sizeof(ofn));
-            ofn.lStructSize = 0x4C;
+            ofn.lStructSize = sizeof(ofn);
             ofn.hwndOwner =
                 s->state.floatingWindow
                     ? reinterpret_cast<HWND>(

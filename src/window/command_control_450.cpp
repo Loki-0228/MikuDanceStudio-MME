@@ -332,7 +332,11 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         light.Type = D3DLIGHT_DIRECTIONAL;
         light.Direction = {direction[0], direction[1], direction[2]};
         light.Diffuse = {};
-        const float col = 0.6f;  // flt_52C9A4
+        // 0.602f is bit-exact with the x64 immediate 0x3F1A1CAC
+        // (0x7FF7CB46A492..0x7FF7CB46A4BC, written to all three light
+        // channels and copied into Specular); same constant as the
+        // light-key default in command_control_400.cpp ResetLightRecord.
+        const float col = 0.602f;  // flt_52C9A4
         app->LightColor()[0] = col;
         app->LightColor()[1] = col;
         app->LightColor()[2] = col;
@@ -396,7 +400,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         swprintf_s(fileBuf, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
-        ofn.lStructSize = 0x4C;
+        ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner = app->state.floatingWindow != 0
                             ? reinterpret_cast<HWND>(
                                   app->state.floatingWindow)

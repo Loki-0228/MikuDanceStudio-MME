@@ -416,6 +416,28 @@ void TransformJointPointOriginal(float out[3], const float point[3],
 #endif
 }
 
+// 关节过拉伸限位半径上界：distA/distB 为关节锚点经两刚体逆变换后的
+// 局部距离，限位项按轴取 |lim[axis]| 与 |lim[3+axis]| 的较大者再求
+// 欧氏范数。x64 原版在两个加载器里是同一段内联数学——
+//   PMD sub_7FF7CB4D2670 @0x7FF7CB4D51B0..0x4D526D（lim 表 +0x48..0x5C，
+//   三对比较 0x48/0x54、0x4C/0x58、0x50/0x5C，平方和过 sqrtf 后累加
+//   进关节记录 +0x94）；
+//   PMX sub_7FF7CB4C9AC0 @0x7FF7CB4D1B8A..0x4D1C4A（指令形态逐条一致）。
+// 物理编辑对话框（physics_model_dialog.cpp）的逐轴 maxAbs 写法与此同源。
+float JointRadiusBound(const float limits[6], float distA, float distB) {
+    float maxAbs[3];
+    for (int axis = 0; axis < 3; ++axis) {
+        float upper = std::fabs(limits[axis]);
+        const float lower = std::fabs(limits[3 + axis]);
+        if (lower > upper)
+            upper = lower;
+        maxAbs[axis] = upper;
+    }
+    return distA + distB + std::sqrt(maxAbs[0] * maxAbs[0] +
+                                     maxAbs[1] * maxAbs[1] +
+                                     maxAbs[2] * maxAbs[2]);
+}
+
 // VA 0x004064F0 - build one Bullet rigid body from PMD data.
 // shape 0 = sphere(sx), 1 = box(sx,sy,sz), 2 = capsule(sx radius, sy height).
 // mode != 0 -> dynamic (mass used); mode == 0 -> kinematic bone follower.

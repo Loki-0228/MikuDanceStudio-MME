@@ -23,7 +23,7 @@ EXPR_FIXES = {
     "a03E5": "globalTrackSelected[1]",
     "a03E6": "globalTrackSelected[2]",
     "a03E7": "globalTrackSelected[3]",
-    "a03E8": "a03E8",
+    "a03E8": "selectionActiveLatch",
     "fontSubOrPtr": "pathWorkspace",
 }
 

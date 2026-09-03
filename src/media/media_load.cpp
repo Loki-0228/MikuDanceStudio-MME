@@ -77,9 +77,10 @@ struct ImgInfo {                    // first fields of D3DXIMAGE_INFO
     UINT Width, Height, Depth, MipLevels;
 };
 
-// .rdata doubles of the aspect maths shared by 0x433250/0x4337A0.
-constexpr double kDbl52BA20 = 1.2000000476837158;   // dbl @0x52BA20
-constexpr double kDbl52B8F0 = 0.5;                  // dbl @0x52B8F0
+// x64 端纵横比数学用的 .rdata float 常量（SSE 单精度乘除，
+// sub_7FF7CB487A20 @0x7ff7cb487ed3/0x7ff7cb487f03 引用）。
+constexpr float kOverlaySpan = 1.2f;   // float @0x7FF7CB552B3C (3F 99 99 9A)
+constexpr float kOverlayHalf = 0.5f;   // float @0x7FF7CB55298C (3F 00 00 00)
 
 // 0x50747B: CRT _wsopen_s(&fh, path, _O_BINARY, _SH_DENYNO, _S_IREAD);
 // used as an existence probe (returns errno, 0 = exists).
@@ -99,32 +100,35 @@ void AviFailTail(MMDApp* app) {
     app->AviBackgroundEnabled() = 0;                                // 0x43333F
 }
 
-// Shared aspect computation of 0x4336A8 (AVI) and 0x433965 (picture):
-//   w     = hideRect[+0xA0D48] - hideRect[+0xA0D40]
-//   h2    = (hideRect[+0xA0D4C] - hideRect[+0xA0D44]) / 2   (int div)
-//   scale = (float)(width / ((w / ratio) * 1.2))             (x87, 1:1)
-//   out   = (int)(1.2 / (height * scale * ratio) * 0.5 - h2)
-// (0x433703 fdivrp divides the product INTO width; 0x43372A fsubrp
-// subtracts h2 FROM the 0.5 term - both reversed operands matter.)
+// 背景媒体（AVI/图片）的纵横比参数，AVI 路径与图片路径共用。
+// x64 定谳（全 SSE 单精度，求值序即下式书写序）：
+//   AVI   sub_7FF7CB487A20 @0x7ff7cb487ec5..0x7ff7cb487f1b
+//   图片  sub_7FF7CB488970 @0x7ff7cb488bf2..0x7ff7cb488c55（同式）
+//   zoom = ((hideRectW / viewScale) * 1.2f) / mediaW     -> 写 app+652036
+//   posY = h2 - ((mediaH * zoom * viewScale) / 1.2f) * 0.5f  -> 写 app+652032
+//   h2 = (hideBottom - hideTop) / 2（整数除法）
+// 物理含义：媒体恰好铺满视口宽并垂直居中——消费端 ComputeOverlayRect
+// (src/render/bg_overlay.cpp) 的 W*zoom*ratio/1.2 恰好还原出 hideRectW，
+// 即本 zoom 正是该公式所需。
+// 历史注记：旧版写成 scale/offsetY 双倒数+反号，根因是 x86 x87 的
+// fdivrp/fsubrp 反操作数伪影误导；x64 SSE 版（divss/mulss/subss 操作
+// 数顺序直观可见）证明上述才是原意。
+// 另：hideLeft 实为右缘、hideRight 实为左缘（见 mmd_app.hpp 的 RECT
+// 视图），故 hideLeft - hideRight 是正的视口宽；h2 同理取正半高。
 void MediaAspect(MMDApp* app, std::int32_t width, std::int32_t height,
                  float& scaleOut, std::int32_t& posOut) {
     auto& s = *app;
-    const std::int32_t w =
-        s.state.hideLeft -
-        s.state.hideRight;              // 0x4336B7
-    const std::int32_t h =
-        s.state.hideBottom -
-        s.state.hideTop;                // 0x4336D4
-    const std::int32_t h2 = h / 2;                                  // 0x4336E9
-    const float ratio = s.Renderer()->viewScale;                    // 0x4336E0
-    const float scale = static_cast<float>(
-        static_cast<double>(width) /
-        ((static_cast<double>(w) / ratio) * kDbl52BA20));           // 0x4336F5..
-    scaleOut = scale;
+    const std::int32_t w = s.state.hideLeft - s.state.hideRight;   // 0x4336B7
+    const std::int32_t h2 =
+        (s.state.hideBottom - s.state.hideTop) / 2;                // 0x4336E9
+    const float ratio = s.Renderer()->viewScale;                   // 0x4336E0
+    const float spanW = static_cast<float>(w) / ratio;             // 0x4336F5..
+    const float zoom = (spanW * kOverlaySpan) / static_cast<float>(width);
+    const float drawnH =
+        (static_cast<float>(height) * zoom * ratio) / kOverlaySpan;
+    scaleOut = zoom;
     posOut = static_cast<std::int32_t>(
-        kDbl52BA20 / (static_cast<double>(height) * scale * ratio) *
-            kDbl52B8F0 -
-        static_cast<double>(h2));                                   // 0x43370D..
+        static_cast<float>(h2) - drawnH * kOverlayHalf);           // 0x43370D..
 }
 
 }  // namespace
@@ -189,6 +193,12 @@ void LoadAviFile(MMDApp* app) {
         return;
     }
     s.AviFile() = file;
+
+    // x64 在 AVIFileOpenW 成功后立即把解析后的绝对路径回写存储槽
+    // (wcscpy_s app+651448, @0x7ff7cb487b62)——PMM 保存/重开时原版
+    // 保留的正是这条解析后路径；图片侧同款回写见 0x43386D（本文件
+    // LoadBackgroundPicture 内 wcscpy_s(stored, 0x100, path)）。
+    wcscpy_s(s.AviBackgroundPath(), 0x100, path);
 
     AVIFILEINFOA info{};
     if (AVIFileInfoA(file, &info, 0x6C) != 0) {                     // 0x522E7A

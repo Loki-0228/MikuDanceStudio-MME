@@ -227,7 +227,9 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
         if (sel > 0) {
             std::int32_t slot = 0;
             bool found = false;
-            for (; slot < 0x64; ++slot) {
+            // 槽扫描界 255：x64 0x7FF7CB472E70 处 mov r13d,0FFh 后按 8 字节
+            // 步进扫槽数组（x86 原版才是 0x64）
+            for (; slot < kModelSlotCount; ++slot) {
                 unsigned char* model = app->ModelSlot(slot);
                 if (model != nullptr &&
                     static_cast<int>(model[kModelComboOrder2D7C]) ==
@@ -325,7 +327,8 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
         if (sel > 0) {
             std::int32_t slot = 0;
             bool found = false;
-            for (; slot < 0x64; ++slot) {
+            // 槽扫描界 255：x64 0x7FF7CB4732F7 处 mov r13d,0FFh（同 0x1C1）
+            for (; slot < kModelSlotCount; ++slot) {
                 unsigned char* model = app->ModelSlot(slot);
                 if (model != nullptr &&
                     static_cast<int>(model[kModelComboOrder2D7C]) ==

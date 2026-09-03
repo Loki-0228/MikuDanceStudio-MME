@@ -1268,8 +1268,8 @@ INT_PTR CALLBACK PhysicsModelDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
         if (app->state.floatingWindow != 0)
-            SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0,
-                         SWP_NOSIZE | SWP_NOMOVE);
+            SetWindowPos(hDlg, HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOSIZE | SWP_NOMOVE);  // x64 0x7FF7CB4AE84E: or rdx,-1, flags 3
         HWND nameEdit = GetDlgItem(hDlg, kBodyNameEdit);
         app->FrameCopyEditProc() = reinterpret_cast<WNDPROC>(
             GetWindowLongPtrA(nameEdit, GWLP_WNDPROC));

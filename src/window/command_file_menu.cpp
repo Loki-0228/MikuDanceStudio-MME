@@ -1493,7 +1493,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         swprintf_s(path, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
-        ofn.lStructSize = 0x4C;
+        ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner =
             app->state.floatingWindow != 0
                 ? reinterpret_cast<HWND>(app->state.floatingWindow)
@@ -1532,7 +1532,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         swprintf_s(path, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
-        ofn.lStructSize = 0x4C;
+        ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner = MainHwnd(app);
         ofn.lpstrFilter = L"AVI files(*.avi)\0*.avi\0";   // 0x52F720
         ofn.lpstrFile = path;
@@ -2248,7 +2248,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         swprintf_s(path, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
-        ofn.lStructSize = 0x4C;
+        ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner =
             app->state.floatingWindow != 0
                 ? reinterpret_cast<HWND>(app->state.floatingWindow)

@@ -79,13 +79,23 @@ struct ModelRecord {
     PmdVertexMorphEntry* morph0Table;  // 8724  (16-byte PMD morph entries)
     void* boneMorphTable;  // 8728  (pmx_load 32-byte entries)
     RawPad<36> gap7;  // 8732..8768 (unrecovered)
-    std::int32_t searchCursor;  // 8768  (free keyframe-slot scan cursor)
-    std::int32_t maxBoneLayer;  // 8772  (maximum PMX bone transform layer)
-    char name[20];  // 8776  (SJIS)
-    RawPad<30> gap8;  // 8796..8826 (unrecovered)
 #if defined(_M_X64)
-    RawPad<52> x64NameStorage;  // original x64-only name metadata
+    // x64-only name metadata.  It must precede the SJIS name buffer: the x64
+    // select dialog (sub_7FF7CB4BA7B0, 0x7FF7CB4BAB5B/0x7FF7CB4BAB89) reads
+    // the JP name at +0x22C0 and the EN name at +0x22F2, i.e. name+50 apart
+    // exactly like the x86 pair - the 52-byte block sits before name, not
+    // between name and nameEn.  On x64 it also has to sit BEFORE the pinned
+    // keyframe search cursor at +0x22B8 so that name stays at 0x22C0.
+    RawPad<52> x64NameStorage;
 #endif
+    // Free keyframe-slot scan cursor.  x64: +0x22B8 = 8888, shared by the
+    // bone-key pool (0x7FF7CB4E9958, 0x7FF7CB4EA46F), the morph-key pool
+    // (0x7FF7CB48E416) and the display-key pool (0x7FF7CB48E5EA); the cursor
+    // only ever advances.  8836 (0x2274) has zero x64 references.
+    std::int32_t searchCursor;  // x86 8768; x64 8888 (0x22B8)
+    std::int32_t maxBoneLayer;  // x86 8772; x64 8892 (maximum PMX bone transform layer)
+    char name[20];  // 8776 x86; x64 8896 (0x22C0, select-dialog combo fill)
+    RawPad<30> gap8;  // x86 8796..8826 (unrecovered)
     char nameEn[20];  // 8826  (x64 anchor 8946 verified)
     RawPad<30> gap9;  // 8846..8876 (unrecovered)
     char comment[256];  // 8876
@@ -181,7 +191,12 @@ struct ModelRecord {
     // this as the cheap gate before walking displayKeys; it is distinct from
     // the per-frame displayTrackActive cursor state near the record head.
     unsigned char displayKeyframesPresent;  // 14588
-    RawPad<1> gap24;  // 14589 (unrecovered)
+    // Per-model copy of the app-wide OpenNI runtime version.  Menu command
+    // 292 (auto frame record) pushes the app byte (x86 0xA03EA / x64
+    // 0xA137E) into every loaded model; the bone/physics probes read it
+    // back as a capability gate (>= 14 / >= 15).  x64 twin at model+0x3CA5
+    // (0x7FF7CB47033B..342: movzx eax,[rbx+0A137Eh]; mov [rcx+3CA5h],al).
+    unsigned char openniVersion;  // 14589
     unsigned char physicsMode;  // 14590  (SetMenuItemInfo gate)
     RawPad<1> gap25;  // 14591..14592 (unrecovered)
     std::uint32_t displayRootBone;  // 14592 (x64 0x3CA8; first PMX display-frame bone)
@@ -383,6 +398,8 @@ static_assert(offsetof(ModelRecord, legIkXOffset) == 14580,
               "legIkXOffset x86");
 static_assert(offsetof(ModelRecord, matMisc) == 14584,
               "matMisc x86");
+static_assert(offsetof(ModelRecord, openniVersion) == 14589,
+              "openniVersion x86");
 static_assert(offsetof(ModelRecord, physicsMode) == 14590,
               "physicsMode x86");
 static_assert(offsetof(ModelRecord, displayRootBone) == 14592,
@@ -400,8 +417,15 @@ static_assert(offsetof(ModelRecord, frameRegistrationSelection) == 314608,
 static_assert(sizeof(ModelRecord) == 0x4CCF4,
               "model record x86 size");
 #else
+static_assert(offsetof(ModelRecord, name) == 8896,
+              "name x64 (select-dialog JP name 0x22C0)");
 static_assert(offsetof(ModelRecord, nameEn) == 8946,
               "nameEn x64");
+static_assert(offsetof(ModelRecord, comboSelIndex) == 12552,
+              "comboSelIndex x64 (0x3108)");
+static_assert(offsetof(ModelRecord, comboSelIndex2) == 12553,
+              "comboSelIndex2 x64 (0x3109; display-order byte scans in "
+              "physics_frame/playback_catchup and the select dialog)");
 static_assert(offsetof(ModelRecord, comment) == 8996,
               "comment x64");
 static_assert(offsetof(ModelRecord, commentEn) == 9252,
@@ -410,8 +434,10 @@ static_assert(offsetof(ModelRecord, pmxTextBuffers) == 0x2528,
               "pmxTextBuffers x64");
 static_assert(offsetof(ModelRecord, path) == 0x2548,
               "path x64");
-static_assert(offsetof(ModelRecord, searchCursor) == 8836,
-              "searchCursor x64");
+static_assert(offsetof(ModelRecord, searchCursor) == 8888,
+              "searchCursor x64 (0x22B8; bone pool 0x7FF7CB4E9958/"
+              "0x7FF7CB4EA46F, morph pool 0x7FF7CB48E416, display pool "
+              "0x7FF7CB48E5EA)");
 static_assert(offsetof(ModelRecord, materialCount) == 56,
               "materialCount x64");
 static_assert(offsetof(ModelRecord, materials) == 64,
@@ -461,7 +487,11 @@ static_assert(offsetof(ModelRecord, modelDirectory) == 13696,
 static_assert(offsetof(ModelRecord, pmdToonFileNames) == 14208,
               "pmdToonFileNames x64");
 static_assert(offsetof(ModelRecord, undoState) == 13648,
-              "undoState x64");
+              "undoState x64 (0x3550, ring depth 30, 0x7FF7CB4470A0)");
+static_assert(offsetof(ModelRecord, undoDirty) == 13656,
+              "undoDirty x64 (0x3558, 0x7FF7CB447074)");
+static_assert(offsetof(ModelRecord, redoDirty) == 13657,
+              "redoDirty x64 (0x3559, 0x7FF7CB44708A)");
 static_assert(offsetof(ModelRecord, selectedBone) == 0x311C,
               "selectedBone x64");
 static_assert(offsetof(ModelRecord, selectedMorphs) == 0x3130,

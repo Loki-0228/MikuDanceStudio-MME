@@ -156,6 +156,7 @@ add_library(mikudancestudio_core STATIC
     src/app/app_gap_bodies.cpp
     src/app/shutdown_cleanup.cpp
     src/app/oni_kinect.cpp
+    src/app/oni_skeleton_pump.cpp
     src/io/vsq_load.cpp
     src/window/dialog_select_ops.cpp
     src/window/ui_viewport_refresh.cpp

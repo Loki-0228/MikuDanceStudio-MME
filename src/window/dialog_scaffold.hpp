@@ -11,11 +11,12 @@
 // those sequences - message order and parameters preserved verbatim (each
 // dialog's original-VA comment carries the provenance).
 //
-// Two "top" variants exist because the original uses two different
-// SetWindowPos shapes: the view-menu family raises the dialog to HWND_TOP,
-// the file-menu family to HWND_TOPMOST.  Both gates test the same
-// floating-window handle; the insert-after constant differs, so they stay
-// separate helpers (behaviour, not style).
+// A 2026-09 audit re-checked the "top" dance against the x64 build: every
+// dialog family raises the dialog to HWND_TOPMOST, never HWND_TOP - the
+// x86-only HWND_TOP readings were sign-extension artifacts.  Anchors:
+// FrameRange 0x7FF7CB475FE5, camera frame transform 0x7FF7CB4788E3,
+// morph frame transform 0x7FF7CB478BC3, model order 0x7FF7CB478383
+// (or ebx,-1), physics editor 0x7FF7CB4AE84E.  One helper, one constant.
 // =========================================================================//
 #ifndef MIKUDANCESTUDIO_WINDOW_DIALOG_SCAFFOLD_HPP
 #define MIKUDANCESTUDIO_WINDOW_DIALOG_SCAFFOLD_HPP
@@ -61,16 +62,9 @@ inline float ReadFloatFromEdit(HWND hDlg, int controlId, int maxChars = 20) {
     return static_cast<float>(atof(text));
 }
 
-// View-menu family top dance: raise to HWND_TOP (flags 3) when the
-// floating render window exists.
-inline void MakeDialogTopIfRequested(MMDApp* app, HWND hDlg) {
-    if (app->state.floatingWindow != 0) {
-        // original: SetWindowPos(hDlg, HWND_MESSAGE|2, ...) == HWND_TOP
-        SetWindowPos(hDlg, HWND_TOP, 0, 0, 0, 0, 3);
-    }
-}
-
-// File-menu family top dance: HWND_TOPMOST (flags 3) on the same gate.
+// Owned-dialog top dance, shared by every menu family: raise the dialog to
+// HWND_TOPMOST (flags 3) when the floating render window exists.  The x64
+// insert-after register is always -1 (see header note for the anchors).
 inline void MakeDialogTopmostIfRequested(MMDApp* app, HWND hDlg) {
     if (app->FloatingWindow() != nullptr) {
         SetWindowPos(hDlg, HWND_TOPMOST, 0, 0, 0, 0, 3u);

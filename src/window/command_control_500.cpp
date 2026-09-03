@@ -336,20 +336,20 @@ void BoneRotEdit(MMDApp* app, float* vec, int axis) {
         app->BoneRotationEditDegreesY() =
             static_cast<float>(-(double)rY * kPi / 180.0);
         app->BoneRotationEditDegreesZ() =
-            static_cast<float>(180.0 / (-(double)rZ * kPi));
+            static_cast<float>(-(double)rZ * kPi / 180.0);
         break;
     case 1:  // 541: edited axis = Y
         app->BoneRotationEditDegreesX() =
             static_cast<float>((double)rX * kPiF / 180.0);
         app->BoneRotationEditDegreesY() = 0.0f;
         app->BoneRotationEditDegreesZ() =
-            static_cast<float>(180.0 / (-(double)rZ * kPi));
+            static_cast<float>(-(double)rZ * kPi / 180.0);
         break;
     default:  // 542: edited axis = Z
         app->BoneRotationEditDegreesX() =
             static_cast<float>((double)rX * kPiF / 180.0);
         app->BoneRotationEditDegreesY() =
-            static_cast<float>(180.0 / (-(double)rY * kPi));
+            static_cast<float>(-(double)rY * kPi / 180.0);
         app->BoneRotationEditDegreesZ() = 0.0f;
         break;
     }

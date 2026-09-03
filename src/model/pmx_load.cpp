@@ -1521,13 +1521,9 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                         std::sqrt(ax * ax + ay * ay + az * az);
                     const float distB =
                         std::sqrt(bx * bx + by * by + bz * bz);
-                    jt.radiusBound = distA + distB;
-                    float r1 = std::fabs(jt.limits[0]);
-                    float r2 = std::fabs(jt.limits[3]);
-                    if (r2 > r1) r1 = r2;
-                    r2 = std::sqrt(r1 * r1 + std::fabs(jt.limits[0])
-                                         * std::fabs(jt.limits[0]));
-                    jt.radiusBound += r2;
+                    // 过拉伸限位半径：限位范数叠加两锚点距离
+                    // （x64 @0x7FF7CB4D1B8A..0x4D1C4A，见 JointRadiusBound）
+                    jt.radiusBound = JointRadiusBound(jt.limits, distA, distB);
                     D3DXMATRIXF rot, t2;
                     float qa[4], qb[4];
                     d.rotZ(&rot, jt.rotation[2]);

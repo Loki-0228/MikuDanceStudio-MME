@@ -158,6 +158,9 @@ int CreatePhysJoint(PhysicsScene* scene, void* bodyA, void* bodyB,
                     float spring5);                  // VA 0x00406010
 void TransformJointPointOriginal(float out[3], const float point[3],
                                  const float matrix[16]);
+// Joint limit-sphere radius bound shared by the PMD/PMX loaders (returns
+// distA + distB + the limit norm; see physics_create.cpp for the x64 anchors).
+float JointRadiusBound(const float limits[6], float distA, float distB);
 void BoneFrameTransform(unsigned char* model, unsigned char a2, int a3,
                         unsigned char* const* modelSlots,
                         int a5);  // VA 0x00493A60 (per-frame bone
@@ -282,17 +285,10 @@ void CmdSavePose(MMDApp*);                        // 0xCB
 void CmdResetState(MMDApp*);                      // 0xCC -> 0x0044E540
 void CmdOpenScene(MMDApp*);                       // 0xCD -> 0x00458F80
 void CmdOpenWave(MMDApp*);                        // 0xCE -> 0x00418500
-void CmdPlayPause(MMDApp*);                       // 0xCF/0xD3
 void CmdSaveScene(MMDApp*);                       // 0xD0 -> 0x0041B080
 void CmdLoadMotion(MMDApp*);                      // 0xD1 -> 0x00434B60
 void CmdSaveMotion(MMDApp*);                      // 0xD2 -> 0x00419370
 void CmdLoadAvi(MMDApp*);                         // 0xD5 -> 0x00433250
-void CmdToggleBoneDisplay(MMDApp*);               // 0xD6
-void CmdToggleMorphDisplay(MMDApp*);              // 0xD7
-void CmdTogglePhysicsDisplay(MMDApp*);            // 0xD8
-void CmdSelectAllBoneFrames(MMDApp*);             // 0xD9
-void CmdSelectAllEyeFrames(MMDApp*);              // 0xDA
-void CmdSelectAllLipFrames(MMDApp*);              // 0xDC
 
 // ---- D3D subsystem (phase 5) -----------------------------------------------
 bool InitD3D(MMDApp* app, HWND hwnd, bool english, HMODULE hModule); // 0x00408020
@@ -356,7 +352,11 @@ void BeginRangeScaleBoneUndo(unsigned char* model, int frame,
 // the original passes the key record by value on the stack - the port
 // takes (app, rec) with the same record layouts, a stub-era deviation
 // absorbed by those ports).
-int RegisterCameraKey(MMDApp* app, const void* rec);      // VA 0x00410AA0, was Sub410AA0
+// overflowAdvertised: 满表报错框里印的 point 数。粘贴路径（本函数 x64 原型
+// Sub410AA0）打 10000；相机实况注册器（Sub410560/x64 0x7FF7CB47B18D）打
+// 600000 —— 原版两处不一致，故做成参数。
+int RegisterCameraKey(MMDApp* app, const void* rec,
+                      int overflowAdvertised = 10000);    // VA 0x00410AA0, was Sub410AA0
 int RegisterLightKey(MMDApp* app, const void* rec);       // VA 0x00411900, was Sub411900
 int RegisterSelfShadowKey(MMDApp* app, const void* rec);  // VA 0x004120B0, was Sub4120B0
 int RegisterGravityKey(MMDApp* app, const void* rec);     // VA 0x00412DF0, was Sub412DF0
@@ -436,6 +436,13 @@ void DeleteFacialLightFrameLine(MMDApp* app); // was Sub43BB30, VA 0x0043BB30
 // ---- DxOpenNI / Kinect loader (src/app/oni_kinect.cpp) ------------------
 void OpenNiInit(MMDApp* app, const char* sjisPath);  // VA 0x00429CB0
 void DisableKinect(MMDApp* app);                     // VA 0x0042A020
+// ---- Kinect 骨架驱动泵块（src/app/oni_skeleton_pump.cpp）----------------
+// x64 泵 0x7FF7CB44C12E..0x7FF7CB44C656（settle 门内、gate B 前），
+// 由 frame_driver.cpp 在 PhysicsFrame 之前调用（见该处注释）。
+void PumpKinectSkeleton(MMDApp* app, unsigned char selActive);
+bool RegisterKinectPoseCapture(unsigned char* model, unsigned frame);  // sub_7FF7CB4F2EB0
+bool RegisterTraceBoneKey(unsigned char* model, unsigned boneIdx,      // sub_7FF7CB4F23E0
+                          int slot, int mode, unsigned frame);
 // ---- VSQ loader / auto lipsync (src/io/vsq_load.cpp) --------------------
 void LoadVsqFile(MMDApp* app, const wchar_t* path);  // was Sub435FE0, VA 0x00435FE0
 // big-endian readers used by the SMF walkers (src/model/model_query_gaps.cpp)

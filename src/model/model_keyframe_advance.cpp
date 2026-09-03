@@ -193,10 +193,11 @@ void NotifyBonePhysicsMode(unsigned char* model, int boneIdx, unsigned char mode
                 flags & ~btCollisionObject::CF_KINEMATIC_OBJECT);
             r->mode = r->kinematicFlag != 0 ? 2 : 1;
         }
-        // Physics creation uses this activation state too.  Retaining it
-        // across a temporary kinematic transition prevents a body from
-        // silently sleeping after its authored mode is restored.
-        body->setActivationState(DISABLE_DEACTIVATION);
+        // x64 定谳：0x7FF7CB4E3140 全函数（以及 Advance 内联段
+        // 0x7FF7CB4F15EA / 0x7FF7CB4F1780）只做两件事——写 btRigidBody
+        // +0xE0 的 CF_KINEMATIC 位（or/and 2）和模式字节，没有任何
+        // activation 调用。移植方原先保留的
+        // setActivationState(DISABLE_DEACTIVATION) 已按 x64 基准撤除。
     }
 }
 

@@ -50,12 +50,11 @@
 //     fgets (the L0/L1 lyric line); m = strstr(line, "\",\""); *m = 0;
 //     sprintf_s(ev+7, 10, first '"'+1)  -> L0 token; if m[4] == '"'
 //     (second field is a single char): ev[0] = 0, ev[6] = m[3];
-//     else if m[4] == '\\': slot = carried pointer, if slot[1] == ' '
-//     (slot++ then) fall through else ev[0]=0, ev[6]='N';  else
-//     slot = strstr(m+1, " "); NULL -> ev[0]=0, ev[6]='N';  else *slot=0,
-//     sprintf_s(ev, 6, m+3), ev[6] = slot[1].  (slot is a loop-carried
-//     local that the original leaves stale on the first iteration when the
-//     '\\' path is taken - the port starts it at NULL, recorded deviation.)
+//     else if m[4] == '\\' (x64 0x7FF7CB48F664): if m[5] == ' ' then
+//     m[5] = 0, sprintf_s(ev, 6, m+3), ev[6] = m[6]; else ev[0] = 0,
+//     ev[6] = 'N';  else slot = strstr(m+1, " ") (per-iteration scratch,
+//     NOT loop-carried); NULL -> ev[0]=0, ev[6]='N';  else *slot=0,
+//     sprintf_s(ev, 6, m+3), ev[6] = slot[1].
 //     Finally 'M' -> 'u' on ev[6].
 //
 // Phase 4 - tick->seconds + phoneme class  (0x436D70..0x437BBA)
@@ -502,7 +501,10 @@ void LoadVsqFile(MMDApp* app, const wchar_t* path) {  // was Sub435FE0
     }
 
     // ---- 0x436940: phoneme extraction (still on rd2) ----------------
-    char* carried = nullptr;   // loop-carried slot 0x436CF7/0x436D16
+    // 注：x64 里空格指针是 strstr 每轮现算的临时值（rsi），没有跨迭代状态；
+    // port 曾残留一个 loop-carried 的 carried 指针，'\' 分支里 ++carried
+    // 先于判空自增（nullptr 时得 (char*)1，carried[1] 读地址 2 直接崩溃），
+    // 且取到的是刚断言过为 ' ' 的字节，元音恒为空格。已按 x64 删除。
     for (int j = 0; j < count; ++j) {
         VsqEvent& ev = events[j];
         if (strstr(line, ev.handle) == nullptr) {
@@ -523,25 +525,27 @@ void LoadVsqFile(MMDApp* app, const wchar_t* path) {  // was Sub435FE0
         if (m1[3] == '"') {                  // 0x436A16: 1-char field
             ev.consonant[0] = 0;
             ev.vowel = m[3];
-        } else if (m1[3] == '\\') {          // 0x436CE9 (carried pointer)
-            ++carried;
-            if (carried != nullptr && carried[1] == ' ') {
-                *carried = 0;
+        } else if (m1[3] == '\\') {          // 0x7FF7CB48F664: X-SAMPA "p\ a"
+            // ふ行等带 '\' 的音素：直接检查 m[5] 是否空格（0x7FF7CB48F668），
+            // 命中则先抹掉该空格（0x7FF7CB48F67D，m+3 截短后兼作格式串），
+            // 元音取空格后的 m[6]（0x7FF7CB48F692）
+            if (m[5] == ' ') {
+                m[5] = 0;
                 sprintf_s(ev.consonant, 6, m + 3);
-                ev.vowel = carried[1];
+                ev.vowel = m[6];
             } else {
-                ev.consonant[0] = 0;
-                ev.vowel = 'N';                                     // 0x4E
+                ev.consonant[0] = 0;        // 0x7FF7CB48F6B4（公共落空路径）
+                ev.vowel = 'N';
             }
         } else {
-            carried = strstr(const_cast<char*>(m1), " ");           // 0x52BEB0
-            if (carried == nullptr) {
+            char* space = strstr(const_cast<char*>(m1), " ");        // 0x52BEB0
+            if (space == nullptr) {
                 ev.consonant[0] = 0;
                 ev.vowel = 'N';
             } else {
-                *carried = 0;
+                *space = 0;
                 sprintf_s(ev.consonant, 6, m + 3);
-                ev.vowel = carried[1];
+                ev.vowel = space[1];
             }
         }
         if (ev.vowel == 'M')                                         // 0x4D
@@ -778,10 +782,11 @@ void LoadVsqFile(MMDApp* app, const wchar_t* path) {  // was Sub435FE0
         VsqEvent& ev = events[i];
         const double start = ev.start;
         const double end = ev.end;
-        // 0x438150: 'h' inherits token[5] (record +0x0C), NOT the
-        // consonant byte at +0 (pfVar164-4 where pfVar164 = &ev.start).
+        // 0x438150 (x64 0x7FF7CB4908C8): vowel=='h' 时取 ev+0x00 的首字节
+        // 写回 vowel——r12=&ev.start(+0x10)，[r12-0Ah]=vowel(+0x06)，
+        // [r12-10h]=ev+0x00，即 consonant[0]（分类轮重写后的口型 token）。
         if (ev.vowel == 'h')
-            ev.vowel = ev.token[5];
+            ev.vowel = ev.consonant[0];
         const int f1 = -2 - static_cast<int>(start * -30.0);        // 0x52CE10
         const int f2 = static_cast<int>(start * 30.0);              // 0x52BA68
         const int f3 = -2 - static_cast<int>(end * -30.0);

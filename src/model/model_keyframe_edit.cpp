@@ -314,13 +314,20 @@ int RegisterBonePoseAtFrame(unsigned char* model, int boneIndex,  // was Sub4B38
         AppendBoneKeyToUndo(model, current);
         fill(current);
     } else {
-        int freeIndex = static_cast<int>(mdl::Mdl(model)->boneCount);
-        while (freeIndex < static_cast<int>(mdl::kBoneKeyCapacity) &&
-               keys[freeIndex].frame != 0)
-            ++freeIndex;
-        if (freeIndex >= static_cast<int>(mdl::kBoneKeyCapacity)) {
-            BoneKeyOverflow(model);
-            return 0;
+        // x64 sub_7FF7CB4E9DB0 @0x7FF7CB4EA46F：空闲槽扫描从持久游标
+        // searchCursor（model+0x22B8）起步，命中占用槽时游标随扫描推进、
+        // 只增不减——写法与 RegisterBoneKey（key_registrars.cpp）一致。
+        int freeIndex = static_cast<int>(mdl::Mdl(model)->searchCursor);
+        if (keys[freeIndex].frame != 0) {
+            for (;;) {
+                ++mdl::Mdl(model)->searchCursor;
+                ++freeIndex;
+                if (freeIndex >= static_cast<int>(mdl::kBoneKeyCapacity)) {
+                    BoneKeyOverflow(model);
+                    return 0;
+                }
+                if (keys[freeIndex].frame == 0) break;
+            }
         }
 
         mdl::BoneKey& fresh = keys[freeIndex];

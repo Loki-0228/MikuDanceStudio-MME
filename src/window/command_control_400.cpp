@@ -324,7 +324,8 @@ void* ConstructArrayElements(void* block, std::uint32_t elementSize,
 int MarkKeyTrackRangeByName(unsigned char* model, std::uint32_t from,
                             std::uint32_t to,
                             const char* name);   // VA 0x004A27F0, was Sub4A27F0
-int RegisterCameraKey(MMDApp* app, const void* rec);      // VA 0x00410AA0 0x374 paste, was Sub410AA0
+int RegisterCameraKey(MMDApp* app, const void* rec,
+                      int overflowAdvertised);             // VA 0x00410AA0 0x374 paste, was Sub410AA0
 int RegisterLightKey(MMDApp* app, const void* rec);      // VA 0x00411900 0x378 paste, was Sub411900
 int RegisterSelfShadowKey(MMDApp* app, const void* rec);      // VA 0x004120B0 0x37C paste, was Sub4120B0
 int RegisterGravityKey(MMDApp* app, const void* rec);      // VA 0x00412DF0 0x380 paste, was Sub412DF0
@@ -348,7 +349,8 @@ static unsigned char* ActiveModel(MMDApp* app) {
 template <typename Key, typename Source, typename Fill>
 static int InsertGlobalFrame(MMDApp* app, Key* table,
                              std::uint32_t relativeFrame,
-                             const Source& source, Fill fill) {
+                             const Source& source, Fill fill,
+                             int advertisedCapacity = 10000) {
     if (table == nullptr) {
         return 0;
     }
@@ -381,7 +383,8 @@ static int InsertGlobalFrame(MMDApp* app, Key* table,
         if (app->state.englishUI != 0) {
             sprintf_s(message, sizeof(message),
                       "You cannot regist over %dpoint.\n"
-                      "Please execute 'delete unused frame'", 10000);
+                      "Please execute 'delete unused frame'",
+                      advertisedCapacity);
             MessageBoxA(app->MainWindow(), message,
                         "register frame", 0);
         } else {
@@ -398,7 +401,8 @@ static int InsertGlobalFrame(MMDApp* app, Key* table,
                 "\x89\xba\x82\xb3\x82\xa2";
             static const char kJpTitle[] =
                 "\xcc\xda\xb0\xd1\x93\x6f\x98\x5e";
-            sprintf_s(message, sizeof(message), kJpOverflow, 10000);
+            sprintf_s(message, sizeof(message), kJpOverflow,
+                      advertisedCapacity);
             MessageBoxA(app->MainWindow(), message,
                         kJpTitle, 0);
         }
@@ -464,10 +468,11 @@ static void FillGravityFrame(mdl::GravityKey& key,
     key.selected = 1;
 }
 
-int RegisterCameraKey(MMDApp* app, const void* rec) {  // was Sub410AA0, VA 0x00410AA0
+int RegisterCameraKey(MMDApp* app, const void* rec,
+                      int overflowAdvertised) {  // was Sub410AA0, VA 0x00410AA0
     const auto& source = *static_cast<const CameraClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->CameraKeys(), source.frame, source,
-                             FillCameraFrame);
+                             FillCameraFrame, overflowAdvertised);
 }
 
 int RegisterLightKey(MMDApp* app, const void* rec) {  // was Sub411900, VA 0x00411900
@@ -533,7 +538,10 @@ void RegisterCameraState(MMDApp* app, int frame) {
     }
     std::memcpy(source.interpolation, interpolation,
                 sizeof(source.interpolation));
-    RegisterCameraKey(app, &source);
+    // 满表文案 x64 一比一照抄 600000（0x7FF7CB47B18D sprintf_s 的实参；
+    // 表容实为 10000 条，孪生粘贴注册器 Sub410AA0/x64 0x7FF7CB47B769 才打
+    // 10000 —— 原版自身不一致，按行为基准保留）
+    RegisterCameraKey(app, &source, 600000);
 }
 
 // VA 0x00411630: Light manipulation "register" button backend
@@ -589,7 +597,7 @@ static void ResetLightRecord(mdl::LightKey& key, bool head) {
         key.direction[0] = -0.5f;
         key.direction[1] = -1.0f;
         key.direction[2] = 0.5f;
-        key.color[0] = 0.602f;
+        key.color[0] = 0.602f;  // bit-exact: 0x3F1A1CAC, see case 467
         key.color[1] = 0.602f;
         key.color[2] = 0.602f;
     } else {
@@ -2548,7 +2556,7 @@ static void Cmd400_LoadModel(MMDApp* app, HWND hwnd) {
     memset(fileBuf, 0, sizeof(fileBuf));
     OPENFILENAMEW ofn;
     memset(&ofn, 0, sizeof(ofn));
-    ofn.lStructSize = 0x4C;
+    ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = app->state.floatingWindow != 0
                         ? reinterpret_cast<HWND>(
                               app->state.floatingWindow)
@@ -2581,7 +2589,9 @@ static void Cmd400_LoadModel(MMDApp* app, HWND hwnd) {
 // ------------------------------------------------------------------
 // 437 (0x0047FCF5): delete model selected in combo 0x1B4.  Gate
 // dword[0xA0B50]; CB_GETCURSEL(0x1B4) -> slot lookup by model byte
-// +0x2D7C (0x64 slots); confirm MessageBox (JP caption "モデル削除"
+// +0x2D7C (x64 为 255 槽：查找环 0x7FF7CB460A73 mov r13d,0FFh、
+// any-model 环 0x7FF7CB460C2C、逐槽修复环 0x7FF7CB460DB5 均以
+// r13=0xFF 为界); confirm MessageBox (JP caption "モデル削除"
 // unconditionally; EN text "Trying to delete Model(%s)...", JP
 // "モデル：%sを削除します..."; name at model+0x227A EN / +0x2248 JP;
 // flags 0x40001 when 0xA0D38 else 1); teardown of the model-edit
@@ -2605,7 +2615,8 @@ static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
         SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_GETCURSEL, 0, 0);
     app->state.enterKeyState = 1;
     std::int32_t found = -1;
-    for (std::int32_t i = 0; i < 0x64; ++i) {
+    // 槽查找环：x64 0x7FF7CB460A73 mov r13d,0FFh（界 255）
+    for (std::int32_t i = 0; i < kModelSlotCount; ++i) {
         unsigned char* m = app->ModelSlot(i);
         if (m != nullptr && static_cast<int>(m[kModelSelId2D7C]) == sel) {
             found = i;
@@ -2653,7 +2664,8 @@ static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
     app->ModelSlot(found) = nullptr;
     app->SceneModified() = 1;
     app->state.mainModelComboSelection = 0;
-    for (std::int32_t i = 0; i < 0x64; ++i) {
+    // any-model 扫描环：x64 0x7FF7CB460C2C mov rcx,r13（=0xFF，同界）
+    for (std::int32_t i = 0; i < kModelSlotCount; ++i) {
         if (app->ModelSlot(i) != nullptr) {
             app->state.mainModelComboSelection = 1;
         }
@@ -2679,8 +2691,8 @@ static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
     }
     EnableMenuItem(GetMenu(hwnd), 0x120, 1);
     EnableMenuItem(GetMenu(hwnd), 0x121, 1);
-    // per-slot fixup
-    for (std::int32_t j = 0; j < 0x64; ++j) {
+    // per-slot fixup：x64 0x7FF7CB460DB5 mov rax,r13（=0xFF）+ 尾部 dec rax/jne
+    for (std::int32_t j = 0; j < kModelSlotCount; ++j) {
         unsigned char* m = app->ModelSlot(j);
         if (m == nullptr) {
             continue;

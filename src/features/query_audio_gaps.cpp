@@ -55,7 +55,7 @@
 //   model+0x31C0    (+12720) max registered frame
 //   model+0x31C4    (+12740) English-UI flag byte
 //   model+0x31BC    (+12732)/(+12733) pose-registration flags
-//   model+0x38FD    (+14589, signed char) model-spec gate (>=14 / >=15)
+//   model+0x38FD    (+14589) openniVersion - model-spec gate (>=14 / >=15)
 //   model+0x38F8    (+14584) physics-pose slot count
 //   model+0x3908    (+14596) bone-key marker array, one byte per record
 //                   (memset 0 over kBoneKeyCapacity bytes; x64 twin at
@@ -458,7 +458,7 @@ void RegisterPhysicsPose(unsigned char* m, std::uint32_t frame) {
     if (i != -1 && !RegisterPhysicsPoseChain(m, i, 0, 0, frame)) return;          // 0x4A5A2D
     i = FindBoneByName(m, kNameUpper, 7);                          // 0x4A5A53
     if (i != -1 && !RegisterPhysicsPoseChain(m, i, 3, 1, frame)) return;          // 0x4A5A80
-    if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {        // 0x4A5A8D
+    if (model.openniVersion >= 14) {                               // 0x4A5A8D
         i = FindBoneByName(m, kNameNeck, 3);                      // 0x4A5AB0
         if (i != -1 && !RegisterPhysicsPoseChain(m, i, 7, 1, frame)) return;      // 0x4A5ADD
     }
@@ -518,19 +518,19 @@ void RegisterPhysicsPose(unsigned char* m, std::uint32_t frame) {
         }
     }
 
-    if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {        // 0x4A5F4E
+    if (model.openniVersion >= 14) {                               // 0x4A5F4E
         i = FindBoneByName(m, kNameLWrist, 7);                  // 0x4A5F74
         if (i != -1 && !RegisterPhysicsPoseChain(m, i, 61, 1, frame)) return;     // 0x4A5FA1
         // 0x4A5FAE is a REAL re-test of the spec gate in the binary (cmp
         // byte ptr [ebp+38FDh], 0Eh / jl), not decompiler noise.  Nothing
-        // in FindBoneByName/RegisterPhysicsPoseChain writes model+14589, so the re-test
+        // in FindBoneByName/RegisterPhysicsPoseChain writes model.openniVersion, so the re-test
         // always re-enters here; kept verbatim for structural fidelity.
-        if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {    // 0x4A5FAE
+        if (model.openniVersion >= 14) {                           // 0x4A5FAE
             i = FindBoneByName(m, kNameRWrist, 7);              // 0x4A5FD0
             if (i != -1 && !RegisterPhysicsPoseChain(m, i, 65, 1, frame)) return; // 0x4A5FFD
         }
     }
-    if (*reinterpret_cast<signed char*>(m + 14589) >= 15) {        // 0x4A600A
+    if (model.openniVersion >= 15) {                               // 0x4A600A
         i = FindBoneByName(m, kNameLShoulder, 5);                      // 0x4A6030
         // 0x4A6056/0x4A60B6: like every other probe, a LFoot/RFoot
         // failure is a PLAIN return in the original - no cleanup.
@@ -538,7 +538,7 @@ void RegisterPhysicsPose(unsigned char* m, std::uint32_t frame) {
             return;
         // 0x4A606A: same real re-test in the binary (cmp byte ptr
         // [ebp+38FDh], 0Fh / jl); always true here, kept verbatim.
-        if (*reinterpret_cast<signed char*>(m + 14589) >= 15) {    // 0x4A606A
+        if (model.openniVersion >= 15) {                           // 0x4A606A
             i = FindBoneByName(m, kNameRShoulder, 5);                  // 0x4A6090
             if (i != -1 && !RegisterPhysicsPoseChain(m, i, 73, 1, frame))         // 0x4A60B6
                 return;

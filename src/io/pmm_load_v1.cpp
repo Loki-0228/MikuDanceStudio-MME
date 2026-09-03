@@ -512,7 +512,7 @@ static bool LoadSceneV1_ModelBlock(PmmV1LoadContext& ctx, int fd) {
                 swprintf_s(ofnFile, 0x100, L"");                 // 0x459A11
                 OPENFILENAMEW ofn;
                 std::memset(&ofn, 0, sizeof(ofn));
-                ofn.lStructSize = 0x4C;                          // 0x459A22
+                ofn.lStructSize = sizeof(ofn);                          // 0x459A22
                 ofn.hwndOwner =
                     s->state.floatingWindow
                         ? reinterpret_cast<HWND>(
@@ -1039,7 +1039,7 @@ static bool LoadSceneV1_AccessoryBlock(PmmV1LoadContext& ctx, int fd) {
             swprintf_s(ofnFile, 0x100, L"");                     // 0x45BA11
             OPENFILENAMEW ofn;
             std::memset(&ofn, 0, sizeof(ofn));
-            ofn.lStructSize = 0x4C;                              // 0x45BA22
+            ofn.lStructSize = sizeof(ofn);                              // 0x45BA22
             ofn.hwndOwner =
                 s->state.floatingWindow
                     ? reinterpret_cast<HWND>(

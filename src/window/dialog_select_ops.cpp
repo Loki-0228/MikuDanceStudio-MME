@@ -31,6 +31,7 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cmath>
 #include <cstdio>
@@ -60,15 +61,16 @@ namespace {
 
 // ---- app offsets, kept file-local -------------------------------------------
 
-// ---- model-object offsets (on the unsigned char* model pointer) -------------
-constexpr std::size_t kMdlVertSel = 0x26E0;  // vertex select-buffer ptr (stride 0x168)
-constexpr std::size_t kMdlSel2    = 0x26E4;  // select-buffer 2 ptr (stride 0x64)
-constexpr std::size_t kMdlSel3    = 0x26E8;  // select-buffer 3 ptr (stride 0x8C)
-constexpr std::size_t kMdlNameJp  = 0x2248;  // JP name char[]
-constexpr std::size_t kMdlNameEn  = 0x227A;  // EN name char[] (+0x14 past JP)
-constexpr std::size_t kMdlOrder   = 0x2D7D;  // display-order byte (0..99)
-constexpr std::size_t kMdlSelList = 0x4CCE4; // select-record source array ptr (20-byte recs)
-constexpr std::size_t kMdlSelCnt  = 0x4CCE8; // select-record count (combo-669 items)
+// ---- model-object access ---------------------------------------------------
+// All model state goes through the typed mdl::Mdl() view; the former raw
+// offsets were x86-only and read garbage on the x64 baseline:
+//   0x26E0/0x26E4/0x26E8 were never separate selection buffers - they are
+//     boneKeys/morphKeys/displayKeys (x64 0x2790/0x2798/0x27A0), whose
+//     per-record "allocated" byte doubles as the selection flag;
+//   0x2248/0x227A are name/nameEn (x64 0x22C0/0x22F2);
+//   0x2D7D is the display-order byte comboSelIndex2 (x64 0x3109);
+//   0x4CCE4/0x4CCE8 are boneOrderTable/boneOrderCount (x64 0x96470/0x96478),
+//     the 20-byte entries the dialog reads as attach records.
 
 // ---- .rdata literals --------------------------------------------------------
 // JP 0x52D354 "ルート" (root)
@@ -87,9 +89,14 @@ unsigned char* ModelAt(MMDApp* app, int slot) {
 }
 
 bool English(MMDApp* app) {
-    return app->state.englishUI != 0;  // 0xA0B4C
+    return app->state.englishUI != 0;  // 0xA0B4C / x64 0xA1B90
 }
 
+// Dialog-side view of one 20-byte boneOrderTable entry.  The bone-order walk
+// (bone_sort / key_registrars) decodes the same bytes as BoneOrderEntry; the
+// select dialog decodes them as {bone, -, -, target model, target bone}
+// (x86 0x4CCE4 / x64 0x96470, verified in sub_7FF7CB4BA7B0 at
+// 0x7FF7CB4BA825/0x7FF7CB4BA86F).
 struct SelectAttachRecord {
     std::int32_t boneIndex;
     std::int32_t reserved[2];
@@ -97,56 +104,17 @@ struct SelectAttachRecord {
     std::int32_t targetBoneIndex;
 };
 static_assert(sizeof(SelectAttachRecord) == 20, "select dialog record ABI");
+static_assert(offsetof(SelectAttachRecord, targetModelSlot)
+                  == offsetof(mdl::BoneOrderEntry, linkedModel),
+              "select record aliases the bone-order table (model slot)");
+static_assert(offsetof(SelectAttachRecord, targetBoneIndex)
+                  == offsetof(mdl::BoneOrderEntry, linkedBone),
+              "select record aliases the bone-order table (bone index)");
 
-// Model-owned selection tracks.  Their payload is not decoded yet, but the
-// original only mutates the selection bytes listed below.
-struct VertexSelectionTrack {
-    std::uint8_t reserved0[0x38];
-    std::uint8_t selected0;
-    std::uint8_t reserved1[0x3B];
-    std::uint8_t selected1;
-    std::uint8_t reserved2[0x3B];
-    std::uint8_t selected2;
-    std::uint8_t reserved3[0x3B];
-    std::uint8_t selected3;
-    std::uint8_t reserved4[0x3B];
-    std::uint8_t selected4;
-    std::uint8_t reserved5[0x3B];
-    std::uint8_t selected5;
-    std::uint8_t reserved6[3];
-};
-static_assert(sizeof(VertexSelectionTrack) == 0x168,
-              "vertex selection track ABI");
-
-struct SelectionTrack100 {
-    std::uint8_t reserved0[0x10];
-    std::uint8_t selected0;
-    std::uint8_t reserved1[0x13];
-    std::uint8_t selected1;
-    std::uint8_t reserved2[0x13];
-    std::uint8_t selected2;
-    std::uint8_t reserved3[0x13];
-    std::uint8_t selected3;
-    std::uint8_t reserved4[0x13];
-    std::uint8_t selected4;
-    std::uint8_t reserved5[3];
-};
-static_assert(sizeof(SelectionTrack100) == 0x64, "0x64 selection track ABI");
-
-struct SelectionTrack140 {
-    std::uint8_t reserved0[0x14];
-    std::uint8_t selected0;
-    std::uint8_t reserved1[0x1B];
-    std::uint8_t selected1;
-    std::uint8_t reserved2[0x1B];
-    std::uint8_t selected2;
-    std::uint8_t reserved3[0x1B];
-    std::uint8_t selected3;
-    std::uint8_t reserved4[0x1B];
-    std::uint8_t selected4;
-    std::uint8_t reserved5[7];
-};
-static_assert(sizeof(SelectionTrack140) == 0x8C, "0x8c selection track ABI");
+// The combo-669 record source is the model's bone-order table.
+SelectAttachRecord* ModelSelectRecords(unsigned char* model) {
+    return static_cast<SelectAttachRecord*>(mdl::Mdl(model)->boneOrderTable);
+}
 
 // Combo-669 selection record for item index i.
 SelectAttachRecord* SelRecord(MMDApp* app, int item) {
@@ -171,12 +139,13 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466
     }
 
     unsigned char* model = ActiveModel(app);
-    const int count = *reinterpret_cast<int*>(model + kMdlSelCnt);   // 0x4CCE8
+    const int count = static_cast<int>(
+        mdl::Mdl(model)->boneOrderCount);              // x86 0x4CCE8 / x64 0x96478
     auto* const records = static_cast<SelectAttachRecord*>(
         operator new(sizeof(SelectAttachRecord) * static_cast<std::size_t>(count)));
     app->state.selectNavRecords = records;
     if (count > 0) {                                                 // 0x4666B4
-        memcpy(records, *reinterpret_cast<void**>(model + kMdlSelList),
+        memcpy(records, ModelSelectRecords(model),
                sizeof(SelectAttachRecord) * static_cast<std::size_t>(count));
     }
 
@@ -241,16 +210,17 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466
         for (; slot < kModelSlotCount; ++slot) {                     // 0x466911
             unsigned char* cand = ModelAt(app, slot);
             if (cand != nullptr &&
-                *reinterpret_cast<unsigned char*>(cand + kMdlOrder) ==
-                    static_cast<unsigned char>(ord)) {
+                mdl::Mdl(cand)->comboSelIndex2 ==
+                    static_cast<unsigned char>(ord)) {  // x86 0x2D7D / x64 0x3109
                 m = cand;
                 break;
             }
         }
         if (m == nullptr)
             continue;                                                // LABEL_40
-        const char* name = reinterpret_cast<const char*>(
-            m + (English(app) ? kMdlNameEn : kMdlNameJp));
+        const mdl::ModelRecord* const mrec = mdl::Mdl(m);
+        const char* name =
+            English(app) ? mrec->nameEn : mrec->name;  // x64 0x22F2 / 0x22C0
         if (slot == app->SelectedModelSlot()) {                      // 0x46692A
             sprintf_s(Buffer, 0x100, "(%s)", name);                  // 0x466951
             SendMessageA(combo673, CB_ADDSTRING, 0, StrParam(Buffer));
@@ -404,42 +374,32 @@ void ResetModelSelection(MMDApp* app) {  // was Sub4256C0, VA 0x004256C0
 
     unsigned char* const model = ActiveModel(app);
 
-    // Vertex selection tracks: six selection lanes for each of 50,000 slots.
-    auto* const verts = static_cast<VertexSelectionTrack*>(
-        *reinterpret_cast<void**>(model + kMdlVertSel));
-    for (std::size_t i = 0; i < 50000; ++i) {                        // 0x4256CC
-        verts[i].selected0 = 0;
-        verts[i].selected1 = 0;
-        verts[i].selected2 = 0;
-        verts[i].selected3 = 0;
-        verts[i].selected4 = 0;
-        verts[i].selected5 = 0;
-    }
-    // Five selection lanes for each of 4,000 0x64-byte tracks.
-    auto* const sel2 = static_cast<SelectionTrack100*>(
-        *reinterpret_cast<void**>(model + kMdlSel2));
-    for (std::size_t j = 0; j < 4000; ++j) {                         // 0x42577C
-        sel2[j].selected0 = 0;
-        sel2[j].selected1 = 0;
-        sel2[j].selected2 = 0;
-        sel2[j].selected3 = 0;
-        sel2[j].selected4 = 0;
-    }
-    // Five selection lanes for each of 200 0x8c-byte tracks.
-    auto* const sel3 = static_cast<SelectionTrack140*>(
-        *reinterpret_cast<void**>(model + kMdlSel3));
-    for (std::size_t k = 0; k < 200; ++k) {                          // 0x425806
-        sel3[k].selected0 = 0;
-        sel3[k].selected1 = 0;
-        sel3[k].selected2 = 0;
-        sel3[k].selected3 = 0;
-        sel3[k].selected4 = 0;
-    }
+    // The "selection tracks" are the timeline key pools themselves: the
+    // x64 twin sub_7FF7CB4BBA80 walks boneKeys (+0x2790) 100000 groups of
+    // stride 360 clearing +0x38 per 60-byte record, morphKeys (+0x2798)
+    // 4000 groups of stride 100 clearing +0x10 per 20-byte record, and
+    // displayKeys (+0x27A0) 200 groups of stride 200 clearing +0x18 per
+    // 40-byte record - i.e. the full pool capacities, one flag byte per
+    // record (the x86 original 0x4256CC only covered the smaller x86 pools:
+    // 50000x6 bone / 4000x5 morph / 200x5 display keys).  The flag byte is
+    // the record's "allocated" slot, the same one ui_editor_click.cpp's
+    // ClearActiveModelFlags sweeps, so follow the capacity constants
+    // instead of hard-coding group counts.
+    mdl::BoneKey* const boneKeys = mdl::BoneKeys(model);
+    for (std::size_t i = 0; i < mdl::kBoneKeyCapacity; ++i)          // 0x4256CC
+        boneKeys[i].allocated = 0;
+    mdl::MorphKey* const morphKeys = mdl::MorphKeys(model);
+    for (std::size_t j = 0; j < mdl::kMorphKeyCapacity; ++j)         // 0x42577C
+        morphKeys[j].allocated = 0;
+    mdl::DisplayKey* const displayKeys = mdl::DisplayKeys(model);
+    for (std::size_t k = 0; k < mdl::kDisplayKeyCapacity; ++k)       // 0x425806
+        displayKeys[k].allocated = 0;
 
     // restore the saved 20-byte select records into the model
-    const int count = *reinterpret_cast<int*>(model + kMdlSelCnt);   // 0x4258B2
+    const int count = static_cast<int>(
+        mdl::Mdl(model)->boneOrderCount);                            // 0x4258B2 / x64 0x96478
     if (count > 0) {
-        memcpy(*reinterpret_cast<void**>(model + kMdlSelList),
+        memcpy(ModelSelectRecords(model),
                app->state.selectNavRecords,
                sizeof(SelectAttachRecord) * static_cast<std::size_t>(count));
     }
@@ -561,10 +521,12 @@ void ApplyBoneAttach(MMDApp* app, HWND hDlg) {  // was Sub43D610, VA 0x0043D610
 //                    T(-parentBone.pos) * that, Inverse, then parentBoneMat
 //                    * result (cross-model attach chain through the record's
 //                      target-model and target-bone fields)
-// Euler extraction (floats, double intermediates, the original's two-tier
-// epsilon cleanups and the 3.141592025756836 degree constant):
-//   pitch = asin(-m[9]); yaw = atan(m[1]); roll = atan(m[8]); gimbal patch
-//   when |cos(pitch)| < 1e-6 (±3.141592 on yaw/roll by matrix signs).
+// Euler extraction (x64 twin sub_7FF7CB4BB3E0 uses the single-precision
+// intrinsics atan2f/asinf/cosf, plus the original's two-tier epsilon
+// cleanups and the 3.141592025756836 degree constant):
+//   pitch = asinf(-m[9]); yaw = atan2f(m[1], m[5]); roll = atan2f(m[8],
+//   m[10]); gimbal patch when |cos(pitch)| < 1e-6 (±3.141592 on yaw/roll
+//   by matrix signs).
 // ---------------------------------------------------------------------------
 void RefreshSelectNavDisplay(MMDApp* app, HWND hDlg) {  // was Sub4250C0, VA 0x004250C0
     auto& s = *app;
@@ -582,11 +544,9 @@ void RefreshSelectNavDisplay(MMDApp* app, HWND hDlg) {  // was Sub4250C0, VA 0x0
     unsigned char* model = s.SelectedModel();
     mikudancestudio::mdl::BoneRecord* bones =
         mikudancestudio::mdl::Bones(model);
-    unsigned char* recs = static_cast<unsigned char*>(s.state.selectNavRecords);         // 0xA0668
-    unsigned char* rec = recs + 20 * sel;
-    const std::int32_t boneId =
-        *reinterpret_cast<std::int32_t*>(rec);
-    mikudancestudio::mdl::BoneRecord* bone = &bones[boneId];
+    const SelectAttachRecord* const rec =
+        SelRecord(app, sel);                             // 0xA0668 + 20*sel
+    mikudancestudio::mdl::BoneRecord* bone = &bones[rec->boneIndex];
 
     auto& api = d3dx::Get();
     if (!api.Load())                                             // d3dx absent
@@ -595,31 +555,25 @@ void RefreshSelectNavDisplay(MMDApp* app, HWND hDlg) {  // was Sub4250C0, VA 0x0
     if (kind == 1) {                                             // 0x42521A
         std::memcpy(&m, bone->matInit, sizeof m);
     } else if (kind >= 2) {                                      // 0x425286
-        const std::int32_t srcSlot =
-            *reinterpret_cast<std::int32_t*>(rec + 12);
-        const std::int32_t srcBone =
-            *reinterpret_cast<std::int32_t*>(rec + 16);
-        unsigned char* srcModel = s.ModelSlot(srcSlot);
+        unsigned char* srcModel = s.ModelSlot(rec->targetModelSlot);
         mikudancestudio::mdl::BoneRecord* srcBones =
             mikudancestudio::mdl::Bones(srcModel);
-        std::memcpy(&m, &srcBones[srcBone].matInit[0], sizeof m);
-        float p[3] = {
-            *reinterpret_cast<float*>(srcBones + sizeof(mikudancestudio::mdl::BoneRecord) * srcBone + 308),
-            *reinterpret_cast<float*>(srcBones + sizeof(mikudancestudio::mdl::BoneRecord) * srcBone + 312),
-            *reinterpret_cast<float*>(srcBones + sizeof(mikudancestudio::mdl::BoneRecord) * srcBone + 316)};
+        mikudancestudio::mdl::BoneRecord& src =
+            srcBones[rec->targetBoneIndex];
+        std::memcpy(&m, &src.matInit[0], sizeof m);
+        const float* const p = src.position;  // x64 0x13C (bone+316)
         api.translation(&t, p[0], p[1], p[2]);
         api.multiply(&m, &t, &m);
         api.translation(&t,
-                        -*reinterpret_cast<float*>(bone->position),
-                        -*reinterpret_cast<float*>(bone + 312),
-                        -*reinterpret_cast<float*>(bone + 316));
+                        -bone->position[0],
+                        -bone->position[1],
+                        -bone->position[2]);
         api.multiply(&m, &t, &m);
         api.inverse(&m, nullptr, &m);
         std::memcpy(&t2, bone->matInit, sizeof t2);
         api.multiply(&m, &t2, &m);
     } else {                                                     // kind 0
-        const std::int32_t parent =
-            *reinterpret_cast<std::int32_t*>(&bone->parent);
+        const std::int32_t parent = bone->parent;
         if (parent < 0) {                                        // 0x425192
             std::memcpy(&m, bone->matInit, sizeof m);
         } else {
@@ -633,10 +587,7 @@ void RefreshSelectNavDisplay(MMDApp* app, HWND hDlg) {  // was Sub4250C0, VA 0x0
     }
 
     // ---- offset + euler decomposition ------------------------------------
-    float pos[3] = {
-        *reinterpret_cast<float*>(bone->position),
-        *reinterpret_cast<float*>(bone + 312),
-        *reinterpret_cast<float*>(bone + 316)};
+    const float* const pos = bone->position;
     float out[4]{};
     float world[3] = {pos[0], pos[1], pos[2]};
     api.vec3Transform(out, world, &m);                           // 0x42543B
@@ -648,11 +599,14 @@ void RefreshSelectNavDisplay(MMDApp* app, HWND hDlg) {  // was Sub4250C0, VA 0x0
     float& pitch = values[3];                                    // v54
     float& roll = values[4];                                     // v55
     float& yaw = values[5];                                      // v56
-    yaw = static_cast<float>(atan(static_cast<double>(m.m[0][1])));
-    pitch = static_cast<float>(asin(-static_cast<double>(m.m[2][1])));
-    roll = static_cast<float>(atan(static_cast<double>(m.m[2][0])));
-    const double c = cos(static_cast<double>(pitch));
-    if (fabs(c) < 0.000001) {                                    // gimbal lock
+    // x64 twin sub_7FF7CB4BB3E0: single-precision atan2f/asinf/cosf
+    // (0x7FF7CB4BB83C atan2f(m01,m11), 0x7FF7CB4BB84D asinf(-m21),
+    // 0x7FF7CB4BB867 atan2f(m20,m22)), not the x86 single-argument atan.
+    yaw = atan2f(m.m[0][1], m.m[1][1]);
+    pitch = asinf(-m.m[2][1]);
+    roll = atan2f(m.m[2][0], m.m[2][2]);
+    const float c = cosf(pitch);
+    if (fabsf(c) < 0.000001f) {                                  // gimbal lock
         yaw = static_cast<float>(
             static_cast<double>(yaw) +
             (static_cast<double>(m.m[0][1]) <= 0.0 ? -3.141592
