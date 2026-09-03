@@ -131,7 +131,8 @@ struct PmxMaterialMorphEntry {
 };
 static_assert(sizeof(PmxMaterialMorphEntry) == 128,
               "PMX material morph ABI");
-static_assert(offsetof(PmxMaterialMorphEntry, channels) == 8, "");
+static_assert(offsetof(PmxMaterialMorphEntry, channels) == 8,
+              "PmxMaterialMorphEntry.channels ABI");
 
 // Load-time base data and the additive/multiplicative material-morph pools
 // use the same channel layout but do not carry a material index or operation.
@@ -254,12 +255,18 @@ struct ModelMaterialRecord {
     unsigned char tail[50];
 };
 static_assert(sizeof(ModelMaterialRecord) == 2292, "material record ABI");
-static_assert(offsetof(ModelMaterialRecord, texturePath) == 68, "");
-static_assert(offsetof(ModelMaterialRecord, spherePath) == 628, "");
-static_assert(offsetof(ModelMaterialRecord, faceVertexCount) == 1188, "");
-static_assert(offsetof(ModelMaterialRecord, edgeColor) == 1196, "");
-static_assert(offsetof(ModelMaterialRecord, toonPath) == 1216, "");
-static_assert(offsetof(ModelMaterialRecord, flags) == 2240, "");
+static_assert(offsetof(ModelMaterialRecord, texturePath) == 68,
+              "ModelMaterialRecord.texturePath ABI");
+static_assert(offsetof(ModelMaterialRecord, spherePath) == 628,
+              "ModelMaterialRecord.spherePath ABI");
+static_assert(offsetof(ModelMaterialRecord, faceVertexCount) == 1188,
+              "ModelMaterialRecord.faceVertexCount ABI");
+static_assert(offsetof(ModelMaterialRecord, edgeColor) == 1196,
+              "ModelMaterialRecord.edgeColor ABI");
+static_assert(offsetof(ModelMaterialRecord, toonPath) == 1216,
+              "ModelMaterialRecord.toonPath ABI");
+static_assert(offsetof(ModelMaterialRecord, flags) == 2240,
+              "ModelMaterialRecord.flags ABI");
 
 // ---- morph records --------------------------------------------------------
 enum class MorphPanel : std::uint8_t {
@@ -344,74 +351,133 @@ struct JointRecord {
 // ---- x86 pins (byte-exact against the ported loader call sites) -----------
 #if !MIKUDANCESTUDIO_X64
 static_assert(sizeof(mikudancestudio::mdl::MorphRecord) == 136, "morph x86 size");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, jpText) == 40, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, value) == 48, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, offsetCount) == 52, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, uvCounts) == 56, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, boneCount) == 76, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, groupCount) == 80, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, materialCount) == 84, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, panel) == 88, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, type) == 89, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, vertexEntries) == 92, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, boneEntries) == 96, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, groupEntries) == 100, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, uvEntries) == 104, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, materialEntries) == 124, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, impulseEntries) == 128, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, impulse2Entries) == 132, "");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, jpText) == 40,
+          "MorphRecord.jpText x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, value) == 48,
+          "MorphRecord.value x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, offsetCount) == 52,
+          "MorphRecord.offsetCount x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, uvCounts) == 56,
+          "MorphRecord.uvCounts x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, boneCount) == 76,
+          "MorphRecord.boneCount x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, groupCount) == 80,
+          "MorphRecord.groupCount x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, materialCount) == 84,
+          "MorphRecord.materialCount x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, panel) == 88,
+          "MorphRecord.panel x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, type) == 89,
+          "MorphRecord.type x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, vertexEntries) == 92,
+          "MorphRecord.vertexEntries x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, boneEntries) == 96,
+          "MorphRecord.boneEntries x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, groupEntries) == 100,
+          "MorphRecord.groupEntries x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, uvEntries) == 104,
+          "MorphRecord.uvEntries x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, materialEntries) == 124,
+          "MorphRecord.materialEntries x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, impulseEntries) == 128,
+          "MorphRecord.impulseEntries x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, impulse2Entries) == 132,
+          "MorphRecord.impulse2Entries x86 ABI");
 
 static_assert(sizeof(mikudancestudio::mdl::RigidRecord) == 172, "rigid x86 size");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, jpText) == 20, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, enText) == 24, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, boneIndex) == 28, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, group) == 32, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, noCollapse) == 34, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, shape) == 36, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, size) == 40, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, position) == 52, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, rotation) == 64, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, mass) == 76, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, mode) == 80, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, keyData) == 84, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, linearDamping) == 88, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, body) == 104, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, invTransform) == 108, "");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, jpText) == 20,
+          "RigidRecord.jpText x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, enText) == 24,
+          "RigidRecord.enText x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, boneIndex) == 28,
+          "RigidRecord.boneIndex x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, group) == 32,
+          "RigidRecord.group x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, noCollapse) == 34,
+          "RigidRecord.noCollapse x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, shape) == 36,
+          "RigidRecord.shape x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, size) == 40,
+          "RigidRecord.size x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, position) == 52,
+          "RigidRecord.position x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, rotation) == 64,
+          "RigidRecord.rotation x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, mass) == 76,
+          "RigidRecord.mass x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, mode) == 80,
+          "RigidRecord.mode x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, keyData) == 84,
+          "RigidRecord.keyData x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, linearDamping) == 88,
+          "RigidRecord.linearDamping x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, body) == 104,
+          "RigidRecord.body x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, invTransform) == 108,
+          "RigidRecord.invTransform x86 ABI");
 
 static_assert(sizeof(mikudancestudio::mdl::JointRecord) == 140, "joint x86 size");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, jpText) == 20, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, enText) == 24, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, rigidA) == 28, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, rigidB) == 32, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, position) == 36, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, rotation) == 48, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, limits) == 60, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, springs) == 108, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, constraint) == 132, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, radiusBound) == 136, "");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, jpText) == 20,
+          "JointRecord.jpText x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, enText) == 24,
+          "JointRecord.enText x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, rigidA) == 28,
+          "JointRecord.rigidA x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, rigidB) == 32,
+          "JointRecord.rigidB x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, position) == 36,
+          "JointRecord.position x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, rotation) == 48,
+          "JointRecord.rotation x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, limits) == 60,
+          "JointRecord.limits x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, springs) == 108,
+          "JointRecord.springs x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, constraint) == 132,
+          "JointRecord.constraint x86 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, radiusBound) == 136,
+          "JointRecord.radiusBound x86 ABI");
 #else
 // ---- x64 anchors (natural regrowth, mined from the original binary) -------
 static_assert(sizeof(mikudancestudio::mdl::MorphRecord) == 192, "morph x64 size");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, panel) == 0x60, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, type) == 0x61, "");
-static_assert(offsetof(mikudancestudio::mdl::MorphRecord, vertexEntries) == 0x68, "");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, panel) == 0x60,
+          "MorphRecord.panel x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, type) == 0x61,
+          "MorphRecord.type x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::MorphRecord, vertexEntries) == 0x68,
+          "MorphRecord.vertexEntries x64 ABI");
 
 static_assert(sizeof(mikudancestudio::mdl::RigidRecord) == 192, "rigid x64 size 0xC0");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, jpText) == 24, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, enText) == 32, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, size) == 52, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, rotation) == 0x4C, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, keyData) == 96, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, body) == 120, "");
-static_assert(offsetof(mikudancestudio::mdl::RigidRecord, invTransform) == 128, "");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, jpText) == 24,
+          "RigidRecord.jpText x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, enText) == 32,
+          "RigidRecord.enText x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, size) == 52,
+          "RigidRecord.size x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, rotation) == 0x4C,
+          "RigidRecord.rotation x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, keyData) == 96,
+          "RigidRecord.keyData x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, body) == 120,
+          "RigidRecord.body x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::RigidRecord, invTransform) == 128,
+          "RigidRecord.invTransform x64 ABI");
 
 static_assert(sizeof(mikudancestudio::mdl::JointRecord) == 152, "joint x64 size 0x98");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, jpText) == 24, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, enText) == 32, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, rigidA) == 0x28, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, rigidB) == 0x2C, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, limits) == 0x48, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, springs) == 0x78, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, constraint) == 0x90, "");
-static_assert(offsetof(mikudancestudio::mdl::JointRecord, radiusBound) == 0x94, "");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, jpText) == 24,
+          "JointRecord.jpText x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, enText) == 32,
+          "JointRecord.enText x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, rigidA) == 0x28,
+          "JointRecord.rigidA x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, rigidB) == 0x2C,
+          "JointRecord.rigidB x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, limits) == 0x48,
+          "JointRecord.limits x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, springs) == 0x78,
+          "JointRecord.springs x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, constraint) == 0x90,
+          "JointRecord.constraint x64 ABI");
+static_assert(offsetof(mikudancestudio::mdl::JointRecord, radiusBound) == 0x94,
+          "JointRecord.radiusBound x64 ABI");
 #endif

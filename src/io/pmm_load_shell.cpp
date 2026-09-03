@@ -144,7 +144,7 @@ void LoadSceneFile() {
         return;
     }
     if (strncmp(hdr + 0x14, "0002", 5) == 0) {
-        Sub450000(app, fd);                                     // 0x459106
+        LoadSceneV2(app, fd);                                     // 0x459106
         return;                                                 // 0x45E7F7
     }
     MessageBoxA(reinterpret_cast<HWND>(app->Hwnd()),

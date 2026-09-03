@@ -68,7 +68,7 @@
 //
 // Port scope notes (docs/ARCHITECTURE.md section 8):
 //   - sub_4175A0 (PlaybackPoseAdvance) is fully ported in
-//     src/app/timeline_advance.cpp (per-model Sub4A31D0 + camera/clip/
+//     src/app/timeline_advance.cpp (per-model AdvanceModelKeyframes + camera/clip/
 //     shadow/light/accessory key tracks); verified equivalent by the
 //     AllStar play/stop A/B (post-stop kinematic-pose hashes identical
 //     across every model slot).
@@ -99,6 +99,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -122,8 +123,10 @@ btDiscreteDynamicsWorld* PlayWorld(MMDApp* app) {
 }
 
 void StepWorld(btDiscreteDynamicsWorld* world) {
+#ifdef MIKUDANCESTUDIO_DIAG
     if (getenv("MIKUDANCESTUDIO_TRACE_STEPS") != nullptr)
         fprintf(stderr, "CATCHUP step (cursor behind target)\n");
+#endif
     world->stepSimulation(1.0f / 60.0f, 10, 1.0f / 60.0f);   // 0x46F206
 }
 
@@ -197,7 +200,9 @@ void FrameStepBeyondEnd(MMDApp* app) {
     // skipped entirely.  Omitting the guards null-dereferences on the
     // first frame-step click past the end.
     auto capture = [&]() -> long {                          // 0x46F070/9B
+#ifdef MIKUDANCESTUDIO_DIAG
         static int capCount = 0;
+#endif
         if (rec == nullptr)
             return 0;
         void** vt = *reinterpret_cast<void***>(rec);
@@ -205,6 +210,7 @@ void FrameStepBeyondEnd(MMDApp* app) {
         // stack argument (NOT a cdecl call - the 8-byte cleanup mismatch
         // corrupted the caller's stack).
         auto fn = reinterpret_cast<long(__stdcall*)(void*, void*)>(vt[4]);
+#ifdef MIKUDANCESTUDIO_DIAG
         if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
             if (++capCount <= 5 || capCount % 60 == 0) {
                 FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
@@ -216,6 +222,7 @@ void FrameStepBeyondEnd(MMDApp* app) {
                 }
             }
         }
+#endif
         return fn(rec, flagPtr);
     };
 
@@ -233,7 +240,7 @@ void FrameStepBeyondEnd(MMDApp* app) {
         Sleep(1);                                           // 0x46F102
     }
     Sleep(500);                                             // 0x46F115
-    Sub464A00(app);                                         // 0x46F122
+    FinishAviRecord(app);                                         // 0x46F122
 }
 
 // Past-end path while playing (0x46F2AF..0x46F3D1).
@@ -247,7 +254,7 @@ void PlayingBeyondEnd(MMDApp* app) {
 
     if (s.PlaybackLoopEnabled() != 0) {
         char text[8];
-        GetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 0x199),
+        GetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kPlayStartFrameEdit),
                        text, 8);
         const std::int32_t frame = std::atol(text);
         s.PlaybackStartSeconds() =
@@ -259,7 +266,7 @@ void PlayingBeyondEnd(MMDApp* app) {
             s.AutomaticFrameAdvanceEnabled() == 0) {
             SetFrameNormalized(
                 s.FrameNormalization());
-            Sub4C34A0(audio, static_cast<double>(
+            WaveSeekAndFeed(audio, static_cast<double>(
                                    s.PlaybackStartSeconds()));
         }
         s.PlaybackClockAnchorLow() =
@@ -271,9 +278,9 @@ void PlayingBeyondEnd(MMDApp* app) {
 
     // stop playback (0x46F3A5..0x46F3D1); the final 0x4175A0(0) is skipped.
     s.PlaybackActive() = 0;
-    Sub4341E0(app);                                         // 0x4341E0
-    SendMessageA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 0x198),
-                 0xF1 /*BM_SETCHECK*/, 0, 0);               // 0x46F3CB
+    StopPlayback(app);                                         // 0x4341E0
+    SendMessageA(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kPlayButton),
+                 BM_SETCHECK, 0, 0);               // 0x46F3CB
 }
 
 }  // namespace
@@ -286,7 +293,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
 
     // ---- 1. frame counter display + N++ (0x46EEE0..0x46EFB7) ------------
     if (s.state.aviStereoOutput == 0) {
-        const std::int32_t n = s.state.f9ed94;
+        const std::int32_t n = s.state.recordedFrameCount;
         const std::int32_t frameA = s.AviRecordStartFrame();
         const double fps = s.AviRecordFps();
         const int shown = static_cast<int>(
@@ -300,7 +307,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
         }
         SetWindowTextW(s.RecordingWindow(), buf);
     }
-    s.state.f9ed94 += 1;                                     // 0x46EFB7
+    s.state.recordedFrameCount += 1;                                     // 0x46EFB7
 
     // ---- 2./3. gates (0x46EFBE..0x46EFEE) --------------------------------
     if (s.state.messageSeen == 0)
@@ -324,7 +331,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
         // the float store): the frame's FULL dt budget, of which the BLOCK
         // loop substeps below consume their 1/60s and the settle main
         // step steps the remainder.
-        const std::int32_t n = s.state.f9ed94;
+        const std::int32_t n = s.state.recordedFrameCount;
         const std::int32_t frameA = s.AviRecordStartFrame();
         const double fps = s.AviRecordFps();
         g_CatchupDtBudget = static_cast<float>(1.0 / fps);    // 0x46F00D
@@ -375,7 +382,9 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
 
     // ---- 5. playing (0x46F264..) ------------------------------------------
     // MIKUDANCESTUDIO_TRACE_PLAY: per-substep bone dump for the first model, first
-    // 40 catch-up substeps after play starts (diagnostic only).
+    // 40 catch-up substeps after play starts (diagnostic only; compiled
+    // under MIKUDANCESTUDIO_DIAG).
+#ifdef MIKUDANCESTUDIO_DIAG
     static int tracePlayLeft = -1;
     static int tracePassLeft = -1;
     if (const char* tp = getenv("MIKUDANCESTUDIO_TRACE_PLAY")) {
@@ -422,6 +431,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
             }
         }
     }
+#endif
     const std::uint64_t now =
         (static_cast<std::uint64_t>(s.TimeNowHigh()) << 32) | s.TimeNowLow();
     const std::uint64_t t0 =
@@ -434,6 +444,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
         static_cast<double>(s.PlaybackStartSeconds()));
     const float end = s.PlaybackEndSeconds();
 
+#ifdef MIKUDANCESTUDIO_DIAG
     if (tracePassLeft > 0) {
         --tracePassLeft;
         if (FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_PLAY"), "a")) {
@@ -445,6 +456,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
             fclose(tf);
         }
     }
+#endif
 
     if (!(end < target)) {                                  // 0x46F2A9 jp
         // BLOCK 2 (0x46F3D6): playback catch-up with selection skip.
@@ -463,6 +475,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
                         static_cast<double>(g_CatchupDtBudget) -
                         (1.0 / 60.0));
                     BumpCursor(app);
+#ifdef MIKUDANCESTUDIO_DIAG
                     if (tracePlayLeft > 0 && getenv("MIKUDANCESTUDIO_TRACE_PLAY")) {
                         --tracePlayLeft;
                         unsigned char* mdl = s.ModelSlot(0);
@@ -496,6 +509,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
                             fclose(tf);
                         }
                     }
+#endif
                 } while (Cursor(app) < target);             // 0x46F55C
             }
         }

@@ -17,8 +17,8 @@
 //                          (<0: posY 10, camangle -45; else 0), Refresh(-1),
 //                          PostViewRefresh
 //   452 1C4  0x0048681D    clear frame selection (4 arrays + 255 bone-frame
-//                          tables), Refresh(-1), Sub410560, PanelPaint,
-//                          SelectionReeval
+//                          tables), Refresh(-1), RegisterCameraState,
+//                          PanelPaint, SelectionReeval
 //   453 1C5  0x0047E99F    opt flag byte 0x2F9 = 0; PostModelReload2,
 //                          HandleWindowSize, InvalidateRect
 //   454 1C6  0x0047E9C8    opt flag byte 0x2F9 = 1; same refresh chain
@@ -28,7 +28,7 @@
 //                          echo %3d / %+3.1f into 461-466, TBM_SETPOS
 //                          455-460, Refresh(-2)
 //   468 1D4  0x004868C2    clear frame selection (like 452), Refresh(-2),
-//                          Sub411630, PanelPaint
+//                          RegisterLightState, PanelPaint
 //   469 1D5  0x0047E9F1    opt flag byte 0x2FA = 0; same refresh chain
 //   470 1D6  0x0047EA06    opt flag byte 0x2FA = 1; same refresh chain
 //   471 1D7  def_47E903    default (no-op)
@@ -37,7 +37,7 @@
 //   473 1D9  0x00486BA7    delete accessory: CB_GETCURSEL(0x1D7) lookup in
 //                          slot table 0x9DD70, confirm MessageBox (EN/JP),
 //                          free + rebuild slot (0x927C0 blob), index fixup,
-//                          combo rebuild, EnableMenuItem 0xF9, Sub44D780,
+//                          combo rebuild, EnableMenuItem 0xF9, RebuildCameraModePanel,
 //                          Refresh(-1), PostLanguageSweep2
 //   474,475 1DA,1DB  def_47E903   default (no-op)
 //   476 1DC  0x00486F91    toggle accessory display byte 0x210,
@@ -48,8 +48,8 @@
 //   486 1E6  0x00487011    toggle accessory flag byte 0x49C,
 //                          BM_SETCHECK(0x1E6), Refresh(byte 0x9E170)
 //   487 1E7  0x0048696B    per-accessory checkbox sync 0x1DE..0x1E4 via
-//                          Sub463640, clear frame selection, Refresh(byte
-//                          0x9E170), Sub413CB0, PanelPaint
+//                          CommitEditControl, clear frame selection, Refresh(byte
+//                          0x9E170), RegisterAccessoryKey, PanelPaint
 //   488 1E8  0x0047EA2F    opt flag byte 0x2FB = 0; PostModelReload2,
 //                          HandleWindowSize, InvalidateRect
 //   489 1E9  0x0047EA58    opt flag byte 0x2FB = 1; same refresh chain
@@ -83,7 +83,7 @@
 //
 // Default handler def_47E903 (0x482897): only acts when HIWORD(notify)==1
 // (BN_CLICKED) and the sending control equals GetDlgItem(hwnd, 0x1B4) (then
-// Sub44D940 when app+0xA0B50 == 0); otherwise the control-HWND compare chain
+// ApplyModelComboSelection when app+0xA0B50 == 0); otherwise the control-HWND compare chain
 // (0x1B4, 0x1BB, ...) is walked and always misses for the ids in this family
 // (450/452/455-466/471/474/475/478-485/499 are all > 0x1B4/0x1BB), so the
 // default is a no-op here.  `notify` (= HIWORD of the original wParam) is
@@ -106,6 +106,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 
 #include <commdlg.h>
 #include <cstdint>
@@ -118,6 +119,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -220,24 +222,25 @@ static const char kNeedle530BFC[] =
 void RefreshRequest(int area);                     // VA 0x00440AC0
 void PanelPaint(MMDApp* app);                      // VA 0x00414610
 void SelectionReeval(MMDApp* app);                 // VA 0x00430510 (stubs.cpp)
-void Sub42AE20(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 path copy
+void CopyDirPathW(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 path copy
 
 // ---------------------------------------------------------------------------
 // Unported dependencies - kept as file-local external stubs with the call
 // sites intact (stubs.cpp must not be touched).  TODO(port): replace with
 // real bodies as the corresponding functions are ported.
 // ---------------------------------------------------------------------------
-void Sub42D6E0(MMDApp* app);                       // VA 0x0042D6E0
-void Sub44D780(MMDApp* app);                       // VA 0x0044D780
-void Sub4134E0(MMDApp* app);                       // VA 0x004134E0
-void Sub413CB0(MMDApp* app, int a2, int a3);       // VA 0x00413CB0
-void Sub410560(MMDApp* app, int a2);               // VA 0x00410560
-void Sub411630(MMDApp* app, int a2);               // VA 0x00411630
-void Sub463640(MMDApp* app, HWND hwnd);            // VA 0x00463640
-void Sub40A6F0(void* obj, int flag);               // VA 0x0040A6F0
-void Sub4C46F0(void* obj);                         // VA 0x004C46F0 (ctor)
-void* Sub401150(void* block, std::uint32_t size,
-                std::uint32_t count, void* ctor);  // VA 0x00401150
+void PushBoneEditUndo(MMDApp* app);                       // VA 0x0042D6E0
+void RebuildCameraModePanel(MMDApp* app);                       // VA 0x0044D780
+void SyncAccessoryEditPanel(MMDApp* app);                       // VA 0x004134E0
+void RegisterAccessoryKey(MMDApp* app, int frame, int slot);   // VA 0x00413CB0
+void RegisterCameraState(MMDApp* app, int frame);  // VA 0x00410560, was Sub410560
+void RegisterLightState(MMDApp* app, int frame);   // VA 0x00411630, was Sub411630
+void CommitEditControl(MMDApp* app, HWND hwnd);            // VA 0x00463640
+void DeleteAccessory(mdl::AccessoryRecord* accessory, int flag);  // VA 0x0040A6F0, was Sub40A6F0
+void IdentityCtor(void* obj);                         // VA 0x004C46F0 (ctor)
+void* ConstructArrayElements(void* block, std::uint32_t elementSize,
+                             std::uint32_t count,
+                             void* ctor);  // VA 0x00401150, was Sub401150
 
 void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                    std::uint16_t notify) {
@@ -269,65 +272,46 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     // 453 / 454 (0x0047E99F / 0x0047E9C8): UI option flag byte 0x2F9 =
     // 0 / 1, then PostModelReload2 + HandleWindowSize + InvalidateRect.
+    // 469 / 470 (0x0047E9F1 / 0x0047EA06): flag byte 0x2FA, same refresh
+    // chain.  488 / 489 (0x0047EA2F / 0x0047EA58): flag byte 0x2FB, same
+    // refresh chain.  Table-driven: the six bodies are identical except
+    // for the flag index and the value stored.
     // ------------------------------------------------------------------
     case 453:
-        app->state.optflag[1] = 0;
-        PostModelReload2(app);
-        HandleWindowSize(app);
-        InvalidateRect(hwnd, nullptr, FALSE);
-        break;
-
     case 454:
-        app->state.optflag[1] = 1;
-        PostModelReload2(app);
-        HandleWindowSize(app);
-        InvalidateRect(hwnd, nullptr, FALSE);
-        break;
-
-    // ------------------------------------------------------------------
-    // 469 / 470 (0x0047E9F1 / 0x0047EA06): UI option flag byte 0x2FA =
-    // 0 / 1, same refresh chain.
-    // ------------------------------------------------------------------
     case 469:
-        app->state.optflag[2] = 0;
-        PostModelReload2(app);
-        HandleWindowSize(app);
-        InvalidateRect(hwnd, nullptr, FALSE);
-        break;
-
     case 470:
-        app->state.optflag[2] = 1;
-        PostModelReload2(app);
-        HandleWindowSize(app);
-        InvalidateRect(hwnd, nullptr, FALSE);
-        break;
-
-    // ------------------------------------------------------------------
-    // 488 / 489 (0x0047EA2F / 0x0047EA58): UI option flag byte 0x2FB =
-    // 0 / 1, same refresh chain.
-    // ------------------------------------------------------------------
     case 488:
-        app->state.optflag[3] = 0;
+    case 489: {
+        static const struct {
+            int id;
+            int flagIdx;
+            unsigned char value;  // optflag is unsigned char[7]
+        } kOptFlagRadios[] = {
+            {453, 1, 0}, {454, 1, 1},  // 0x2F9
+            {469, 2, 0}, {470, 2, 1},  // 0x2FA
+            {488, 3, 0}, {489, 3, 1},  // 0x2FB
+        };
+        for (const auto& radio : kOptFlagRadios) {
+            if (radio.id == id) {
+                app->state.optflag[radio.flagIdx] = radio.value;
+                break;
+            }
+        }
         PostModelReload2(app);
         HandleWindowSize(app);
         InvalidateRect(hwnd, nullptr, FALSE);
         break;
-
-    case 489:
-        app->state.optflag[3] = 1;
-        PostModelReload2(app);
-        HandleWindowSize(app);
-        InvalidateRect(hwnd, nullptr, FALSE);
-        break;
+    }
 
     // ------------------------------------------------------------------
     // 452 (0x0048681D): clear frame selection; RefreshRequest(-1),
-    // Sub410560(app, app+0x980), PanelPaint, SelectionReeval.
+    // RegisterCameraState(app, app+0x980), PanelPaint, SelectionReeval.
     // ------------------------------------------------------------------
     case 452: {
         ClearFrameSelection(app);
         RefreshRequest(-1);
-        Sub410560(app, app->state.currentFrame);
+        RegisterCameraState(app, app->state.currentFrame);
         PanelPaint(app);
         SelectionReeval(app);
         break;
@@ -371,14 +355,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             SetWindowTextA(GetDlgItem(hwnd, 0x1D0 + ax), buf);  // 464..466
         }
         for (int ch = 0; ch < 3; ++ch) {
-            SendMessageA(GetDlgItem(hwnd, 0x1C7 + ch), 0x405 /*TBM_SETPOS*/,
+            SendMessageA(GetDlgItem(hwnd, panel::kLightColorSliderR + ch), TBM_SETPOS,
                          1, static_cast<LPARAM>(static_cast<int>(
                                 static_cast<double>(
                                     app->LightColor()[ch]) *
                                 256.0)));  // sliders 455..457
         }
         for (int ax = 0; ax < 3; ++ax) {
-            SendMessageA(GetDlgItem(hwnd, 0x1CA + ax), 0x405 /*TBM_SETPOS*/,
+            SendMessageA(GetDlgItem(hwnd, panel::kLightDirSliderX + ax), TBM_SETPOS,
                          1, static_cast<LPARAM>(static_cast<int>(
                                 static_cast<double>(
                                     direction[ax]) *
@@ -390,12 +374,12 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
 
     // ------------------------------------------------------------------
     // 468 (0x004868C2): clear frame selection (like 452); Refresh(-2),
-    // Sub411630(app, app+0x980), PanelPaint.
+    // RegisterLightState(app, app+0x980), PanelPaint.
     // ------------------------------------------------------------------
     case 468: {
         ClearFrameSelection(app);
         RefreshRequest(-2);
-        Sub411630(app, app->state.currentFrame);
+        RegisterLightState(app, app->state.currentFrame);
         PanelPaint(app);
         break;
     }
@@ -435,7 +419,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         ofn.nMaxFile = 0x100;
         ofn.lpstrFileTitle = fileTitle;
         ofn.nMaxFileTitle = 0x100;
-        ofn.Flags = 0x1000;
+        ofn.Flags = OFN_FILEMUSTEXIST;
         if (!GetOpenFileNameW(&ofn)) {
             break;
         }
@@ -444,7 +428,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             wchar_t* dir =
                 ExtractDirFromPath(app->PathWorkspace().projectDirectory,
                                    fileBuf);
-            Sub42AE20(app->DirAccs(), dir);
+            CopyDirPathW(app->DirAccs(), dir);
         }
         // original thiscall: LoadAccessoryFile(app, fileBuf)
         LoadAccessoryFile(fileBuf);
@@ -457,11 +441,11 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // confirm box (EN/JP, MB_OKCANCEL + 0x40000 when app+0xA0D38 != 0);
     // dispose slot blob, allocate fresh 0x927C0 blob, fix up indices,
     // rebuild combos 0x1D7/0x1DA/0x1DB, clear checkbox labels 0x1DE..0x1E4,
-    // EnableMenuItem 0xF9, Sub44D780, Refresh(-1), PostLanguageSweep2.
+    // EnableMenuItem 0xF9, RebuildCameraModePanel, Refresh(-1), PostLanguageSweep2.
     // ------------------------------------------------------------------
     case 473: {
         const LRESULT sel =
-            SendMessageA(GetDlgItem(hwnd, 0x1D7), 0x147 /*CB_GETCURSEL*/, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_GETCURSEL, 0, 0);
         std::int32_t found = -1;
         for (int i = 0; i < 0xFF; ++i) {
             mdl::AccessoryRecord* acc = app->AccessorySlot(i);
@@ -474,7 +458,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (found < 0) {
             break;
         }
-        app->state.bC = 1;  // 0xBC
+        app->state.enterKeyState = 1;  // 0xBC
         mdl::AccessoryRecord* acc = app->AccessorySlot(found);
 
         char text[0x100];
@@ -489,7 +473,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                       acc->name);
         }
         const std::uint32_t flags =
-            app->state.floatingWindow != 0 ? 0x40001u : 1u;
+            app->state.floatingWindow != 0 ? (MB_OKCANCEL | MB_TOPMOST) : MB_OKCANCEL;
         const char* caption = app->state.englishUI != 0
                                   ? "delete accessory"
                                   : kCaptionDelAccessoryJp;
@@ -500,7 +484,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         const std::int32_t oldSel = acc->order;
         // dispose the accessory blob
         if (acc != nullptr) {
-            Sub40A6F0(acc, 1);
+            DeleteAccessory(acc, 1);
         }
         app->AccessorySlot(found) = nullptr;
         // dispose the previous frame blob of this slot
@@ -518,11 +502,11 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         *reinterpret_cast<float*>(blob + 0x34) = 1.0f;
         *reinterpret_cast<float*>(blob + 0x38) = 1.0f;
         // combo rebuild: 0x1D7 select = oldSel, 0x1B2 index shifted
-        SendMessageA(GetDlgItem(hwnd, 0x1D7), 0x144 /*CB_RESETCONTENT*/,
+        SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_DELETESTRING,
                      static_cast<WPARAM>(sel), 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1B2), 0x144 /*CB_RESETCONTENT*/,
+        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_DELETESTRING,
                      static_cast<WPARAM>(sel + 4), 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1D7), 0x14E /*CB_SETCURSEL*/, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_SETCURSEL, 0, 0);
         // fix indices above the deleted one
         for (int i = 0; i < 0xFF; ++i) {
             mdl::AccessoryRecord* p = app->AccessorySlot(i);
@@ -540,29 +524,29 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             }
         }
         if (firstFree == 0x100) {
-            app->state.selLightAccSlotOrUint32 = 0;
-            SendMessageA(GetDlgItem(hwnd, 0x1DA), 0x14E /*CB_SETCURSEL*/, -1, 0);
+            app->state.selectedObjectSlot = 0;
+            SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround), CB_SETCURSEL, -1, 0);
         } else {
-            SendMessageA(GetDlgItem(hwnd, 0x1D7), 0x14E /*CB_SETCURSEL*/, 0, 0);
-            app->state.selLightAccSlotOrUint32 =
+            SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_SETCURSEL, 0, 0);
+            app->state.selectedObjectSlot =
                 static_cast<std::uint8_t>(firstFree);
-            Sub4134E0(app);
+            SyncAccessoryEditPanel(app);
         }
-        SendMessageA(GetDlgItem(hwnd, 0x1DB), 0x14B /*CB_SHOWDROPDOWN*/, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kAttachBoneCombo), CB_RESETCONTENT, 0, 0);
         // clear the checkbox labels 0x1DE..0x1E4
         char empty[0x100];
         strcpy_s(empty, 0x100, "");
         for (int ctl = 0x1DE; ctl <= 0x1E4; ++ctl) {
             HWND edit = GetDlgItem(hwnd, ctl);
-            SendMessageA(edit, 0xB1 /*EM_SETSEL*/, 0,
+            SendMessageA(edit, EM_SETSEL, 0,
                          static_cast<LPARAM>(GetWindowTextLengthA(edit)));
-            SendMessageA(edit, 0xC2 /*WM_SETTEXT*/, 0,
+            SendMessageA(edit, EM_REPLACESEL, 0,
                          reinterpret_cast<LPARAM>(empty));
         }
         EnableMenuItem(GetMenu(hwnd), 0xF9, 1);
-        Sub44D780(app);
-        SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x144 /*CB_RESETCONTENT*/, 5, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x144 /*CB_RESETCONTENT*/, 4, 0);
+        RebuildCameraModePanel(app);
+        SendMessageA(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_DELETESTRING, 5, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_DELETESTRING, 4, 0);
         PostModelReload2(app);
         app->GlobalTrackSelected(GlobalTimelineTrack::Camera) = 0;
         RefreshRequest(-1);
@@ -576,17 +560,17 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // BM_SETCHECK into checkbox 0x1DC, Refresh(byte 0x9E170).
     // ------------------------------------------------------------------
     case 476: {
-        const std::uint8_t idx = app->state.selLightAccSlotOrUint32;
+        const std::uint8_t idx = app->state.selectedObjectSlot;
         mdl::AccessoryRecord* acc = app->AccessorySlot(idx);
         if (acc == nullptr) {
             break;
         }
         if (acc->visible != 0) {
             acc->visible = 0;
-            SendMessageA(GetDlgItem(hwnd, 0x1DC), 0xF1 /*BM_SETCHECK*/, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kAccessoryVisibleCheckbox), BM_SETCHECK, 0, 0);
         } else {
             acc->visible = 1;
-            SendMessageA(GetDlgItem(hwnd, 0x1DC), 0xF1 /*BM_SETCHECK*/, 1, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kAccessoryVisibleCheckbox), BM_SETCHECK, 1, 0);
         }
         RefreshRequest(idx);
         break;
@@ -598,7 +582,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // default note) - equivalent to break here.
     // ------------------------------------------------------------------
     case 477: {
-        const std::uint8_t idx = app->state.selLightAccSlotOrUint32;
+        const std::uint8_t idx = app->state.selectedObjectSlot;
         mdl::AccessoryRecord* acc = app->AccessorySlot(idx);
         if (acc == nullptr) {
             break;
@@ -612,17 +596,17 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // BM_SETCHECK into checkbox 0x1E6, Refresh(byte 0x9E170).
     // ------------------------------------------------------------------
     case 486: {
-        const std::uint8_t idx = app->state.selLightAccSlotOrUint32;
+        const std::uint8_t idx = app->state.selectedObjectSlot;
         mdl::AccessoryRecord* acc = app->AccessorySlot(idx);
         if (acc == nullptr) {
             break;
         }
         if (acc->shadowEnabled != 0) {
             acc->shadowEnabled = 0;
-            SendMessageA(GetDlgItem(hwnd, 0x1E6), 0xF1 /*BM_SETCHECK*/, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kAccessoryShadowCheckbox), BM_SETCHECK, 0, 0);
         } else {
             acc->shadowEnabled = 1;
-            SendMessageA(GetDlgItem(hwnd, 0x1E6), 0xF1 /*BM_SETCHECK*/, 1, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kAccessoryShadowCheckbox), BM_SETCHECK, 1, 0);
         }
         RefreshRequest(idx);
         break;
@@ -630,21 +614,21 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
 
     // ------------------------------------------------------------------
     // 487 (0x0048696B): sync the per-accessory checkboxes 0x1DE..0x1E4
-    // (Sub463640), clear the frame selection, then Refresh(byte 0x9E170)
-    // + Sub413CB0(app, app+0x980, byte 0x9E170) + PanelPaint.
+    // (CommitEditControl), clear the frame selection, then Refresh(byte 0x9E170)
+    // + RegisterAccessoryKey(app, app+0x980, byte 0x9E170) + PanelPaint.
     // ------------------------------------------------------------------
     case 487: {
         for (int ctl = 0x1DE; ctl <= 0x1E4; ++ctl) {
-            Sub463640(app, GetDlgItem(hwnd, ctl));
+            CommitEditControl(app, GetDlgItem(hwnd, ctl));
         }
         app->SceneModified() = 1;
-        const std::uint8_t idx = app->state.selLightAccSlotOrUint32;
+        const std::uint8_t idx = app->state.selectedObjectSlot;
         if (app->AccessorySlot(idx) == nullptr) {
             break;
         }
         ClearFrameSelection(app);
         RefreshRequest(idx);
-        Sub413CB0(app, app->state.currentFrame, idx);
+        RegisterAccessoryKey(app, app->state.currentFrame, idx);
         PanelPaint(app);
         break;
     }
@@ -656,37 +640,37 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // (0/1/3/4 when the corresponding radio is checked, 2 when none).
     // ------------------------------------------------------------------
     case 490: {
-        SendMessageA(GetDlgItem(hwnd, 0x1EB), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1EC), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1ED), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        app->EditMode() = IsDlgButtonChecked(hwnd, 0x1EA) != 0
+        SendMessageA(GetDlgItem(hwnd, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneMoveRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRotateRadio), BM_SETCHECK, 0, 0);
+        app->EditMode() = IsDlgButtonChecked(hwnd, panel::kBoneSelectRadio) != 0
             ? ViewportEditMode::Bone : ViewportEditMode::None;
         break;
     }
 
     case 491: {
-        SendMessageA(GetDlgItem(hwnd, 0x1EA), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1EC), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1ED), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        app->EditMode() = IsDlgButtonChecked(hwnd, 0x1EB) != 0
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneMoveRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRotateRadio), BM_SETCHECK, 0, 0);
+        app->EditMode() = IsDlgButtonChecked(hwnd, panel::kBoxSelectRadio) != 0
             ? ViewportEditMode::BoneBox : ViewportEditMode::None;
         break;
     }
 
     case 492: {
-        SendMessageA(GetDlgItem(hwnd, 0x1EB), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1EA), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1ED), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        app->EditMode() = IsDlgButtonChecked(hwnd, 0x1EC) != 0
+        SendMessageA(GetDlgItem(hwnd, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRotateRadio), BM_SETCHECK, 0, 0);
+        app->EditMode() = IsDlgButtonChecked(hwnd, panel::kBoneMoveRadio) != 0
             ? ViewportEditMode::Light : ViewportEditMode::None;
         break;
     }
 
     case 493: {
-        SendMessageA(GetDlgItem(hwnd, 0x1EB), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1EC), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1EA), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        app->EditMode() = IsDlgButtonChecked(hwnd, 0x1ED) != 0
+        SendMessageA(GetDlgItem(hwnd, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneMoveRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, 0, 0);
+        app->EditMode() = IsDlgButtonChecked(hwnd, panel::kBoneRotateRadio) != 0
             ? ViewportEditMode::Camera : ViewportEditMode::None;
         break;
     }
@@ -704,16 +688,21 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         mikudancestudio::mdl::BoneRecord* const bones = modelRecord->boneTable;
         unsigned char* const sel = modelRecord->boneSelection;
         for (std::int32_t i = 0; i < boneCount; ++i) {
-            const std::uint8_t type = bones[i].type;
+            const mdl::BoneType type = bones[i].type;
             const std::uint16_t flag = bones[i].flags;
-            const bool hit = ((flag & 0x400) == 0x400 && type == 4) ||
-                             type == 8 || type <= 6;
+            const bool hit =
+                ((flag & mdl::kBoneFlagFixedAxis) == mdl::kBoneFlagFixedAxis &&
+                 type == mdl::BoneType::UnderIk) ||
+                type == mdl::BoneType::FixedAxis ||
+                type <= mdl::BoneType::Effector;
             if (hit) {
                 sel[i] = 1;
             }
         }
-        SendMessageA(GetDlgItem(hwnd, 0x1EA), 0xF1 /*BM_SETCHECK*/, 1, 0);
-        SendMessageA(hwnd, 0x111 /*WM_COMMAND*/, 0x1EA, 0);
+        // raw command id kept: 0x1EA is the original's bone-select radio
+        // command; the WM_COMMAND switch below keys the same literal.
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, 1, 0);
+        SendMessageA(hwnd, WM_COMMAND, 0x1EA, 0);
         PostLanguageSweep(app);
         PostLanguageSweep2(app);
         break;
@@ -731,7 +720,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // math follows the original x87 shape (double intermediates).
     // ------------------------------------------------------------------
     case 495: {
-        Sub42D6E0(app);  // prep (thiscall)
+        PushBoneEditUndo(app);  // prep (thiscall)
         unsigned char* model = ActiveModel(app);
         auto* modelRecord = mikudancestudio::mdl::Mdl(model);
         unsigned char* boneSel = modelRecord->boneSelection;
@@ -885,11 +874,11 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (count == 0) {
             break;  // jz def_47E903 (no-op)
         }
-        EnableWindow(GetDlgItem(hwnd, 0x1F1), TRUE);
-        EnableWindow(GetDlgItem(hwnd, 0x1F2), TRUE);
-        app->state.v9da24[0] = count;
+        EnableWindow(GetDlgItem(hwnd, panel::kBonePasteButton), TRUE);
+        EnableWindow(GetDlgItem(hwnd, panel::kBoneReversePasteButton), TRUE);
+        app->state.copiedBoneCount = count;
         auto& records =
-            reinterpret_cast<BoneCopyRecord*&>(app->V350Clipboard());
+            reinterpret_cast<BoneCopyRecord*&>(app->BoneCopyRecords());
         if (records != nullptr) {
             free(records);
             records = nullptr;
@@ -898,14 +887,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             MulOrMax(static_cast<std::uint32_t>(count),
                      sizeof(BoneCopyRecord))));
         if (block != nullptr) {
-            Sub401150(block, sizeof(BoneCopyRecord),
-                      static_cast<std::uint32_t>(count),
-                      &Sub4C46F0);
+            ConstructArrayElements(block, sizeof(BoneCopyRecord),
+                                   static_cast<std::uint32_t>(count),
+                                   &IdentityCtor);
         }
         records = block;
         memset(block, 0,
                static_cast<std::size_t>(count) * sizeof(BoneCopyRecord));
-        app->state.v9da24[0] = 0;  // fill cursor
+        app->state.copiedBoneCount = 0;  // fill cursor
         model = ActiveModel(app);
         modelRecord = mikudancestudio::mdl::Mdl(model);
         const std::int32_t nBones = modelRecord->boneCount;
@@ -923,7 +912,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             ++cursor;
             // 0x481B1E updates the shared copy count after every emitted
             // record.  Paste (497/498) gates directly on this field.
-            app->state.v9da24[0] = cursor;
+            app->state.copiedBoneCount = cursor;
         }
         break;
     }
@@ -937,7 +926,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // flags, current bone = pasted index, then the language sweeps.
     // ------------------------------------------------------------------
     case 497: {
-        if (app->state.v9da24[0] == 0) {
+        if (app->state.copiedBoneCount == 0) {
             break;  // jz def_47E903 (no-op)
         }
         unsigned char* model = ActiveModel(app);
@@ -947,8 +936,8 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         for (std::int32_t i = 0; i < boneCount; ++i) {
             sel[i] = 0;
         }
-        EnableWindow(GetDlgItem(hwnd, 0x190), TRUE);
-        EnableWindow(GetDlgItem(hwnd, 0x191), FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+        EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
         modelRecord->undoDirty = 1;
         modelRecord->redoDirty = 0;
         ++modelRecord->undoState[0];
@@ -960,7 +949,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         auto& undo = modelRecord->undoRings[0].slots[pasteIdx];
         undo.operation = 1;
         // count stored 28*(pasteIdx+0x164) dwords past the undo-table base
-        undo.dirty = app->state.v9da24[0];
+        undo.dirty = app->state.copiedBoneCount;
         unsigned char* pasteBlob =
             reinterpret_cast<unsigned char*>(undo.bonePose);
         if (pasteBlob != nullptr) {
@@ -968,19 +957,20 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             undo.bonePose = nullptr;
         }
         const std::int32_t count =
-            app->state.v9da24[0];
+            app->state.copiedBoneCount;
         pasteBlob = static_cast<unsigned char*>(::operator new(
             MulOrMax(static_cast<std::uint32_t>(count), 0x24u)));
         if (pasteBlob != nullptr) {
-            Sub401150(pasteBlob, 0x24, static_cast<std::uint32_t>(count),
-                      &Sub4C46F0);
+            ConstructArrayElements(pasteBlob, 0x24,
+                                   static_cast<std::uint32_t>(count),
+                                   &IdentityCtor);
         }
         undo.bonePose = reinterpret_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
             pasteBlob);
         memset(pasteBlob, 0, static_cast<std::size_t>(count) * 0x24u);
 
         auto& records =
-            reinterpret_cast<BoneCopyRecord*&>(app->V350Clipboard());
+            reinterpret_cast<BoneCopyRecord*&>(app->BoneCopyRecords());
         for (std::int32_t j = 0; j < count; ++j) {
             model = ActiveModel(app);
             modelRecord = mikudancestudio::mdl::Mdl(model);
@@ -1034,7 +1024,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // fallback target.
     // ------------------------------------------------------------------
     case 498: {
-        if (app->state.v9da24[0] == 0) {
+        if (app->state.copiedBoneCount == 0) {
             break;  // jz def_47E903 (no-op)
         }
         unsigned char* model = ActiveModel(app);
@@ -1044,8 +1034,8 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         for (std::int32_t i = 0; i < boneCount; ++i) {
             sel[i] = 0;
         }
-        EnableWindow(GetDlgItem(hwnd, 0x190), TRUE);
-        EnableWindow(GetDlgItem(hwnd, 0x191), FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+        EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
         modelRecord->undoDirty = 1;
         modelRecord->redoDirty = 0;
         ++modelRecord->undoState[0];
@@ -1056,7 +1046,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         modelRecord->undoState[1] = pasteIdx;
         auto& undo = modelRecord->undoRings[0].slots[pasteIdx];
         undo.operation = 1;
-        undo.dirty = app->state.v9da24[0];
+        undo.dirty = app->state.copiedBoneCount;
         unsigned char* pasteBlob =
             reinterpret_cast<unsigned char*>(undo.bonePose);
         if (pasteBlob != nullptr) {
@@ -1064,19 +1054,20 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
             undo.bonePose = nullptr;
         }
         const std::int32_t count =
-            app->state.v9da24[0];
+            app->state.copiedBoneCount;
         pasteBlob = static_cast<unsigned char*>(::operator new(
             MulOrMax(static_cast<std::uint32_t>(count), 0x24u)));
         if (pasteBlob != nullptr) {
-            Sub401150(pasteBlob, 0x24, static_cast<std::uint32_t>(count),
-                      &Sub4C46F0);
+            ConstructArrayElements(pasteBlob, 0x24,
+                                   static_cast<std::uint32_t>(count),
+                                   &IdentityCtor);
         }
         undo.bonePose = reinterpret_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
             pasteBlob);
         memset(pasteBlob, 0, static_cast<std::size_t>(count) * 0x24u);
 
         auto& records =
-            reinterpret_cast<BoneCopyRecord*&>(app->V350Clipboard());
+            reinterpret_cast<BoneCopyRecord*&>(app->BoneCopyRecords());
         for (std::int32_t j = 0; j < count; ++j) {
             model = ActiveModel(app);
             modelRecord = mikudancestudio::mdl::Mdl(model);

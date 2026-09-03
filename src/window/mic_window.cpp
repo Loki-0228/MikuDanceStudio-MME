@@ -19,24 +19,24 @@
 
 namespace mikudancestudio {
 
-// WM_COMMAND child dispatch (0x004620A0) - real body pending; placeholder in
-// wndproc_stubs.cpp.
-void Sub4620A0(MMDApp* app, unsigned short id);
+// WM_COMMAND child dispatch (0x004620A0) - full port in wndproc_stubs.cpp.
+void DispatchSeparateWindowCommand(MMDApp* app, unsigned short id);  // VA 0x004620A0, was Sub4620A0
 // Viewport overlay layout (0x0040CAC0) - ported in ui_viewport_layout.cpp.
-void Sub40CAC0(MMDApp* app);
+void LayoutViewportPanels(MMDApp* app);  // VA 0x0040CAC0, was Sub40CAC0
 
 // VA 0x00428FF0 - separate-window mouse-move filter (thiscall on app).
 // Tracks the cursor inside the detached panel, clears the left/top
 // "auto-hide armed" bytes once the pointer crosses the hide margins, and
 // raises the moved-flag for the frame driver (drag threshold 50px).
-int Sub428FF0(MMDApp* app, unsigned short x, unsigned short y) {
+// was Sub428FF0
+int FilterSeparateWindowMouseMove(MMDApp* app, unsigned short x, unsigned short y) {
     auto& s = *app;
     if (s.state.a06B5 != 0) {          // 0x428FF6
         // original: (int)(sub1D574+120048 /*viewScale, render scale*/ *
         // 200.0) via __ftol2_sse
-        const int v3 = static_cast<int>(s.Renderer()->viewScale * 200.0f);
-        if (x > s.ViewportRect().right - v3)                        // 0x429028
-            return v3;
+        const int edgeBand = static_cast<int>(s.Renderer()->viewScale * 200.0f);
+        if (x > s.ViewportRect().right - edgeBand)                  // 0x429028
+            return edgeBand;
         s.state.a06B5 = 0;              // 0x42902E
     }
     int result = y;
@@ -46,7 +46,7 @@ int Sub428FF0(MMDApp* app, unsigned short x, unsigned short y) {
         s.state.a06B4 = 0;                                          // 0x429050
     }
     if (s.MouseX() != x || s.MouseY() != y) {                      // 0x42906F
-        const bool first = s.state.v9f12c == 0;
+        const bool first = s.state.separateWindowMouseSeen == 0;
         s.MouseX() = x;                                             // 0x429077
         s.MouseY() = y;                                             // 0x42907A
         if (!first) {
@@ -55,10 +55,10 @@ int Sub428FF0(MMDApp* app, unsigned short x, unsigned short y) {
             // 0x429090: OFSUB/SF/ZF flag algebra on the unsigned deltas
             // reduces to "either axis moved more than 50 px".
             if (dx > 50 || dy > 50)                                // 0x429096
-                s.state.b6568483 = 1;                              // 0x4290AC
+                s.state.mouseJumped = 1;                              // 0x4290AC
             s.PreviousMouseX() = x;                                // 0x4290B4
             s.PreviousMouseY() = y;                                // 0x4290B7
-            s.state.v9f12c = 0;          // 0x4290BA
+            s.state.separateWindowMouseSeen = 0;          // 0x4290BA
         }
         if (s.ViewportToolHovered() == 1) {                      // 0x4290C6
             SetCursor(LoadCursorA(nullptr,
@@ -78,13 +78,13 @@ LRESULT CALLBACK MicWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     switch (msg) {
     case WM_MOUSEMOVE:                                             // 0x466A36
         s.MessageSeen() = 1;                                      // 0x466BDB
-        Sub428FF0(app, LOWORD(lParam), HIWORD(lParam));            // 0x466BF6
+        FilterSeparateWindowMouseMove(app, LOWORD(lParam), HIWORD(lParam));  // 0x466BF6
         return 0;
     case WM_CLOSE:                                                 // 0x466B8A
         SaveFlagSubsystem(app);                                    // 0x466BBD
         return 0;
     case WM_COMMAND:                                               // 0x466B91
-        Sub4620A0(app, LOWORD(wParam));                            // 0x466B9E
+        DispatchSeparateWindowCommand(app, LOWORD(wParam));  // 0x466B9E
         return 0;
     case WM_PAINT: {                                               // 0x466AB7
         RECT rc;
@@ -106,12 +106,12 @@ LRESULT CALLBACK MicWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
     }
     case WM_MOVE:                                                  // 0x466A96
-        Sub4290F0(app);                                            // 0x466A96
+        RefreshSeparateWindowViewport(app);                                            // 0x466A96
         return 0;
     case WM_SIZE:                                                  // 0x466A5C
         s.MessageSeen() = 1;                                      // 0x466A5C
-        Sub4290F0(app);                                            // 0x466A6C
-        Sub40CAC0(app);                                            // 0x466A77
+        RefreshSeparateWindowViewport(app);                                            // 0x466A6C
+        LayoutViewportPanels(app);                                 // 0x466A77
         return 0;
     case WM_MOUSEACTIVATE:                                         // 0x466C6E
         HandleMouseActivate(app);
@@ -181,7 +181,7 @@ void InitFlagSubsystem(MMDApp* app) {
         SetParent(GetDlgItem(main, id),
                   s.FloatingWindow());                            // 0x461F52
 
-    Sub442EB0(app);                                                // 0x461F61
+    RelayoutSidebarControls(app);                                                // 0x461F61
     PanelPaint(app);                                               // 0x461F68
     InvalidateRect(main, nullptr, FALSE);                          // 0x461F7E
     InvalidateRect(s.FloatingWindow(),
@@ -210,7 +210,7 @@ void SaveFlagSubsystem(MMDApp* app) {
     s.SidebarWidth() = s.SeparateWindowSidebarWidth();
     PanelPaint(app);                                               // 0x462073
     InvalidateRect(main, nullptr, FALSE);                          // 0x462083
-    Sub442EB0(app);                                                // 0x462090
+    RelayoutSidebarControls(app);                                                // 0x462090
 }
 
 }  // namespace mikudancestudio

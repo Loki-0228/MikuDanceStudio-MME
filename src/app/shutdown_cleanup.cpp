@@ -31,7 +31,7 @@
 //      +656424/+656384/+656416
 //  14. DeleteDC on +736/+724/+744 (no null guards)
 //  15. Sub048 physics wrapper (+650672): DisposePhysicsWorld (0x4030F0)
-//      then free; Sub04B0 (+650656): DisposeAccessory then free;
+//      then free; AxisMeshObject (+650656): DisposeAccessory then free;
 //      Sub06C recorder (+657088): TeardownDShowGraphCoUninit (0x4096C0)
 //      then free; Sub025C audio ctx (+204): DisposeAudioContext
 //      (0x4C2C40) then free; Sub1D574 render wrapper (+657092):
@@ -73,7 +73,7 @@
 namespace mikudancestudio {
 
 // 0x4C4700 real body lives in src/render/accessory.cpp (not yet declared
-// in ported_funcs.hpp; the Sub4C4700 no-op stub in stubs.cpp is superseded).
+// in ported_funcs.hpp; the no-op stub for it in stubs.cpp is superseded).
 void DisposeAccessory(void* accessory);
 
 namespace {
@@ -420,12 +420,12 @@ void ShutdownCleanup(MMDApp* app) {
     // ---- 1/2: flag-gated callback + module unload ------------------------
     if (s.state.depthDeviceEnabled != 0) {        // 0x462C6F
         reinterpret_cast<void(*)()>(
-            s.state.a03C4)();                                   // 0x462C81
+            s.state.oniExportSlot1)();                                   // 0x462C81
         s.state.depthDeviceEnabled = 0;
     }
-    if (HMODULE mod = s.state.a03BC) {                          // 0x462C89
+    if (HMODULE mod = s.state.oniModule) {                          // 0x462C89
         FreeLibrary(mod);                                       // 0x462C94
-        s.state.a03BC = nullptr;
+        s.state.oniModule = nullptr;
     }
 
     // ---- 3/4: capture graph + separate ("Mic") window --------------------
@@ -460,9 +460,9 @@ void ShutdownCleanup(MMDApp* app) {
     // ---- 7: accessory-record base + misc frees ----------------------------
     delete s.RecordingCompletionFlag();                         // 0x462DAB
     s.RecordingCompletionFlag() = nullptr;
-    if (s.state.cameraRecordArray != nullptr) {                   // 0x462DC4
-        std::free(s.state.cameraRecordArray);
-        s.state.cameraRecordArray = nullptr;
+    if (s.state.rigidScratchArray != nullptr) {                   // 0x462DC4
+        std::free(s.state.rigidScratchArray);
+        s.state.rigidScratchArray = nullptr;
     }
 
     // ---- 8: render-side and AVI-config Release() run ----------------------
@@ -549,8 +549,8 @@ void ShutdownCleanup(MMDApp* app) {
     s.AccessoryClipboard() = nullptr;
     std::free(s.BoneClipboard());                               // 0x46312A
     s.BoneClipboard() = nullptr;
-    std::free(s.V350Clipboard());                               // 0x463143
-    s.V350Clipboard() = nullptr;
+    std::free(s.BoneCopyRecords());                               // 0x463143
+    s.BoneCopyRecords() = nullptr;
 
     // ---- 13: selection-record buffers -------------------------------------
     FreeTimelineSelectionRecords(s, TimelineSelectionBand::Accessory);   // 0x46315C
@@ -572,10 +572,10 @@ void ShutdownCleanup(MMDApp* app) {
         std::free(phys);                                        // 0x463233
         s.Physics() = nullptr;
     }
-    if (void* acc = s.Sub04B0()) {                              // 0x463241
+    if (void* acc = s.AxisMeshObject()) {                              // 0x463241
         DisposeAccessory(acc);                                  // 0x46324D
         std::free(acc);                                         // 0x463253
-        s.Sub04B0() = nullptr;
+        s.AxisMeshObject() = nullptr;
     }
     if (DShowRecorder* rec = s.Recorder()) {                    // 0x463261
         TeardownDShowGraphCoUninit(rec);                         // 0x46326D

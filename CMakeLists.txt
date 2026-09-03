@@ -198,6 +198,19 @@ target_link_libraries(mikudancestudio_core PUBLIC
 )
 
 # ---------------------------------------------------------------------------
+# Porting-era diagnostics.  The MIKUDANCESTUDIO_* environment probes
+# (state dumps, A/B traces, canaries) are comparison tooling against the
+# original binaries, not product features.  Default OFF: the shipped build
+# contains none of that code.  Turn ON only while running A/B sessions:
+#   cmake -B build-x64/diag -DMIKUDANCESTUDIO_DIAG=ON ..
+# ---------------------------------------------------------------------------
+option(MIKUDANCESTUDIO_DIAG
+       "Compile the porting-era diagnostics probes (MIKUDANCESTUDIO_* env dumps/traces)" OFF)
+if (MIKUDANCESTUDIO_DIAG)
+    target_compile_definitions(mikudancestudio_core PUBLIC MIKUDANCESTUDIO_DIAG=1)
+endif()
+
+# ---------------------------------------------------------------------------
 # Main executable.  WIN32 subsystem matches the original PE header
 # (Subsystem 2, GUI).  Exports (Exp*) come from exports/MikuMikuDance.def
 # exactly like the original export table at RVA 0x00141328.

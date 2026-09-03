@@ -24,6 +24,10 @@
 namespace mikudancestudio {
 namespace {
 
+// Porting-era VB dump under MIKUDANCESTUDIO_VB_DUMP_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub below keeps the call
+// site valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 bool ModelVbCaptureReady(char directory[MAX_PATH]) {
     const DWORD length = GetEnvironmentVariableA(
         "MIKUDANCESTUDIO_VB_DUMP_DIR", directory, MAX_PATH);
@@ -104,6 +108,12 @@ void DumpModelVertexBuffers(MMDApp* app, unsigned char* model,
         count, mainStride);
     WriteBytes(path, metadata, static_cast<DWORD>(chars));
 }
+#else
+inline void DumpModelVertexBuffers(MMDApp*, unsigned char*,
+                                   const mdl::SkinnedVertexBase*,
+                                   const mdl::EdgeVertex*, std::uint32_t,
+                                   std::uint32_t) {}
+#endif
 
 void TransformPosition(float out[3], const float in[3], const float* m) {
     out[0] = in[0] * m[0] + in[1] * m[4] + in[2] * m[8] + m[12];

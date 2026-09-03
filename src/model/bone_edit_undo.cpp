@@ -1,4 +1,4 @@
-// Bone-edit undo snapshot (original VA 0x0042D6E0).
+// Bone-edit undo snapshot (original VA 0x0042D6E0; was Sub42D6E0).
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
@@ -9,10 +9,11 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
-void Sub42D6E0(MMDApp* app) {
+void PushBoneEditUndo(MMDApp* app) {  // was Sub42D6E0, VA 0x0042D6E0
     if (app == nullptr)
         return;
     const unsigned modelSlot = app->state.slotIdx;
@@ -37,8 +38,8 @@ void Sub42D6E0(MMDApp* app) {
     HWND window = app->state.hwnd;
     if (window == nullptr)
         window = static_cast<HWND>(app->Hwnd());
-    EnableWindow(GetDlgItem(window, 400), TRUE);
-    EnableWindow(GetDlgItem(window, 401), FALSE);
+    EnableWindow(GetDlgItem(window, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(window, panel::kRedoButton), FALSE);
 
     model[12732] = 1;
     model[12733] = 0;

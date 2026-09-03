@@ -1,5 +1,5 @@
 // ===========================================================================
-// VA 0x0042AE20 - Sub42AE20         (original: sub_42AE20, 16 bytes)
+// VA 0x0042AE20 - CopyDirPathW         (original: sub_42AE20, 16 bytes)
 // VA 0x0042AE40 - CopyPathW         (original: sub_42AE40, 23 bytes)
 // VA 0x00433250 - LoadAviFile       (original: sub_433250, 0x53F bytes)
 // VA 0x004337A0 - LoadBackgroundPicture (original: sub_4337A0, 0x293 bytes)
@@ -12,7 +12,7 @@
 // 0x433250/0x4337A0 are __thiscall(app); like 0x418500 the file path is
 // read from app storage (app+0x9E1EC for AVI, app+0x9E448 for pictures),
 // so these app-taking overloads supersede the old path-taking stub
-// declarations (stubs.cpp left untouched, no longer referenced).
+// declarations (those twins have since been deleted from stubs.cpp).
 //
 // AVI uses the raw VFW API (AVIFIL32): open -> AVIFileInfoA -> pick the
 // 'vids' stream with the LOWEST wPriority (initial best 0xFFFF) ->
@@ -130,18 +130,18 @@ void MediaAspect(MMDApp* app, std::int32_t width, std::int32_t height,
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// VA 0x0042AE20 - Sub42AE20(dest, src): wcscpy_s(dest, 0x3E8, src) thunk
+// VA 0x0042AE20 - CopyDirPathW(dest, src): wcscpy_s(dest, 0x3E8, src) thunk
 // for the wchar_t[1000] UserFile directory buffers.  (Body moved here from
 // the command_view_menu.cpp placeholder per its TODO; real port.)
 // ---------------------------------------------------------------------------
-void Sub42AE20(wchar_t* dest, const wchar_t* src) {
+void CopyDirPathW(wchar_t* dest, const wchar_t* src) {  // was Sub42AE20
     wcscpy_s(dest, 0x3E8, src);                                     // 0x506292
 }
 
 // ---------------------------------------------------------------------------
 // VA 0x0042AE40 - CopyPathW(dest, src): wcscpy_s(dest, 0x100, src) thunk
-// for the wchar_t[256] media path buffers.  (Supersedes the Sub42AE40 stub
-// in stubs.cpp, which stays untouched and unreferenced.)
+// for the wchar_t[256] media path buffers.  (Supersedes the was-Sub42AE40
+// stub, since deleted from stubs.cpp.)
 // ---------------------------------------------------------------------------
 void CopyPathW(wchar_t* dest, const wchar_t* src) {
     wcscpy_s(dest, 0x100, src);                                     // 0x506292
@@ -321,13 +321,13 @@ void LoadAviFile(MMDApp* app) {
         s.AviBackgroundSurface() = nullptr;
     }
     s.AviBackgroundEnabled() = 1;                                   // 0x43376C
-    Sub4168D0(app);                                                 // 0x433776
+    AviBgOverlayRefresh(app);                                                 // 0x433776
 }
 
 // ---------------------------------------------------------------------------
 // VA 0x004337A0 - LoadBackgroundPicture(this=app).  Reads the path from
 // app+0x9E448 after UserFile resolution; D3DX texture at app+0x9E42C.
-// (Supersedes the Sub4337A0 stub in stubs.cpp, left untouched.)
+// (Supersedes the was-Sub4337A0 stub, since deleted from stubs.cpp.)
 // ---------------------------------------------------------------------------
 void LoadBackgroundPicture(MMDApp* app) {
     auto& s = *app;
@@ -394,7 +394,7 @@ void LoadBackgroundPicture(MMDApp* app) {
     s.PictureOffsetY() = pos;
     s.PictureBackgroundEnabled() = 1;                               // 0x433A07
     CheckMenuItem(GetMenu(hwnd), 0xE9, MF_CHECKED);                 // 0x4339F3..
-    Sub417130(app);                                                 // 0x433A22
+    PicBgOverlayRefresh(app);                                                 // 0x433A22
 }
 
 }  // namespace mikudancestudio

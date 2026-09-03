@@ -24,6 +24,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -39,7 +40,7 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
     while (app->ModelSlot(slot) != nullptr) {
         ++slot;
         if (slot >= 100) {
-            app->state.bC = 1;
+            app->state.enterKeyState = 1;
             char text[256];
             if (app->EnglishUI() == 0) {
                 sprintf_s(text, 0x100, kMsgModelLimitJp, 100);
@@ -71,22 +72,22 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
             app->EnglishUI() == 0 ? mdl::Mdl(model)->name
                                   : mdl::Mdl(model)->nameEn;
         mdl::Mdl(model)->comboSelIndex = static_cast<std::uint8_t>(SendMessageA(
-            GetDlgItem(hwnd, 436), CB_ADDSTRING, 0,
+            GetDlgItem(hwnd, panel::kMainComboModel), CB_ADDSTRING, 0,
             reinterpret_cast<LPARAM>(name)));
-        SendMessageA(GetDlgItem(hwnd, 474), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(name));
-        SendMessageA(GetDlgItem(hwnd, 449), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(name));
         mdl::Mdl(model)->comboSelIndex2 = mdl::Mdl(model)->comboSelIndex;
-        SendMessageA(GetDlgItem(hwnd, 436), CB_SETCURSEL,
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL,
                      mdl::Mdl(model)->comboSelIndex, 0);
-        app->state.a042C =
+        app->state.mainModelComboSelection =
             mdl::Mdl(model)->comboSelIndex;
         app->SetSelectedModelSlot(static_cast<std::uint8_t>(slot));
-        mikudancestudio::mdl::Mdl(model)->displayState = app->state.v9eb7e;
+        mikudancestudio::mdl::Mdl(model)->displayState = app->state.characterTransparentMode;
 
         if (app->state.optflag[0] != 0) {
-            Sub44D610(app);                                   // 0x44D610
+            RebuildModelModePanel(app);                                   // 0x44D610
             app->state.optflag[0] = 0;
             PostLanguageSweep(app);                           // 0x42F1E0
             PostModelReload2(app);                            // 0x40D940
@@ -96,11 +97,11 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
             PostLanguageSweep(app);                           // 0x42F1E0
         }
 
-        SendMessageA(GetDlgItem(hwnd, 491), BM_SETCHECK, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 492), BM_SETCHECK, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 493), BM_SETCHECK, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 490), BM_SETCHECK, 1, 0);
-        SendMessageA(GetDlgItem(hwnd, 440), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneMoveRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRotateRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kShadowCheckbox), BM_SETCHECK, 1, 0);
         app->EditMode() = ViewportEditMode::Bone;
 
         HMENU menu = GetMenu(hwnd);
@@ -116,7 +117,7 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
         static const UINT kDisable[] = {0xEE, 0xEF, 0xF0, 0xF1, 0xF2};
         for (UINT item : kDisable)
             EnableMenuItem(GetMenu(hwnd), item, 1);
-        EnableWindow(GetDlgItem(hwnd, 424), 1);
+        EnableWindow(GetDlgItem(hwnd, panel::kExpandShrinkButton), 1);
 
         MENUITEMINFOA mii;
         std::memset(&mii, 0, sizeof(mii));
@@ -127,28 +128,28 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
         SetMenuItemInfoA(GetSubMenu(GetMenu(hwnd), 7), 2, FALSE, &mii);
         DrawMenuBar(hwnd);
 
-        EnableWindow(GetDlgItem(hwnd, 421), 0);
+        EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), 0);
         if (app->ClipboardCounts().morphs != 0 ||
             app->ClipboardCounts().displays != 0) {
-            EnableWindow(GetDlgItem(hwnd, 421), 1);
+            EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), 1);
             if (app->ClipboardCounts().bones != 0) {
-                EnableWindow(GetDlgItem(hwnd, 422), 1);
+                EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton), 1);
                 PostLanguageSweep2(app);                      // 0x40D070
                 return;
             }
         } else if (app->ClipboardCounts().bones != 0) {
-            EnableWindow(GetDlgItem(hwnd, 421), 1);
-            EnableWindow(GetDlgItem(hwnd, 422), 1);
+            EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), 1);
+            EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton), 1);
             PostLanguageSweep2(app);                          // 0x40D070
             return;
         }
-        EnableWindow(GetDlgItem(hwnd, 422), 0);
+        EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton), 0);
         PostLanguageSweep2(app);                          // 0x40D070
     } else {
-        void* v8 = app->ModelSlot(slot);
-        if (v8 != nullptr) {
-            ModelDispose(static_cast<unsigned char*>(v8));    // 0x48F830
-            free(v8);
+        void* oldModel = app->ModelSlot(slot);
+        if (oldModel != nullptr) {
+            ModelDispose(static_cast<unsigned char*>(oldModel));    // 0x48F830
+            free(oldModel);
             app->ModelSlot(slot) = nullptr;
         }
     }

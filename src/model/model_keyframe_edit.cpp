@@ -1,9 +1,13 @@
 // ===========================================================================
 // Model keyframe edit helpers used by the left frame editor.
-//   0x0049D410  append one selected display-key record to the undo slot
-//   0x004A0080  snapshot the current pose/selection before changing frame
-//   0x004A02C0  synchronize model manipulation controls
-//   0x004A1510  create an undo snapshot for selected display keys
+//   0x0049D410  append one touched bone-key record to the undo slot
+//               (was Sub49D410 -> AppendBoneKeyToUndo)
+//   0x004A0080  SnapshotPoseBeforeFrameChange (was Sub4A0080): snapshot
+//               the current pose/selection before changing frame
+//   0x004A02C0  SyncModelEditControls (was Sub4A02C0): synchronize model
+//               manipulation controls
+//   0x004A1510  SnapshotSelectedKeysForUndo (was Sub4A1510): create an
+//               undo snapshot for selected display keys
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -17,6 +21,7 @@
 
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -42,7 +47,7 @@ mdl::UndoRecord& RedoAt(unsigned char* model, int index) {
 void SetFrameEdit(unsigned char* model, int frame) {
     char text[0x100];
     sprintf_s(text, sizeof(text), "%d", frame);
-    const HWND edit = GetDlgItem(*reinterpret_cast<HWND*>(model), 417);
+    const HWND edit = GetDlgItem(*reinterpret_cast<HWND*>(model), panel::kCurrentFrameEdit);
     const int length = GetWindowTextLengthA(edit);
     SendMessageA(edit, EM_SETSEL, 0, length);
     SendMessageA(edit, EM_REPLACESEL, FALSE,
@@ -221,7 +226,7 @@ void BoneKeyOverflow(unsigned char* model) {
 
 }  // namespace
 
-void Sub49D410(unsigned char* model, int index) {
+void AppendBoneKeyToUndo(unsigned char* model, int index) {  // was Sub49D410, VA 0x0049D410
     if (model == nullptr)
         return;
     unsigned char* visited = mdl::Mdl(model)->keyVisitMap;
@@ -239,14 +244,14 @@ void Sub49D410(unsigned char* model, int index) {
     ++count;
 }
 
-int Sub4B38A0(unsigned char* model, int boneIndex,
+int RegisterBonePoseAtFrame(unsigned char* model, int boneIndex,  // was Sub4B38A0, VA 0x004B38A0
               std::uint32_t frame, int mode) {
     if (model == nullptr)
         return static_cast<int>(frame);
 
     const HWND hwnd = *reinterpret_cast<HWND*>(model);
     const bool autoInterpolation =
-        SendMessageA(GetDlgItem(hwnd, 530), BM_GETCHECK, 0, 0) == BST_CHECKED;
+        SendMessageA(GetDlgItem(hwnd, panel::kPhysicsFrameCheckbox), BM_GETCHECK, 0, 0) == BST_CHECKED;
     mdl::BoneKey* const keys = mdl::BoneKeys(model);
     mdl::BoneRecord* const bone = &mdl::Bones(model)[boneIndex];
 
@@ -264,8 +269,8 @@ int Sub4B38A0(unsigned char* model, int boneIndex,
 
     auto fill = [&](int recordIndex) {
         mdl::BoneKey& record = keys[recordIndex];
-        const bool usePhysicsPose = bone->f492 != 0 &&
-            (mode == 1 || (mode >= 2 && bone->f493 == 0));
+        const bool usePhysicsPose = bone->hasRigidBody != 0 &&
+            (mode == 1 || (mode >= 2 && bone->physicsDisabled == 0));
         if (usePhysicsPose) {
             std::memcpy(record.rotation, bone->ikBackup + 3,
                         sizeof(record.rotation));
@@ -280,17 +285,17 @@ int Sub4B38A0(unsigned char* model, int boneIndex,
                         sizeof(record.position));
         }
 
-        if (bone->f492 != 0) {
-            if (IsDlgButtonChecked(hwnd, 499) == BST_CHECKED) {
+        if (bone->hasRigidBody != 0) {
+            if (IsDlgButtonChecked(hwnd, panel::kPhysicsCheckbox) == BST_CHECKED) {
                 record.physicsDisabled = 0;
-                if (mode >= 2 && bone->f493 != 0)
-                    Sub499B50(model, boneIndex, 0);
-                bone->f493 = 0;
+                if (mode >= 2 && bone->physicsDisabled != 0)
+                    NotifyBonePhysicsMode(model, boneIndex, 0);
+                bone->physicsDisabled = 0;
             } else {
                 record.physicsDisabled = 1;
-                if (bone->f493 == 0 && mode >= 2)
-                    Sub499B50(model, boneIndex, 1);
-                bone->f493 = 1;
+                if (bone->physicsDisabled == 0 && mode >= 2)
+                    NotifyBonePhysicsMode(model, boneIndex, 1);
+                bone->physicsDisabled = 1;
             }
         }
 
@@ -306,7 +311,7 @@ int Sub4B38A0(unsigned char* model, int boneIndex,
 
     mdl::BoneKey& currentRecord = keys[current];
     if (currentRecord.frame == frame) {
-        Sub49D410(model, current);
+        AppendBoneKeyToUndo(model, current);
         fill(current);
     } else {
         int freeIndex = static_cast<int>(mdl::Mdl(model)->boneCount);
@@ -320,16 +325,16 @@ int Sub4B38A0(unsigned char* model, int boneIndex,
 
         mdl::BoneKey& fresh = keys[freeIndex];
         if (currentRecord.frame < frame) {
-            Sub49D410(model, current);
-            Sub49D410(model, freeIndex);
+            AppendBoneKeyToUndo(model, current);
+            AppendBoneKeyToUndo(model, freeIndex);
             currentRecord.next = static_cast<std::uint32_t>(freeIndex);
             fresh.previous = static_cast<std::uint32_t>(current);
         } else {
             const int previous = static_cast<int>(currentRecord.previous);
             mdl::BoneKey& previousRecord = keys[previous];
-            Sub49D410(model, previous);
-            Sub49D410(model, current);
-            Sub49D410(model, freeIndex);
+            AppendBoneKeyToUndo(model, previous);
+            AppendBoneKeyToUndo(model, current);
+            AppendBoneKeyToUndo(model, freeIndex);
             previousRecord.next = static_cast<std::uint32_t>(freeIndex);
             fresh.previous = static_cast<std::uint32_t>(previous);
             currentRecord.previous = static_cast<std::uint32_t>(freeIndex);
@@ -344,7 +349,7 @@ int Sub4B38A0(unsigned char* model, int boneIndex,
     return static_cast<int>(frame);
 }
 
-void Sub4C2080(unsigned char* model, int frame, int mode) {
+void RegisterSelectedBoneKeys(unsigned char* model, int frame, int mode) {  // was Sub4C2080, VA 0x004C2080
     if (model == nullptr)
         return;
 
@@ -358,8 +363,8 @@ void Sub4C2080(unsigned char* model, int frame, int mode) {
     }
 
     const HWND hwnd = *reinterpret_cast<HWND*>(model);
-    EnableWindow(GetDlgItem(hwnd, 400), TRUE);
-    EnableWindow(GetDlgItem(hwnd, 401), FALSE);
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
     AdvanceUndo(model);
 
     auto& undo = CurrentUndo(model);
@@ -386,12 +391,12 @@ void Sub4C2080(unsigned char* model, int frame, int mode) {
     for (std::int32_t i = 0; i < boneCount; ++i) {
         if (selected[i] == 0)
             continue;
-        Sub4B38A0(model, i, static_cast<std::uint32_t>(frame), mode);
+        RegisterBonePoseAtFrame(model, i, static_cast<std::uint32_t>(frame), mode);
         secondary[i] = 0;
     }
 }
 
-void Sub4A0080(unsigned char* model, int frame) {
+void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame) {  // was Sub4A0080
     if (model == nullptr)
         return;
     const std::int32_t count = mdl::Mdl(model)->boneCount;
@@ -410,7 +415,7 @@ void Sub4A0080(unsigned char* model, int frame) {
     SnapshotPose(model, undo);
 }
 
-void Sub4A1510(unsigned char* model, int frame) {
+void SnapshotSelectedKeysForUndo(unsigned char* model, int frame) {  // was Sub4A1510
     if (model == nullptr)
         return;
     mdl::BoneKey* const keys = mdl::BoneKeys(model);
@@ -427,8 +432,8 @@ void Sub4A1510(unsigned char* model, int frame) {
         return;
 
     const HWND hwnd = *reinterpret_cast<HWND*>(model);
-    EnableWindow(GetDlgItem(hwnd, 0x190), TRUE);
-    EnableWindow(GetDlgItem(hwnd, 0x191), FALSE);
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
 
     AdvanceUndo(model);
     auto& undo = CurrentUndo(model);
@@ -444,11 +449,11 @@ void Sub4A1510(unsigned char* model, int frame) {
                 sizeof(mdl::Mdl(model)->keyVisitMap));
     for (std::size_t index = 0; index < mdl::kBoneKeyCapacity; ++index) {
         if (keys[index].allocated != 0)
-            Sub49D410(model, index);
+            AppendBoneKeyToUndo(model, index);
     }
 }
 
-// Original inline block 0x43F15E..0x43F60D in Sub43E970.  Sub4316B0 has
+// Original inline block 0x43F15E..0x43F60D in Sub43E970.  DeleteMarkedKeyframes (was Sub4316B0) has
 // just made the deletion snapshot at the current cursor.  Type 4 tells
 // Undo/Redo to chain that entry with the type-2 snapshot opened here for the
 // transformed records which are about to be inserted.
@@ -460,8 +465,8 @@ void BeginRangeScaleBoneUndo(unsigned char* model, int frame,
     CurrentUndo(model).operation = 4;
 
     const HWND hwnd = *reinterpret_cast<HWND*>(model);
-    EnableWindow(GetDlgItem(hwnd, 400), TRUE);
-    EnableWindow(GetDlgItem(hwnd, 401), FALSE);
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
     AdvanceUndo(model);
 
     auto& undo = CurrentUndo(model);
@@ -480,7 +485,7 @@ void BeginRangeScaleBoneUndo(unsigned char* model, int frame,
 // VA 0x004A09E0: delete every marked model-mode key.  The three key arrays
 // retain their fixed-capacity slots; non-root records are unlinked and reset,
 // while root records keep their track-head role with default values.
-void Sub4A09E0(unsigned char* model, int frame) {
+void DeleteMarkedModelKeys(unsigned char* model, int frame) {  // was Sub4A09E0, VA 0x004A09E0
     if (model == nullptr) return;
     mdl::BoneKey* const boneKeys = mdl::BoneKeys(model);
     mdl::MorphKey* const morphKeys = mdl::MorphKeys(model);
@@ -495,8 +500,8 @@ void Sub4A09E0(unsigned char* model, int frame) {
     }
     if (selectedBoneKeys != 0) {
         const HWND hwnd = *reinterpret_cast<HWND*>(model);
-        EnableWindow(GetDlgItem(hwnd, 400), TRUE);
-        EnableWindow(GetDlgItem(hwnd, 401), FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+        EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
         AdvanceUndo(model);
         auto& undo = CurrentUndo(model);
         undo.operation = 2;
@@ -556,16 +561,16 @@ void Sub4A09E0(unsigned char* model, int frame) {
 
     const HWND hwnd = *reinterpret_cast<HWND*>(model);
     const bool autoInterpolation =
-        SendMessageA(GetDlgItem(hwnd, 530), BM_GETCHECK, 0, 0) == BST_CHECKED;
+        SendMessageA(GetDlgItem(hwnd, panel::kPhysicsFrameCheckbox), BM_GETCHECK, 0, 0) == BST_CHECKED;
     mdl::BoneRecord* const bones = mdl::Bones(model);
     for (std::size_t i = 0; i < mdl::kBoneKeyCapacity; ++i) {
         mdl::BoneKey& rec = boneKeys[i];
         if (rec.allocated == 0) continue;
         const int prev = static_cast<int>(rec.previous);
         const int next = static_cast<int>(rec.next);
-        Sub49D410(model, static_cast<int>(i));
-        Sub49D410(model, prev);
-        Sub49D410(model, next);
+        AppendBoneKeyToUndo(model, static_cast<int>(i));
+        AppendBoneKeyToUndo(model, prev);
+        AppendBoneKeyToUndo(model, next);
         rec.frame = 0;
         if (i >= boneCount) {
             boneKeys[prev].next = static_cast<std::uint32_t>(next);
@@ -582,20 +587,20 @@ void Sub4A09E0(unsigned char* model, int frame) {
         }
         if (i >= boneCount) rec.next = 0;
         rec.previous = 0;
-        if (i < boneCount && bones[i].f492 != 0)
+        if (i < boneCount && bones[i].hasRigidBody != 0)
             rec.physicsDisabled = 0;
     }
 }
 
 // VA 0x004A1870: undo one ring entry, capturing the displaced state into the
 // parallel redo ring at 0x2A34. Type 4 entries are chained recursively by MMD.
-void Sub4A1870(unsigned char* model, std::int32_t* frame) {
+void UndoModelEdit(unsigned char* model, std::int32_t* frame) {  // was Sub4A1870, VA 0x004A1870
     if (model == nullptr || frame == nullptr) return;
     int cursor = static_cast<int>(mdl::Mdl(model)->undoState[0]);
     auto& undo = UndoAt(model, cursor);
     const int type = undo.operation;
     if (type == 0) {
-        EnableWindow(GetDlgItem(*reinterpret_cast<HWND*>(model), 400), FALSE);
+        EnableWindow(GetDlgItem(*reinterpret_cast<HWND*>(model), panel::kUndoButton), FALSE);
         mdl::Mdl(model)->undoDirty = 0;
         return;
     }
@@ -643,12 +648,12 @@ void Sub4A1870(unsigned char* model, std::int32_t* frame) {
     cursor = cursor == 0 ? 29 : cursor - 1;
     mdl::Mdl(model)->undoState[0] = cursor;
     if (UndoAt(model, cursor).operation == 4)
-        Sub4A1870(model, frame);
+        UndoModelEdit(model, frame);
 }
 
 // VA 0x004A2490: redo the parallel-ring entry selected by advancing the
 // cursor. Type 2/4 restores complete 60-byte key records byte-for-byte.
-void Sub4A2490(unsigned char* model, std::int32_t* frame) {
+void RedoModelEdit(unsigned char* model, std::int32_t* frame) {  // was Sub4A2490, VA 0x004A2490
     if (model == nullptr || frame == nullptr) return;
     int cursor = static_cast<int>(mdl::Mdl(model)->undoState[0]) + 1;
     if (cursor >= 30) cursor = 0;
@@ -656,7 +661,7 @@ void Sub4A2490(unsigned char* model, std::int32_t* frame) {
     auto& redo = RedoAt(model, cursor);
     const int type = redo.operation;
     if (type == 0) {
-        EnableWindow(GetDlgItem(*reinterpret_cast<HWND*>(model), 401), FALSE);
+        EnableWindow(GetDlgItem(*reinterpret_cast<HWND*>(model), panel::kRedoButton), FALSE);
         mdl::Mdl(model)->redoDirty = 0;
         return;
     }
@@ -676,10 +681,10 @@ void Sub4A2490(unsigned char* model, std::int32_t* frame) {
         SetFrameEdit(model, *frame);
     }
     if (UndoAt(model, cursor).operation == 4)
-        Sub4A2490(model, frame);
+        RedoModelEdit(model, frame);
 }
 
-void Sub4A4A00(unsigned char* model) {  // VA 0x004A4A00
+void ResetDisplayKeyCursor(unsigned char* model) {  // VA 0x004A4A00, was Sub4A4A00
     if (model == nullptr)
         return;
     mdl::DisplayKey* const displayKeys = mdl::DisplayKeys(model);
@@ -693,17 +698,17 @@ void Sub4A4A00(unsigned char* model) {  // VA 0x004A4A00
     }
 }
 
-void Sub4A02C0(unsigned char* model) {
+void SyncModelEditControls(unsigned char* model) {  // was Sub4A02C0
     if (model == nullptr)
         return;
     const HWND hwnd = *reinterpret_cast<HWND*>(model);
-    SendMessageA(GetDlgItem(hwnd, 0x1B7), BM_SETCHECK,
+    SendMessageA(GetDlgItem(hwnd, panel::kModelVisibleCheckbox), BM_SETCHECK,
                  mikudancestudio::mdl::Mdl(model)->loadComplete != 0 ? BST_CHECKED : BST_UNCHECKED, 0);
 
     mdl::IkChain* chains = mdl::IkChains(model);
     if (chains != nullptr) {
         const LRESULT sel =
-            SendMessageA(GetDlgItem(hwnd, 0x1BB), CB_GETCURSEL, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kIkChainCombo), CB_GETCURSEL, 0, 0);
         const bool enabled = chains[sel].enabled != 0;
         CheckRadioButton(hwnd, 0x1BC, 0x1BD, enabled ? 0x1BC : 0x1BD);
     }
@@ -730,7 +735,7 @@ void Sub4A02C0(unsigned char* model) {
 // Exported entry for the frame-line delete command (0x43A650) - the body
 // above is the verbatim port of VA 0x0049D4D0 but lives in the anonymous
 // namespace.  VA 0x0049D4D0.
-void Sub49D4D0(unsigned char* model, int index, int lane) {
+void RebuildBoneKeyInterpolation(unsigned char* model, int index, int lane) {  // was Sub49D4D0, VA 0x0049D4D0
     RebuildBoneInterpolation(model, index, lane);
 }
 

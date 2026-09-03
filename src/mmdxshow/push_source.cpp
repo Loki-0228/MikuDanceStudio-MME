@@ -153,10 +153,11 @@ ULONG STDMETHODCALLTYPE CPushSourceDIBSq::Release()
 // converts the obj+0x70 sub-object pointer the binary code sees).
 // =============================================================================
 
-// VA 0x10001730 - IPushSource slot +0x0C - SetBitmapInfo.
+// VA 0x10001730 - IPushSource slot +0x0C - SetBitmapInfo
+// (was PushSource_v0C_SetBitmapInfo).
 // Binary ABI: __stdcall(this, const void* pBIH, int n, float fps), retn 0x10.
-HRESULT CPushSourceDIBSq::PushSource_v0C_SetBitmapInfo(const void* pBitmapInfo,
-                                                       int n, float fps)
+HRESULT CPushSourceDIBSq::SetBitmapInfo(const void* pBitmapInfo,
+                                        int n, float fps)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
@@ -181,9 +182,10 @@ HRESULT CPushSourceDIBSq::PushSource_v0C_SetBitmapInfo(const void* pBitmapInfo,
     return S_OK;                           // 0
 }
 
-// VA 0x100017D0 - IPushSource slot +0x10 - GetStreamingState.
+// VA 0x100017D0 - IPushSource slot +0x10 - GetStreamingState
+// (was PushSource_v10_GetStreamingState).
 // Binary ABI: __stdcall(this, BYTE* pState), retn 8; pState is NOT checked.
-HRESULT CPushSourceDIBSq::PushSource_v10_GetStreamingState(void* pState)
+HRESULT CPushSourceDIBSq::GetStreamingState(void* pState)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
@@ -193,10 +195,11 @@ HRESULT CPushSourceDIBSq::PushSource_v10_GetStreamingState(void* pState)
     return S_OK;
 }
 
-// VA 0x10001800 - IPushSource slot +0x14 - StartStreaming.
+// VA 0x10001800 - IPushSource slot +0x14 - StartStreaming
+// (was PushSource_v14_StartStreaming).
 // Binary ABI: __stdcall(this, DWORD dwBits), retn 8; dwBits is stored verbatim
 // at pin+0x5B4 (0x10001828: mov [ecx+5B4h], edx).
-HRESULT CPushSourceDIBSq::PushSource_v14_StartStreaming(DWORD dwBits)
+HRESULT CPushSourceDIBSq::StartStreaming(DWORD dwBits)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
@@ -209,10 +212,11 @@ HRESULT CPushSourceDIBSq::PushSource_v14_StartStreaming(DWORD dwBits)
     return S_OK;
 }
 
-// VA 0x10001840 - IPushSource slot +0x18 - BeginStreaming.
+// VA 0x10001840 - IPushSource slot +0x18 - BeginStreaming
+// (was PushSource_v18_BeginStreaming).
 // Latches pin+0x5B3 — from here on every IPushSource method returns E_FAIL
 // until the object is destroyed.
-HRESULT CPushSourceDIBSq::PushSource_v18_BeginStreaming(void)
+HRESULT CPushSourceDIBSq::BeginStreaming(void)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
@@ -224,11 +228,12 @@ HRESULT CPushSourceDIBSq::PushSource_v18_BeginStreaming(void)
     return S_OK;
 }
 
-// VA 0x10001880 - IPushSource slot +0x1C - GetRate.
+// VA 0x10001880 - IPushSource slot +0x1C - GetRate
+// (was PushSource_v1C_GetRate).
 // Binary ABI: __stdcall(this, float* pRate), retn 8; writes exactly 4 bytes
 // (fstp dword) from .rdata 0x10008308 = 1.02f — the EXE version handshake
 // (requires >= 1.01f).
-HRESULT CPushSourceDIBSq::PushSource_v1C_GetRate(float* pRate)
+HRESULT CPushSourceDIBSq::GetRate(float* pRate)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
@@ -246,23 +251,14 @@ HRESULT CPushSourceDIBSq::PushSource_v1C_GetRate(float* pRate)
 // primary-vtable dispatch; the MSVC adjustor thunk does that rebase for us.
 // =============================================================================
 
-// Primary-vtable slot +0x20 dispatch (binary 0x10003a14: mov eax,[ecx-10h];
-// mov edx,[eax+20h]) — the "GetSetupData" slot.  In this DLL every class
-// resolves it to 0x100011D0, which just returns 0 (NULL), so BOTH methods
-// below bail out with S_FALSE before touching any registry; real registration
-// runs exclusively through DllRegisterServer -> AMovieDllRegisterServer2
-// (IFilterMapper2 / IFilterMapper dual path, dll_main.cpp).
-static const MMDXSHOW_FILTER_SETUP* CallGetSetupData(CBaseFilter* pFilter)
-{
-    void** vtbl = *reinterpret_cast<void***>(pFilter);      // primary vtable
-    typedef void* (__thiscall *Fn_t)(void*);
-    return (const MMDXSHOW_FILTER_SETUP*)(((Fn_t)vtbl[8])(pFilter));
-}
-
-// VA 0x10003A10 / 0x10003A80 - IAMovieSetup::Register / Unregister are
-// defined in source_base.cpp (CBaseFilter owns the slots per the header);
-// both early-out with S_FALSE here because the GetSetupData slot (primary
-// +0x20 -> 0x100011D0) always returns NULL in this DLL.
+// Primary-vtable slot +0x20 (binary 0x10003a14: mov eax,[ecx-10h];
+// mov edx,[eax+20h]) is the GetSetupData slot, declared as a proper virtual
+// on CBaseFilter (was Filter_v20); source_base.cpp's Register/Unregister
+// call it directly.  In this DLL every class resolves it to 0x100011D0,
+// which just returns NULL, so both methods bail out with S_FALSE before
+// touching any registry; real registration runs exclusively through
+// DllRegisterServer -> AMovieDllRegisterServer2 (IFilterMapper2 /
+// IFilterMapper dual path, dll_main.cpp).
 
 // =============================================================================
 // Construction / destruction

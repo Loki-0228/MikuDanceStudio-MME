@@ -53,11 +53,11 @@
 //             ResetAppState + return (NO HandleWindowSize); 60-byte track
 //             records with the transparency quirk byte)
 //   0x45C390  current accessory UI (CB_SETCURSEL 0x1D7, parent-model frame
-//             entries with the (<7 || ==8) filter, Sub4134E0)
+//             entries with the (<7 || ==8) filter, SyncAccessoryEditPanel)
 //   0x45C48C  config block: 0x980/0x97C/0x9E16C, frame edit 0x1A1, refresh
 //             chain, radio 0x914 switch (v1 map: 0->0x1EA, 1->0x1EB,
 //             2->none, 3->0x1ED, 4->0x1EC), checkbox bytes 0x340..0x342/
-//             0x9ED99 + edits 0x199/0x19A, Sub40AE00, wave path (0xD0),
+//             0x9ED99 + edits 0x199/0x19A, ClearTimelineAndCurveDCs, wave path (0xD0),
 //             AVI block (0x91C read-before-test; w1/w2/w3 -> 9E414/9E418/
 //             9E41C), picture block (9E428; p1/p2/p3 -> 9E434/9E438/9E43C),
 //             0x31E/0x31D/0x918 menu checks with owner checkboxes
@@ -70,11 +70,11 @@
 //             physics-mode menu, gravity reads, A0CD4, A0D30/A0188 +
 //             selection track 0x37C 24-byte records, model 0x37C0 bytes,
 //             A0198..A01A0 color sweep, 0x11A, camera parent reregister +
-//             A0430/A0434 + Sub410040 + 0x1C2 strcmp loop, 16 config dwords
+//             A0430/A0434 + RefillBoneRegisterCombo + 0x1C2 strcmp loop, 16 config dwords
 //             0xA0438..0xA0474, 0xF7/0x217, A0478, 0x11D scene +0xD4,
 //             per-model 0x2D7D byte sweep)
 //   0x45E11D  _close(fd)
-//   0x45E149  success tail: shadow-mode gate (Sub411B90), menu 0x117,
+//   0x45E149  success tail: shadow-mode gate (RefreshSelfShadowPanel), menu 0x117,
 //             BM_SETCHECK 0x1B8, light direction to the physics scene
 //             (D3DXVec3Normalize + vtable[13]), window title
 //             ("MikuMikuDance [%s]"), two key-chain integrity boxes
@@ -82,9 +82,15 @@
 //             v1 compares the chain link against 0, not the root index),
 //             combo 0x1B2 population (camera/light/s shadow/gravity +
 //             accessory names; else model re-select -> 0x910 +
-//             PostLoadInit), Sub4290F0 + InvalidateRect(child), edit-mode
-//             repaint (Sub411070 + PanelPaint), InvalidateRect, Sub442EB0,
+//             PostLoadInit), RefreshSeparateWindowViewport + InvalidateRect(child), edit-mode
+//             repaint (RefreshLightPanel + PanelPaint), InvalidateRect, RelayoutSidebarControls,
 //             9EDB5=1, A442C=1, PostViewRefresh
+//
+// Split: the body is divided into static LoadSceneV1_* segment functions
+// along this VA map (each carries its address-range banner); the shared
+// frame - window handles, slot arrays, scratch buffers, track pointers -
+// lives in PmmV1LoadContext.  The read-gated tail stays ONE function
+// with the original nesting.
 //
 // Deviations: the v1-only quirks are kept and commented inline (inverted
 //   0x1BE checkbox sense, duplicated +0x14C read, radio case 2 leaving all
@@ -112,44 +118,20 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/scene_ownership.hpp"
+#include "mikudancestudio/panel_controls.hpp"
+
+// Shared PMM record readers, the Rd helper and the byte-identical halves of
+// the loader string tables live here (see the header comment for the
+// v1/v2 parameterization points).
+#include "pmm_io_common.hpp"
 
 #pragma comment(lib, "avifil32.lib")
 
 namespace mikudancestudio {
 
-namespace {
-inline int Rd(int fd, void* buf, unsigned int count);
-void ReadV1BoneKey(int fd, mdl::BoneKey& key) {
-    Rd(fd, &key.frame, 4); Rd(fd, &key.previous, 4); Rd(fd, &key.next, 4);
-    for (int lane = 0; lane < 4; ++lane) {
-        Rd(fd, &key.interpolation[lane], 1);
-        Rd(fd, &key.interpolation[lane + 4], 1);
-        Rd(fd, &key.interpolation[lane + 8], 1);
-        Rd(fd, &key.interpolation[lane + 12], 1);
-    }
-    Rd(fd, key.position, sizeof key.position);
-    Rd(fd, key.rotation, sizeof key.rotation);
-    Rd(fd, &key.allocated, 1);
-}
-
-void ReadV1MorphKey(int fd, mdl::MorphKey& key) {
-    Rd(fd, &key.frame, 4); Rd(fd, &key.previous, 4); Rd(fd, &key.next, 4);
-    Rd(fd, &key.value, 4); Rd(fd, &key.allocated, 1);
-}
-}  // namespace
+using namespace pmm_io;
 
 namespace {
-
-// AVIFIL32 imports used by the teardown.
-extern "C" {
-__declspec(dllimport) std::int32_t __stdcall AVIStreamGetFrameClose(void* pg);
-__declspec(dllimport) std::int32_t __stdcall AVIStreamRelease(void* pavi);
-__declspec(dllimport) std::int32_t __stdcall AVIFileRelease(void* pfile);
-}
-
-inline int Rd(int fd, void* buf, unsigned int count) {
-    return _read(fd, buf, count);
-}
 
 // Model-relative field access (offsets kept as verified literals).
 inline std::int32_t& M32(unsigned char* m, std::size_t o) {
@@ -169,37 +151,14 @@ inline unsigned char* AllocBytes(std::size_t n) {
     return static_cast<unsigned char*>(std::malloc(n));
 }
 
-// ---- UI strings (wide .rdata mirrors; VA recorded) -----------------------
-const wchar_t kWNashi[]    = L"\x306A\x3057";                    // 0x52D360
-const wchar_t kWGround[]   = L"\x5730\x9762";                    // 0x52D368
-const wchar_t kWCamLight[] =
-    L"\xFF76\xFF92\xFF97\xFF65\x7167\x660E\xFF65"
-      L"\xFF71\xFF78\xFF7E\xFF7B\xFF98";                         // 0x52D370
-const wchar_t kWLight[]    = L"\x7167\x660E";                    // 0x52D390
-const wchar_t kWSelfSh[]   = L"\x30BB\x30EB\x30D5\x5F71";        // 0x52D398
-const wchar_t kWGravity[]  = L"\x91CD\x529B";                    // 0x52D3A4
-const wchar_t kWAll[]      = L"\x3059\x3079\x3066";              // 0x52D3AC
-const wchar_t kWViewAng[]  = L"\x8996\x91CE\x89D2";              // 0x52D3B4
-const wchar_t kWDist[]     = L"\x8DDD\x3000\x96E2";              // 0x52D3BC
-const wchar_t kWXMove[]    = L"\xFF58\x79FB\x52D5";              // 0x52D3D4
-const wchar_t kWYMove[]    = L"\xFF59\x79FB\x52D5";              // 0x52D3CC
-const wchar_t kWZMove[]    = L"\xFF5A\x79FB\x52D5";              // 0x52D3C4
-const wchar_t kWRot[]      = L"\x56DE\x3000\x8EE2";              // 0x52D470
-const wchar_t kWCamera[]   = L"\x30AB\x30E1\x30E9";              // 0x52B784
-const wchar_t kWOpenFile[] = L"\x30D5\x30A1\x30A4\x30EB\x3092"
-                             L"\x958B\x304F";                    // 0x52DC84
-const wchar_t kWUserModel[] = L"UserFile\\Model";
-const wchar_t kWUserAcc[]   = L"UserFile\\Accessory";
-const wchar_t kWFilterModel[] =
-    L"All Model files(*.pmd,*.pmx)\0*.pmd;*.pmx\0";              // 0x52DCE0
-const wchar_t kWFilterAccJp[] =
-    L"\x8AAD\x8FBC\x53EF\x80FD\x30D5\x30A1\x30A4\x30EB"
-      L"(*.x,*.vac)\0*.x;*.vac\0";                               // 0x52D948
-const wchar_t kWFilterAccEn[] =
-    L"accessory file(*.x,*.vac)\0*.x;*.vac\0";
-const char kNon[] = "non";                                       // 0x52D38C
+// ---- UI strings: see pmm_io_common.hpp (byte-identical halves; the wide
+// .rdata mirrors and kNon moved there). ------------------------------------
 
 
+// Porting-era trace under MIKUDANCESTUDIO_PMM_TRACE_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call sites
+// valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void LogV1Stage(const char* stage, long pos, std::int32_t a = 0,
                 std::int32_t b = 0) {
     const char* dir = std::getenv("MIKUDANCESTUDIO_PMM_TRACE_DIR");
@@ -214,6 +173,10 @@ void LogV1Stage(const char* stage, long pos, std::int32_t a = 0,
             static_cast<long>(a), static_cast<long>(b));
     fclose(stream);
 }
+#else
+inline void LogV1Stage(const char*, long, std::int32_t = 0,
+                       std::int32_t = 0) {}
+#endif
 
 constexpr std::size_t kTrackCam =
     sizeof(mdl::CameraKey) * mdl::kTimelineKeyCapacity;      // 0xCD140
@@ -231,13 +194,17 @@ constexpr std::size_t kTrackAcc =
 namespace {
 
 // ---- SJIS box texts (byte-exact; VA recorded) ----------------------------
-const char kJpChainCapPhys[] =
-    "\x95\x5C\x8E\xA6\xA5IK\xA5\x8AO\x90\x65\x83\x66\x81[\x83"
-    "^\x88\xD9\x8F\xED";   // 0x52D82C
+// kJpChainCapPhys / kJpCannotOpenModel / kJpOpenCaption are byte-identical
+// to their v2 copies and live in pmm_io_common.hpp.  Wave5-C IDA verdict
+// (x86 original): the four kept below are byte-identical to their v2
+// copies too - single .rdata originals (0x52D770 / 0x52D788 / 0x52D848 /
+// 0x52DAE0) referenced by both loader bodies (v1 sites 0x45E4FC /
+// 0x45E4DA / 0x45E37A / 0x45B9B7; v2 sites 0x458B54 / 0x458B32 /
+// 0x458A22 / 0x455B8C); the v2 file's former 以下 / ブ / 替 / no-し直
+// readings were transcription errors, corrected in Wave5-C.  Per-body
+// duplicates stay until the loader split lands, then belong in
+// pmm_io_common.hpp.
 const char kJpChainCapDisp[] = "\x83Z\x81[\x83u\x83\x66\x81[\x83^\x82\xCC\x88\xD9\x8F\xED";   // 0x52D770
-// Same byte content as the v2 kJpChainFmtPhys constant (the string
-// object starts at 0x52D788; the two preceding bytes belong to a
-// separate empty string).
 const char kJpChainFmtPhys[] =
     "\x22%s\x22\x83\x82\x83\x66\x83\x8B\x81\x41\x83{\x81[\x83"
     "\x93\x22%s\x22\x82\xCC\x83t\x83\x8C\x81[\x83\x80\x83\x66"
@@ -279,10 +246,6 @@ const char kJpModelFailFmt[] =
     "\x94\x5C\x90\xAB\x82\xAA\x82\xA0\x82\xE8\x82\xDC\x82\xB7"
     "\x82\xCC\x82\xC5\x92\x8D\x88\xD3\x82\xB5\x82\xC4\x89\xBA"
     "\x82\xB3\x82\xA2)";   // 0x52DE00
-const char kJpCannotOpenModel[] =
-    "\x83\x82\x83\x66\x83\x8B\x83t\x83@\x83\x43\x83\x8B\x93\xC7"
-    "\x82\xDD\x8D\x9E\x82\xDD\x8E\xB8\x94s";   // 0x52DB64
-const char kJpOpenCaption[] = "\x83t\x83@\x83\x43\x83\x8B\x93\xC7\x8D\x9E";   // 0x52DB80
 const char kJpCannotOpenAcc[] =
     "\x83\x41\x83N\x83Z\x83T\x83\x8A\x83t\x83@\x83\x43\x83\x8B"
     "(%s)\x82\xAA\x8C\xA9\x82\xC2\x82\xA9\x82\xE8\x82\xDC\x82"
@@ -292,21 +255,71 @@ const char kJpCannotOpenAcc[] =
 
 }  // namespace
 
-void LoadSceneV1(MMDApp* app, int fd) {
-    auto* s = app;
+namespace {
+
+// Per-load frame shared by the LoadSceneV1 segment functions: the
+// original keeps every one of these in sub_458F80's inline v1 body
+// frame; the split passes them as one context (same pattern as the v2
+// loader's PmmV2LoadContext).
+struct PmmV1LoadContext {
+    MMDApp* s;
+    HWND main;
+    PathResolutionWorkspace* paths;
+    D3DRenderer* wrap;
+    unsigned char** slots;
+    mdl::AccessoryRecord** accs;
+    mdl::AccessoryKey** accTracks;
+    // shared scratch buffers (the 0x218/0x318/0x380/0xdb8 frame slots of
+    // the original stack)
+    char text[0x100];          // name/EM_REPLACESEL scratch
+    char box[0x3E8];           // 1000-byte message-box text (0x459994)
+    char mbPath[0x100];        // accessory/background path scratch
+    wchar_t widePath[0x100];   // model path
+    wchar_t wideTmp[0x100];    // accessory path
+    wchar_t ofnFile[0x100];    // GetOpenFileName buffer
+    wchar_t ofnTitle[0x100];
+    wchar_t wndText[0x100];    // window-title sprintf target
+    char lbText[0x100];        // CB_GETLBTEXT buffer
+    // the re-allocated global tracks this body reads back (0x45AA93
+    // segment; the gravity track stays local - nothing reads it)
+    mdl::CameraKey* cameraKeys = nullptr;
+    mdl::LightKey* lightKeys = nullptr;
+    mdl::SelfShadowKey* selfShadowKeys = nullptr;
+
+    explicit PmmV1LoadContext(MMDApp* app)
+        : s(app),
+          main(reinterpret_cast<HWND>(app->Hwnd())),
+          paths(&app->PathWorkspace()),
+          wrap(app->Renderer()),
+          slots(app->ModelSlots()),
+          accs(app->AccessorySlots()),
+          accTracks(app->AccessoryKeyTracks()) {}
+};
+
+// common abort for a cancelled locate-file dialog (0x45A7C5):
+// close + ResetAppState + HandleWindowSize + return; the split-out twin
+// of the abortLoad lambda the inline body carried.
+static void AbortV1Load(MMDApp* s, int fd) {
+    _close(fd);                                              // 0x45A7CA
+    ResetAppState(s);                                        // 0x45A7D4
+    HandleWindowSize(s);                                     // 0x45A7DB
+}
+
+// ---- 0x45916D..0x459630: dispose + scene-state reset + menu/checkbox
+// reset + AVI teardown + header-field reads + UI clear run -------------
+static void LoadSceneV1_DisposeAndHeader(PmmV1LoadContext& ctx, int fd) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    char* const text = ctx.text;
 
     // ---- dispose models + tracks + accessories (0x45916D..0x459257) ------
-    unsigned char** const slots = s->ModelSlots();
     ReleaseSceneModels(*s);                                      // 0x45916D
     ReleaseGlobalTimelineTracks(*s);                              // 0x459196
-    mdl::AccessoryRecord** const accs = s->AccessorySlots();
-    mdl::AccessoryKey** const accTracks = s->AccessoryKeyTracks();
     ReleaseAccessoriesAndTracks(*s);                              // 0x459221
-
     // ---- scene-state reset run (0x45922D..0x4592F5) ----------------------
     s->state.accessoryRenderSplitOrder = 0;
     s->SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
-    s->state.a042C = 0;
+    s->state.mainModelComboSelection = 0;
     s->state.cameraParentModel = -1;
     s->state.cameraParentBone = 0;
     s->state.cameraAttachmentBasis[14] = 0;               // 0xA0470
@@ -325,27 +338,10 @@ void LoadSceneV1(MMDApp* app, int fd) {
     s->state.cameraAttachmentBasis[10] = 1.0f;                     // 0xA0460
     s->state.cameraAttachmentBasis[5] = 1.0f;                 // 0xA044C
     s->state.cameraAttachmentBasis[0] = 1.0f;                    // 0xA0438
-    s->state.v9ed98 = 0;                // 0x9ED98
-
-    HWND const main = reinterpret_cast<HWND>(s->Hwnd());
-    PathResolutionWorkspace& paths = s->PathWorkspace();
-    D3DRenderer* const wrap = s->Renderer();
-
-    // shared scratch buffers (the 0x218/0x318/0x380/0xdb8 frame slots of
-    // the original stack)
-    char text[0x100];          // name/EM_REPLACESEL scratch
-    char box[0x3E8];           // 1000-byte message-box text (0x459994)
-    char mbPath[0x100];        // accessory/background path scratch
-    wchar_t widePath[0x100];   // model path
-    wchar_t wideTmp[0x100];    // accessory path
-    wchar_t ofnFile[0x100];    // GetOpenFileName buffer
-    wchar_t ofnTitle[0x100];
-    wchar_t wndText[0x100];    // window-title sprintf target
-    char lbText[0x100];        // CB_GETLBTEXT buffer
-
+    s->state.followCameraEnabled = 0;                // 0x9ED98
     // ---- menu/checkbox reset (0x4592F6..0x45933F) ------------------------
     CheckMenuItem(GetMenu(main), 0xF7, 0);                       // 0x459316
-    SendMessageA(GetDlgItem(main, 0x217), BM_SETCHECK, 0, 0);    // 0x45933A
+    SendMessageA(GetDlgItem(main, panel::kFollowCameraCheckbox), BM_SETCHECK, 0, 0);    // 0x45933A
 
     s->state.physicsInterval = 0x3C3851ECu;       // 0x45934D
     s->state.selfShadowMode = 0;                 // 0x45935C
@@ -394,19 +390,29 @@ void LoadSceneV1(MMDApp* app, int fd) {
     strcpy_s(text, 0x100, "");                                   // 0x459526
 
     // ---- UI clear run (0x45953F..0x459630) -------------------------------
-    for (int id = 0x1DE; id <= 0x1E4; ++id) {
+    for (int id = 478; id <= 484; ++id) {  // 0x1DE..0x1E4 edits
         HWND item = GetDlgItem(main, id);
         const int len = GetWindowTextLengthA(item);
         SendMessageA(item, EM_SETSEL, 0, len);
         SendMessageA(item, EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(text));
     }
-    SendMessageA(GetDlgItem(main, 0x1B8), BM_SETCHECK, 0, 0);     // 0x4595A8
-    SendMessageA(GetDlgItem(main, 0x1B9), BM_SETCHECK, 0, 0);     // 0x4595C2
-    SendMessageA(GetDlgItem(main, 0x1DD), BM_SETCHECK, 0, 0);     // 0x4595DC
+    SendMessageA(GetDlgItem(main, panel::kShadowCheckbox), BM_SETCHECK, 0, 0);     // 0x4595A8
+    SendMessageA(GetDlgItem(main, panel::kAddBlendCheckbox), BM_SETCHECK, 0, 0);     // 0x4595C2
+    SendMessageA(GetDlgItem(main, panel::kAccessoryAddBlendCheckbox), BM_SETCHECK, 0, 0);     // 0x4595DC
     CheckMenuItem(GetMenu(main), 0xFE, 0);                       // 0x4595F3
     EnableMenuItem(GetMenu(main), 0x120, 1);                     // 0x45960E
     EnableMenuItem(GetMenu(main), 0x121, 1);                     // 0x459629
+}
+
+
+// ---- 0x45964A..0x459841: 9ED9A=0, slot byte, model count, combo resets
+// + the per-model 20-byte name pre-pass; returns the model count ------
+static unsigned char LoadSceneV1_ModelPrePass(PmmV1LoadContext& ctx,
+                                            int fd) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    char* const text = ctx.text;
 
     // ---- model count / combo resets (0x45964A..0x45979E) ----------------
     s->state.projectedShadowBlendEnabled = 0;                   // 0x459640
@@ -414,57 +420,63 @@ void LoadSceneV1(MMDApp* app, int fd) {
     unsigned char modelCount = 0;
     Rd(fd, &modelCount, 1);                                      // 0x45965B
 
-    SendMessageA(GetDlgItem(main, 0x1B4), CB_RESETCONTENT, 0, 0); // 0x459675
+    SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_RESETCONTENT, 0, 0); // 0x459675
     if (s->EnglishUI() == 0)
-        SendMessageW(GetDlgItem(main, 0x1B4), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(main, panel::kMainComboModel), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kWCamLight));       // 0x4596BA
     else
-        SendMessageA(GetDlgItem(main, 0x1B4), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("camera/light/accessory"));
-    SendMessageA(GetDlgItem(main, 0x1DA), CB_RESETCONTENT, 0, 0); // 0x4596D8
+    SendMessageA(GetDlgItem(main, panel::kMainComboGround), CB_RESETCONTENT, 0, 0); // 0x4596D8
     if (s->EnglishUI() == 0)
-        SendMessageW(GetDlgItem(main, 0x1DA), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(main, panel::kMainComboGround), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kWGround));         // 0x45971D
     else
-        SendMessageA(GetDlgItem(main, 0x1DA), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(main, panel::kMainComboGround), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("ground"));
-    SendMessageA(GetDlgItem(main, 0x1C1), CB_RESETCONTENT, 0, 0); // 0x45973B
+    SendMessageA(GetDlgItem(main, panel::kMainComboNormal), CB_RESETCONTENT, 0, 0); // 0x45973B
     if (s->EnglishUI() == 0)
-        SendMessageW(GetDlgItem(main, 0x1C1), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(main, panel::kMainComboNormal), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kWNashi));          // 0x459780
     else
-        SendMessageA(GetDlgItem(main, 0x1C1), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(main, panel::kMainComboNormal), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kNon));
-    SendMessageA(GetDlgItem(main, 0x1C2), CB_RESETCONTENT, 0, 0); // 0x45979E
+    SendMessageA(GetDlgItem(main, panel::kBoneRegisterCombo), CB_RESETCONTENT, 0, 0); // 0x45979E
 
     // per-model 20-byte name pre-pass (0x4597C6..0x459841)
     for (unsigned char i = 0; i < modelCount; ++i) {
         Rd(fd, text, 0x14);                                      // 0x4597C6
-        SendMessageA(GetDlgItem(main, 0x1B4), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(text));
-        SendMessageA(GetDlgItem(main, 0x1DA), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(main, panel::kMainComboGround), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(text));
-        SendMessageA(GetDlgItem(main, 0x1C1), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(main, panel::kMainComboNormal), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(text));
     }
+    return modelCount;
+}
 
-    // common abort for a cancelled locate-file dialog (0x45A7C5):
-    // close + ResetAppState + HandleWindowSize + return.
-    const auto abortLoad = [&]() {
-        _close(fd);                                              // 0x45A7CA
-        ResetAppState(s);                                        // 0x45A7D4
-        HandleWindowSize(s);                                     // 0x45A7DB
-    };
 
-    LogV1Stage("pre-pass-done", _tell(fd), modelCount);
-    if (modelCount != 0) {
-        unsigned char modelIdx = 0;
-        for (;;) {
+// ---- 0x459861..0x45A6B4: one per-model record - allocate/init, load
+// the PMD (MessageBoxA + GetOpenFileNameW retry; cancel aborts), then
+// the direct-index state load.  Returns false after AbortV1Load ran.
+static bool LoadSceneV1_ModelBlock(PmmV1LoadContext& ctx, int fd) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    PathResolutionWorkspace& paths = *ctx.paths;
+    D3DRenderer* const wrap = ctx.wrap;
+    unsigned char** const slots = ctx.slots;
+    char* const box = ctx.box;
+    char* const mbPath = ctx.mbPath;
+    wchar_t* const widePath = ctx.widePath;
+    wchar_t* const ofnFile = ctx.ofnFile;
+    wchar_t* const ofnTitle = ctx.ofnTitle;
+
             unsigned char slotByte = 0;
             Rd(fd, &slotByte, 1);                                // 0x459861
             unsigned char* nm =
                 static_cast<unsigned char*>(operator new(mdl::kSize));
-            if (nm != nullptr) Sub4C46F0(nm);                    // 0x459888
+            if (nm != nullptr) IdentityCtor(nm);                    // 0x459888
             slots[slotByte] = nm;                                // 0x459897
             std::memset(slots[slotByte], 0, mdl::kSize);         // 0x4598BC
             ModelInitDefaults(slots[slotByte]);                  // 0x4598D0
@@ -509,7 +521,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 ofn.lpstrFilter = kWFilterModel;
                 ofn.lpstrFile = ofnFile;
                 ofn.nMaxFile = 0x100;
-                ofn.Flags = 0x1000;
+                ofn.Flags = OFN_FILEMUSTEXIST;
                 ofn.lpstrInitialDir =
                     (GetMenuState(GetMenu(main), 0x12D, 0) & 8)
                         ? reinterpret_cast<LPCWSTR>(s->state.dirModel)
@@ -522,8 +534,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
                         ? L"load model"
                         : reinterpret_cast<LPCWSTR>(kWOpenFile);
                 if (!GetOpenFileNameW(&ofn)) {                   // 0x459B09
-                    abortLoad();                                 // 0x45A7C5
-                    return;
+                    AbortV1Load(s, fd);                                 // 0x45A7C5
+                    return false;
                 }
                 if (GetMenuState(GetMenu(main), 0x12D, 0) & 8) {
                     ExtractDirFromPath(ofnTitle, ofnFile);       // 0x459B3F
@@ -556,7 +568,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             // x64 members instead of indexing the model allocation.
             Rd(fd, &record->comboSelIndex, 1);                   // 0x459BEB
             record->comboSelIndex2 = record->comboSelIndex;
-            s->state.a042C =
+            s->state.mainModelComboSelection =
                 record->comboSelIndex;
             {
                 unsigned char b = 0;
@@ -596,7 +608,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                     static_cast<std::int32_t>(record->boneCount);
                 mdl::BoneKey* keys = mdl::BoneKeys(model);
                 for (std::int32_t i = 0; i < boneCnt; ++i) {
-                    ReadV1BoneKey(fd, keys[i]);
+                    ReadPmmBoneKey<PmmStream::V1>(fd, keys[i]);
                 }
                 // Sparse records name a bone-key pool index, not a timeline
                 // frame.  The first boneCount entries are the dense heads.
@@ -606,7 +618,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 for (std::int32_t i = 0; i < cnt; ++i) {
                     std::int32_t keyIndex = 0;
                     Rd(fd, &keyIndex, 4);
-                    ReadV1BoneKey(fd, keys[keyIndex]);
+                    ReadPmmBoneKey<PmmStream::V1>(fd, keys[keyIndex]);
                 }
             }
             // dense + sparse morph keys (0x26E4 array, 0x14 stride)
@@ -615,13 +627,13 @@ void LoadSceneV1(MMDApp* app, int fd) {
                     static_cast<std::int32_t>(record->morphCount);
                 mdl::MorphKey* keys = mdl::MorphKeys(model);
                 for (std::int32_t i = 0; i < morphCnt; ++i)      // 0x45A0D7
-                    ReadV1MorphKey(fd, keys[i]);
+                    ReadPmmMorphKey(fd, keys[i]);
                 std::int32_t cnt = 0;
                 Rd(fd, &cnt, 4);                                 // 0x45A107
                 for (std::int32_t i = 0; i < cnt; ++i) {
                     std::int32_t keyIndex = 0;
                     Rd(fd, &keyIndex, 4);
-                    ReadV1MorphKey(fd, keys[keyIndex]);
+                    ReadPmmMorphKey(fd, keys[keyIndex]);
                 }
             }
 
@@ -711,39 +723,45 @@ void LoadSceneV1(MMDApp* app, int fd) {
             LogV1Stage("state-done", _tell(fd));
             EnableMenuItem(GetMenu(main), 0x120, 0);             // 0x45A682
             EnableMenuItem(GetMenu(main), 0x121, 0);             // 0x45A6A2
+    return true;
+}
 
-            if (++modelIdx >= modelCount) break;                 // 0x45A6B4
-        }
-    }
+
+// ---- 0x45A6D3..0x45AA89: register-combo 0x1B1 (5 model-mode entries
+// incl. reselect, or 7 camera-mode entries) ----------------------------
+static void LoadSceneV1_RegisterCombo(PmmV1LoadContext& ctx) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    unsigned char** const slots = ctx.slots;
 
     // ---- register-combo 0x1B1 (0x45A6D3..0x45AA89) -----------------------
-    SendMessageA(GetDlgItem(main, 0x1B1), CB_RESETCONTENT, 0, 0); // 0x45A6D3
+    SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_RESETCONTENT, 0, 0); // 0x45A6D3
     if (s->state.optflag[0] == 0) {
         // model-edit mode: 5 entries + reselect current model
         if (s->EnglishUI() == 0) {
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWXMove));      // 0x45A9A3
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWYMove));
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWZMove));
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWRot));
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWAll));
         } else {
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("x axis move"));
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("y axis move"));
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("z axis move"));
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("rotation"));
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("all"));        // 0x52D594
         }
-        SendMessageA(GetDlgItem(main, 0x1B4), CB_SETCURSEL,       // 0x45AA59
+        SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_SETCURSEL,       // 0x45AA59
                      M8(slots[s->SelectedModelSlot()],
                         0x2D7C),
                      0);
@@ -751,66 +769,77 @@ void LoadSceneV1(MMDApp* app, int fd) {
     } else {
         // camera mode: 7 entries (distance + view angle included)
         if (s->EnglishUI() == 0) {
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWXMove));      // 0x45A7FA
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWYMove));
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWZMove));
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWRot));
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWDist));        // 0x45A87E
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWViewAng));
-            SendMessageW(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(kWAll));
         } else {
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("x axis move"));
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("y axis move"));
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("z axis move"));
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("rotation"));
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("distance"));   // 0x52D5A4
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("view angle")); // 0x52D598
-            SendMessageA(GetDlgItem(main, 0x1B1), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>("all"));        // 0x52D594
         }
-        SendMessageA(GetDlgItem(main, 0x1B4), CB_SETCURSEL, 0, 0);// 0x45A8DE
+        SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_SETCURSEL, 0, 0);// 0x45A8DE
     }
-    SendMessageA(GetDlgItem(main, 0x1B1), CB_SETCURSEL, 3, 0);    // 0x45AA86
+    SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_SETCURSEL, 3, 0);    // 0x45AA86
+
+}
+
+
+// ---- 0x45AA93..0x45ABCC: track re-allocation through the 0x4C6889
+// malloc-family helper + defaults + 255 accessory tracks --------------
+static void LoadSceneV1_ReallocateTracks(PmmV1LoadContext& ctx) {
+    auto* const s = ctx.s;
+    D3DRenderer* const wrap = ctx.wrap;
+    mdl::AccessoryRecord** const accs = ctx.accs;
+    mdl::AccessoryKey** const accTracks = ctx.accTracks;
 
     // ---- track re-allocation (0x45AA93..0x45ABCC) -------------------------
-    auto* const cameraKeys = reinterpret_cast<mdl::CameraKey*>(
+    ctx.cameraKeys = reinterpret_cast<mdl::CameraKey*>(
         AllocBytes(kTrackCam));                                  // 0x45AA93
-    s->CameraKeys() = cameraKeys;
-    std::memset(cameraKeys, 0, kTrackCam);                        // 0x45AAA6
-    auto* const lightKeys = reinterpret_cast<mdl::LightKey*>(
+    s->CameraKeys() = ctx.cameraKeys;
+    std::memset(ctx.cameraKeys, 0, kTrackCam);                        // 0x45AAA6
+    ctx.lightKeys = reinterpret_cast<mdl::LightKey*>(
         AllocBytes(kTrackLight));                                // 0x45AAB0
-    s->LightKeys() = lightKeys;
-    std::memset(lightKeys, 0, kTrackLight);
-    auto* const selfShadowKeys = reinterpret_cast<mdl::SelfShadowKey*>(
+    s->LightKeys() = ctx.lightKeys;
+    std::memset(ctx.lightKeys, 0, kTrackLight);
+    ctx.selfShadowKeys = reinterpret_cast<mdl::SelfShadowKey*>(
         AllocBytes(kTrackSel));                                  // 0x45AACD
-    s->ShadowKeys() = selfShadowKeys;
-    std::memset(selfShadowKeys, 0, kTrackSel);
+    s->ShadowKeys() = ctx.selfShadowKeys;
+    std::memset(ctx.selfShadowKeys, 0, kTrackSel);
     auto* const gravityKeys = reinterpret_cast<mdl::GravityKey*>(
         AllocBytes(kTrackShadow));                               // 0x45AAEA
     s->GravityKeys() = gravityKeys;
     std::memset(gravityKeys, 0, kTrackShadow);
-    selfShadowKeys[0].mode = wrap->postProcessEnabled ? 1 : 0;   // 0x45AB29
-    selfShadowKeys[0].distance = 0.0112500004f;                   // flt_52A1D8
+    ctx.selfShadowKeys[0].mode = wrap->postProcessEnabled ? 1 : 0;   // 0x45AB29
+    ctx.selfShadowKeys[0].distance = 0.0112500004f;                   // flt_52A1D8
     s->state.selfShadowMode = 1;                 // 0x45AB46
-    s->state.selfShadowCfgOrUint32 = 0;
+    s->state.selfShadowEnabled = 0;
     gravityKeys[0].noise = 10;
     gravityKeys[0].acceleration = 9.8000002f;                    // 0x52A1DC
     gravityKeys[0].direction[1] = -1.0f;                         // 0x5295E8
     for (std::size_t i = 0; i < mdl::kTimelineKeyCapacity; ++i)   // 0x45AB84
-        cameraKeys[i].parentModel = -1;
+        ctx.cameraKeys[i].parentModel = -1;
     for (int i = 0; i < 255; ++i) {                              // 0x45ABB0
         auto* const keys = reinterpret_cast<mdl::AccessoryKey*>(
             AllocBytes(kTrackAcc));
@@ -822,36 +851,31 @@ void LoadSceneV1(MMDApp* app, int fd) {
         keys[0].opacity = 1.0f;
         accs[i] = nullptr;
     }
+}
 
-    LogV1Stage("regcombo-done", _tell(fd));
+
+// ---- 0x45AC10..0x45B090: camera track read (shorter v1 field set) +
+// camera misc + frame UI (inverted 0x1BE sense) ------------------------
+static void LoadSceneV1_CameraTrack(PmmV1LoadContext& ctx, int fd) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    char* const text = ctx.text;
+    mdl::CameraKey* const cameraKeys = ctx.cameraKeys;
+
     // ---- camera track read (0x45AC10..0x45ACF7) ---------------------------
     {
         // v1 camera record: 0x28 bytes, 6x4 interpolation bytes (the
         // 0x45AC96 loop bound is 6, as in v2), flag +0x40, dword +0x44,
         // flag +0x48 (no +0x4C/+0x50 dwords here - those come from the
-        // config tail reregister pass).
-        const auto readCamRecord = [&](mdl::CameraKey& key) {
-            Rd(fd, &key.frame, 0x28);                            // 0x45AC10
-            for (int k = 0; k < 6; ++k) {
-                Rd(fd, &key.interpolation[0][k], 1);             // 0x45AC3B..
-                Rd(fd, &key.interpolation[1][k], 1);
-                Rd(fd, &key.interpolation[2][k], 1);
-                Rd(fd, &key.interpolation[3][k], 1);
-            }
-            unsigned char b = 0;
-            Rd(fd, &b, 1);                                       // 0x45ACB0
-            key.perspective = (b == 1) ? 1 : 0;
-            Rd(fd, &key.fov, 4);                                 // 0x45ACE6
-            Rd(fd, &b, 1);                                       // 0x45ACF7
-            key.selected = (b == 1) ? 1 : 0;
-        };
-        readCamRecord(cameraKeys[0]);
+        // config tail reregister pass).  Shape lives in
+        // pmm_io_common.hpp ReadPmmCameraKey.
+        ReadPmmCameraKey<PmmStream::V1>(fd, cameraKeys[0]);
         std::int32_t cnt = 0;
         Rd(fd, &cnt, 4);                                         // 0x45AD51
         for (std::int32_t i = 0; i < cnt; ++i) {
             std::int32_t timelineFrame = 0;
             Rd(fd, &timelineFrame, 4);
-            readCamRecord(cameraKeys[timelineFrame]);
+            ReadPmmCameraKey<PmmStream::V1>(fd, cameraKeys[timelineFrame]);
         }
     }
     LogV1Stage("camtrack-done", _tell(fd));
@@ -877,43 +901,42 @@ void LoadSceneV1(MMDApp* app, int fd) {
             static_cast<int>(s->state.cameraFov);    // 0x9E1E8
         // 0x405 = TBM_SETPOS (WM_USER+5, trackbar): wParam 1 = redraw,
         // lParam = position (0x45AFBF..0x45AFCE).
-        SendMessageA(GetDlgItem(main, 0x1BF), 0x405 /*TBM_SETPOS*/, 1,
+        SendMessageA(GetDlgItem(main, panel::kFovSlider), TBM_SETPOS, 1,
                      frame);                                     // 0x45AFCE
-        HWND item = GetDlgItem(main, 0x1C0);
+        HWND item = GetDlgItem(main, panel::kFovEdit);
         SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
         sprintf_s(text, 0x100, "%3d", frame);                    // 0x45B022
         SendMessageA(item, EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(text));
         // v1 checks the box when 0x31C == 0 (v2 uses != 0).
-        SendMessageA(GetDlgItem(main, 0x1BE), BM_SETCHECK,
+        SendMessageA(GetDlgItem(main, panel::kPerspectiveCheckbox), BM_SETCHECK,
                      s->state.cameraPerspective == 0 ? 1 : 0,
                      0);                                         // 0x45B07A
     }
 
     LogV1Stage("cammisc-done", _tell(fd));
+}
+
+
+// ---- 0x45B090..0x45B761: light track read + light misc + rgb/direction
+// slider UI --------------------------------------------------------------
+static void LoadSceneV1_LightTrack(PmmV1LoadContext& ctx, int fd) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    char* const text = ctx.text;
+    mdl::LightKey* const lightKeys = ctx.lightKeys;
+
     // ---- light track read (0x45B090..0x45B2D2) ----------------------------
     {
-        const auto readLightRecord = [&](mdl::LightKey& key) {
-            Rd(fd, &key.frame, 4);                               // 0x45B090
-            Rd(fd, &key.previous, 4);
-            Rd(fd, &key.next, 4);
-            Rd(fd, &key.color[0], 4);
-            Rd(fd, &key.color[1], 4);
-            Rd(fd, &key.color[2], 4);
-            Rd(fd, &key.direction[0], 4);
-            Rd(fd, &key.direction[1], 4);
-            Rd(fd, &key.direction[2], 4);
-            unsigned char b = 0;
-            Rd(fd, &b, 1);                                       // 0x45B154
-            key.selected = (b == 1) ? 1 : 0;
-        };
-        readLightRecord(lightKeys[0]);
+        // Record shape (37 stream bytes) lives in pmm_io_common.hpp
+        // ReadPmmLightKey - byte-identical to the v2 reader.
+        ReadPmmLightKey(fd, lightKeys[0]);
         std::int32_t cnt = 0;
         Rd(fd, &cnt, 4);                                         // 0x45B185
         for (std::int32_t i = 0; i < cnt; ++i) {
             std::int32_t timelineFrame = 0;
             Rd(fd, &timelineFrame, 4);
-            readLightRecord(lightKeys[timelineFrame]);
+            ReadPmmLightKey(fd, lightKeys[timelineFrame]);
         }
     }
     // light misc (0x45B326..0x45B385)
@@ -927,8 +950,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
     LogV1Stage("light-done", _tell(fd));
     // rgb/direction slider UI (0x45B399..0x45B74E)
     {
-        const int sliderIds[] = {0x1C7, 0x1C8, 0x1C9, 0x1CA, 0x1CB, 0x1CC};
-        const int editIds[] = {0x1CD, 0x1CE, 0x1CF, 0x1D0, 0x1D1, 0x1D2};
+        const int sliderIds[] = {455, 456, 457, 458, 459, 460};  // 0x1C7..0x1CC
+        const int editIds[] = {461, 462, 463, 464, 465, 466};    // 0x1CD..0x1D2
         const float values[] = {
             s->LightColor()[0], s->LightColor()[1], s->LightColor()[2],
             s->LightDirection()[0], s->LightDirection()[1],
@@ -937,7 +960,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             const double scale = k < 3 ? 256.0 : 100.0;
             // 0x405 = TBM_SETPOS, same shape as the frame slider.
             SendMessageA(GetDlgItem(main, sliderIds[k]),
-                         0x405 /*TBM_SETPOS*/, 1,
+                         TBM_SETPOS, 1,
                          static_cast<int>(values[k] * scale));    // 0x45B3AF..
             HWND item = GetDlgItem(main, editIds[k]);
             SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
@@ -951,18 +974,38 @@ void LoadSceneV1(MMDApp* app, int fd) {
         }
     }
 
+}
+
+
+// ---- 0x45B761..0x45C479: accessory block (retry dialog; cancel ->
+// AbortV1Load, retry failure -> close+ResetAppState WITHOUT
+// HandleWindowSize) + current accessory UI; false = aborted -------------
+static bool LoadSceneV1_AccessoryBlock(PmmV1LoadContext& ctx, int fd) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    PathResolutionWorkspace& paths = *ctx.paths;
+    D3DRenderer* const wrap = ctx.wrap;
+    mdl::AccessoryRecord** const accs = ctx.accs;
+    mdl::AccessoryKey** const accTracks = ctx.accTracks;
+    unsigned char** const slots = ctx.slots;
+    char* const text = ctx.text;
+    char* const mbPath = ctx.mbPath;
+    wchar_t* const wideTmp = ctx.wideTmp;
+    wchar_t* const ofnFile = ctx.ofnFile;
+    wchar_t* const ofnTitle = ctx.ofnTitle;
+
     // ---- accessory block (0x45B761..0x45C479) -----------------------------
     Rd(fd, &s->SelectedAccessorySlot(), 1);                       // 0x45B761
     Rd(fd, &s->DisplayObjectListScrollPosition(), 4);             // 0x45B774
-    SendMessageA(GetDlgItem(main, 0x1D7), CB_RESETCONTENT, 0, 0);// 0x45B78E
-    SendMessageA(GetDlgItem(main, 0x1DB), CB_RESETCONTENT, 0, 0);// 0x45B7A8
+    SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_RESETCONTENT, 0, 0);// 0x45B78E
+    SendMessageA(GetDlgItem(main, panel::kAttachBoneCombo), CB_RESETCONTENT, 0, 0);// 0x45B7A8
     unsigned char accCount = 0;
     Rd(fd, &accCount, 1);                                        // 0x45B7BC
     EnableMenuItem(GetMenu(main), 0xF9, accCount == 0 ? 1 : 0);  // 0x45B7EA
     // shadow name list (0x45B814..0x45B837)
     for (unsigned char i = 0; i < accCount; ++i) {
         Rd(fd, text, 100);
-        SendMessageA(GetDlgItem(main, 0x1D7), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(text));
     }
     LogV1Stage("acc-head-done", _tell(fd), accCount);
@@ -972,7 +1015,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         Rd(fd, &accSlot, 1);                                     // 0x45B867
         auto* acc = static_cast<mdl::AccessoryRecord*>(operator new(
             sizeof(mdl::AccessoryRecord)));                     // 0x45B871
-        if (acc != nullptr) Sub4C46F0(acc);                      // 0x45B88E
+        if (acc != nullptr) IdentityCtor(acc);                      // 0x45B88E
         accs[accSlot] = acc;
         std::memset(accs[accSlot], 0, sizeof(mdl::AccessoryRecord));
         Sub04B0Init(accs[accSlot]);                              // 0x45B8D6
@@ -1006,7 +1049,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 s->EnglishUI() != 0 ? kWFilterAccEn : kWFilterAccJp;
             ofn.lpstrFile = ofnFile;
             ofn.nMaxFile = 0x100;
-            ofn.Flags = 0x1000;
+            ofn.Flags = OFN_FILEMUSTEXIST;
             ofn.lpstrInitialDir =
                 (GetMenuState(GetMenu(main), 0x12D, 0) & 8)
                     ? reinterpret_cast<LPCWSTR>(s->state.dirAccs)
@@ -1019,8 +1062,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
                     ? L"open file"                               // 0x52DA00
                     : reinterpret_cast<LPCWSTR>(kWOpenFile);
             if (!GetOpenFileNameW(&ofn)) {                       // 0x45BB0D
-                abortLoad();                                     // 0x45A7C5
-                return;
+                AbortV1Load(s, fd);                                     // 0x45A7C5
+                return false;
             }
             if (GetMenuState(GetMenu(main), 0x12D, 0) & 8) {
                 ExtractDirFromPath(ofnTitle, ofnFile);           // 0x45BB47
@@ -1032,7 +1075,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 _close(fd);                                      // 0x45C5D5
                 ResetAppState(s);                                // 0x45C5DF
                 // NOTE: no HandleWindowSize on this path (unlike 0x45A7C5).
-                return;
+                return false;
             }
         }
 
@@ -1040,37 +1083,19 @@ void LoadSceneV1(MMDApp* app, int fd) {
         mdl::AccessoryRecord& accessory = *mdl::Accessory(accs[accSlot]);
         Rd(fd, &accessory.order, 1);                              // 0x45BBB8
         strcpy_s(accessory.name, sizeof accessory.name, accName);// 0x45BBDA
-        // accessory track record 0 + sparse keys (0x45BBF3..0x45C16F)
-        const auto readAccRecord = [&](mdl::AccessoryKey& key) {
-            Rd(fd, &key.frame, 4);
-            Rd(fd, &key.previous, 4);
-            Rd(fd, &key.next, 4);
-            unsigned char b = 0;
-            Rd(fd, &b, 1);                                       // 0x45BC3C
-            key.visible = b & 1;
-            // transparency quirk: (100 - b/2) / 100.0
-            key.opacity =
-                static_cast<float>(100 - (b >> 1)) / 100.0f;     // 0x52B8E0
-            Rd(fd, &key.parentModel, 4);                         // 0x45BCBD
-            Rd(fd, &key.parentBone, 4);
-            Rd(fd, key.position, sizeof key.position);
-            Rd(fd, key.rotation, sizeof key.rotation);
-            Rd(fd, &key.scale, 4);                               // 0x45BDA0
-            Rd(fd, &b, 1);                                       // 0x45BDB1
-            key.shadowEnabled = (b == 1) ? 1 : 0;
-            Rd(fd, &b, 1);                                       // 0x45BDEE
-            key.selected = (b == 1) ? 1 : 0;
-        };
+        // accessory track record 0 + sparse keys (0x45BBF3..0x45C16F);
+        // record shape (55 stream bytes, transparency quirk included) lives
+        // in pmm_io_common.hpp ReadPmmAccessoryKey - byte-identical to v2.
         auto* const accessoryKeys =
             reinterpret_cast<mdl::AccessoryKey*>(accTracks[accSlot]);
-        readAccRecord(accessoryKeys[0]);
+        ReadPmmAccessoryKey(fd, accessoryKeys[0]);
         {
             std::int32_t cnt = 0;
             Rd(fd, &cnt, 4);                                     // 0x45BE2B
             for (std::int32_t k = 0; k < cnt; ++k) {
                 std::int32_t timelineFrame = 0;
                 Rd(fd, &timelineFrame, 4);
-                readAccRecord(accessoryKeys[timelineFrame]);
+                ReadPmmAccessoryKey(fd, accessoryKeys[timelineFrame]);
             }
         }
         {
@@ -1104,7 +1129,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
         const unsigned char cur = s->SelectedAccessorySlot();
         if (accs[cur] != nullptr) {
             mdl::AccessoryRecord& accessory = *mdl::Accessory(accs[cur]);
-            SendMessageA(GetDlgItem(main, 0x1D7), CB_SETCURSEL,  // 0x45C390
+            SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_SETCURSEL,  // 0x45C390
                          accessory.order, 0);
             const std::int32_t parentSlot = accessory.parentModel;
             unsigned char* pm = slots[parentSlot];
@@ -1114,23 +1139,38 @@ void LoadSceneV1(MMDApp* app, int fd) {
                         MP(pm, 0x26BC) +
                         static_cast<std::size_t>(b) * 0x25C;
                     if (M8(entry, 0x1E4) < 7 || M8(entry, 0x1E4) == 8)
-                        SendMessageA(GetDlgItem(main, 0x1DB),
+                        SendMessageA(GetDlgItem(main, panel::kAttachBoneCombo),
                                      CB_ADDSTRING, 0,
                                      reinterpret_cast<LPARAM>(
                                          reinterpret_cast<char*>(entry)));
                 }
             }
-            Sub4134E0(s);                                        // 0x45C479
+            SyncAccessoryEditPanel(s);                                        // 0x45C479
         }
     }
 
     LogV1Stage("accessories-done", _tell(fd));
+    return true;
+}
+
+
+// ---- 0x45C48C..0x45D278: config block head, register radios, checkbox
+// bytes, wave/AVI/picture blocks, menu checks, FPS + capture-mode
+// switches, physics defaults --------------------------------------------
+static void LoadSceneV1_ConfigBlock(PmmV1LoadContext& ctx, int fd) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    PathResolutionWorkspace& paths = *ctx.paths;
+    D3DRenderer* const wrap = ctx.wrap;
+    char* const text = ctx.text;
+    char* const mbPath = ctx.mbPath;
+
     // ---- config block head (0x45C48C..0x45C553) ---------------------------
     Rd(fd, &s->state.currentFrame, 4);
     Rd(fd, &s->state.timelineStartFrame, 4);
     Rd(fd, &s->state.lastRegisteredFrame, 4);
     {
-        HWND item = GetDlgItem(main, 0x1A1);
+        HWND item = GetDlgItem(main, panel::kCurrentFrameEdit);
         SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
         sprintf_s(text, 0x100, "%d",
                   s->state.currentFrame);         // 0x45C501
@@ -1140,7 +1180,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
     PostModelReload2(s);                                         // 0x45C52B
     PostLanguageSweep(s);                                        // 0x45C532
     HandleWindowSize(s);                                         // 0x45C539
-    Sub44D940(s);                                                // 0x45C540
+    ApplyModelComboSelection(s);                                                // 0x45C540
 
     // register radios (0x45C553..0x45C766); v1 map: 0 -> 0x1EA, 1 -> 0x1EB,
     // 2 -> none of them checked, 3 -> 0x1ED, 4 -> 0x1EC.
@@ -1151,48 +1191,48 @@ void LoadSceneV1(MMDApp* app, int fd) {
         const ViewportEditMode mode = s->EditMode();
         const int check4 = mode == ViewportEditMode::Camera ? 1 : 0;
         const int check2 = mode == ViewportEditMode::Light ? 1 : 0;
-        SendMessageA(GetDlgItem(main, 0x1EA), BM_SETCHECK,
+        SendMessageA(GetDlgItem(main, panel::kBoneSelectRadio), BM_SETCHECK,
                      mode == ViewportEditMode::Bone ? 1 : 0, 0);
-        SendMessageA(GetDlgItem(main, 0x1EB), BM_SETCHECK,
+        SendMessageA(GetDlgItem(main, panel::kBoxSelectRadio), BM_SETCHECK,
                      mode == ViewportEditMode::BoneBox ? 1 : 0, 0);
-        SendMessageA(GetDlgItem(main, 0x1EC), BM_SETCHECK, check2, 0);
-        SendMessageA(GetDlgItem(main, 0x1ED), BM_SETCHECK, check4, 0);
+        SendMessageA(GetDlgItem(main, panel::kBoneMoveRadio), BM_SETCHECK, check2, 0);
+        SendMessageA(GetDlgItem(main, panel::kBoneRotateRadio), BM_SETCHECK, check4, 0);
     }
     {
         unsigned char b = 0;
         Rd(fd, &b, 1);                                           // 0x45C779
         s->state.cameraReferenceMode = b;
-        SendMessageA(GetDlgItem(main, 0x19C), BM_SETCHECK,
+        SendMessageA(GetDlgItem(main, panel::kCameraRefModelCheckbox), BM_SETCHECK,
                      b == 1 ? 1 : 0, 0);
-        SendMessageA(GetDlgItem(main, 0x213), BM_SETCHECK,
+        SendMessageA(GetDlgItem(main, panel::kCameraRefBoneCheckbox), BM_SETCHECK,
                      b == 2 ? 1 : 0, 0);
         Rd(fd, &b, 1);                                           // 0x45C821
         s->state.playbackLoopEnabled = b ? 1 : 0;
-        SendMessageA(GetDlgItem(main, 0x19B), BM_SETCHECK, b ? 1 : 0, 0);
+        SendMessageA(GetDlgItem(main, 411), BM_SETCHECK, b ? 1 : 0, 0);
         Rd(fd, &b, 1);                                           // 0x45C879
-        s->state.v342 = b ? 1 : 0;
-        SendMessageA(GetDlgItem(main, 0x19D), BM_SETCHECK, b ? 1 : 0, 0);
+        s->state.playbackReturnsToStartFrame = b ? 1 : 0;
+        SendMessageA(GetDlgItem(main, 413), BM_SETCHECK, b ? 1 : 0, 0);
         Rd(fd, &b, 1);                                           // 0x45C8D1
         s->state.playbackStartsAtCurrentFrame = b ? 1 : 0;
-        SendMessageA(GetDlgItem(main, 0x19E), BM_SETCHECK, b ? 1 : 0, 0);
-        std::int32_t v1 = 0, v2 = 0;
-        Rd(fd, &v1, 4);                                          // 0x45C929
+        SendMessageA(GetDlgItem(main, 414), BM_SETCHECK, b ? 1 : 0, 0);
+        std::int32_t playStartFrame = 0, playStopFrame = 0;
+        Rd(fd, &playStartFrame, 4);                                          // 0x45C929
         {
-            HWND item = GetDlgItem(main, 0x199);
+            HWND item = GetDlgItem(main, panel::kPlayStartFrameEdit);
             SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
-            sprintf_s(text, 0x100, "%d", v1);                    // 0x45C97A
+            sprintf_s(text, 0x100, "%d", playStartFrame);                    // 0x45C97A
             SendMessageA(item, EM_REPLACESEL, 0,
                          reinterpret_cast<LPARAM>(text));
         }
-        Rd(fd, &v2, 4);                                          // 0x45C9B1
+        Rd(fd, &playStopFrame, 4);                                          // 0x45C9B1
         {
-            HWND item = GetDlgItem(main, 0x19A);
+            HWND item = GetDlgItem(main, panel::kPlayStopFrameEdit);
             SendMessageA(item, EM_SETSEL, 0, GetWindowTextLengthA(item));
-            sprintf_s(text, 0x100, "%d", v2);                    // 0x45CA05
+            sprintf_s(text, 0x100, "%d", playStopFrame);                    // 0x45CA05
             SendMessageA(item, EM_REPLACESEL, 0,
                          reinterpret_cast<LPARAM>(text));
         }
-        Sub40AE00(s);                                            // 0x45CA2F
+        ClearTimelineAndCurveDCs(s);                                            // 0x45CA2F
         Rd(fd, &b, 1);                                           // 0x45CA40
         s->state.waveEnabled = b ? 1 : 0;
         Rd(fd, mbPath, 0x100);                                   // 0x45CA71
@@ -1225,7 +1265,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             std::memcpy(&s->AviScale(), &w3, sizeof w3);
             if (s->AviBackgroundEnabled() == 1) {
                 CheckMenuItem(GetMenu(main), 0xD8, 8);
-                Sub4168D0(s);                                    // 0x45CBA6
+                AviBgOverlayRefresh(s);                                    // 0x45CBA6
             } else {
                 CheckMenuItem(GetMenu(main), 0xD8, 0);
             }
@@ -1272,7 +1312,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             s->PictureBackgroundEnabled() = b ? 1 : 0;
             if (b != 0) {
                 CheckMenuItem(GetMenu(main), 0xE9, 8);
-                Sub417130(s);                                    // 0x45CD4E
+                PicBgOverlayRefresh(s);                                    // 0x45CD4E
             } else {
                 CheckMenuItem(GetMenu(main), 0xE9, 0);           // 0x45CD7D
             }
@@ -1289,21 +1329,21 @@ void LoadSceneV1(MMDApp* app, int fd) {
         if (b != 0) {
             s->state.fpsOverlayEnabled = 1;
             CheckMenuItem(GetMenu(main), 0xD3, 8);
-            SendMessageA(GetDlgItem(owner, 0x227), BM_SETCHECK, 1, 0);
+            SendMessageA(GetDlgItem(owner, panel::kInfoCheckbox), BM_SETCHECK, 1, 0);
         } else {
             s->state.fpsOverlayEnabled = 0;
             CheckMenuItem(GetMenu(main), 0xD3, 0);
-            SendMessageA(GetDlgItem(owner, 0x227), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(owner, panel::kInfoCheckbox), BM_SETCHECK, 0, 0);
         }
         Rd(fd, &b, 1);                                           // 0x45CE3F
         if (b != 0) {
             s->state.groundGridEnabled = 1;
             CheckMenuItem(GetMenu(main), 0xD7, 8);
-            SendMessageA(GetDlgItem(owner, 0x22D), BM_SETCHECK, 1, 0);
+            SendMessageA(GetDlgItem(owner, panel::kCoordAxisCheckbox), BM_SETCHECK, 1, 0);
         } else {
             s->state.groundGridEnabled = 0;
             CheckMenuItem(GetMenu(main), 0xD7, 0);
-            SendMessageA(GetDlgItem(owner, 0x22D), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(owner, panel::kCoordAxisCheckbox), BM_SETCHECK, 0, 0);
         }
         Rd(fd, &b, 1);                                           // 0x45CEE9
         s->state.groundShadowEnabled = b ? 1 : 0;
@@ -1360,23 +1400,40 @@ void LoadSceneV1(MMDApp* app, int fd) {
     }
     // physics defaults + combos (0x45D1C8..0x45D265)
     s->state.gravityMagnitude = 9.8000002f;              // 0x52A1DC
-    s->state.v9edcc = 0.0f;
+    s->state.gravityNoiseTimer = 0.0f;
     s->state.gravityX = 0.0f;
     s->state.gravityY = -1.0f;                     // 0x5295E8
-    s->state.a0CD4 = 0;
+    s->state.gravityNoiseEnabled = 0;
     s->state.gravityNoise = 10;
     s->state.gravityZ = 0.0f;
-    s->state.a0CC8OrUint32 = 0;
+    s->state.rigidBodyDisplayEnabled = 0;
     s->state.modelOutlineColorRed = 0;
     s->state.modelOutlineColorGreen = 0;
     s->state.modelOutlineColorBlue = 0;
-    SendMessageA(GetDlgItem(main, 0x1C1), CB_SETCURSEL, 0, 0);   // 0x45D248
-    SendMessageA(GetDlgItem(main, 0x1C2), CB_SETCURSEL, 0, 0);   // 0x45D262
+    SendMessageA(GetDlgItem(main, panel::kMainComboNormal), CB_SETCURSEL, 0, 0);   // 0x45D248
+    SendMessageA(GetDlgItem(main, panel::kBoneRegisterCombo), CB_SETCURSEL, 0, 0);   // 0x45D262
 
     LogV1Stage("physics-defaults-done", _tell(fd));
+}
+
+
+// ---- 0x45D278..0x45E117: read-gated tail.  The original tests every
+// _read result here and unwinds early at end-of-stream; the if(Rd>0)
+// tower is kept VERBATIM (flattening would change control flow) - the
+// [read-gate N] comments mark each level -------------------------------
+static void LoadSceneV1_ReadGatedTail(PmmV1LoadContext& ctx, int fd) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    unsigned char** const slots = ctx.slots;
+    mdl::AccessoryRecord** const accs = ctx.accs;
+    char* const lbText = ctx.lbText;
+    mdl::CameraKey* const cameraKeys = ctx.cameraKeys;
+    mdl::SelfShadowKey* const selfShadowKeys = ctx.selfShadowKeys;
+
     // ---- read-gated tail (0x45D278..0x45E117) ----------------------------
     // Unlike the rest of the body, this chain tests the _read results and
     // unwinds early at end-of-stream.
+    // [read-gate 1] end-of-stream unwinds here
     if (Rd(fd, &s->state.accessoryRenderSplitOrder, 4) > 0) {  // 0x45D278
         Rd(fd, &s->ProjectedShadowAmbientIntensity(), 4);       // 0x45D296
         s->SetProjectedShadowAmbient(s->ProjectedShadowAmbientIntensity());
@@ -1393,7 +1450,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
             M8(slots[s->SelectedModelSlot()], 0x31BE) !=
                 0 &&
             s->state.optflag[0] == 0)
-            SendMessageA(GetDlgItem(main, 0x1B9), BM_SETCHECK, 1,
+            SendMessageA(GetDlgItem(main, panel::kAddBlendCheckbox), BM_SETCHECK, 1,
                          0);                                     // 0x45D360
         for (int i = 0; i < 255; ++i) {
             if (accs[i] != nullptr) {
@@ -1406,10 +1463,11 @@ void LoadSceneV1(MMDApp* app, int fd) {
             const unsigned char cur = s->SelectedAccessorySlot();
             if (accs[cur] != nullptr &&
                 mdl::Accessory(accs[cur])->additiveBlend != 0)
-                SendMessageA(GetDlgItem(main, 0x1DD), BM_SETCHECK, 1,
+                SendMessageA(GetDlgItem(main, panel::kAccessoryAddBlendCheckbox), BM_SETCHECK, 1,
                              0);                                 // 0x45D3FB
         }
         std::int32_t v31C0 = 0;
+        // [read-gate 2] end-of-stream unwinds here
         if (Rd(fd, &v31C0, 4) > 0) {                             // 0x45D40F
             for (int i = 0; i < kModelSlotCount; ++i)
                 if (slots[i] != nullptr) M32(slots[i], 0x31C0) = v31C0;
@@ -1422,6 +1480,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 s->state.projectedShadowBlendEnabled = 0;
             }
             const int got48F = Rd(fd, &b, 1);                    // 0x45D48F
+            // [read-gate 3] end-of-stream unwinds here
             if (b == 1 && got48F > 0) {
                 // per-model 0x31C0 re-read pass (0x45D4B0..0x45D4FB):
                 // ONE float dword per occupied slot, unlike the broadcast
@@ -1432,12 +1491,13 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 }
                 unsigned char b509 = 0;
                 const int got509 = Rd(fd, &b509, 1);             // 0x45D509
+                // [read-gate 4] end-of-stream unwinds here
                 if (b509 == 1 && got509 > 0) {
                 Rd(fd, reinterpret_cast<unsigned char*>(
                            &s->PlaybackPhysicsMode()),
                    1);                                           // 0x45D538
                 // v1: only 0/1/2 update the menus; the default case leaves
-                // them untouched (v2 re-checks 0x10E).
+                // them untouched (the v2 body re-checks 0x10E).
                 switch (s->PlaybackPhysicsMode()) {
                     case 0:
                         CheckMenuItem(GetMenu(main), 0x10D, 0);
@@ -1469,16 +1529,17 @@ void LoadSceneV1(MMDApp* app, int fd) {
                 Rd(fd, &s->state.gravityZ, 4);
                 unsigned char bc = 0;
                 Rd(fd, &bc, 1);                                  // 0x45D6F4
-                s->state.a0CD4 =
+                s->state.gravityNoiseEnabled =
                     (bc == 1) ? 1 : 0;
                 {
                     unsigned char bd = 0;
                     const int got716 = Rd(fd, &bd, 1);           // 0x45D716
+                    // [read-gate 5] end-of-stream unwinds here
                     if (bd == 1 && got716 > 0) {
                         unsigned char be = 0;
                         Rd(fd, &be, 1);                          // 0x45D743
                         s->state.selfShadowMode = be;
-                        s->state.selfShadowCfgOrUint32 =
+                        s->state.selfShadowEnabled =
                             (be != 0) ? 1 : 0;
                         Rd(fd, &s->state.physicsInterval,
                            4);                                   // 0x45D76E
@@ -1496,30 +1557,24 @@ void LoadSceneV1(MMDApp* app, int fd) {
                         }
                         unsigned char bs = 0;
                         const int got7FE = Rd(fd, &bs, 1);       // 0x45D7FE
+                        // [read-gate 6] end-of-stream unwinds here
                         if (bs == 1 && got7FE > 0) {
                             // selection/self-shadow track on app+0x37C
-                            // (24-byte records)
-                            const auto readSelRecord =            // 0x45D82D
-                                [&](mdl::SelfShadowKey& key) {
-                                    Rd(fd, &key.frame, 4);
-                                    Rd(fd, &key.previous, 4);
-                                    Rd(fd, &key.next, 4);
-                                    Rd(fd, &key.mode, 1);
-                                    Rd(fd, &key.distance, 4);
-                                    unsigned char b = 0;
-                                    Rd(fd, &b, 1);
-                                    key.selected = (b == 1) ? 1 : 0;
-                                };
-                            readSelRecord(selfShadowKeys[0]);
+                            // (24-byte records); shape lives in
+                            // pmm_io_common.hpp ReadPmmSelfShadowKey.
+                            ReadPmmSelfShadowKey(fd, selfShadowKeys[0]);
                             std::int32_t cnt = 0;
                             Rd(fd, &cnt, 4);                     // 0x45D8C7
                             for (std::int32_t i = 0; i < cnt; ++i) {
                                 std::int32_t timelineFrame = 0;
                                 Rd(fd, &timelineFrame, 4);
-                                readSelRecord(selfShadowKeys[timelineFrame]);
+                                ReadPmmSelfShadowKey(fd,
+                                                     selfShadowKeys[
+                                                         timelineFrame]);
                             }
                             unsigned char bq = 0;
                             const int got9EC = Rd(fd, &bq, 1);   // 0x45D9EC
+                            // [read-gate 7] end-of-stream unwinds here
                             if (bq == 1 && got9EC > 0) {
                                 // model color sweep (0x45DA1B..0x45DA91)
                                 Rd(fd, &s->state.modelOutlineColorRed,
@@ -1533,7 +1588,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                     s->state.modelOutlineColorBlue != 0) {
                                     for (int i = 0; i < kModelSlotCount; ++i)
                                         if (slots[i] != nullptr)
-                                            Sub4A4850(
+                                            SetModelColor(
                                                 reinterpret_cast<MMDApp*>(
                                                     slots[i]),
                                                 s->state.modelOutlineColorRed,
@@ -1543,15 +1598,17 @@ void LoadSceneV1(MMDApp* app, int fd) {
 
                                 unsigned char br = 0;
                                 const int gotAB4 = Rd(fd, &br, 1); // 0x45DAB4
+                                // [read-gate 8] end-of-stream unwinds here
                                 if (br == 1 && gotAB4 > 0) {
                                     unsigned char b194 = 0;
                                     Rd(fd, &b194, 1);            // 0x45DAE1
-                                    s->state.a0194 = (b194 != 0) ? 1 : 0;
+                                    s->state.blackBackgroundEnabled = (b194 != 0) ? 1 : 0;
                                     CheckMenuItem(GetMenu(main), 0x11A,
                                                   b194 ? 8 : 0);
                                     unsigned char bcam = 0;
                                     const int gotB35 =
                                         Rd(fd, &bcam, 1);        // 0x45DB35
+                                    // [read-gate 9] end-of-stream unwinds here
                                     if (bcam == 1 && gotB35 > 0) {
                                         // camera parent reregister
                                         // (0x45DB67..0x45DC76)
@@ -1584,26 +1641,26 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                             if (sel0 >= 0) {
                                                 SendMessageA(
                                                     GetDlgItem(main,
-                                                               0x1C1),
+                                                               panel::kMainComboNormal),
                                                     CB_SETCURSEL,
                                                     M8(slots[sel0],
                                                        0x2D7C),
                                                     0);        // 0x45DC9D
                                             }
-                                            Sub410040(s, sel0); // 0x45DCAE
+                                            RefillBoneRegisterCombo(s, sel0); // 0x45DCAE
 
                                             if (sel0 >= 0) {
                                                 const LRESULT n =
                                                     SendMessageA(
                                                         GetDlgItem(
-                                                            main, 0x1C2),
+                                                            main, panel::kBoneRegisterCombo),
                                                         CB_GETCOUNT, 0,
                                                         0);     // 0x45DCD5
                                                 for (LRESULT i = 0;
                                                      i < n; ++i) {
                                                     SendMessageA(
                                                         GetDlgItem(
-                                                            main, 0x1C2),
+                                                            main, panel::kBoneRegisterCombo),
                                                         CB_GETLBTEXT,
                                                         static_cast<
                                                             WPARAM>(i),
@@ -1626,7 +1683,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                                         SendMessageA(
                                                             GetDlgItem(
                                                                 main,
-                                                                0x1C2),
+                                                                panel::kBoneRegisterCombo),
                                                             CB_SETCURSEL,
                                                             static_cast<
                                                                 WPARAM>(i),
@@ -1637,6 +1694,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                         unsigned char bdd = 0;
                                         const int gotDDFC =
                                             Rd(fd, &bdd, 1);    // 0x45DDFC
+                                        // [read-gate 10] end-of-stream unwinds here
                                         if (bdd == 1 && gotDDFC > 0) {
                                         // 16 config dwords
                                         // (0x45DE2B..0x45DF4E)
@@ -1647,18 +1705,18 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                         unsigned char bf7 = 0;
                                         Rd(fd, &bf7, 1);        // 0x45DF5F
                                         if (bf7 == 1) {
-                                            s->state.v9ed98 = 1;
+                                            s->state.followCameraEnabled = 1;
                                             CheckMenuItem(
                                                 GetMenu(main), 0xF7, 8);
                                             SendMessageA(
-                                                GetDlgItem(main, 0x217),
+                                                GetDlgItem(main, panel::kFollowCameraCheckbox),
                                                 BM_SETCHECK, 1, 0);
                                         } else {
-                                            s->state.v9ed98 = 0;
+                                            s->state.followCameraEnabled = 0;
                                             CheckMenuItem(
                                                 GetMenu(main), 0xF7, 0);
                                             SendMessageA(
-                                                GetDlgItem(main, 0x217),
+                                                GetDlgItem(main, panel::kFollowCameraCheckbox),
                                                 BM_SETCHECK, 0, 0);
                                         }
 
@@ -1669,6 +1727,7 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                         unsigned char b11d = 0;
                                         const int got00E =
                                             Rd(fd, &b11d, 1);    // 0x45E00E
+                                        // [read-gate 11] end-of-stream unwinds here
                                         if (b11d == 1 && got00E > 0) {
                                             unsigned char bd2 = 0;
                                             Rd(fd, &bd2, 1);    // 0x45E03B
@@ -1676,20 +1735,21 @@ void LoadSceneV1(MMDApp* app, int fd) {
                                                 CheckMenuItem(
                                                     GetMenu(main),
                                                     0x11D, 8);
-                                                s->state.a0197 = 1;
+                                                s->state.floorVisible = 1;
                                                 s->Physics()->groundBody
                                                     ->setDeactivationTime(1.0f);
                                             } else {
                                                 CheckMenuItem(
                                                     GetMenu(main),
                                                     0x11D, 0);
-                                                s->state.a0197 = 0;
+                                                s->state.floorVisible = 0;
                                                 s->Physics()->groundBody
                                                     ->setDeactivationTime(-1.0f);
                                             }
                                             unsigned char bfin = 0;
                                             const int got0BC =
                                                 Rd(fd, &bfin, 1); // 0x45E0BC
+                                            // [read-gate 12] end-of-stream unwinds here
                                             if (bfin == 1 && got0BC > 0) {
                                                 for (int i = 0;
                                                      i < kModelSlotCount;
@@ -1714,22 +1774,34 @@ void LoadSceneV1(MMDApp* app, int fd) {
     }
     }
 
-    LogV1Stage("gated-tail-done", _tell(fd));
-    _close(fd);                                                   // 0x45E11D
+}
+
+
+// ---- 0x45E149..0x45E7F7: success tail - shadow-mode gate, light
+// direction to the physics scene, window title, the two key-chain
+// integrity boxes, combo 0x1B2 population, repaint ----------------------
+static void LoadSceneV1_SuccessTail(PmmV1LoadContext& ctx) {
+    auto* const s = ctx.s;
+    HWND const main = ctx.main;
+    D3DRenderer* const wrap = ctx.wrap;
+    unsigned char** const slots = ctx.slots;
+    char* const text = ctx.text;
+    char* const lbText = ctx.lbText;
+    wchar_t* const wndText = ctx.wndText;
 
     // ---- success tail (0x45E149..0x45E7F7) --------------------------------
     if (wrap->postProcessEnabled != 0) {
-        Sub411B90(s);                                             // 0x45E149
+        RefreshSelfShadowPanel(s);                                             // 0x45E149
     } else {
-        s->state.selfShadowCfgOrUint32 = 0;
+        s->state.selfShadowEnabled = 0;
         s->state.selfShadowMode = 0;
     }
     CheckMenuItem(GetMenu(main), 0x117,
-                  s->state.selfShadowCfgOrUint32 != 0 ? 8 : 0);
+                  s->state.selfShadowEnabled != 0 ? 8 : 0);
     if (slots[s->SelectedModelSlot()] != nullptr &&
         M8(slots[s->SelectedModelSlot()], 0x37C0) != 0 &&
         s->state.optflag[0] == 0)
-        SendMessageA(GetDlgItem(main, 0x1B8), BM_SETCHECK, 1, 0); // 0x45E1C1
+        SendMessageA(GetDlgItem(main, panel::kShadowCheckbox), BM_SETCHECK, 1, 0); // 0x45E1C1
     {  // light direction into the physics scene (0x45E1EF..0x45E286)
         float dir[3] = {s->state.gravityX,
                         s->state.gravityY,
@@ -1764,8 +1836,8 @@ void LoadSceneV1(MMDApp* app, int fd) {
         }
     }
     // Title brand: the port ships as MikuDanceStudio (About-box rename);
-    // v2 load and pmm_save.cpp already use the same form.
-    swprintf_s(wndText, 0x100, L"MikuDanceStudio [%s]",           // 0x45E2A4
+    // the same kAppTitleFormat constant serves the v2 load and pmm_save.cpp.
+    swprintf_s(wndText, 0x100, kAppTitleFormat,                   // 0x45E2A4
                reinterpret_cast<const wchar_t*>(s->state.envFileName));
     SetWindowTextW(main, wndText);
 
@@ -1835,38 +1907,38 @@ void LoadSceneV1(MMDApp* app, int fd) {
     // combo 0x1B2 population (0x45E585..0x45E753)
     {
         const LRESULT sel =
-            SendMessageA(GetDlgItem(main, 0x1B4), CB_GETCURSEL, 0, 0);
-        SendMessageA(GetDlgItem(main, 0x1B2), CB_RESETCONTENT, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_GETCURSEL, 0, 0);
+        SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_RESETCONTENT, 0, 0);
         if (sel == 0) {
             if (s->EnglishUI() == 0) {
-                SendMessageW(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>(kWCamera));
-                SendMessageW(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>(kWLight));  // 0x45E672
-                SendMessageW(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>(kWSelfSh));
-                SendMessageW(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>(kWGravity));
             } else {
-                SendMessageA(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>("camera")); // 0x45E5D8
-                SendMessageA(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>("light"));
-                SendMessageA(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>("s shadow"));
-                SendMessageA(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>("gravity"));
             }
             const LRESULT n =
-                SendMessageA(GetDlgItem(main, 0x1D7), CB_GETCOUNT, 0, 0);
+                SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0);
             for (LRESULT i = 0; i < n; ++i) {                    // 0x45E705
-                SendMessageA(GetDlgItem(main, 0x1D7), CB_GETLBTEXT,
+                SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT,
                              static_cast<WPARAM>(i),
                              reinterpret_cast<LPARAM>(lbText));
-                SendMessageA(GetDlgItem(main, 0x1B2), CB_ADDSTRING, 0,
+                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>(lbText));
             }
-            SendMessageA(GetDlgItem(main, 0x1B2), CB_SETCURSEL, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_SETCURSEL, 0, 0);
         } else {
             int found = 0;                                       // 0x45E794
             while (found < kModelSlotCount &&
@@ -1882,22 +1954,55 @@ void LoadSceneV1(MMDApp* app, int fd) {
     }
     // child window refresh (0x45E7AA..0x45E7C4)
     if (s->state.floatingWindow != 0) {
-        Sub4290F0(s);                                             // 0x45E7AA
+        RefreshSeparateWindowViewport(s);                                             // 0x45E7AA
         InvalidateRect(
             reinterpret_cast<HWND>(s->state.floatingWindow),
             nullptr, FALSE);
     }
     if (s->state.optflag[0] != 0) {
-        Sub411070(s);                                             // 0x45E7C7
+        RefreshLightPanel(s);                                             // 0x45E7C7
         PanelPaint(s);                                            // 0x45E7CE
     }
     InvalidateRect(main, nullptr, FALSE);                        // 0x45E7DB
-    Sub442EB0(s);                                                 // 0x45E7E2
+    RelayoutSidebarControls(s);                                                 // 0x45E7E2
     s->PhysicsResetPending() = 1;
     s->state.windowLayoutReady = 1;
     s->ApplyTimelineLightState();
     TraceSceneLightState(s, "pmm-v1-load-tail");
     PostViewRefresh(s);                                           // 0x45E7F7
+}
+
+
+}  // namespace
+
+void LoadSceneV1(MMDApp* app, int fd) {
+    auto* s = app;
+    PmmV1LoadContext ctx(app);
+
+    LoadSceneV1_DisposeAndHeader(ctx, fd);            // 0x45916D..0x459630
+    const unsigned char modelCount = LoadSceneV1_ModelPrePass(ctx, fd);
+    LogV1Stage("pre-pass-done", _tell(fd), modelCount);
+    if (modelCount != 0) {
+        unsigned char modelIdx = 0;
+        for (;;) {
+            if (!LoadSceneV1_ModelBlock(ctx, fd))
+                return;  // AbortV1Load already ran (0x45A7C5)
+            if (++modelIdx >= modelCount) break;                 // 0x45A6B4
+        }
+    }
+
+    LoadSceneV1_RegisterCombo(ctx);                   // 0x45A6D3..0x45AA89
+    LoadSceneV1_ReallocateTracks(ctx);                // 0x45AA93..0x45ABCC
+    LogV1Stage("regcombo-done", _tell(fd));
+    LoadSceneV1_CameraTrack(ctx, fd);                 // 0x45AC10..0x45B090
+    LoadSceneV1_LightTrack(ctx, fd);                  // 0x45B090..0x45B761
+    if (!LoadSceneV1_AccessoryBlock(ctx, fd)) return; // 0x45B761..0x45C479
+    LogV1Stage("accessories-done", _tell(fd));
+    LoadSceneV1_ConfigBlock(ctx, fd);                 // 0x45C48C..0x45D278
+    LoadSceneV1_ReadGatedTail(ctx, fd);               // 0x45D278..0x45E117
+    LogV1Stage("gated-tail-done", _tell(fd));
+    _close(fd);                                       // 0x45E11D
+    LoadSceneV1_SuccessTail(ctx);                     // 0x45E149..0x45E7F7
 }
 
 }  // namespace mikudancestudio

@@ -27,7 +27,7 @@
 //      limit), zero angle or sub-epsilon axis -> identity; else angle *=
 //      weight and work.quat = work.quat * q (D3DXQuaternionMultiply),
 //      work.pos += entry translation * weight.  SetPhysicsMode later adds
-//      these records onto bone->f364/+376 before the transform/IK update.
+//      these records onto bone->physicsOffset/+376 before the transform/IK update.
 //   2. Material morphs (0x497696..0x4996BF): two 128-byte-per-material
 //      pools are reset - model+8760 additive (memset 0) and model+8764
 //      multiplicative (the 28 blend channels at offsets 8..124 skipping

@@ -26,7 +26,7 @@ constexpr std::size_t kSize = sizeof(ModelRecord);
 // 0x2255100 / record 0x927C0, and the overflow box prints 600000
 // (x64 0x7FF7CB4D213D alloc, 0x7FF7CB47B16D box).  The x86 original
 // keeps 300000 (0x493E0).
-#ifdef _M_X64
+#if defined(_M_X64)
 constexpr std::size_t kBoneKeyCapacity = 600000;
 #else
 constexpr std::size_t kBoneKeyCapacity = 300000;

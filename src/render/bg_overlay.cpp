@@ -7,10 +7,9 @@
 // Both functions are app methods (thiscall, this = Block) reached from the
 // canvas-size dialog (menu 0xD4), the picture renderer (0x114 / case 276),
 // the AVI record starters (0x45E820/0x464760 via the 9E428 gate) and the
-// per-frame render chain.  NOTE: the shared stubs in src/unported/stubs.cpp
-// still export the names Sub4168D0/Sub417130; the dispatchers ported in this
-// tree call these full implementations instead (stub removal happens when the
-// parallel worktree lands its own version).
+// per-frame render chain.  The former Sub4168D0/Sub417130 forwarding twins
+// that used to live at the bottom of this file were removed; every call
+// site in this tree now uses the semantic names directly.
 //
 // 0x4168D0 decodes the current AVI background frame with the VFW chain
 // (AVIStreamTimeToSample / AVIStreamGetFrame / DrawDibDraw) into an
@@ -292,15 +291,15 @@ void AviBgOverlayRefresh(MMDApp* app) {
         // 0x416ADE: wall-clock driven sample from the seconds field
         // (9E64C is the frameB float copy; 0x52BA60 = double 1000.0).
         float secondsF;
-        std::memcpy(&secondsF, &s.state.f9e64c, sizeof secondsF);
+        std::memcpy(&secondsF, &s.state.playbackCursorSeconds, sizeof secondsF);
         const LONG t = static_cast<LONG>(
             static_cast<double>(secondsF) * 1000.0);
         sample = (stream != nullptr ? AVIStreamTimeToSample(stream, t)
                                     : 0) +
                  static_cast<std::int32_t>(s.state.a0B10);
     } else {
-        sample = s.state.f9e648;      // 0x416ABC
-        s.state.f9e648 = sample + 1;
+        sample = s.state.aviBackgroundSample;      // 0x416ABC
+        s.state.aviBackgroundSample = sample + 1;
     }
     if (sample < s.AviStreamStartFrame())
         sample = s.AviStreamStartFrame();
@@ -368,10 +367,9 @@ void PicBgOverlayRefresh(MMDApp* app) {
          s.PictureWidth(), s.PictureHeight()});
 }
 
-// Canonical names retained for the (app, ...) call sites that referenced
-// the former stubs; the real bodies above are the parallel-port winner
-// (full VFW decode chain; the background_plane.cpp twin was removed).
-void Sub4168D0(MMDApp* app) { AviBgOverlayRefresh(app); }  // VA 0x004168D0
-void Sub417130(MMDApp* app) { PicBgOverlayRefresh(app); }  // VA 0x00417130
+// (The former Sub4168D0/Sub417130 forwarding twins were removed; every
+//  call site now uses AviBgOverlayRefresh/PicBgOverlayRefresh directly.
+//  The real bodies above are the parallel-port winner - full VFW decode
+//  chain; the background_plane.cpp twin was removed.)
 
 }  // namespace mikudancestudio

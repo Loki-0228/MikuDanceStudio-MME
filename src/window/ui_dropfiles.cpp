@@ -42,7 +42,7 @@
 //       (0xA3480, 0x3E8); LoadWaveFile (0x418500); dirty = 1.
 //   .vsq (.vsq/.VSQ/.Vsq)  VOCALOID sequence (0x435FE0, NOT 0x4337A0):
 //       byte@760 != 0 -> MB_OK message, EN "Not selected model!"/"open
-//       vsq data" or JP 0x52E374/"vsq"; else Sub435FE0 + dirty = 1.
+//       vsq data" or JP 0x52E374/"vsq"; else LoadVsqFile + dirty = 1.
 //   .oni (.oni/.ONI/.Oni)  OpenNI/Kinect data:
 //       byte@760 != 0 -> MB_OK message, EN "Please select model!"/"open
 //       oni data" or JP 0x52E2F4/"oni"; else: byte@656312 (0xA03B8) != 0
@@ -257,7 +257,7 @@ void HandleDropFiles(HDROP hDrop) {
             if (DirMenuChecked(app)) {
                 wcscpy_s(app->DirBg(), 0x3E8, DirOf(app, szFile));     // 0xA3C50
             }
-            wcscpy_s(app->state.wcs9e1ec, 0x100, szFile);              // 0x9E1EC
+            wcscpy_s(app->state.aviBackgroundPath, 0x100, szFile);              // 0x9E1EC
             // original: sub_433250(this) reads the path from app+647660;
             // the stub interface takes the path - pass the same buffer
             LoadAviFile(app);                                        // 0x433250
@@ -297,7 +297,7 @@ void HandleDropFiles(HDROP hDrop) {
                                 MessageBoxA(MainHwnd(app), kJpVsqText, "vsq",
                                             MB_OK);
                         } else {
-                            Sub435FE0(app, szFile);                   // 0x435FE0
+                            LoadVsqFile(app, szFile);                   // 0x435FE0
                             app->SceneModified() = 1;
                         }
                     } else {

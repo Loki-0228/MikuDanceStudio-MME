@@ -1,5 +1,6 @@
 // ===========================================================================
-// VA 0x0040CAC0 - ViewportPanelLayout  (original: sub_40CAC0, 0x5A9 bytes)
+// VA 0x0040CAC0 - LayoutViewportPanels  (original: sub_40CAC0, 0x5A9 bytes,
+// was Sub40CAC0)
 // ===========================================================================
 // Repositions the camera/light/accessory overlay strip at the top of the 3D
 // viewport (ids 536..550) and the window-top button row (ids 551..557).
@@ -28,7 +29,7 @@
 
 namespace mikudancestudio {
 
-void Sub40CAC0(MMDApp* app) {
+void LayoutViewportPanels(MMDApp* app) {  // was Sub40CAC0, VA 0x0040CAC0
     auto& s = *app;
 
     HWND separate = s.FloatingWindow();                           // 658744

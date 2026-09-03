@@ -1,941 +1,496 @@
 // ===========================================================================
-// MikuDanceStudio - layout pin wall
+// MikuDanceStudio - layout pin wall (MMDAppState)
 // ===========================================================================
 // Regression guard for MMDAppState, split from app_layout.hpp so the
 // struct definition reads like the original author's code:
 //   * x86: every member pinned to the original binary's byte offset
 //     (the ground truth this port mirrors; recovered from IDA + probes).
-//   * x64: anchor members pinned; the rest keep their spacing relative to
-//     the last anchor, and the size is bounded near the original truth.
+//     The wall below is ordered by offset, i.e. by struct order; one
+//     MIKUDANCESTUDIO_APP_OFF line per pinned field (array elements get
+//     their own line, e.g. dialogFlags[17]).
+//   * x64: anchor members only - instruction-level ground truth
+//     (vote-grade twin reads); the rest keep their spacing relative to
+//     the last anchor, and the size is bounded near the original truth
+//     (see app_layout.hpp).
 // Included at the bottom of app_layout.hpp, inside namespace
 // mikudancestudio - requires MMDAppState in scope.  Hand-maintained
-// alongside the struct.
+// alongside the struct.  Architecture switches use the canonical
+// #if defined(_M_X64) / #if !defined(_M_X64) forms.
 // ===========================================================================
 #pragma once
 
 #include <cstddef>
 
-#ifndef _M_X64
-// every field pinned to its position in the original x86 binary
-static_assert(offsetof(MMDAppState, hInstance) == 0,
-              "hInstance x86");
-static_assert(offsetof(MMDAppState, mouseX) == 4,
-              "mouseX x86");
-static_assert(offsetof(MMDAppState, mouseY) == 8,
-              "mouseY x86");
-static_assert(offsetof(MMDAppState, previousMouseX) == 12,
-              "previousMouseX x86");
-static_assert(offsetof(MMDAppState, previousMouseY) == 16,
-              "previousMouseY x86");
-static_assert(offsetof(MMDAppState, upKeyState) == 20,
-              "upKeyState x86");
-static_assert(offsetof(MMDAppState, downKeyState) == 24,
-              "downKeyState x86");
-static_assert(offsetof(MMDAppState, leftKeyState) == 28,
-              "leftKeyState x86");
-static_assert(offsetof(MMDAppState, rightKeyState) == 32,
-              "rightKeyState x86");
-static_assert(offsetof(MMDAppState, shiftModifierState) == 36,
-              "shiftModifierState x86");
-static_assert(offsetof(MMDAppState, spaceKeyState) == 40,
-              "spaceKeyState x86");
-static_assert(offsetof(MMDAppState, escKeyState) == 44,
-              "escKeyState x86");
-static_assert(offsetof(MMDAppState, dialogFlags) == 48,
-              "dialogFlags x86");
-static_assert(offsetof(MMDAppState, dialogFlags[16]) == 112,
-              "dialogFlags[16] x86");
-static_assert(offsetof(MMDAppState, dialogFlags[17]) == 116,
-              "dialogFlags[17] x86");
-static_assert(offsetof(MMDAppState, keyState221) == 120,
-              "keyState221 x86");
-static_assert(offsetof(MMDAppState, keyState226) == 124,
-              "keyState226 x86");
-static_assert(offsetof(MMDAppState, tabKeyState) == 128,
-              "tabKeyState x86");
-static_assert(offsetof(MMDAppState, leftMouseButtonState) == 132,
-              "leftMouseButtonState x86");
-static_assert(offsetof(MMDAppState, rightMouseButtonState) == 136,
-              "rightMouseButtonState x86");
-static_assert(offsetof(MMDAppState, middleMouseButtonState) == 140,
-              "middleMouseButtonState x86");
-static_assert(offsetof(MMDAppState, numpadKeyState) == 144,
-              "numpadKeyState x86");
-static_assert(offsetof(MMDAppState, numpadKeyState[9]) == 180,
-              "numpadKeyState[9] x86");
-static_assert(offsetof(MMDAppState, deleteKeyState) == 184,
-              "deleteKeyState x86");
-static_assert(offsetof(MMDAppState, bC) == 188,
-              "bC x86");
-static_assert(offsetof(MMDAppState, ctrlModifierState) == 192,
-              "ctrlModifierState x86");
-static_assert(offsetof(MMDAppState, menuKeyState) == 196,
-              "menuKeyState x86");
-static_assert(offsetof(MMDAppState, optflag) == 760,
-              "optflag x86");
-static_assert(offsetof(MMDAppState, optflag[6]) == 766,
-              "optflag[6] x86");
-static_assert(offsetof(MMDAppState, sidebarResizeDragging) == 200,
-              "sidebarResizeDragging x86");
-static_assert(offsetof(MMDAppState, sub025c) == 204,
-              "sub025c x86");
-static_assert(offsetof(MMDAppState, wavPath) == 208,
-              "wavPath x86");
-static_assert(offsetof(MMDAppState, directSoundAvailable) == 720,
-              "directSoundAvailable x86");
-static_assert(offsetof(MMDAppState, hdcMainPanel) == 724,
-              "hdcMainPanel x86");
-static_assert(offsetof(MMDAppState, bmpPanel) == 728,
-              "bmpPanel x86");
-static_assert(offsetof(MMDAppState, bmpPanelSpare) == 732,
-              "bmpPanelSpare x86");
-static_assert(offsetof(MMDAppState, hdcTimeline) == 736,
-              "hdcTimeline x86");
-static_assert(offsetof(MMDAppState, bmpTimelineStrip) == 740,
-              "bmpTimelineStrip x86");
-static_assert(offsetof(MMDAppState, hdcInterpCurve) == 744,
-              "hdcInterpCurve x86");
-static_assert(offsetof(MMDAppState, bmpInterpCurve) == 748,
-              "bmpInterpCurve x86");
-static_assert(offsetof(MMDAppState, bmpRes101) == 752,
-              "bmpRes101 x86");
-static_assert(offsetof(MMDAppState, bmpRes119) == 756,
-              "bmpRes119 x86");
-static_assert(offsetof(MMDAppState, groundGridVertices) == 768,
-              "groundGridVertices x86");
-static_assert(offsetof(MMDAppState, groundGridIndices) == 772,
-              "groundGridIndices x86");
-static_assert(offsetof(MMDAppState, viewOffsetX) == 776,
-              "viewOffsetX x86");
-static_assert(offsetof(MMDAppState, viewOffsetY) == 780,
-              "viewOffsetY x86");
-static_assert(offsetof(MMDAppState, cameraPitch) == 784,
-              "cameraPitch x86");
-static_assert(offsetof(MMDAppState, cameraYaw) == 788,
-              "cameraYaw x86");
-static_assert(offsetof(MMDAppState, cameraRoll) == 792,
-              "cameraRoll x86");
-static_assert(offsetof(MMDAppState, cameraPerspective) == 796,
-              "cameraPerspective x86");
-static_assert(offsetof(MMDAppState, groundGridEnabled) == 797,
-              "groundGridEnabled x86");
-static_assert(offsetof(MMDAppState, fpsOverlayEnabled) == 798,
-              "fpsOverlayEnabled x86");
-static_assert(offsetof(MMDAppState, fpsOverlayElapsedSeconds) == 800,
-              "fpsOverlayElapsedSeconds x86");
-static_assert(offsetof(MMDAppState, fpsOverlayFrameCount) == 804,
-              "fpsOverlayFrameCount x86");
-static_assert(offsetof(MMDAppState, framesPerSecond) == 808,
-              "framesPerSecond x86");
-static_assert(offsetof(MMDAppState, v32c) == 812,
-              "v32c x86");
-static_assert(offsetof(MMDAppState, playbackActive) == 816,
-              "playbackActive x86");
-static_assert(offsetof(MMDAppState, cameraPosX) == 820,
-              "cameraPosX x86");
-static_assert(offsetof(MMDAppState, cameraPosY) == 824,
-              "cameraPosY x86");
-static_assert(offsetof(MMDAppState, cameraPosZ) == 828,
-              "cameraPosZ x86");
-static_assert(offsetof(MMDAppState, cameraReferenceMode) == 832,
-              "cameraReferenceMode x86");
-static_assert(offsetof(MMDAppState, playbackLoopEnabled) == 833,
-              "playbackLoopEnabled x86");
-static_assert(offsetof(MMDAppState, v342) == 834,
-              "v342 x86");
-static_assert(offsetof(MMDAppState, viewportToolHovered) == 836,
-              "viewportToolHovered x86");
-static_assert(offsetof(MMDAppState, viewToolDragOperation) == 840,
-              "viewToolDragOperation x86");
-static_assert(offsetof(MMDAppState, interactionDragMode) == 844,
-              "interactionDragMode x86");
-static_assert(offsetof(MMDAppState, v350Clipboard) == 848,
-              "v350Clipboard x86");
-#ifndef _M_X64
-static_assert(offsetof(MMDAppState, boneClipboard) == 852,
-              "boneClipboard x86");
-static_assert(offsetof(MMDAppState, morphClipboard) == 856,
-              "morphClipboard x86");
-static_assert(offsetof(MMDAppState, cameraClipboard) == 864,
-              "cameraClipboard x86");
-static_assert(offsetof(MMDAppState, lightClipboard) == 868,
-              "lightClipboard x86");
-static_assert(offsetof(MMDAppState, shadowClipboard) == 872,
-              "shadowClipboard x86");
-static_assert(offsetof(MMDAppState, gravityClipboard) == 876,
-              "gravityClipboard x86");
-static_assert(offsetof(MMDAppState, accessoryClipboard) == 880,
-              "accessoryClipboard x86");
-#endif
-static_assert(offsetof(MMDAppState, displayClipboard) == 860,
-              "displayClipboard x86");
-static_assert(offsetof(MMDAppState, cameraKeyTrack) == 884,
-              "cameraKeyTrack x86");
-static_assert(offsetof(MMDAppState, lightKeyTrack) == 888,
-              "lightKeyTrack x86");
-static_assert(offsetof(MMDAppState, selfShadowKeyTrack) == 892,
-              "selfShadowKeyTrack x86");
-static_assert(offsetof(MMDAppState, gravityKeyTrack) == 896,
-              "gravityKeyTrack x86");
-static_assert(offsetof(MMDAppState, accKeyTracks) == 900,
-              "accKeyTracks x86");
-static_assert(offsetof(MMDAppState, modelSlots) == 1920,
-              "modelSlots x86");
-static_assert(offsetof(MMDAppState, slotIdx) == 2320,
-              "slotIdx x86");
-static_assert(offsetof(MMDAppState, editMode) == 2324,
-              "editMode x86");
-static_assert(offsetof(MMDAppState, groundShadowEnabled) == 2328,
-              "groundShadowEnabled x86");
-static_assert(offsetof(MMDAppState, aviBackgroundEnabled) == 2332,
-              "aviBackgroundEnabled x86");
-static_assert(offsetof(MMDAppState, viewportToolOperation) == 2348,
-              "viewportToolOperation x86");
-static_assert(offsetof(MMDAppState, dragOriginX) == 2352,
-              "dragOriginX x86");
-static_assert(offsetof(MMDAppState, dragOriginY) == 2356,
-              "dragOriginY x86");
-static_assert(offsetof(MMDAppState, viewportToolCenterX) == 2336,
-              "viewportToolCenterX x86");
-static_assert(offsetof(MMDAppState, viewportToolCenterY) == 2340,
-              "viewportToolCenterY x86");
-static_assert(offsetof(MMDAppState, selectedClipW) == 2344,
-              "selectedClipW x86");
-static_assert(offsetof(MMDAppState, boneBoxStartX) == 2360,
-              "boneBoxStartX x86");
-static_assert(offsetof(MMDAppState, boneBoxStartY) == 2364,
-              "boneBoxStartY x86");
-static_assert(offsetof(MMDAppState, cameraTrackCursor) == 648796,
-              "cameraTrackCursor x86");
-static_assert(offsetof(MMDAppState, cameraTrackActive) == 648800,
-              "cameraTrackActive x86");
-static_assert(offsetof(MMDAppState, lightTrackCursor) == 648804,
-              "lightTrackCursor x86");
-static_assert(offsetof(MMDAppState, lightTrackActive) == 648808,
-              "lightTrackActive x86");
-static_assert(offsetof(MMDAppState, shadowTrackCursor) == 648812,
-              "shadowTrackCursor x86");
-static_assert(offsetof(MMDAppState, shadowTrackActive) == 648816,
-              "shadowTrackActive x86");
-static_assert(offsetof(MMDAppState, gravityTrackCursor) == 648820,
-              "gravityTrackCursor x86");
-static_assert(offsetof(MMDAppState, gravityTrackActive) == 648824,
-              "gravityTrackActive x86");
-static_assert(offsetof(MMDAppState, accessoryTrackCursor) == 648828,
-              "accessoryTrackCursor x86");
-static_assert(offsetof(MMDAppState, accessoryTrackCursor[54]) == 649044,
-              "accessoryTrackCursor[54] x86");
-static_assert(offsetof(MMDAppState, accessoryTrackActive) == 649848,
-              "accessoryTrackActive x86");
-static_assert(offsetof(MMDAppState, boneBoxSelectionActive) == 2368,
-              "boneBoxSelectionActive x86");
-static_assert(offsetof(MMDAppState, scrollCbSize) == 2372,
-              "scrollCbSize x86");
-static_assert(offsetof(MMDAppState, scrollFMask) == 2376,
-              "scrollFMask x86");
-static_assert(offsetof(MMDAppState, scrollNMin) == 2380,
-              "scrollNMin x86");
-static_assert(offsetof(MMDAppState, scrollNMax) == 2384,
-              "scrollNMax x86");
-static_assert(offsetof(MMDAppState, scrollNPage) == 2388,
-              "scrollNPage x86");
-static_assert(offsetof(MMDAppState, scrollNPos) == 2392,
-              "scrollNPos x86");
-static_assert(offsetof(MMDAppState, timelineScrollNPage) == 2416,
-              "timelineScrollNPage x86");
-static_assert(offsetof(MMDAppState, timelineScrollNMin) == 2420,
-              "timelineScrollNMin x86");
-static_assert(offsetof(MMDAppState, timelineStartFrame) == 2428,
-              "timelineStartFrame x86");
-static_assert(offsetof(MMDAppState, currentFrame) == 2432,
-              "currentFrame x86");
-static_assert(offsetof(MMDAppState, rowHitBone) == 2436,
-              "rowHitBone x86");
-static_assert(offsetof(MMDAppState, pmxEncoding) == 8624,
-              "pmxEncoding x86");
-static_assert(offsetof(MMDAppState, pmxIdxVert) == 8626,
-              "pmxIdxVert x86");
-static_assert(offsetof(MMDAppState, pmxIdxBone) == 8628,
-              "pmxIdxBone x86");
-static_assert(offsetof(MMDAppState, pmxIdxRigid) == 8631,
-              "pmxIdxRigid x86");
-static_assert(offsetof(MMDAppState, morph0Count) == 8684,
-              "morph0Count x86");
-static_assert(offsetof(MMDAppState, physOffsetCount) == 8708,
-              "physOffsetCount x86");
-static_assert(offsetof(MMDAppState, morph0Table) == 8724,
-              "morph0Table x86");
-static_assert(offsetof(MMDAppState, physOffsetRecords) == 8728,
-              "physOffsetRecords x86");
-static_assert(offsetof(MMDAppState, physLastFrame) == 8772,
-              "physLastFrame x86");
-static_assert(offsetof(MMDAppState, morphCount) == 11648,
-              "morphCount x86");
-static_assert(offsetof(MMDAppState, boneCount) == 11652,
-              "boneCount x86");
-static_assert(offsetof(MMDAppState, ikCount) == 11656,
-              "ikCount x86");
-static_assert(offsetof(MMDAppState, facialFrameCount) == 11692,
-              "facialFrameCount x86");
-static_assert(offsetof(MMDAppState, rbGroupCount) == 11696,
-              "rbGroupCount x86");
-static_assert(offsetof(MMDAppState, rigidCount) == 12752,
-              "rigidCount x86");
-static_assert(offsetof(MMDAppState, jointCount) == 12756,
-              "jointCount x86");
-static_assert(offsetof(MMDAppState, physicsMode) == 14590,
-              "physicsMode x86");
-static_assert(offsetof(MMDAppState, rowHitMorph) == 162436,
-              "rowHitMorph x86");
-static_assert(offsetof(MMDAppState, centerBoneIndex) == 314604,
-              "centerBoneIndex x86");
-static_assert(offsetof(MMDAppState, rowHitIk) == 322436,
-              "rowHitIk x86");
-static_assert(offsetof(MMDAppState, rowHitBand0) == 482436,
-              "rowHitBand0 x86");
-static_assert(offsetof(MMDAppState, rowHitBand1) == 483236,
-              "rowHitBand1 x86");
-static_assert(offsetof(MMDAppState, rowHitBand2) == 484036,
-              "rowHitBand2 x86");
-static_assert(offsetof(MMDAppState, rowHitBand3) == 484836,
-              "rowHitBand3 x86");
-static_assert(offsetof(MMDAppState, rowHitAcc) == 485636,
-              "rowHitAcc x86");
-static_assert(offsetof(MMDAppState, interpCurveUniformFound) == 645636,
-              "interpCurveUniformFound x86");
-static_assert(offsetof(MMDAppState, interpCurveControlCache) == 645637,
-              "interpCurveControlCache x86");
-static_assert(offsetof(MMDAppState, pendingTimelineSelectionRow) == 645641,
-              "pendingTimelineSelectionRow x86");
-static_assert(offsetof(MMDAppState, lightA) == 645642,
-              "lightA x86");
-static_assert(offsetof(MMDAppState, lightB) == 645648,
-              "lightB x86");
-static_assert(offsetof(MMDAppState, lightC) == 645654,
-              "lightC x86");
-static_assert(offsetof(MMDAppState, lightD) == 645660,
-              "lightD x86");
-static_assert(offsetof(MMDAppState, v9da24) == 645668,
-              "v9da24 x86");
-static_assert(offsetof(MMDAppState, v9da24[8]) == 645700,
-              "v9da24[8] x86");
-static_assert(offsetof(MMDAppState, displayObjectListScrollPosition) == 645704,
-              "displayObjectListScrollPosition x86");
-static_assert(offsetof(MMDAppState, displayObjectListMatchCount) == 645708,
-              "displayObjectListMatchCount x86");
-static_assert(offsetof(MMDAppState, jointLineMap) == 645712,
-              "jointLineMap x86");
-static_assert(offsetof(MMDAppState, buf9ddx) == 646512,
-              "buf9ddx x86");
-static_assert(offsetof(MMDAppState, lastRegisteredFrame) == 647532,
-              "lastRegisteredFrame x86");
-static_assert(offsetof(MMDAppState, selLightAccSlotOrUint32) == 647536,
-              "selLightAccSlotOrUint32 x86");
-static_assert(offsetof(MMDAppState, lightDirection) == 647540,
-              "lightDirection x86");
-static_assert(offsetof(MMDAppState, v9e178) == 647544,
-              "v9e178 x86");
-static_assert(offsetof(MMDAppState, v9e17c) == 647548,
-              "v9e17c x86");
-static_assert(offsetof(MMDAppState, lightColor) == 647588,
-              "lightColor x86");
-static_assert(offsetof(MMDAppState, v9e1a8) == 647592,
-              "v9e1a8 x86");
-static_assert(offsetof(MMDAppState, v9e1ac) == 647596,
-              "v9e1ac x86");
-static_assert(offsetof(MMDAppState, v9e1cc) == 647628,
-              "v9e1cc x86");
-static_assert(offsetof(MMDAppState, cameraFov) == 647656,
-              "cameraFov x86");
-static_assert(offsetof(MMDAppState, wcs9e1ec) == 647660,
-              "wcs9e1ec x86");
-static_assert(offsetof(MMDAppState, drawDib) == 648172,
-              "drawDib x86");
-static_assert(offsetof(MMDAppState, aviBackgroundTexture) == 648176,
-              "aviBackgroundTexture x86");
-static_assert(offsetof(MMDAppState, aviBackgroundSurface) == 648180,
-              "aviBackgroundSurface x86");
-static_assert(offsetof(MMDAppState, v9e3f8OrPtr) == 648184,
-              "v9e3f8OrPtr x86");
-static_assert(offsetof(MMDAppState, aviFile) == 648188,
-              "aviFile x86");
-static_assert(offsetof(MMDAppState, v9e400OrUint32) == 648192,
-              "v9e400OrUint32 x86");
-static_assert(offsetof(MMDAppState, aviFrameReader) == 648196,
-              "aviFrameReader x86");
-static_assert(offsetof(MMDAppState, aviStreamStart) == 648200,
-              "aviStreamStart x86");
-static_assert(offsetof(MMDAppState, aviStreamEnd) == 648204,
-              "aviStreamEnd x86");
-static_assert(offsetof(MMDAppState, aviUsesThirtyFpsTiming) == 648208,
-              "aviUsesThirtyFpsTiming x86");
-static_assert(offsetof(MMDAppState, aviOffsetX) == 648212,
-              "aviOffsetX x86");
-static_assert(offsetof(MMDAppState, aviOffsetY) == 648216,
-              "aviOffsetY x86");
-static_assert(offsetof(MMDAppState, aviScale) == 648220,
-              "aviScale x86");
-static_assert(offsetof(MMDAppState, aviFrameWidth) == 648224,
-              "aviFrameWidth x86");
-static_assert(offsetof(MMDAppState, aviFrameHeight) == 648228,
-              "aviFrameHeight x86");
-static_assert(offsetof(MMDAppState, pictureBackgroundEnabled) == 648232,
-              "pictureBackgroundEnabled x86");
-static_assert(offsetof(MMDAppState, pictureBackgroundTexture) == 648236,
-              "pictureBackgroundTexture x86");
-static_assert(offsetof(MMDAppState, v9e430OrPtr) == 648240,
-              "v9e430OrPtr x86");
-static_assert(offsetof(MMDAppState, pictureOffsetX) == 648244,
-              "pictureOffsetX x86");
-static_assert(offsetof(MMDAppState, pictureOffsetY) == 648248,
-              "pictureOffsetY x86");
-static_assert(offsetof(MMDAppState, pictureScale) == 648252,
-              "pictureScale x86");
-static_assert(offsetof(MMDAppState, pictureWidth) == 648256,
-              "pictureWidth x86");
-static_assert(offsetof(MMDAppState, pictureHeight) == 648260,
-              "pictureHeight x86");
-static_assert(offsetof(MMDAppState, pictureBackgroundPath) == 648264,
-              "pictureBackgroundPath x86");
-static_assert(offsetof(MMDAppState, f9e648) == 648776,
-              "f9e648 x86");
-static_assert(offsetof(MMDAppState, f9e64c) == 648780,
-              "f9e64c x86");
-static_assert(offsetof(MMDAppState, v9e650) == 648784,
-              "v9e650 x86");
-static_assert(offsetof(MMDAppState, f9e654) == 648788,
-              "f9e654 x86");
-static_assert(offsetof(MMDAppState, f9e658) == 648792,
-              "f9e658 x86");
-static_assert(offsetof(MMDAppState, playbackEnabledSnapshot) == 650103,
-              "playbackEnabledSnapshot x86");
-static_assert(offsetof(MMDAppState, v9eb7e) == 650110,
-              "v9eb7e x86");
-static_assert(offsetof(MMDAppState, blinkPhase) == 650111,
-              "blinkPhase x86");
-static_assert(offsetof(MMDAppState, captureTexture) == 650112,
-              "captureTexture x86");
-static_assert(offsetof(MMDAppState, captureMode) == 650116,
-              "captureMode x86");
-static_assert(offsetof(MMDAppState, captureRenderTarget) == 650120,
-              "captureRenderTarget x86");
-static_assert(offsetof(MMDAppState, v9eb8c) == 650124,
-              "v9eb8c x86");
-#ifndef _M_X64
-static_assert(offsetof(MMDAppState, aviOutputPath) == 650128,
-              "aviOutputPath x86");
-#endif
-static_assert(offsetof(MMDAppState, v9ed90) == 650640,
-              "v9ed90 x86");
-static_assert(offsetof(MMDAppState, f9ed94) == 650644,
-              "f9ed94 x86");
-static_assert(offsetof(MMDAppState, v9ed98) == 650648,
-              "v9ed98 x86");
-static_assert(offsetof(MMDAppState, playbackStartsAtCurrentFrame) == 650649,
-              "playbackStartsAtCurrentFrame x86");
-static_assert(offsetof(MMDAppState, projectedShadowBlendEnabled) == 650650,
-              "projectedShadowBlendEnabled x86");
-static_assert(offsetof(MMDAppState, v9ed9c) == 650652,
-              "v9ed9c x86");
-static_assert(offsetof(MMDAppState, sub04b0OrUint32) == 650656,
-              "sub04b0OrUint32 x86");
-static_assert(offsetof(MMDAppState, playbackClockAnchorLow) == 650664,
-              "playbackClockAnchorLow x86");
-static_assert(offsetof(MMDAppState, playbackClockAnchorHigh) == 650668,
-              "playbackClockAnchorHigh x86");
-static_assert(offsetof(MMDAppState, physicsScene) == 650672,
-              "physicsScene x86");
-static_assert(offsetof(MMDAppState, a9edb4) == 650676,
-              "a9edb4 x86");
-static_assert(offsetof(MMDAppState, physicsResetPending) == 650677,
-              "physicsResetPending x86");
-static_assert(offsetof(MMDAppState, playbackFrameChanged) == 650678,
-              "playbackFrameChanged x86");
-static_assert(offsetof(MMDAppState, gravityX) == 650680,
-              "gravityX x86");
-static_assert(offsetof(MMDAppState, gravityY) == 650684,
-              "gravityY x86");
-static_assert(offsetof(MMDAppState, gravityZ) == 650688,
-              "gravityZ x86");
-static_assert(offsetof(MMDAppState, gravityMagnitude) == 650692,
-              "gravityMagnitude x86");
-static_assert(offsetof(MMDAppState, gravityNoise) == 650696,
-              "gravityNoise x86");
-static_assert(offsetof(MMDAppState, v9edcc) == 650700,
-              "v9edcc x86");
-static_assert(offsetof(MMDAppState, v9edd0) == 650704,
-              "v9edd0 x86");
-static_assert(offsetof(MMDAppState, viewportInputActive) == 650705,
-              "viewportInputActive x86");
-static_assert(offsetof(MMDAppState, recordingCompletionFlag) == 650708,
-              "recordingCompletionFlag x86");
-static_assert(offsetof(MMDAppState, v9edd8) == 650712,
-              "v9edd8 x86");
-static_assert(offsetof(MMDAppState, f9eddc) == 650716,
-              "f9eddc x86");
-static_assert(offsetof(MMDAppState, toonTextures) == 650720,
-              "toonTextures x86");
-static_assert(offsetof(MMDAppState, v9ee0cOrUint32) == 650764,
-              "v9ee0cOrUint32 x86");
-static_assert(offsetof(MMDAppState, spriteOverlayPrimitiveCount) == 650768,
-              "spriteOverlayPrimitiveCount x86");
-static_assert(offsetof(MMDAppState, overlayTexture) == 650772,
-              "overlayTexture x86");
-static_assert(offsetof(MMDAppState, overlayVertices) == 650776,
-              "overlayVertices x86");
-static_assert(offsetof(MMDAppState, textOverlayPrimitiveCount) == 650780,
-              "textOverlayPrimitiveCount x86");
-static_assert(offsetof(MMDAppState, sceneFontTexture) == 650784,
-              "sceneFontTexture x86");
-static_assert(offsetof(MMDAppState, recentFile0) == 650788,
-              "recentFile0 x86");
-static_assert(offsetof(MMDAppState, recentFile1) == 651044,
-              "recentFile1 x86");
-static_assert(offsetof(MMDAppState, recentFile2) == 651300,
-              "recentFile2 x86");
-static_assert(offsetof(MMDAppState, lineOverlayPrimitiveCount) == 651556,
-              "lineOverlayPrimitiveCount x86");
-static_assert(offsetof(MMDAppState, groundPlaneVertices) == 651560,
-              "groundPlaneVertices x86");
-static_assert(offsetof(MMDAppState, v9f12c) == 651564,
-              "v9f12c x86");
-static_assert(offsetof(MMDAppState, projectedShadowRestoreTexture) == 651568,
-              "projectedShadowRestoreTexture x86");
-static_assert(offsetof(MMDAppState, captureSavePath) == 651572,
-              "captureSavePath x86");
-static_assert(offsetof(MMDAppState, captureReadbackPixels) == 652084,
-              "captureReadbackPixels x86");
-static_assert(offsetof(MMDAppState, fontSubOrPtr) == 652088,
-              "fontSubOrPtr x86");
+#if !defined(_M_X64)
+// ---- x86 wall: every field pinned to the original x86 binary ----------
+#define MIKUDANCESTUDIO_APP_OFF(f, off)                                        \
+    static_assert(offsetof(MMDAppState, f) == (off),                          \
+                  #f " x86 offset must match the original binary")
+
+MIKUDANCESTUDIO_APP_OFF(hInstance, 0);
+MIKUDANCESTUDIO_APP_OFF(mouseX, 4);
+MIKUDANCESTUDIO_APP_OFF(mouseY, 8);
+MIKUDANCESTUDIO_APP_OFF(previousMouseX, 12);
+MIKUDANCESTUDIO_APP_OFF(previousMouseY, 16);
+MIKUDANCESTUDIO_APP_OFF(upKeyState, 20);
+MIKUDANCESTUDIO_APP_OFF(downKeyState, 24);
+MIKUDANCESTUDIO_APP_OFF(leftKeyState, 28);
+MIKUDANCESTUDIO_APP_OFF(rightKeyState, 32);
+MIKUDANCESTUDIO_APP_OFF(shiftModifierState, 36);
+MIKUDANCESTUDIO_APP_OFF(spaceKeyState, 40);
+MIKUDANCESTUDIO_APP_OFF(escKeyState, 44);
+MIKUDANCESTUDIO_APP_OFF(dialogFlags, 48);
+MIKUDANCESTUDIO_APP_OFF(dialogFlags[16], 112);
+MIKUDANCESTUDIO_APP_OFF(dialogFlags[17], 116);
+MIKUDANCESTUDIO_APP_OFF(keyState221, 120);
+MIKUDANCESTUDIO_APP_OFF(keyState226, 124);
+MIKUDANCESTUDIO_APP_OFF(tabKeyState, 128);
+MIKUDANCESTUDIO_APP_OFF(leftMouseButtonState, 132);
+MIKUDANCESTUDIO_APP_OFF(rightMouseButtonState, 136);
+MIKUDANCESTUDIO_APP_OFF(middleMouseButtonState, 140);
+MIKUDANCESTUDIO_APP_OFF(numpadKeyState, 144);
+MIKUDANCESTUDIO_APP_OFF(numpadKeyState[9], 180);
+MIKUDANCESTUDIO_APP_OFF(deleteKeyState, 184);
+MIKUDANCESTUDIO_APP_OFF(enterKeyState, 188);
+MIKUDANCESTUDIO_APP_OFF(ctrlModifierState, 192);
+MIKUDANCESTUDIO_APP_OFF(menuKeyState, 196);
+MIKUDANCESTUDIO_APP_OFF(sidebarResizeDragging, 200);
+MIKUDANCESTUDIO_APP_OFF(audioContext, 204);
+MIKUDANCESTUDIO_APP_OFF(wavPath, 208);
+MIKUDANCESTUDIO_APP_OFF(directSoundAvailable, 720);
+MIKUDANCESTUDIO_APP_OFF(hdcMainPanel, 724);
+MIKUDANCESTUDIO_APP_OFF(bmpPanel, 728);
+MIKUDANCESTUDIO_APP_OFF(bmpPanelSpare, 732);
+MIKUDANCESTUDIO_APP_OFF(hdcTimeline, 736);
+MIKUDANCESTUDIO_APP_OFF(bmpTimelineStrip, 740);
+MIKUDANCESTUDIO_APP_OFF(hdcInterpCurve, 744);
+MIKUDANCESTUDIO_APP_OFF(bmpInterpCurve, 748);
+MIKUDANCESTUDIO_APP_OFF(bmpRes101, 752);
+MIKUDANCESTUDIO_APP_OFF(bmpRes119, 756);
+MIKUDANCESTUDIO_APP_OFF(optflag, 760);
+MIKUDANCESTUDIO_APP_OFF(optflag[6], 766);
+MIKUDANCESTUDIO_APP_OFF(groundGridVertices, 768);
+MIKUDANCESTUDIO_APP_OFF(groundGridIndices, 772);
+MIKUDANCESTUDIO_APP_OFF(viewOffsetX, 776);
+MIKUDANCESTUDIO_APP_OFF(viewOffsetY, 780);
+MIKUDANCESTUDIO_APP_OFF(cameraPitch, 784);
+MIKUDANCESTUDIO_APP_OFF(cameraYaw, 788);
+MIKUDANCESTUDIO_APP_OFF(cameraRoll, 792);
+MIKUDANCESTUDIO_APP_OFF(cameraPerspective, 796);
+MIKUDANCESTUDIO_APP_OFF(groundGridEnabled, 797);
+MIKUDANCESTUDIO_APP_OFF(fpsOverlayEnabled, 798);
+MIKUDANCESTUDIO_APP_OFF(fpsOverlayElapsedSeconds, 800);
+MIKUDANCESTUDIO_APP_OFF(fpsOverlayFrameCount, 804);
+MIKUDANCESTUDIO_APP_OFF(framesPerSecond, 808);
+MIKUDANCESTUDIO_APP_OFF(v32c, 812);
+MIKUDANCESTUDIO_APP_OFF(playbackActive, 816);
+MIKUDANCESTUDIO_APP_OFF(cameraPosX, 820);
+MIKUDANCESTUDIO_APP_OFF(cameraPosY, 824);
+MIKUDANCESTUDIO_APP_OFF(cameraPosZ, 828);
+MIKUDANCESTUDIO_APP_OFF(cameraReferenceMode, 832);
+MIKUDANCESTUDIO_APP_OFF(playbackLoopEnabled, 833);
+MIKUDANCESTUDIO_APP_OFF(playbackReturnsToStartFrame, 834);
+MIKUDANCESTUDIO_APP_OFF(viewportToolHovered, 836);
+MIKUDANCESTUDIO_APP_OFF(viewToolDragOperation, 840);
+MIKUDANCESTUDIO_APP_OFF(interactionDragMode, 844);
+MIKUDANCESTUDIO_APP_OFF(boneCopyRecords, 848);
+MIKUDANCESTUDIO_APP_OFF(boneClipboard, 852);
+MIKUDANCESTUDIO_APP_OFF(morphClipboard, 856);
+MIKUDANCESTUDIO_APP_OFF(displayClipboard, 860);
+MIKUDANCESTUDIO_APP_OFF(cameraClipboard, 864);
+MIKUDANCESTUDIO_APP_OFF(lightClipboard, 868);
+MIKUDANCESTUDIO_APP_OFF(shadowClipboard, 872);
+MIKUDANCESTUDIO_APP_OFF(gravityClipboard, 876);
+MIKUDANCESTUDIO_APP_OFF(accessoryClipboard, 880);
+MIKUDANCESTUDIO_APP_OFF(cameraKeyTrack, 884);
+MIKUDANCESTUDIO_APP_OFF(lightKeyTrack, 888);
+MIKUDANCESTUDIO_APP_OFF(selfShadowKeyTrack, 892);
+MIKUDANCESTUDIO_APP_OFF(gravityKeyTrack, 896);
+MIKUDANCESTUDIO_APP_OFF(accKeyTracks, 900);
+MIKUDANCESTUDIO_APP_OFF(modelSlots, 1920);
+MIKUDANCESTUDIO_APP_OFF(slotIdx, 2320);
+MIKUDANCESTUDIO_APP_OFF(editMode, 2324);
+MIKUDANCESTUDIO_APP_OFF(groundShadowEnabled, 2328);
+MIKUDANCESTUDIO_APP_OFF(aviBackgroundEnabled, 2332);
+MIKUDANCESTUDIO_APP_OFF(viewportToolCenterX, 2336);
+MIKUDANCESTUDIO_APP_OFF(viewportToolCenterY, 2340);
+MIKUDANCESTUDIO_APP_OFF(selectedClipW, 2344);
+MIKUDANCESTUDIO_APP_OFF(viewportToolOperation, 2348);
+MIKUDANCESTUDIO_APP_OFF(dragOriginX, 2352);
+MIKUDANCESTUDIO_APP_OFF(dragOriginY, 2356);
+MIKUDANCESTUDIO_APP_OFF(boneBoxStartX, 2360);
+MIKUDANCESTUDIO_APP_OFF(boneBoxStartY, 2364);
+MIKUDANCESTUDIO_APP_OFF(boneBoxSelectionActive, 2368);
+MIKUDANCESTUDIO_APP_OFF(scrollCbSize, 2372);
+MIKUDANCESTUDIO_APP_OFF(scrollFMask, 2376);
+MIKUDANCESTUDIO_APP_OFF(scrollNMin, 2380);
+MIKUDANCESTUDIO_APP_OFF(scrollNMax, 2384);
+MIKUDANCESTUDIO_APP_OFF(scrollNPage, 2388);
+MIKUDANCESTUDIO_APP_OFF(scrollNPos, 2392);
+MIKUDANCESTUDIO_APP_OFF(timelineScrollNPage, 2416);
+MIKUDANCESTUDIO_APP_OFF(timelineScrollNMin, 2420);
+MIKUDANCESTUDIO_APP_OFF(timelineStartFrame, 2428);
+MIKUDANCESTUDIO_APP_OFF(currentFrame, 2432);
+MIKUDANCESTUDIO_APP_OFF(rowHitBone, 2436);
+MIKUDANCESTUDIO_APP_OFF(pmxEncoding, 8624);
+MIKUDANCESTUDIO_APP_OFF(pmxIdxVert, 8626);
+MIKUDANCESTUDIO_APP_OFF(pmxIdxBone, 8628);
+MIKUDANCESTUDIO_APP_OFF(pmxIdxRigid, 8631);
+MIKUDANCESTUDIO_APP_OFF(morph0Count, 8684);
+MIKUDANCESTUDIO_APP_OFF(physOffsetCount, 8708);
+MIKUDANCESTUDIO_APP_OFF(morph0Table, 8724);
+MIKUDANCESTUDIO_APP_OFF(physOffsetRecords, 8728);
+MIKUDANCESTUDIO_APP_OFF(physLastFrame, 8772);
+MIKUDANCESTUDIO_APP_OFF(morphCount, 11648);
+MIKUDANCESTUDIO_APP_OFF(boneCount, 11652);
+MIKUDANCESTUDIO_APP_OFF(ikCount, 11656);
+MIKUDANCESTUDIO_APP_OFF(facialFrameCount, 11692);
+MIKUDANCESTUDIO_APP_OFF(rbGroupCount, 11696);
+MIKUDANCESTUDIO_APP_OFF(rigidCount, 12752);
+MIKUDANCESTUDIO_APP_OFF(jointCount, 12756);
+MIKUDANCESTUDIO_APP_OFF(physicsMode, 14590);
+MIKUDANCESTUDIO_APP_OFF(rowHitMorph, 162436);
+MIKUDANCESTUDIO_APP_OFF(centerBoneIndex, 314604);
+MIKUDANCESTUDIO_APP_OFF(rowHitIk, 322436);
+MIKUDANCESTUDIO_APP_OFF(rowHitBand0, 482436);
+MIKUDANCESTUDIO_APP_OFF(rowHitBand1, 483236);
+MIKUDANCESTUDIO_APP_OFF(rowHitBand2, 484036);
+MIKUDANCESTUDIO_APP_OFF(rowHitBand3, 484836);
+MIKUDANCESTUDIO_APP_OFF(rowHitAcc, 485636);
+MIKUDANCESTUDIO_APP_OFF(interpCurveUniformFound, 645636);
+MIKUDANCESTUDIO_APP_OFF(interpCurveControlCache, 645637);
+MIKUDANCESTUDIO_APP_OFF(pendingTimelineSelectionRow, 645641);
+MIKUDANCESTUDIO_APP_OFF(lightA, 645642);
+MIKUDANCESTUDIO_APP_OFF(lightB, 645648);
+MIKUDANCESTUDIO_APP_OFF(lightC, 645654);
+MIKUDANCESTUDIO_APP_OFF(lightD, 645660);
+MIKUDANCESTUDIO_APP_OFF(copiedBoneCount, 645668);
+MIKUDANCESTUDIO_APP_OFF(clipboardCounts.accessories, 645700);
+MIKUDANCESTUDIO_APP_OFF(displayObjectListScrollPosition, 645704);
+MIKUDANCESTUDIO_APP_OFF(displayObjectListMatchCount, 645708);
+MIKUDANCESTUDIO_APP_OFF(jointLineMap, 645712);
+MIKUDANCESTUDIO_APP_OFF(objectSlots, 646512);
+MIKUDANCESTUDIO_APP_OFF(lastRegisteredFrame, 647532);
+MIKUDANCESTUDIO_APP_OFF(selectedObjectSlot, 647536);
+MIKUDANCESTUDIO_APP_OFF(lightDirection, 647540);
+MIKUDANCESTUDIO_APP_OFF(lightDirection[1], 647544);
+MIKUDANCESTUDIO_APP_OFF(lightDirection[2], 647548);
+MIKUDANCESTUDIO_APP_OFF(lightColor, 647588);
+MIKUDANCESTUDIO_APP_OFF(lightColor[1], 647592);
+MIKUDANCESTUDIO_APP_OFF(lightColor[2], 647596);
+MIKUDANCESTUDIO_APP_OFF(sceneLightRange, 647628);
+MIKUDANCESTUDIO_APP_OFF(cameraFov, 647656);
+MIKUDANCESTUDIO_APP_OFF(aviBackgroundPath, 647660);
+MIKUDANCESTUDIO_APP_OFF(drawDib, 648172);
+MIKUDANCESTUDIO_APP_OFF(aviBackgroundTexture, 648176);
+MIKUDANCESTUDIO_APP_OFF(aviBackgroundSurface, 648180);
+MIKUDANCESTUDIO_APP_OFF(aviOverlayVertices, 648184);
+MIKUDANCESTUDIO_APP_OFF(aviFile, 648188);
+MIKUDANCESTUDIO_APP_OFF(aviStream, 648192);
+MIKUDANCESTUDIO_APP_OFF(aviFrameReader, 648196);
+MIKUDANCESTUDIO_APP_OFF(aviStreamStart, 648200);
+MIKUDANCESTUDIO_APP_OFF(aviStreamEnd, 648204);
+MIKUDANCESTUDIO_APP_OFF(aviUsesThirtyFpsTiming, 648208);
+MIKUDANCESTUDIO_APP_OFF(aviOffsetX, 648212);
+MIKUDANCESTUDIO_APP_OFF(aviOffsetY, 648216);
+MIKUDANCESTUDIO_APP_OFF(aviScale, 648220);
+MIKUDANCESTUDIO_APP_OFF(aviFrameWidth, 648224);
+MIKUDANCESTUDIO_APP_OFF(aviFrameHeight, 648228);
+MIKUDANCESTUDIO_APP_OFF(pictureBackgroundEnabled, 648232);
+MIKUDANCESTUDIO_APP_OFF(pictureBackgroundTexture, 648236);
+MIKUDANCESTUDIO_APP_OFF(pictureOverlayVertices, 648240);
+MIKUDANCESTUDIO_APP_OFF(pictureOffsetX, 648244);
+MIKUDANCESTUDIO_APP_OFF(pictureOffsetY, 648248);
+MIKUDANCESTUDIO_APP_OFF(pictureScale, 648252);
+MIKUDANCESTUDIO_APP_OFF(pictureWidth, 648256);
+MIKUDANCESTUDIO_APP_OFF(pictureHeight, 648260);
+MIKUDANCESTUDIO_APP_OFF(pictureBackgroundPath, 648264);
+MIKUDANCESTUDIO_APP_OFF(aviBackgroundSample, 648776);
+MIKUDANCESTUDIO_APP_OFF(playbackCursorSeconds, 648780);
+MIKUDANCESTUDIO_APP_OFF(keyRepeatTimer, 648784);
+MIKUDANCESTUDIO_APP_OFF(playbackStartSeconds, 648788);
+MIKUDANCESTUDIO_APP_OFF(playbackEndSeconds, 648792);
+MIKUDANCESTUDIO_APP_OFF(cameraTrackCursor, 648796);
+MIKUDANCESTUDIO_APP_OFF(cameraTrackActive, 648800);
+MIKUDANCESTUDIO_APP_OFF(lightTrackCursor, 648804);
+MIKUDANCESTUDIO_APP_OFF(lightTrackActive, 648808);
+MIKUDANCESTUDIO_APP_OFF(shadowTrackCursor, 648812);
+MIKUDANCESTUDIO_APP_OFF(shadowTrackActive, 648816);
+MIKUDANCESTUDIO_APP_OFF(gravityTrackCursor, 648820);
+MIKUDANCESTUDIO_APP_OFF(gravityTrackActive, 648824);
+MIKUDANCESTUDIO_APP_OFF(accessoryTrackCursor, 648828);
+MIKUDANCESTUDIO_APP_OFF(accessoryTrackCursor[54], 649044);
+MIKUDANCESTUDIO_APP_OFF(accessoryTrackActive, 649848);
+MIKUDANCESTUDIO_APP_OFF(playbackEnabledSnapshot, 650103);
+MIKUDANCESTUDIO_APP_OFF(characterTransparentMode, 650110);
+MIKUDANCESTUDIO_APP_OFF(blinkPhase, 650111);
+MIKUDANCESTUDIO_APP_OFF(captureTexture, 650112);
+MIKUDANCESTUDIO_APP_OFF(captureMode, 650116);
+MIKUDANCESTUDIO_APP_OFF(captureRenderTarget, 650120);
+MIKUDANCESTUDIO_APP_OFF(captureSystemSurface, 650124);
+MIKUDANCESTUDIO_APP_OFF(aviOutputPath, 650128);
+MIKUDANCESTUDIO_APP_OFF(frameStepPlayback, 650640);
+MIKUDANCESTUDIO_APP_OFF(recordedFrameCount, 650644);
+MIKUDANCESTUDIO_APP_OFF(followCameraEnabled, 650648);
+MIKUDANCESTUDIO_APP_OFF(playbackStartsAtCurrentFrame, 650649);
+MIKUDANCESTUDIO_APP_OFF(projectedShadowBlendEnabled, 650650);
+MIKUDANCESTUDIO_APP_OFF(coordinateSystem, 650652);
+MIKUDANCESTUDIO_APP_OFF(axisMeshObject, 650656);
+MIKUDANCESTUDIO_APP_OFF(playbackClockAnchorLow, 650664);
+MIKUDANCESTUDIO_APP_OFF(playbackClockAnchorHigh, 650668);
+MIKUDANCESTUDIO_APP_OFF(physicsScene, 650672);
+MIKUDANCESTUDIO_APP_OFF(physicsEditorJointPage, 650676);
+MIKUDANCESTUDIO_APP_OFF(physicsResetPending, 650677);
+MIKUDANCESTUDIO_APP_OFF(playbackFrameChanged, 650678);
+MIKUDANCESTUDIO_APP_OFF(gravityX, 650680);
+MIKUDANCESTUDIO_APP_OFF(gravityY, 650684);
+MIKUDANCESTUDIO_APP_OFF(gravityZ, 650688);
+MIKUDANCESTUDIO_APP_OFF(gravityMagnitude, 650692);
+MIKUDANCESTUDIO_APP_OFF(gravityNoise, 650696);
+MIKUDANCESTUDIO_APP_OFF(gravityNoiseTimer, 650700);
+MIKUDANCESTUDIO_APP_OFF(timelineAdvanceDue, 650704);
+MIKUDANCESTUDIO_APP_OFF(viewportInputActive, 650705);
+MIKUDANCESTUDIO_APP_OFF(recordingCompletionFlag, 650708);
+MIKUDANCESTUDIO_APP_OFF(recordPlaybackStartPending, 650712);
+MIKUDANCESTUDIO_APP_OFF(recordSavedFrame, 650716);
+MIKUDANCESTUDIO_APP_OFF(toonTextures, 650720);
+MIKUDANCESTUDIO_APP_OFF(spriteOverlayVertices, 650764);
+MIKUDANCESTUDIO_APP_OFF(spriteOverlayPrimitiveCount, 650768);
+MIKUDANCESTUDIO_APP_OFF(overlayTexture, 650772);
+MIKUDANCESTUDIO_APP_OFF(overlayVertices, 650776);
+MIKUDANCESTUDIO_APP_OFF(textOverlayPrimitiveCount, 650780);
+MIKUDANCESTUDIO_APP_OFF(sceneFontTexture, 650784);
+MIKUDANCESTUDIO_APP_OFF(recentFile0, 650788);
+MIKUDANCESTUDIO_APP_OFF(recentFile1, 651044);
+MIKUDANCESTUDIO_APP_OFF(recentFile2, 651300);
+MIKUDANCESTUDIO_APP_OFF(lineOverlayPrimitiveCount, 651556);
+MIKUDANCESTUDIO_APP_OFF(groundPlaneVertices, 651560);
+MIKUDANCESTUDIO_APP_OFF(separateWindowMouseSeen, 651564);
+MIKUDANCESTUDIO_APP_OFF(projectedShadowRestoreTexture, 651568);
+MIKUDANCESTUDIO_APP_OFF(captureSavePath, 651572);
+MIKUDANCESTUDIO_APP_OFF(captureReadbackPixels, 652084);
+MIKUDANCESTUDIO_APP_OFF(pathWorkspace, 652088);
+MIKUDANCESTUDIO_APP_OFF(leftViewportVertices, 655624);
+MIKUDANCESTUDIO_APP_OFF(rightViewportVertices, 655628);
+MIKUDANCESTUDIO_APP_OFF(toonEdgeTable, 655632);
+MIKUDANCESTUDIO_APP_OFF(selfShadowEnabled, 655752);
+MIKUDANCESTUDIO_APP_OFF(selectionBoxDragging, 655753);
+MIKUDANCESTUDIO_APP_OFF(selectionBoxAnchorX, 655756);
+MIKUDANCESTUDIO_APP_OFF(selectionBoxAnchorY, 655760);
+MIKUDANCESTUDIO_APP_OFF(blackBackgroundEnabled, 655764);
+MIKUDANCESTUDIO_APP_OFF(modelNonDisplayMode, 655765);
+MIKUDANCESTUDIO_APP_OFF(wavPlaysOnFrameMove, 655766);
+MIKUDANCESTUDIO_APP_OFF(floorVisible, 655767);
+MIKUDANCESTUDIO_APP_OFF(modelOutlineColorRed, 655768);
+MIKUDANCESTUDIO_APP_OFF(modelOutlineColorGreen, 655772);
+MIKUDANCESTUDIO_APP_OFF(modelOutlineColorBlue, 655776);
+MIKUDANCESTUDIO_APP_OFF(customColorTable, 655780);
+MIKUDANCESTUDIO_APP_OFF(wireframeRenderingEnabled, 655844);
+MIKUDANCESTUDIO_APP_OFF(lightViewProjectionMatrix, 655848);
+MIKUDANCESTUDIO_APP_OFF(worldViewProjectionMatrix, 655912);
+MIKUDANCESTUDIO_APP_OFF(activeRenderObject, 655976);
+MIKUDANCESTUDIO_APP_OFF(activeRenderPass, 655980);
+MIKUDANCESTUDIO_APP_OFF(renderPassCount, 655984);
+MIKUDANCESTUDIO_APP_OFF(fullscreenMode, 655988);
+MIKUDANCESTUDIO_APP_OFF(savedMenu, 655992);
+MIKUDANCESTUDIO_APP_OFF(savedPlacement, 655996);
+MIKUDANCESTUDIO_APP_OFF(fullscreenFlagsSaved, 656040);
+MIKUDANCESTUDIO_APP_OFF(recRTW, 656044);
+MIKUDANCESTUDIO_APP_OFF(recRTH, 656048);
+MIKUDANCESTUDIO_APP_OFF(recordFullscreenActive, 656052);
+MIKUDANCESTUDIO_APP_OFF(stereoActivated, 656053);
+MIKUDANCESTUDIO_APP_OFF(a02B6, 656054);
+MIKUDANCESTUDIO_APP_OFF(sjisOut, 656055);
+MIKUDANCESTUDIO_APP_OFF(timelineAdvanceRequested, 656311);
+MIKUDANCESTUDIO_APP_OFF(depthDeviceEnabled, 656312);
+MIKUDANCESTUDIO_APP_OFF(oniModule, 656316);
+MIKUDANCESTUDIO_APP_OFF(oniExportSlot0, 656320);
+MIKUDANCESTUDIO_APP_OFF(oniExportSlot1, 656324);
+MIKUDANCESTUDIO_APP_OFF(oniExportSlot2, 656328);
+MIKUDANCESTUDIO_APP_OFF(depthTextureCallback, 656332);
+MIKUDANCESTUDIO_APP_OFF(oniExportSlot4, 656336);
+MIKUDANCESTUDIO_APP_OFF(openniTrackingCallback, 656340);
+MIKUDANCESTUDIO_APP_OFF(oniExportSlot6, 656344);
+MIKUDANCESTUDIO_APP_OFF(kinectMirrorEnabled, 656348);
+MIKUDANCESTUDIO_APP_OFF(kinectInitLostBone, 656349);
+MIKUDANCESTUDIO_APP_OFF(depthTextureCompositionEnabled, 656350);
+MIKUDANCESTUDIO_APP_OFF(kinectCaptureActive, 656351);
+MIKUDANCESTUDIO_APP_OFF(fpsLimitSaved, 656352);
+MIKUDANCESTUDIO_APP_OFF(globalTrackSelected, 656356);
+MIKUDANCESTUDIO_APP_OFF(globalTrackSelected[1], 656357);
+MIKUDANCESTUDIO_APP_OFF(globalTrackSelected[2], 656358);
+MIKUDANCESTUDIO_APP_OFF(globalTrackSelected[3], 656359);
+MIKUDANCESTUDIO_APP_OFF(a03E8, 656360);
+MIKUDANCESTUDIO_APP_OFF(automaticFrameAdvanceEnabled, 656361);
+MIKUDANCESTUDIO_APP_OFF(openniVersion, 656362);
+MIKUDANCESTUDIO_APP_OFF(timelineSelectionChanged, 656363);
+MIKUDANCESTUDIO_APP_OFF(timelineSelectionSlots, 656364);
+MIKUDANCESTUDIO_APP_OFF(timelineSelectionSlots[15], 656424);
+MIKUDANCESTUDIO_APP_OFF(mainModelComboSelection, 656428);
+MIKUDANCESTUDIO_APP_OFF(cameraParentModel, 656432);
+MIKUDANCESTUDIO_APP_OFF(cameraParentBone, 656436);
+MIKUDANCESTUDIO_APP_OFF(cameraAttachmentBasis, 656440);
+MIKUDANCESTUDIO_APP_OFF(cameraAttachmentBasis[15], 656500);
+MIKUDANCESTUDIO_APP_OFF(cameraAttachmentTransformSuppressed, 656504);
+MIKUDANCESTUDIO_APP_OFF(logFont, 656508);
+MIKUDANCESTUDIO_APP_OFF(modelReloadPending, 656568);
+MIKUDANCESTUDIO_APP_OFF(hFontUI, 656572);
+MIKUDANCESTUDIO_APP_OFF(eulerX, 656576);
+MIKUDANCESTUDIO_APP_OFF(eulerY, 656580);
+MIKUDANCESTUDIO_APP_OFF(eulerZ, 656584);
+MIKUDANCESTUDIO_APP_OFF(brushes, 656588);
+MIKUDANCESTUDIO_APP_OFF(buf656632, 656632);
+MIKUDANCESTUDIO_APP_OFF(timelineRangeFirstOffset, 656832);
+MIKUDANCESTUDIO_APP_OFF(timelineRangeLastBase, 656844);
+MIKUDANCESTUDIO_APP_OFF(timelineRangeApplyEnabled, 656848);
+MIKUDANCESTUDIO_APP_OFF(viewDirty, 656849);
+MIKUDANCESTUDIO_APP_OFF(b6568482, 656850);
+MIKUDANCESTUDIO_APP_OFF(mouseJumped, 656851);
+MIKUDANCESTUDIO_APP_OFF(uiTextRed, 656852);
+MIKUDANCESTUDIO_APP_OFF(uiTextGreen, 656853);
+MIKUDANCESTUDIO_APP_OFF(uiTextBlue, 656854);
+MIKUDANCESTUDIO_APP_OFF(themeColors, 656856);
+MIKUDANCESTUDIO_APP_OFF(themeColors[34], 656992);
+MIKUDANCESTUDIO_APP_OFF(accessoryApplyGate, 656996);
+MIKUDANCESTUDIO_APP_OFF(accessoryEditDialogOpen, 656997);
+MIKUDANCESTUDIO_APP_OFF(selectNavRecords, 657000);
+MIKUDANCESTUDIO_APP_OFF(physicsBodiesMoved, 657004);
+MIKUDANCESTUDIO_APP_OFF(playbackAlwaysOnOffMode, 657005);
+MIKUDANCESTUDIO_APP_OFF(savedPlaybackPhysicsMode, 657008);
+MIKUDANCESTUDIO_APP_OFF(viewRotationTransform, 657012);
+MIKUDANCESTUDIO_APP_OFF(a06B4, 657076);
+MIKUDANCESTUDIO_APP_OFF(a06B5, 657077);
+MIKUDANCESTUDIO_APP_OFF(a06B6, 657078);
+MIKUDANCESTUDIO_APP_OFF(hwnd, 657080);
+MIKUDANCESTUDIO_APP_OFF(deltaTime, 657084);
+MIKUDANCESTUDIO_APP_OFF(recorder, 657088);
+MIKUDANCESTUDIO_APP_OFF(renderer, 657092);
+MIKUDANCESTUDIO_APP_OFF(sidebarWidth, 657096);
+MIKUDANCESTUDIO_APP_OFF(waveEnabled, 657100);
+MIKUDANCESTUDIO_APP_OFF(exeDir, 657102);
+MIKUDANCESTUDIO_APP_OFF(origEditProc, 657616);
+MIKUDANCESTUDIO_APP_OFF(renderW, 657620);
+MIKUDANCESTUDIO_APP_OFF(renderH, 657624);
+MIKUDANCESTUDIO_APP_OFF(cameraDistance, 657628);
+MIKUDANCESTUDIO_APP_OFF(fpsLimit, 657632);
+MIKUDANCESTUDIO_APP_OFF(modelOffsetX, 657636);
+MIKUDANCESTUDIO_APP_OFF(modelOffsetY, 657640);
+MIKUDANCESTUDIO_APP_OFF(modelOffsetZ, 657644);
+MIKUDANCESTUDIO_APP_OFF(morphFrameShift, 657652);
+MIKUDANCESTUDIO_APP_OFF(blinkStartFrame, 657656);
+MIKUDANCESTUDIO_APP_OFF(blinkEndFrame, 657660);
+MIKUDANCESTUDIO_APP_OFF(envFileName, 657664);
+MIKUDANCESTUDIO_APP_OFF(aviRecordStartFrame, 658176);
+MIKUDANCESTUDIO_APP_OFF(aviRecordEndFrame, 658180);
+MIKUDANCESTUDIO_APP_OFF(aviRecordFps, 658184);
+MIKUDANCESTUDIO_APP_OFF(aviIncludeWave, 658188);
+MIKUDANCESTUDIO_APP_OFF(sceneModified, 658189);
+MIKUDANCESTUDIO_APP_OFF(a0B10, 658192);
+MIKUDANCESTUDIO_APP_OFF(groundShadowColorDialog, 658196);
+MIKUDANCESTUDIO_APP_OFF(groundShadowColorEditProc, 658200);
+MIKUDANCESTUDIO_APP_OFF(accessoryOrderArray, 658204);
+MIKUDANCESTUDIO_APP_OFF(accessoryRenderSplitOrder, 658208);
+MIKUDANCESTUDIO_APP_OFF(accessoryEditArray, 658212);
+MIKUDANCESTUDIO_APP_OFF(rotationDialogTemp, 658216);
+MIKUDANCESTUDIO_APP_OFF(edgeThicknessDialog, 658244);
+MIKUDANCESTUDIO_APP_OFF(edgeThicknessEditProc, 658248);
+MIKUDANCESTUDIO_APP_OFF(englishUI, 658252);
+MIKUDANCESTUDIO_APP_OFF(frameRangeDialog, 658256);
+MIKUDANCESTUDIO_APP_OFF(modelEdgeEditProc, 658260);
+MIKUDANCESTUDIO_APP_OFF(modelEdgeComboCursor, 658264);
+MIKUDANCESTUDIO_APP_OFF(enhancedModelDirty, 658276);
+MIKUDANCESTUDIO_APP_OFF(timeNowLow, 658280);
+MIKUDANCESTUDIO_APP_OFF(timeNowHigh, 658284);
+MIKUDANCESTUDIO_APP_OFF(milliToSec, 658288);
+MIKUDANCESTUDIO_APP_OFF(frameCopyDialog, 658292);
+MIKUDANCESTUDIO_APP_OFF(frameCopyEditProc, 658296);
+MIKUDANCESTUDIO_APP_OFF(rigidScratchArray, 658300);
+MIKUDANCESTUDIO_APP_OFF(cameraFrameScratch, 658304);
+MIKUDANCESTUDIO_APP_OFF(selectedRigidIndex, 658476);
+MIKUDANCESTUDIO_APP_OFF(jointScratchArray, 658480);
+MIKUDANCESTUDIO_APP_OFF(boneFrameScratch, 658484);
+MIKUDANCESTUDIO_APP_OFF(selectedJointIndex, 658624);
+MIKUDANCESTUDIO_APP_OFF(playbackPhysicsMode, 658628);
+MIKUDANCESTUDIO_APP_OFF(rigidBodyDisplayEnabled, 658632);
+MIKUDANCESTUDIO_APP_OFF(gravitySettingDialog, 658636);
+MIKUDANCESTUDIO_APP_OFF(accessoryFrameEditProc, 658640);
+MIKUDANCESTUDIO_APP_OFF(gravityNoiseEnabled, 658644);
+MIKUDANCESTUDIO_APP_OFF(aviCodecSelection, 658648);
+MIKUDANCESTUDIO_APP_OFF(origTrackProc, 658652);
+MIKUDANCESTUDIO_APP_OFF(aviSettings, 658656);
+MIKUDANCESTUDIO_APP_OFF(projectedShadowDiffuseAlpha, 658668);
+MIKUDANCESTUDIO_APP_OFF(projectedShadowAmbientIntensity, 658672);
+MIKUDANCESTUDIO_APP_OFF(projectedShadowAmbientG, 658676);
+MIKUDANCESTUDIO_APP_OFF(projectedShadowAmbientB, 658680);
+MIKUDANCESTUDIO_APP_OFF(projectedShadowAmbientA, 658684);
+MIKUDANCESTUDIO_APP_OFF(projectedShadowSpecularAlpha, 658700);
+MIKUDANCESTUDIO_APP_OFF(recordingWindow, 658724);
+MIKUDANCESTUDIO_APP_OFF(selfShadowCompositionEnabled, 658728);
+MIKUDANCESTUDIO_APP_OFF(physicsInterval, 658732);
+MIKUDANCESTUDIO_APP_OFF(selfShadowMode, 658736);
+MIKUDANCESTUDIO_APP_OFF(floatingWindow, 658744);
+MIKUDANCESTUDIO_APP_OFF(separateWindowSidebarWidth, 658748);
+MIKUDANCESTUDIO_APP_OFF(hideRight, 658752);
+MIKUDANCESTUDIO_APP_OFF(hideTop, 658756);
+MIKUDANCESTUDIO_APP_OFF(hideLeft, 658760);
+MIKUDANCESTUDIO_APP_OFF(hideBottom, 658764);
+MIKUDANCESTUDIO_APP_OFF(separateWindowX, 658768);
+MIKUDANCESTUDIO_APP_OFF(separateWindowY, 658772);
+MIKUDANCESTUDIO_APP_OFF(separateWindowWidth, 658776);
+MIKUDANCESTUDIO_APP_OFF(separateWindowHeight, 658780);
+MIKUDANCESTUDIO_APP_OFF(separateWindowMaximized, 658784);
+MIKUDANCESTUDIO_APP_OFF(aviStereoOutput, 658785);
+MIKUDANCESTUDIO_APP_OFF(aviStereoWidthMultiplier, 658788);
+MIKUDANCESTUDIO_APP_OFF(autoRepeat, 658792);
+MIKUDANCESTUDIO_APP_OFF(messageSeen, 658796);
+MIKUDANCESTUDIO_APP_OFF(dirModel, 658800);
+MIKUDANCESTUDIO_APP_OFF(dirUser, 660800);
+MIKUDANCESTUDIO_APP_OFF(dirAccs, 662800);
+MIKUDANCESTUDIO_APP_OFF(dirMotion, 664800);
+MIKUDANCESTUDIO_APP_OFF(dirPose, 666800);
+MIKUDANCESTUDIO_APP_OFF(dirWave, 668800);
+MIKUDANCESTUDIO_APP_OFF(dirBg, 670800);
+MIKUDANCESTUDIO_APP_OFF(frameVolumeControlEnabled, 672800);
+MIKUDANCESTUDIO_APP_OFF(frameNormalization, 672804);
+MIKUDANCESTUDIO_APP_OFF(sidebarRatio, 672808);
+MIKUDANCESTUDIO_APP_OFF(windowLayoutReady, 672812);
+MIKUDANCESTUDIO_APP_OFF(statusText, 672813);
+
+#undef MIKUDANCESTUDIO_APP_OFF
+
+// The inline path-resolution workspace (was fontSubOrPtr + 3535 pad bytes)
+// must fill the blob region up to the next live field.
 static_assert(offsetof(MMDAppState, leftViewportVertices) -
-                  offsetof(MMDAppState, fontSubOrPtr) == 3536,
-              "path-resolution workspace must end at the next app field");
-static_assert(offsetof(MMDAppState, leftViewportVertices) == 655624,
-              "leftViewportVertices x86");
-static_assert(offsetof(MMDAppState, rightViewportVertices) == 655628,
-              "rightViewportVertices x86");
-static_assert(offsetof(MMDAppState, toonEdgeTable) == 655632,
-              "toonEdgeTable x86");
-static_assert(offsetof(MMDAppState, selfShadowCfgOrUint32) == 655752,
-              "selfShadowCfgOrUint32 x86");
-static_assert(offsetof(MMDAppState, selectionBoxDragging) == 655753,
-              "selectionBoxDragging x86");
-static_assert(offsetof(MMDAppState, selectionBoxAnchorX) == 655756,
-              "selectionBoxAnchorX x86");
-static_assert(offsetof(MMDAppState, selectionBoxAnchorY) == 655760,
-              "selectionBoxAnchorY x86");
-static_assert(offsetof(MMDAppState, a0194) == 655764,
-              "a0194 x86");
-static_assert(offsetof(MMDAppState, modelOutlineRenderingSuppressed) == 655765,
-              "modelOutlineRenderingSuppressed x86");
-static_assert(offsetof(MMDAppState, a0196) == 655766,
-              "a0196 x86");
-static_assert(offsetof(MMDAppState, a0197) == 655767,
-              "a0197 x86");
-static_assert(offsetof(MMDAppState, modelOutlineColorRed) == 655768,
-              "modelOutlineColorRed x86");
-static_assert(offsetof(MMDAppState, modelOutlineColorGreen) == 655772,
-              "modelOutlineColorGreen x86");
-static_assert(offsetof(MMDAppState, modelOutlineColorBlue) == 655776,
-              "modelOutlineColorBlue x86");
-static_assert(offsetof(MMDAppState, buf655780) == 655780,
-              "buf655780 x86");
-static_assert(offsetof(MMDAppState, wireframeRenderingEnabled) == 655844,
-              "wireframeRenderingEnabled x86");
-static_assert(offsetof(MMDAppState, lightViewProjectionMatrix) == 655848,
-              "lightViewProjectionMatrix x86");
-static_assert(offsetof(MMDAppState, worldViewProjectionMatrix) == 655912,
-              "worldViewProjectionMatrix x86");
-static_assert(offsetof(MMDAppState, activeRenderObject) == 655976,
-              "activeRenderObject x86");
-static_assert(offsetof(MMDAppState, activeRenderPass) == 655980,
-              "activeRenderPass x86");
-static_assert(offsetof(MMDAppState, a0270) == 655984,
-              "a0270 x86");
-static_assert(offsetof(MMDAppState, fullscreenMode) == 655988,
-              "fullscreenMode x86");
-static_assert(offsetof(MMDAppState, savedMenu) == 655992,
-              "savedMenu x86");
-#ifndef _M_X64
-static_assert(offsetof(MMDAppState, savedPlacement) == 655996,
-              "savedPlacement x86");
-#endif
-static_assert(offsetof(MMDAppState, a02A8) == 656040,
-              "a02A8 x86");
-static_assert(offsetof(MMDAppState, recRTW) == 656044,
-              "recRTW x86");
-static_assert(offsetof(MMDAppState, recRTH) == 656048,
-              "recRTH x86");
-static_assert(offsetof(MMDAppState, a02B4) == 656052,
-              "a02B4 x86");
-static_assert(offsetof(MMDAppState, a02B5) == 656053,
-              "a02B5 x86");
-static_assert(offsetof(MMDAppState, a02B6) == 656054,
-              "a02B6 x86");
-static_assert(offsetof(MMDAppState, sjisOut) == 656055,
-              "sjisOut x86");
-static_assert(offsetof(MMDAppState, a03B7) == 656311,
-              "a03B7 x86");
-static_assert(offsetof(MMDAppState, depthDeviceEnabled) == 656312,
-              "depthDeviceEnabled x86");
-static_assert(offsetof(MMDAppState, a03BC) == 656316,
-              "a03BC x86");
-static_assert(offsetof(MMDAppState, a03C0) == 656320,
-              "a03C0 x86");
-static_assert(offsetof(MMDAppState, a03C4) == 656324,
-              "a03C4 x86");
-static_assert(offsetof(MMDAppState, a03C8) == 656328,
-              "a03C8 x86");
-static_assert(offsetof(MMDAppState, depthTextureCallback) == 656332,
-              "depthTextureCallback x86");
-static_assert(offsetof(MMDAppState, a03D0) == 656336,
-              "a03D0 x86");
-static_assert(offsetof(MMDAppState, openniTrackingCallback) == 656340,
-              "openniTrackingCallback x86");
-static_assert(offsetof(MMDAppState, a03D8) == 656344,
-              "a03D8 x86");
-static_assert(offsetof(MMDAppState, a03DC) == 656348,
-              "a03DC x86");
-static_assert(offsetof(MMDAppState, a03DD) == 656349,
-              "a03DD x86");
-static_assert(offsetof(MMDAppState, depthTextureCompositionEnabled) == 656350,
-              "depthTextureCompositionEnabled x86");
-static_assert(offsetof(MMDAppState, a03DF) == 656351,
-              "a03DF x86");
-static_assert(offsetof(MMDAppState, fpsLimitSaved) == 656352,
-              "fpsLimitSaved x86");
-static_assert(offsetof(MMDAppState, a03E4) == 656356,
-              "a03E4 x86");
-static_assert(offsetof(MMDAppState, a03E5) == 656357,
-              "a03E5 x86");
-static_assert(offsetof(MMDAppState, a03E6) == 656358,
-              "a03E6 x86");
-static_assert(offsetof(MMDAppState, a03E7) == 656359,
-              "a03E7 x86");
-static_assert(offsetof(MMDAppState, a03E8) == 656360,
-              "a03E8 x86");
-static_assert(offsetof(MMDAppState, automaticFrameAdvanceEnabled) == 656361,
-              "automaticFrameAdvanceEnabled x86");
-static_assert(offsetof(MMDAppState, openniVersion) == 656362,
-              "openniVersion x86");
-static_assert(offsetof(MMDAppState, timelineSelectionChanged) == 656363,
-              "timelineSelectionChanged x86");
-#ifndef _M_X64
-static_assert(offsetof(MMDAppState, timelineSelectionSlots) == 656364,
-              "timelineSelectionSlots x86");
-static_assert(offsetof(MMDAppState, timelineSelectionSlots[15]) == 656424,
-              "timelineSelectionSlots[15] x86");
-#endif
-static_assert(offsetof(MMDAppState, a042C) == 656428,
-              "a042C x86");
-static_assert(offsetof(MMDAppState, cameraParentModel) == 656432,
-              "cameraParentModel x86");
-static_assert(offsetof(MMDAppState, cameraParentBone) == 656436,
-              "cameraParentBone x86");
-static_assert(offsetof(MMDAppState, cameraAttachmentBasis) == 656440,
-              "cameraAttachmentBasis x86");
-static_assert(offsetof(MMDAppState, cameraAttachmentBasis[15]) == 656500,
-              "cameraAttachmentBasis[15] x86");
-static_assert(offsetof(MMDAppState, cameraAttachmentTransformSuppressed) == 656504,
-              "cameraAttachmentTransformSuppressed x86");
-static_assert(offsetof(MMDAppState, logFont) == 656508,
-              "logFont x86");
-static_assert(offsetof(MMDAppState, a04B8) == 656568,
-              "a04B8 x86");
-static_assert(offsetof(MMDAppState, hFontUI) == 656572,
-              "hFontUI x86");
-static_assert(offsetof(MMDAppState, eulerX) == 656576,
-              "eulerX x86");
-static_assert(offsetof(MMDAppState, eulerY) == 656580,
-              "eulerY x86");
-static_assert(offsetof(MMDAppState, eulerZ) == 656584,
-              "eulerZ x86");
-static_assert(offsetof(MMDAppState, brushes) == 656588,
-              "brushes x86");
-static_assert(offsetof(MMDAppState, buf656632) == 656632,
-              "buf656632 x86");
-static_assert(offsetof(MMDAppState, timelineRangeFirstOffset) == 656832,
-              "timelineRangeFirstOffset x86");
-static_assert(offsetof(MMDAppState, timelineRangeLastBase) == 656844,
-              "timelineRangeLastBase x86");
-static_assert(offsetof(MMDAppState, b6568480) == 656848,
-              "b6568480 x86");
-static_assert(offsetof(MMDAppState, b6568481) == 656849,
-              "b6568481 x86");
-static_assert(offsetof(MMDAppState, b6568482) == 656850,
-              "b6568482 x86");
-static_assert(offsetof(MMDAppState, b6568483) == 656851,
-              "b6568483 x86");
-static_assert(offsetof(MMDAppState, uiTextRed) == 656852,
-              "uiTextRed x86");
-static_assert(offsetof(MMDAppState, uiTextGreen) == 656853,
-              "uiTextGreen x86");
-static_assert(offsetof(MMDAppState, uiTextBlue) == 656854,
-              "uiTextBlue x86");
-static_assert(offsetof(MMDAppState, themeColors) == 656856,
-              "themeColors x86");
-static_assert(offsetof(MMDAppState, themeColors[34]) == 656992,
-              "themeColors[34] x86");
-static_assert(offsetof(MMDAppState, accessoryApplyGate) == 656996,
-              "accessoryApplyGate x86");
-static_assert(offsetof(MMDAppState, a0665) == 656997,
-              "a0665 x86");
-static_assert(offsetof(MMDAppState, a0668OrUint32) == 657000,
-              "a0668OrUint32 x86");
-static_assert(offsetof(MMDAppState, a066C) == 657004,
-              "a066C x86");
-static_assert(offsetof(MMDAppState, a066D) == 657005,
-              "a066D x86");
-static_assert(offsetof(MMDAppState, savedPlaybackPhysicsMode) == 657008,
-              "savedPlaybackPhysicsMode x86");
-#ifndef _M_X64
-static_assert(offsetof(MMDAppState, viewRotationTransform) == 657012,
-              "viewRotationTransform x86");
-#endif
-static_assert(offsetof(MMDAppState, a06B4) == 657076,
-              "a06B4 x86");
-static_assert(offsetof(MMDAppState, a06B5) == 657077,
-              "a06B5 x86");
-static_assert(offsetof(MMDAppState, a06B6) == 657078,
-              "a06B6 x86");
-static_assert(offsetof(MMDAppState, hwnd) == 657080,
-              "hwnd x86");
-static_assert(offsetof(MMDAppState, deltaTime) == 657084,
-              "deltaTime x86");
-static_assert(offsetof(MMDAppState, sub06c) == 657088,
-              "sub06c x86");
-static_assert(offsetof(MMDAppState, rendererOrLocaleTable) == 657092,
-              "rendererOrLocaleTable x86");
-static_assert(offsetof(MMDAppState, sidebarWidth) == 657096,
-              "sidebarWidth x86");
-static_assert(offsetof(MMDAppState, waveEnabled) == 657100,
-              "waveEnabled x86");
-static_assert(offsetof(MMDAppState, exeDir) == 657102,
-              "exeDir x86");
-static_assert(offsetof(MMDAppState, origEditProc) == 657616,
-              "origEditProc x86");
-static_assert(offsetof(MMDAppState, renderW) == 657620,
-              "renderW x86");
-static_assert(offsetof(MMDAppState, renderH) == 657624,
-              "renderH x86");
-static_assert(offsetof(MMDAppState, cameraDistance) == 657628,
-              "cameraDistance x86");
-static_assert(offsetof(MMDAppState, fpsLimit) == 657632,
-              "fpsLimit x86");
-static_assert(offsetof(MMDAppState, modelOffsetX) == 657636,
-              "modelOffsetX x86");
-static_assert(offsetof(MMDAppState, modelOffsetY) == 657640,
-              "modelOffsetY x86");
-static_assert(offsetof(MMDAppState, modelOffsetZ) == 657644,
-              "modelOffsetZ x86");
-static_assert(offsetof(MMDAppState, morphFrameShift) == 657652,
-              "morphFrameShift x86");
-static_assert(offsetof(MMDAppState, blinkStartFrame) == 657656,
-              "blinkStartFrame x86");
-static_assert(offsetof(MMDAppState, blinkEndFrame) == 657660,
-              "blinkEndFrame x86");
-static_assert(offsetof(MMDAppState, envFileName) == 657664,
-              "envFileName x86");
-static_assert(offsetof(MMDAppState, aviRecordStartFrame) == 658176,
-              "aviRecordStartFrame x86");
-static_assert(offsetof(MMDAppState, aviRecordEndFrame) == 658180,
-              "aviRecordEndFrame x86");
-static_assert(offsetof(MMDAppState, aviRecordFps) == 658184,
-              "aviRecordFps x86");
-static_assert(offsetof(MMDAppState, aviIncludeWave) == 658188,
-              "aviIncludeWave x86");
-static_assert(offsetof(MMDAppState, sceneModified) == 658189,
-              "sceneModified x86");
-static_assert(offsetof(MMDAppState, a0B10) == 658192,
-              "a0B10 x86");
-static_assert(offsetof(MMDAppState, groundShadowColorDialog) == 658196,
-              "groundShadowColorDialog x86");
-static_assert(offsetof(MMDAppState, groundShadowColorEditProc) == 658200,
-              "groundShadowColorEditProc x86");
-static_assert(offsetof(MMDAppState, accessoryOrderArray) == 658204,
-              "accessoryOrderArray x86");
-static_assert(offsetof(MMDAppState, accessoryEditArray) == 658212,
-              "accessoryEditArray x86");
-static_assert(offsetof(MMDAppState, accessoryRenderSplitOrder) == 658208,
-              "accessoryRenderSplitOrder x86");
-static_assert(offsetof(MMDAppState, rotationDialogTemp) == 658216,
-              "rotationDialogTemp x86");
-static_assert(offsetof(MMDAppState, modelInfoDialog) == 658244,
-              "modelInfoDialog x86");
-static_assert(offsetof(MMDAppState, modelInfoEditProc) == 658248,
-              "modelInfoEditProc x86");
-#ifndef _M_X64
-static_assert(offsetof(MMDAppState, frameRangeDialog) == 658256,
-              "frameRangeDialog x86");
-static_assert(offsetof(MMDAppState, modelEdgeEditProc) == 658260,
-              "modelEdgeEditProc x86");
-static_assert(offsetof(MMDAppState, modelEdgeComboCursor) == 658264,
-              "modelEdgeComboCursor x86");
-#endif
-static_assert(offsetof(MMDAppState, englishUI) == 658252,
-              "englishUI x86");
-static_assert(offsetof(MMDAppState, a0B64) == 658276,
-              "a0B64 x86");
-static_assert(offsetof(MMDAppState, timeNowLow) == 658280,
-              "timeNowLow x86");
-static_assert(offsetof(MMDAppState, timeNowHigh) == 658284,
-              "timeNowHigh x86");
-static_assert(offsetof(MMDAppState, milliToSec) == 658288,
-              "milliToSec x86");
-static_assert(offsetof(MMDAppState, frameCopyDialog) == 658292,
-              "frameCopyDialog x86");
-static_assert(offsetof(MMDAppState, frameCopyEditProc) == 658296,
-              "frameCopyEditProc x86");
-static_assert(offsetof(MMDAppState, cameraRecordArray) == 658300,
-              "cameraRecordArray x86");
-static_assert(offsetof(MMDAppState, cameraFrameScratch) == 658304,
-              "cameraFrameScratch x86");
-static_assert(offsetof(MMDAppState, selAcc) == 658476,
-              "selAcc x86");
-static_assert(offsetof(MMDAppState, boneRecordArray) == 658480,
-              "boneRecordArray x86");
-static_assert(offsetof(MMDAppState, boneFrameScratch) == 658484,
-              "boneFrameScratch x86");
-static_assert(offsetof(MMDAppState, sel8c) == 658624,
-              "sel8c x86");
-static_assert(offsetof(MMDAppState, playbackPhysicsMode) == 658628,
-              "playbackPhysicsMode x86");
-static_assert(offsetof(MMDAppState, a0CC8OrUint32) == 658632,
-              "a0CC8OrUint32 x86");
-static_assert(offsetof(MMDAppState, a0CD4) == 658644,
-              "a0CD4 x86");
-#ifndef _M_X64
-static_assert(offsetof(MMDAppState, accessoryFrameDialog) == 658636,
-              "accessoryFrameDialog x86");
-static_assert(offsetof(MMDAppState, accessoryFrameEditProc) == 658640,
-              "accessoryFrameEditProc x86");
-#endif
-#ifndef _M_X64
-static_assert(offsetof(MMDAppState, aviCodecSelection) == 658648,
-              "aviCodecSelection x86");
-#endif
-static_assert(offsetof(MMDAppState, origTrackProc) == 658652,
-              "origTrackProc x86");
-static_assert(offsetof(MMDAppState, aviSettings) == 658656,
-              "aviSettings x86");
-static_assert(offsetof(MMDAppState, projectedShadowDiffuseAlpha) == 658668,
-              "projectedShadowDiffuseAlpha x86");
-static_assert(offsetof(MMDAppState, projectedShadowAmbientIntensity) == 658672,
-              "projectedShadowAmbientIntensity x86");
-static_assert(offsetof(MMDAppState, projectedShadowAmbientG) == 658676,
-              "projectedShadowAmbientG x86");
-static_assert(offsetof(MMDAppState, projectedShadowAmbientB) == 658680,
-              "projectedShadowAmbientB x86");
-static_assert(offsetof(MMDAppState, projectedShadowAmbientA) == 658684,
-              "projectedShadowAmbientA x86");
-static_assert(offsetof(MMDAppState, projectedShadowSpecularAlpha) == 658700,
-              "projectedShadowSpecularAlpha x86");
-static_assert(offsetof(MMDAppState, recordingWindow) == 658724,
-              "recordingWindow x86");
-static_assert(offsetof(MMDAppState, selfShadowCompositionEnabled) == 658728,
-              "selfShadowCompositionEnabled x86");
-static_assert(offsetof(MMDAppState, physicsInterval) == 658732,
-              "physicsInterval x86");
-static_assert(offsetof(MMDAppState, selfShadowMode) == 658736,
-              "selfShadowMode x86");
-static_assert(offsetof(MMDAppState, floatingWindow) == 658744,
-              "floatingWindow x86");
-static_assert(offsetof(MMDAppState, separateWindowSidebarWidth) == 658748,
-              "separateWindowSidebarWidth x86");
-static_assert(offsetof(MMDAppState, hideRight) == 658752,
-              "hideRight x86");
-static_assert(offsetof(MMDAppState, hideTop) == 658756,
-              "hideTop x86");
-static_assert(offsetof(MMDAppState, hideLeft) == 658760,
-              "hideLeft x86");
-static_assert(offsetof(MMDAppState, hideBottom) == 658764,
-              "hideBottom x86");
-static_assert(offsetof(MMDAppState, separateWindowX) == 658768,
-              "separateWindowX x86");
-static_assert(offsetof(MMDAppState, separateWindowY) == 658772,
-              "separateWindowY x86");
-static_assert(offsetof(MMDAppState, separateWindowWidth) == 658776,
-              "separateWindowWidth x86");
-static_assert(offsetof(MMDAppState, separateWindowHeight) == 658780,
-              "separateWindowHeight x86");
-static_assert(offsetof(MMDAppState, separateWindowMaximized) == 658784,
-              "separateWindowMaximized x86");
-static_assert(offsetof(MMDAppState, aviStereoOutput) == 658785,
-              "aviStereoOutput x86");
-static_assert(offsetof(MMDAppState, aviStereoWidthMultiplier) == 658788,
-              "aviStereoWidthMultiplier x86");
-static_assert(offsetof(MMDAppState, autoRepeat) == 658792,
-              "autoRepeat x86");
-static_assert(offsetof(MMDAppState, messageSeen) == 658796,
-              "messageSeen x86");
-static_assert(offsetof(MMDAppState, dirModel) == 658800,
-              "dirModel x86");
-static_assert(offsetof(MMDAppState, dirUser) == 660800,
-              "dirUser x86");
-static_assert(offsetof(MMDAppState, dirAccs) == 662800,
-              "dirAccs x86");
-static_assert(offsetof(MMDAppState, dirMotion) == 664800,
-              "dirMotion x86");
-static_assert(offsetof(MMDAppState, dirPose) == 666800,
-              "dirPose x86");
-static_assert(offsetof(MMDAppState, dirWave) == 668800,
-              "dirWave x86");
-static_assert(offsetof(MMDAppState, dirBg) == 670800,
-              "dirBg x86");
-static_assert(offsetof(MMDAppState, flag672800) == 672800,
-              "flag672800 x86");
-static_assert(offsetof(MMDAppState, val672804) == 672804,
-              "val672804 x86");
-static_assert(offsetof(MMDAppState, sidebarRatio) == 672808,
-              "sidebarRatio x86");
-static_assert(offsetof(MMDAppState, windowLayoutReady) == 672812,
-              "windowLayoutReady x86");
-static_assert(offsetof(MMDAppState, statusText) == 672813,
-              "statusText x86");
+                  offsetof(MMDAppState, pathWorkspace) == 3536,
+              "pathWorkspace x86 span must end at the next app field");
 #else
-// anchors only - instruction-level x64 ground truth (vote-grade
-static_assert(offsetof(MMDAppState, sub025c) == 208,
-              "sub025c x64");
-static_assert(offsetof(MMDAppState, hdcMainPanel) == 736,
-              "hdcMainPanel x64");
-static_assert(offsetof(MMDAppState, bmpRes101) == 792,
-              "bmpRes101 x64");
-static_assert(offsetof(MMDAppState, displayClipboard) == 936,
-              "displayClipboard x64");
-static_assert(offsetof(MMDAppState, cameraKeyTrack) == 976,
-              "cameraKeyTrack x64");
-static_assert(offsetof(MMDAppState, lightKeyTrack) == 984,
-              "lightKeyTrack x64");
-static_assert(offsetof(MMDAppState, selfShadowKeyTrack) == 992,
-              "selfShadowKeyTrack x64");
-static_assert(offsetof(MMDAppState, gravityKeyTrack) == 1000,
-              "gravityKeyTrack x64");
-static_assert(offsetof(MMDAppState, accKeyTracks) == 1008,
-              "accKeyTracks x64");
-static_assert(offsetof(MMDAppState, modelSlots) == 3048,
-              "modelSlots x64");
-static_assert(offsetof(MMDAppState, slotIdx) == 5088,
-              "slotIdx x64");
-static_assert(offsetof(MMDAppState, rowHitBone) == 5204,
-              "rowHitBone x64");
-static_assert(offsetof(MMDAppState, rowHitMorph) == 165204,
-              "rowHitMorph x64");
-static_assert(offsetof(MMDAppState, rowHitIk) == 325204,
-              "rowHitIk x64");
-static_assert(offsetof(MMDAppState, rowHitBand0) == 485204,
-              "rowHitBand0 x64");
-static_assert(offsetof(MMDAppState, rowHitBand1) == 486004,
-              "rowHitBand1 x64");
-static_assert(offsetof(MMDAppState, rowHitBand2) == 486804,
-              "rowHitBand2 x64");
-static_assert(offsetof(MMDAppState, rowHitBand3) == 487604,
-              "rowHitBand3 x64");
-static_assert(offsetof(MMDAppState, rowHitAcc) == 488404,
-              "rowHitAcc x64");
-static_assert(offsetof(MMDAppState, jointLineMap) == 648480,
-              "jointLineMap x64");
-static_assert(offsetof(MMDAppState, buf9ddx) == 649280,
-              "buf9ddx x64");
-static_assert(offsetof(MMDAppState, lastRegisteredFrame) == 651320,
-              "lastRegisteredFrame x64");
+// ---- x64 anchors --------------------------------------------------------
+#define MIKUDANCESTUDIO_APP_OFF64(f, off)                                      \
+    static_assert(offsetof(MMDAppState, f) == (off),                          \
+                  #f " x64 anchor must match the original binary")
+
+MIKUDANCESTUDIO_APP_OFF64(audioContext, 208);
+MIKUDANCESTUDIO_APP_OFF64(hdcMainPanel, 736);
+MIKUDANCESTUDIO_APP_OFF64(bmpRes101, 792);
+MIKUDANCESTUDIO_APP_OFF64(displayClipboard, 936);
+MIKUDANCESTUDIO_APP_OFF64(cameraKeyTrack, 976);
+MIKUDANCESTUDIO_APP_OFF64(lightKeyTrack, 984);
+MIKUDANCESTUDIO_APP_OFF64(selfShadowKeyTrack, 992);
+MIKUDANCESTUDIO_APP_OFF64(gravityKeyTrack, 1000);
+MIKUDANCESTUDIO_APP_OFF64(accKeyTracks, 1008);
+MIKUDANCESTUDIO_APP_OFF64(modelSlots, 3048);
+MIKUDANCESTUDIO_APP_OFF64(slotIdx, 5088);
+MIKUDANCESTUDIO_APP_OFF64(rowHitBone, 5204);
+MIKUDANCESTUDIO_APP_OFF64(rowHitMorph, 165204);
+MIKUDANCESTUDIO_APP_OFF64(rowHitIk, 325204);
+MIKUDANCESTUDIO_APP_OFF64(rowHitBand0, 485204);
+MIKUDANCESTUDIO_APP_OFF64(rowHitBand1, 486004);
+MIKUDANCESTUDIO_APP_OFF64(rowHitBand2, 486804);
+MIKUDANCESTUDIO_APP_OFF64(rowHitBand3, 487604);
+MIKUDANCESTUDIO_APP_OFF64(rowHitAcc, 488404);
+MIKUDANCESTUDIO_APP_OFF64(jointLineMap, 648480);
+MIKUDANCESTUDIO_APP_OFF64(objectSlots, 649280);
+MIKUDANCESTUDIO_APP_OFF64(lastRegisteredFrame, 651320);
+
+#undef MIKUDANCESTUDIO_APP_OFF64
 #endif

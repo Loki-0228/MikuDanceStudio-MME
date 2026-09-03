@@ -83,8 +83,11 @@ namespace {
 
 constexpr long kEFail = static_cast<long>(0x80004005);
 
-// MIKUDANCESTUDIO_TRACE_REC diagnostic: one line per pass (throttled), plus one
-// line per early-out with the failing stage.
+// MIKUDANCESTUDIO_TRACE_REC diagnostic (CMake option MIKUDANCESTUDIO_DIAG,
+// default OFF): one line per pass (throttled), plus one line per early-out
+// with the failing stage.  The OFF stub keeps the call sites valid and
+// inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void TraceRec(const char* fmt, ...) {
     if (getenv("MIKUDANCESTUDIO_TRACE_REC") == nullptr)
         return;
@@ -96,6 +99,9 @@ void TraceRec(const char* fmt, ...) {
         fclose(tf);
     }
 }
+#else
+inline void TraceRec(const char*, ...) {}
+#endif
 
 // The push interface (app+0xA06C0 object, +0x68 field).  IPushSource is
 // an STDMETHODCALLTYPE (stdcall) interface: `this` travels as the first
@@ -140,7 +146,7 @@ bool RecordingReadbackPass(MMDApp* app) {
         *rtSlot = surf;
         if (FAILED(hr) || surf == nullptr) {
             TraceRec("readback: CreateRenderTarget hr=%ld\n", (long)hr);
-            Sub464A00(app);                                      // 0x46E80B
+            FinishAviRecord(app);                                      // 0x46E80B
             return false;
         }
     }
@@ -152,7 +158,7 @@ bool RecordingReadbackPass(MMDApp* app) {
         *sysSlot = surf;
         if (FAILED(hr)) {
             TraceRec("readback: sysmem hr=%ld\n", (long)hr);
-            Sub464A00(app);
+            FinishAviRecord(app);
             return false;
         }
     }
@@ -166,8 +172,10 @@ bool RecordingReadbackPass(MMDApp* app) {
     // DIAGNOSTIC ONLY: pace the recording passes to a wall-clock rate
     // (the original's pin-consumption ack paces it to ~60/s; the port runs
     // at ~200/s) to test for residual wall-clock coupling in the physics.
+#ifdef MIKUDANCESTUDIO_DIAG
     if (const char* pace = getenv("MIKUDANCESTUDIO_REC_PACE_MS"))
         Sleep(atoi(pace));
+#endif
     DShowRecorder* recorder = s.Recorder();
     unsigned char* push = recorder != nullptr
         ? static_cast<unsigned char*>(recorder->framePush)
@@ -253,7 +261,7 @@ bool RecordingReadbackPass(MMDApp* app) {
             reinterpret_cast<unsigned char*>(wrapper), 0);       // 0x46EDE4
     if (stretch != 0) {
         TraceRec("readback: StretchRect hr=%ld\n", (long)stretch);
-        Sub464A00(app);                                          // 0x46EDEB
+        FinishAviRecord(app);                                          // 0x46EDEB
         return false;
     }
 
@@ -262,14 +270,14 @@ bool RecordingReadbackPass(MMDApp* app) {
     if (FAILED(grtdHr)) {
         TraceRec("readback: GetRenderTargetData hr=%ld\n",
                  (long)grtdHr);
-        Sub464A00(app);                                          // 0x46EE2F
+        FinishAviRecord(app);                                          // 0x46EE2F
         return false;
     }
     D3DLOCKED_RECT locked;
     if (FAILED((*sysSlot)->LockRect(&locked, nullptr,
                                     D3DLOCK_READONLY))) {        // 0x46EE16
         TraceRec("readback: LockRect failed\n");
-        Sub464A00(app);
+        FinishAviRecord(app);
         return false;
     }
     {

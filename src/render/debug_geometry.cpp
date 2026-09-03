@@ -255,7 +255,7 @@ void Sub04B0Init(void* object) {
 }
 
 bool InitAxisMesh(MMDApp* app) {
-    void* axis = app->state.sub04b0OrUint32;
+    void* axis = app->state.axisMeshObject;
     ReleaseCom(At<void*>(axis, 0));
     At<void*>(axis, 0) = nullptr;
 
@@ -338,16 +338,16 @@ void DrawAccessoryDebug(MMDApp* app) {
     auto& api = d3dx::Get();
     PhysicsScene* scene = app->Physics();   // +650672 (kPtrSub048)
     // The physics-model editor's scratch arrays double as the draw source:
-    // cameraRecordArray = rigid bodies (mdl::RigidRecord), boneRecordArray =
+    // rigidScratchArray = rigid bodies (mdl::RigidRecord), jointScratchArray =
     // joints (mdl::JointRecord).  While the dialog is open the records'
     // keyData / constraint slots hold the combo index (-1 = deleted slot).
     auto* bodies =
         static_cast<mikudancestudio::mdl::RigidRecord*>(
-            app->state.cameraRecordArray);
+            app->state.rigidScratchArray);
     auto* joints =
         static_cast<mikudancestudio::mdl::JointRecord*>(
-            app->state.boneRecordArray);
-    const bool dialogSelection = app->state.a9edb4 != 0;
+            app->state.jointScratchArray);
+    const bool dialogSelection = app->state.physicsEditorJointPage != 0;
     for (int index = 0; index < kDebugRecordCapacity; ++index) {
         mikudancestudio::mdl::RigidRecord* record = &bodies[index];
         const int comboSlot =
@@ -367,7 +367,7 @@ void DrawAccessoryDebug(MMDApp* app) {
 
             bool selected = false;
             if (dialogSelection) {
-                const int linkIndex = app->state.sel8c;
+                const int linkIndex = app->state.selectedJointIndex;
                 if (linkIndex >= 0) {
                     const mikudancestudio::mdl::JointRecord* link =
                         &joints[linkIndex];
@@ -375,7 +375,7 @@ void DrawAccessoryDebug(MMDApp* app) {
                                index == link->rigidB;
                 }
             } else {
-                selected = index == app->state.selAcc;
+                selected = index == app->state.selectedRigidIndex;
             }
             if (selected)
                 SetDebugColor(scene, 255, dialogSelection ? 75 : 0,
@@ -416,11 +416,11 @@ void DrawAccessoryDebug(MMDApp* app) {
         api.multiply(&world, &world, &oldWorld);
         device->SetTransform(D3DTS_WORLD,
                              reinterpret_cast<const D3DMATRIX*>(&world));
-        if (dialogSelection && index == app->state.sel8c) {
+        if (dialogSelection && index == app->state.selectedJointIndex) {
             device->SetRenderState(D3DRS_ZENABLE, TRUE);
             device->SetRenderState(D3DRS_LIGHTING, TRUE);
             device->Clear(0, nullptr, D3DCLEAR_ZBUFFER, 0x00FFFFFF, 1.0f, 0);
-            DrawAxisMesh(app->state.sub04b0OrUint32,
+            DrawAxisMesh(app->state.axisMeshObject,
                          app->Renderer());
             device->SetRenderState(D3DRS_ZENABLE, FALSE);
             device->SetRenderState(D3DRS_LIGHTING, FALSE);
@@ -439,9 +439,10 @@ void DrawBoneOperationAxis(MMDApp* app, const float frameMatrix[16]) {
         return;
     auto* bones = mikudancestudio::mdl::Bones(model);
     mikudancestudio::mdl::BoneRecord* bone = &bones[selected];
-    const std::uint8_t type = bone->type;
-    if (type == 8 ||
-        (type == 4 && (bone->flags & 0x400) == 0x400))
+    const mdl::BoneType type = bone->type;
+    if (type == mdl::BoneType::FixedAxis ||
+        (type == mdl::BoneType::UnderIk &&
+         (bone->flags & mdl::kBoneFlagFixedAxis) == mdl::kBoneFlagFixedAxis))
         return;
     const int operation = static_cast<int>(app->ViewportToolOperation());
     const int mode = static_cast<int>(app->InteractionDragMode());
@@ -454,7 +455,7 @@ void DrawBoneOperationAxis(MMDApp* app, const float frameMatrix[16]) {
     Matrix translation;
     api.translation(&translation, bone->position[0], bone->position[1],
                     bone->position[2]);
-    if (app->state.v9ed9c == 1) {
+    if (app->state.coordinateSystem == 1) {
         api.multiply(&world, &translation, BoneMatrix(bone));
         const float x = world.m[3][0];
         const float y = world.m[3][1];
@@ -506,7 +507,7 @@ void DrawBoneOperationAxis(MMDApp* app, const float frameMatrix[16]) {
     device->SetTransform(D3DTS_WORLD,
                          reinterpret_cast<const D3DMATRIX*>(&world));
     device->Clear(0, nullptr, D3DCLEAR_ZBUFFER, 0x00FFFFFF, 1.0f, 0);
-    DrawAxisMesh(app->state.sub04b0OrUint32, app->Renderer());
+    DrawAxisMesh(app->state.axisMeshObject, app->Renderer());
 }
 
 void SetupFrameWorldTransform(MMDApp* app) {
@@ -557,7 +558,7 @@ void SetupFrameWorldTransform(MMDApp* app) {
     api.rotZ(&rotationZ, app->CameraRoll());
     api.multiply(&rotation, &rotation, &rotationZ);
 
-    if (app->state.v9ed98 != 0 ||
+    if (app->state.followCameraEnabled != 0 ||
         app->state.optflag[0] != 0) {
         if (target != nullptr &&
             app->CameraAttachmentTransformSuppressed() == 0) {
@@ -599,7 +600,7 @@ void SetupFrameWorldTransform(MMDApp* app) {
 
     // 0x46BC20..0x46BC9F: the alternate projection used by the orthographic
     // view mode.  The normal perspective projection remains the one written
-    // by Sub42C810.
+    // by RefreshMainWindowViewport.
     if (app->state.cameraPerspective != 0) {
         Matrix projection{};
         projection.m[0][0] = -2.0f / app->CameraDistance();

@@ -20,9 +20,9 @@
 //      every loaded slot; the active slot (this+0x910, byte) additionally
 //      gets the panel-state sync sub_4A02C0(model).
 //   4. Mode branch on byte this+0x2F8 (kByteOptflag0):
-//        set   -> ReloadModels (0x42E640) + Sub411070/Sub411B90/Sub412330
-//                 + Sub413120 per non-null slot of the 255-slot array at
-//                 this+0x9DD70 + Sub4134E0
+//        set   -> ReloadModels (0x42E640) + RefreshLightPanel/RefreshSelfShadowPanel/ApplyGravityTrack
+//                 + ApplyAccessoryTrack per non-null slot of the 255-slot array at
+//                 this+0x9DD70 + SyncAccessoryEditPanel
 //        clear, byte this+0x9ED98 set -> zero floats this+0x308/+0x30C,
 //                 same reload chain, then if this+0xA0430 >= 0:
 //                 Sub4970B0(model at that slot) and SetPhysicsMode (0x4A9220)
@@ -39,7 +39,7 @@
 //      (0x4C2B80, this+0xA4424) and sub_4C3530 (timer-reset, ecx =
 //      this+0xCC subsystem) with (double)(unsigned)(frame-1) / 30.0
 //      (negative frame adds 2^32f first), clamped >= 0.
-//   7. Tail: if this+0x91C == 1 -> Sub4168D0; byte this+0x9EDB5 = 1.
+//   7. Tail: if this+0x91C == 1 -> AviBgOverlayRefresh; byte this+0x9EDB5 = 1.
 //
 // Reference: ../translated/MikuMikuDance/fcn_0044aaa0.cpp
 //   NOTE: the translated file is a register-tracking re-render that deviates
@@ -56,6 +56,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -70,23 +71,23 @@ void SetFrameNormalized(int frame);                             // VA 0x004C2B80
 // (signatures below are the placeholder ones from stubs.cpp; where the
 // original passes a MODEL pointer or extra arguments the call site casts
 // and marks TODO(port) - see the individual call sites).
-void Sub411070(MMDApp* app);                                    // VA 0x00411070
-void Sub411B90(MMDApp* app);                                    // VA 0x00411B90
-void Sub412330(MMDApp* app);                                    // VA 0x00412330
-void Sub4134E0(MMDApp* app);                                    // VA 0x004134E0
-void Sub413120(MMDApp* app, int idx);                           // VA 0x00413120
-void Sub4A0080(unsigned char* model, int frame);               // VA 0x004A0080
-void Sub4A02C0(unsigned char* model);                          // VA 0x004A02C0
-int Sub4B4260(unsigned char* model, int frame, int a3);       // VA 0x004B4260
-void Sub4C3530(void* sub, double v);                           // VA 0x004C3530
-void Sub4168D0(MMDApp* app);                                    // VA 0x004168D0
+void RefreshLightPanel(MMDApp* app);                                    // VA 0x00411070
+void RefreshSelfShadowPanel(MMDApp* app);                                    // VA 0x00411B90
+void ApplyGravityTrack(MMDApp* app);                                    // VA 0x00412330
+void SyncAccessoryEditPanel(MMDApp* app);                                    // VA 0x004134E0
+void ApplyAccessoryTrack(MMDApp* app, int idx);                           // VA 0x00413120
+void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame);  // VA 0x004A0080, was Sub4A0080
+void SyncModelEditControls(unsigned char* model);                     // VA 0x004A02C0, was Sub4A02C0
+int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // VA 0x004B4260
+void WaveRestartAt(void* sub, double v);                       // VA 0x004C3530, was Sub4C3530
+void AviBgOverlayRefresh(MMDApp* app);                                    // VA 0x004168D0
 
 // VA 0x0044D940 - row/panel mode toggle (combobox-driven rebuild of the
 // accessory/camera panel + menu enable state).  Full port lives in
 // src/window/ui_model_reload.cpp (verified 2026-09 branch-by-branch
 // against the x64 twin sub_7FF7CB486B10); G5 of the pump's TAB/VK226
 // combo cycle (src/app/pump_edit_keys.cpp) is a new caller.
-void Sub44D940(MMDApp* app);
+void ApplyModelComboSelection(MMDApp* app);
 
 void HandleLButtonDblClk(MMDApp* app) {
     if (app->FullscreenMode() != 0)                             // 655988 (0xA0274)
@@ -124,7 +125,7 @@ void HandleLButtonDblClk(MMDApp* app) {
             }
             if (idx < flagCount) {
                 // original: sub_4A0080(ecx = model, stack = app+2432 frame)
-                Sub4A0080(model, app->state.currentFrame);
+                SnapshotPoseBeforeFrameChange(model, app->state.currentFrame);
                 for (int j = 0;
                      j < static_cast<int>(mdl::Mdl(model)->boneCount); ++j)
                     mdl::Mdl(model)->bonePhysicsState[j] = 0;
@@ -135,12 +136,12 @@ void HandleLButtonDblClk(MMDApp* app) {
         // this+0x980 = this+0x97C + (this+4 - 100) / 13
         app->state.currentFrame =
             app->state.timelineStartFrame + (app->MouseX() - 100) / 13;
-        const LRESULT textLen = GetWindowTextLengthA(GetDlgItem(hwnd, 417));
-        SendMessageA(GetDlgItem(hwnd, 417), 0xB1u /*EM_SETSEL*/, 0, textLen);
+        const LRESULT textLen = GetWindowTextLengthA(GetDlgItem(hwnd, panel::kCurrentFrameEdit));
+        SendMessageA(GetDlgItem(hwnd, panel::kCurrentFrameEdit), EM_SETSEL, 0, textLen);
         char frameText[256];                                    // 0x100
         sprintf_s(frameText, 0x100u, "%d",
                   app->state.currentFrame);
-        SendMessageA(GetDlgItem(hwnd, 417), 0xC2u /*WM_SETTEXT*/, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kCurrentFrameEdit), EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(frameText));
 
         // ---- 3. per-slot bone-frame apply + active-slot panel sync --------
@@ -152,38 +153,38 @@ void HandleLButtonDblClk(MMDApp* app) {
                 continue;
             // original: sub_4B4260(ecx = model, frame = app+2432,
             //            app+0xA0CC4)
-            Sub4B4260(model,
+            SeekModelFrame(model,
                       app->state.currentFrame,
                       app->PlaybackPhysicsMode());
             if (i == static_cast<int>(app->SelectedModelSlot())) {
                 // original: sub_4A02C0(ecx = model)
-                Sub4A02C0(model);
+                SyncModelEditControls(model);
             }
         }
 
         // ---- 4. mode branch: model row / accessory row / light row --------
         if (app->state.optflag[0] != 0) {  // 760 (0x2F8)
             ReloadModels(app);                                    // 0x42E640
-            Sub411070(app);                                       // 0x411070
-            Sub411B90(app);                                       // 0x411B90
-            Sub412330(app);                                       // 0x412330
+            RefreshLightPanel(app);                                       // 0x411070
+            RefreshSelfShadowPanel(app);                                       // 0x411B90
+            ApplyGravityTrack(app);                                       // 0x412330
             for (int i = 0; i < 255; ++i) {                       // 0xFF slots
                 if (app->AccessorySlot(i) != nullptr)
-                    Sub413120(app, i);                            // 0x413120
+                    ApplyAccessoryTrack(app, i);                            // 0x413120
             }
-            Sub4134E0(app);                                       // 0x4134E0
-        } else if (app->state.v9ed98 != 0) {  // 650648
+            SyncAccessoryEditPanel(app);                                       // 0x4134E0
+        } else if (app->state.followCameraEnabled != 0) {  // 650648
             app->ViewOffsetX() = 0.0f;
             app->ViewOffsetY() = 0.0f;
             ReloadModels(app);                                    // 0x42E640
-            Sub411070(app);
-            Sub411B90(app);
-            Sub412330(app);
+            RefreshLightPanel(app);
+            RefreshSelfShadowPanel(app);
+            ApplyGravityTrack(app);
             for (int i = 0; i < 255; ++i) {
                 if (app->AccessorySlot(i) != nullptr)
-                    Sub413120(app, i);
+                    ApplyAccessoryTrack(app, i);
             }
-            Sub4134E0(app);
+            SyncAccessoryEditPanel(app);
             const std::int32_t sel =
                 app->CameraParentModel();
             if (sel >= 0) {
@@ -196,8 +197,8 @@ void HandleLButtonDblClk(MMDApp* app) {
             }
             PostModelReload(app);                                 // 0x41A650
         } else {
-            EnableWindow(GetDlgItem(hwnd, 400), TRUE);            // 0x190
-            EnableWindow(GetDlgItem(hwnd, 401), FALSE);           // 0x191
+            EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);            // 0x190
+            EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);           // 0x191
         }
 
         // ---- 5. scroll clamp + panel repaint -------------------------------
@@ -222,29 +223,29 @@ void HandleLButtonDblClk(MMDApp* app) {
             rc.right = app->SidebarWidth() - 3;
             rc.bottom = 146;
             InvalidateRect(hwnd, &rc, 0);
-            if (app->state.a0196 != 0) {  // 655766 (0xA0196)
+            if (app->state.wavPlaysOnFrameMove != 0) {  // 655766 (0xA0196)
                 // gate flag read BEFORE the 0xA02B6 store (asm zf capture)
                 const bool gate =
                     app->state.automaticFrameAdvanceEnabled == 0;  // 656361 (0xA03E9)
                 app->AudioSeekReady() = 1;  // 0xA02B6
                 if (gate) {
                     SetFrameNormalized(app->FrameNormalization());  // 0x4C2B80
-                    const std::int32_t v31 =
+                    const std::int32_t frameMinus1 =
                         app->state.currentFrame - 1;
                     // fild + (negative ? fadd 2^32f) + fdiv 30.0 ==
                     // (double)(unsigned)v31 / 30.0
-                    double t = static_cast<double>(static_cast<std::uint32_t>(v31)) / 30.0;
+                    double t = static_cast<double>(static_cast<std::uint32_t>(frameMinus1)) / 30.0;
                     if (t < 0.0)                                  // fldz/fcom clamp, never fires
                         t = 0.0;
                     // original: sub_4C3530(ecx = app+0xCC subsystem, t)
-                    Sub4C3530(app->Audio(), t);
+                    WaveRestartAt(app->Audio(), t);
                 }
             }
         }
 
         // ---- 7. tail ---------------------------------------------------------
         if (app->state.aviBackgroundEnabled == 1)      // 2332 (0x91C)
-            Sub4168D0(app);                                       // 0x4168D0
+            AviBgOverlayRefresh(app);                                       // 0x4168D0
         app->PhysicsResetPending() = 1;
     }
 }
@@ -305,22 +306,22 @@ void HandleMouseActivate(MMDApp* app) {
     if (app->state.optflag[0] != 0) {    // 760 (0x2F8)
         // mode row: keep the combo selection in sync with the panel state
         if (fg == cached || app->MouseY() <= rect.bottom - 158) {
-            SendMessageA(GetDlgItem(hwnd, 436), 0x14Eu /*CB_SETCURSEL*/,
-                         app->ViewModeComboSelection(), 0);     // 656428 (0xA042C)
-            Sub44D940(app);                                       // 0x44D940 (ui_model_reload.cpp)
+            SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL,
+                         app->MainModelComboSelection(), 0);     // 656428 (0xA042C)
+            ApplyModelComboSelection(app);                                       // 0x44D940 (ui_model_reload.cpp)
             return;
         }
     } else if (app->MouseY() > rect.bottom - 158 &&
                fg != cached) {
-        SendMessageA(GetDlgItem(hwnd, 436), 0x14Eu /*CB_SETCURSEL*/, 0, 0);
-        Sub44D940(app);                                           // 0x44D940 (ui_model_reload.cpp)
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL, 0, 0);
+        ApplyModelComboSelection(app);                                           // 0x44D940 (ui_model_reload.cpp)
         return;
     } else if (app->EditMode() != ViewportEditMode::Bone) {
         // panel already active: checkboxes 491/492/493 off, 490 on
-        SendMessageA(GetDlgItem(hwnd, 491), 0xF1u /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 492), 0xF1u /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 493), 0xF1u /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 490), 0xF1u /*BM_SETCHECK*/, 1, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneMoveRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRotateRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, 1, 0);
         app->EditMode() = ViewportEditMode::Bone;
 
         const float scale =
@@ -344,16 +345,16 @@ void HandleMouseActivate(MMDApp* app) {
             pt.y = 150;                                           // 0x96
             ClientToScreen(hwnd, &pt);
             SetCursorPos(pt.x, pt.y);
-            app->state.v9f12c = 1;      // 651564 (0x9F12C)
+            app->state.separateWindowMouseSeen = 1;      // 651564 (0x9F12C)
             SetForegroundWindow(hwnd);
         }
     } else {
         // panel inactive: all four checkboxes off, cursor parked at the
         // scaled panel corner
-        SendMessageA(GetDlgItem(hwnd, 491), 0xF1u /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 492), 0xF1u /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 493), 0xF1u /*BM_SETCHECK*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 490), 0xF1u /*BM_SETCHECK*/, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneMoveRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRotateRadio), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, 0, 0);
         app->EditMode() = ViewportEditMode::None;
 
         const float scale =
@@ -370,7 +371,7 @@ void HandleMouseActivate(MMDApp* app) {
             ClientToScreen(hwnd, &pt);
         }
         SetCursorPos(pt.x, pt.y);
-        app->state.v9f12c = 1;          // 651564 (0x9F12C)
+        app->state.separateWindowMouseSeen = 1;          // 651564 (0x9F12C)
     }
 }
 

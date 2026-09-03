@@ -3,7 +3,7 @@
 // ===========================================================================
 // __thiscall on the model block:
 //
-//   Sub4B4260(model, frame, physicsMode)
+//   SeekModelFrame(model, frame, physicsMode)
 //     frame        unsigned frame number (NOT seconds - no x30 rounding)
 //     physicsMode  0/1 = no rigid notifications, 2 = notify on mode byte
 //                  changes, 3 = full IK-off arming bookkeeping
@@ -77,9 +77,9 @@ const float kQuatClamp = 0.99999994f;  // 0x3F7FFFFF
 }  // namespace
 
 // ---- VA 0x004B4260 --------------------------------------------------------
-int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
+int SeekModelFrame(unsigned char* model, int frameArg, int physicsMode) {  // was Sub4B4260
     unsigned char* const m = model;
-    const std::uint32_t a2 = static_cast<std::uint32_t>(frameArg);
+    const std::uint32_t frameU32 = static_cast<std::uint32_t>(frameArg);
     int result = 0;
 
     // ==== section 1: IK master track (0x4B426D) ===========================
@@ -87,13 +87,13 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
         mdl::DisplayKey* const keys = mdl::DisplayKeys(m);
         int found = 0;                                 // v5 / v157
         bool resolved = false;
-        if (keys[0].frame < a2) {
+        if (keys[0].frame < frameU32) {
             // walk the master chain (0x4B4281)
             for (;;) {
                 const int next = static_cast<int>(keys[found].next);
                 if (next == 0) break;
                 found = next;
-                if (keys[found].frame >= a2) {
+                if (keys[found].frame >= frameU32) {
                     resolved = true;
                     break;
                 }
@@ -108,7 +108,7 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
             resolved = true;  // a2 is at/before the first record
         }
         if (resolved) {
-            if (keys[found].frame == a2) {
+            if (keys[found].frame == frameU32) {
                 // exact hit: variant B (0x4B42BF)
                 mikudancestudio::mdl::Mdl(m)->loadComplete = keys[found].visible;
                 CopyIkDisplayFlags(m, keys[found]);
@@ -132,13 +132,13 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
         mikudancestudio::mdl::MorphRecord* const vals = mikudancestudio::mdl::Morphs(m);  // 136-byte structs
         for (int k = 0; k < morphCnt; ++k) {
             int found = k;              // morph k's first record is #k
-            if (keys[found].frame < a2) {
+            if (keys[found].frame < frameU32) {
                 bool resolved = false;
                 for (;;) {
                     const int next = static_cast<int>(keys[found].next);
                     if (next == 0) break;
                     found = next;
-                    if (keys[found].frame >= a2) {
+                    if (keys[found].frame >= frameU32) {
                         resolved = true;
                         break;
                     }
@@ -152,11 +152,11 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
             }
             const mdl::MorphKey& rec = keys[found];
             float v;
-            if (rec.frame == a2) {
+            if (rec.frame == frameU32) {
                 v = rec.value;
             } else {
                 const mdl::MorphKey& prev = keys[rec.previous];
-                const float tF = (float)((double)(a2 - prev.frame) /
+                const float tF = (float)((double)(frameU32 - prev.frame) /
                                          (double)(std::uint32_t)(
                                              rec.frame - prev.frame));
                 const float delta =
@@ -178,16 +178,18 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
             mikudancestudio::mdl::BoneRecord* const bone = &bones[b];
             // type gate (0x4B4A5F): signed setle <= 6 or == 8
             const std::int8_t btype = static_cast<std::int8_t>(bone->type);
-            if (!(btype <= 6 || bone->type == 8)) continue;
+            if (!(btype <= static_cast<std::int8_t>(mdl::BoneType::Effector) ||
+                  bone->type == mdl::BoneType::FixedAxis))
+                continue;
 
             int found = b;              // bone b's first record is #b
             bool resolved = false;
-            if (keys[found].frame < a2) {
+            if (keys[found].frame < frameU32) {
                 for (;;) {
                     const int next = static_cast<int>(keys[found].next);
                     if (next == 0) break;
                     found = next;
-                    if (keys[found].frame >= a2) {
+                    if (keys[found].frame >= frameU32) {
                         resolved = true;
                         break;
                     }
@@ -200,17 +202,17 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
                     for (int c = 0; c < 3; ++c)
                         bone->trans[c] = rec.position[c];
                     const unsigned char mode = rec.physicsDisabled;
-                    if (bone->f492 != 0 && bone->f493 != mode &&
+                    if (bone->hasRigidBody != 0 && bone->physicsDisabled != mode &&
                         physicsMode >= 2) {
-                        Sub499B50(m, b, mode);  // 0x4B4D23
-                        bone->f493 = rec.physicsDisabled;
+                        NotifyBonePhysicsMode(m, b, mode);  // 0x4B4D23
+                        bone->physicsDisabled = rec.physicsDisabled;
                     }
                     const int selIdx = bone->slotIndex;
                     if (selIdx >= 0) {
                         const mdl::BoneOrderEntry& window =
                             mdl::BoneOrder(m)[selIdx];
                         const std::uint32_t selStart = window.windowStart;
-                        if (rec.frame < selStart && selStart <= a2) {
+                        if (rec.frame < selStart && selStart <= frameU32) {
                             // zero position + quaternion xyz, w = 1.0
                             // (0x4B4D79..0x4B4DCB)
                             for (int o = 0; o < 6; ++o)
@@ -228,15 +230,15 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
             const mdl::BoneKey& rec = keys[found];
             const std::uint32_t curFrame = rec.frame;
 
-            if (curFrame == a2) {
+            if (curFrame == frameU32) {
                 // exact hit (0x4B4AD8): copy verbatim
                 CopyBoneKeyVerbatim(bone, rec);
-                if (bone->f492 != 0) {  // 0x4B4B37
+                if (bone->hasRigidBody != 0) {  // 0x4B4B37
                     if (physicsMode != 3) {
                         const unsigned char mode = rec.physicsDisabled;
-                        if (bone->f493 != mode && physicsMode == 2) {
-                            Sub499B50(m, b, mode);  // 0x4B4E67
-                            bone->f493 = rec.physicsDisabled;
+                        if (bone->physicsDisabled != mode && physicsMode == 2) {
+                            NotifyBonePhysicsMode(m, b, mode);  // 0x4B4E67
+                            bone->physicsDisabled = rec.physicsDisabled;
                         }
                         result = b + 1;
                         continue;
@@ -244,25 +246,25 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
                     const int nextIdx = static_cast<int>(rec.next);
                     const unsigned char mode = rec.physicsDisabled;
                     if (nextIdx <= 0) {
-                        if (bone->f493 != mode)
-                            Sub499B50(m, b, mode);  // 0x4B4E1D
-                        bone->f493 = rec.physicsDisabled;
+                        if (bone->physicsDisabled != mode)
+                            NotifyBonePhysicsMode(m, b, mode);  // 0x4B4E1D
+                        bone->physicsDisabled = rec.physicsDisabled;
                         result = b + 1;
                         continue;
                     }
                     const mdl::BoneKey& nrec = keys[nextIdx];
                     if (nrec.physicsDisabled != 1 || mode != 0) {
-                        if (bone->f493 != mode)
-                            Sub499B50(m, b, mode);  // 0x4B4DE7
-                        bone->f493 = rec.physicsDisabled;
+                        if (bone->physicsDisabled != mode)
+                            NotifyBonePhysicsMode(m, b, mode);  // 0x4B4DE7
+                        bone->physicsDisabled = rec.physicsDisabled;
                         result = b + 1;
                         continue;
                     }
                     // arm the interpolation for the upcoming segment
                     // (0x4B4B91): working copies AND current pose from the
                     // backups
-                    if (bone->f493 == 0) Sub499B50(m, b, 1);
-                    bone->f493 = 1;
+                    if (bone->physicsDisabled == 0) NotifyBonePhysicsMode(m, b, 1);
+                    bone->physicsDisabled = 1;
                     bone->rigidIdx = static_cast<std::int32_t>(curFrame);
                     MirrorBackupsToWorking(bone);
                     MirrorBackupsToCurrent(bone);
@@ -280,7 +282,7 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
             float pq[4] = {prevRec.rotation[0], prevRec.rotation[1],
                            prevRec.rotation[2], prevRec.rotation[3]};
 
-            if (bone->f492 != 0) {  // 0x4B4E88
+            if (bone->hasRigidBody != 0) {  // 0x4B4E88
                 if (physicsMode == 3) {
                     if (rec.physicsDisabled == 1 &&
                         prevRec.physicsDisabled == 0) {
@@ -289,13 +291,13 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
                             static_cast<std::uint32_t>(bone->rigidIdx);
                         if (start >= curFrame || start < prevFrame) {
                             // stale arm -> re-arm from the backups (0x4B4EDA)
-                            if (bone->f493 == 0) Sub499B50(m, b, 1);
-                            bone->f493 = 1;
+                            if (bone->physicsDisabled == 0) NotifyBonePhysicsMode(m, b, 1);
+                            bone->physicsDisabled = 1;
                             bone->rigidIdx = static_cast<std::int32_t>(prevFrame);
                             MirrorBackupsToWorking(bone);
                         }
-                        if (bone->f493 == 0) Sub499B50(m, b, 1);
-                        bone->f493 = 1;
+                        if (bone->physicsDisabled == 0) NotifyBonePhysicsMode(m, b, 1);
+                        bone->physicsDisabled = 1;
                         // blend from the armed working copies (0x4B4FC4)
                         pq[0] = bone->ikWorkingQuat[0];
                         pq[1] = bone->ikWorkingQuat[1];
@@ -308,15 +310,15 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
                             bone->rigidIdx);
                     } else {
                         const unsigned char pmode = prevRec.physicsDisabled;
-                        if (bone->f493 != pmode)
-                            Sub499B50(m, b, pmode);  // 0x4B5022
-                        bone->f493 = prevRec.physicsDisabled;
+                        if (bone->physicsDisabled != pmode)
+                            NotifyBonePhysicsMode(m, b, pmode);  // 0x4B5022
+                        bone->physicsDisabled = prevRec.physicsDisabled;
                     }
                 } else {
                     const unsigned char pmode = prevRec.physicsDisabled;
-                    if (bone->f493 != pmode && physicsMode == 2) {
-                        Sub499B50(m, b, pmode);  // 0x4B50B0
-                        bone->f493 = prevRec.physicsDisabled;
+                    if (bone->physicsDisabled != pmode && physicsMode == 2) {
+                        NotifyBonePhysicsMode(m, b, pmode);  // 0x4B50B0
+                        bone->physicsDisabled = prevRec.physicsDisabled;
                     }
                 }
             }
@@ -341,7 +343,7 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
                 }
             }
             if (doSnap) {
-                if (a2 >= snapRef)
+                if (frameU32 >= snapRef)
                     CopyBoneKeyVerbatim(bone, rec);  // 0x4B51FC
                 else
                     WriteBonePrevVerbatim(bone, pq, ppos);  // 0x4B51BA
@@ -354,10 +356,10 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
             const float cq[4] = {rec.rotation[0], rec.rotation[1],
                                  rec.rotation[2], rec.rotation[3]};
             const float tF = (float)(
-                (double)(a2 - prevFrame) /
+                (double)(frameU32 - prevFrame) /
                 (double)(std::uint32_t)((std::int32_t)curFrame -
                                         (std::int32_t)prevFrame));
-            const float eRot = Sub4A05A0(m, 3, found, tF);
+            const float eRot = BoneEase(m, 3, found, tF);
 
             const double dotD = (double)pq[0] * cq[0] +
                                 (double)pq[1] * cq[1] +
@@ -385,9 +387,9 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
                         (float)std::sin((double)a0);
                     const float w0 =
                         (float)((double)sin0 / (double)s);
-                    const float a1 = (float)((double)eRot * (double)th2);
+                    const float aEnd = (float)((double)eRot * (double)th2);
                     const float sin1 =
-                        (float)std::sin((double)a1);
+                        (float)std::sin((double)aEnd);
                     const float w1 =
                         (float)((double)sin1 / (double)s);
                     for (int c = 0; c < 4; ++c)
@@ -402,9 +404,9 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
                         (float)std::sin((double)a0);
                     const float w0 =
                         (float)((double)sin0 / (double)s);
-                    const float a1 = (float)((double)eRot * (double)th);
+                    const float aEnd = (float)((double)eRot * (double)th);
                     const float sin1 =
-                        (float)std::sin((double)a1);
+                        (float)std::sin((double)aEnd);
                     const float w1 =
                         (float)((double)sin1 / (double)s);
                     for (int c = 0; c < 4; ++c)
@@ -416,13 +418,14 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
 
             // position easing (0x4B55E1) - same type gate again (always
             // true here because of the bone-level gate, kept for fidelity)
-            if (btype <= 6 || bone->type == 8) {
+            if (btype <= static_cast<std::int8_t>(mdl::BoneType::Effector) ||
+                bone->type == mdl::BoneType::FixedAxis) {
                 for (int axis = 0; axis < 3; ++axis) {
                     const float delta = rec.position[axis] - ppos[axis];
                     if (delta == 0.0f) {
                         bone->trans[axis] = ppos[axis];
                     } else {
-                        const float e = Sub4A05A0(m, axis, found, tF);
+                        const float e = BoneEase(m, axis, found, tF);
                         bone->trans[axis] =
                             (float)((double)e * (double)delta +
                                     (double)ppos[axis]);
@@ -436,16 +439,17 @@ int Sub4B4260(unsigned char* model, int frameArg, int physicsMode) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004220C0 - Sub4220C0(app): seek the selected model to the current
-// frame and set the re-eval byte.  Model slot = app+0x780[byte 0x910],
-// frame = app+0x980, third arg app+0xA0CC4 (same convention as the 30
-// other Sub4B4260 call sites), then byte 0x9ED95 = 1.
+// VA 0x004220C0 - was Sub4220C0.  SeekSelectedModelToCurrentFrame(app):
+// seek the selected model to the current frame and set the re-eval byte.
+// Model slot = app+0x780[byte 0x910], frame = app+0x980, third arg
+// app+0xA0CC4 (same convention as the 30 other SeekModelFrame call
+// sites), then byte 0x9ED95 = 1.
 // ---------------------------------------------------------------------------
-void Sub4220C0(MMDApp* app) {
+void SeekSelectedModelToCurrentFrame(MMDApp* app) {
     unsigned char* model = app->SelectedModel();
-    Sub4B4260(model, app->state.currentFrame,
+    SeekModelFrame(model, app->state.currentFrame,
               app->PlaybackPhysicsMode());                         // 0x4220DF
-    app->F9ed94Byte1() = 1;                                        // 0x4220E4
+    app->RecordedFrameCountByte1() = 1;                                        // 0x4220E4
 }
 
 }  // namespace mikudancestudio

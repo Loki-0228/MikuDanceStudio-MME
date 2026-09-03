@@ -7,7 +7,7 @@
 // (PMD physics) in two 100000-slot scratch arrays owned by the app object,
 // then rebuilds the model tables and the Bullet world contents on OK.
 //
-// The previous body of Sub465020 in this file was a wrong transplant that
+// The previous body of PhysicsModelDlgProc in this file was a wrong transplant that
 // read the very same record slots as camera/bone *frame* records; it has
 // been rewritten from the original binary.  The control-ID call sites,
 // array slots and helper VAs were already right - only the record
@@ -31,9 +31,9 @@
 //    src/model/model_frame_seek.cpp and is called on close.)
 //
 // Editor storage (app blob slots, shared with the accessory physics
-// editor): cameraRecordArray = rigid-body scratch array
-// (mdl::RigidRecord x 100000, index state.selAcc), boneRecordArray =
-// joint scratch array (mdl::JointRecord x 100000, index state.sel8c).
+// editor): rigidScratchArray = rigid-body scratch array
+// (mdl::RigidRecord x 100000, index state.selectedRigidIndex), jointScratchArray =
+// joint scratch array (mdl::JointRecord x 100000, index state.selectedJointIndex).
 // In the scratch copies the RigidRecord::keyData slot holds the combo-box
 // index (-1 = deleted slot) and JointRecord::constraint holds the joint
 // combo index; RigidRecord::noCollapse holds the *collision* mask while
@@ -80,23 +80,24 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
 // Forward declarations (twins of the block in command_view_menu.cpp - the
 // helpers are defined in this file).
-void Sub45F480(HWND hDlg);                                  // VA 0x0045F480
-LRESULT CALLBACK Sub41EC50(HWND, UINT, WPARAM, LPARAM);      // VA 0x0041EC50
-void Sub45F670(HWND hDlg);                                   // VA 0x0045F670
-void Sub41FF30(MMDApp* app);                                 // VA 0x0041FF30
-void Sub4204F0(MMDApp* app);                                 // VA 0x004204F0
-void Sub43CA50(HWND hDlg);                                   // VA 0x0043CA50
-void Sub43CCD0(HWND hDlg, int idx);                          // VA 0x0043CCD0
-void Sub4214A0(HWND hDlg, int idx);                          // VA 0x004214A0
-void Sub421C20(HWND hDlg, int flag);                         // VA 0x00421C20
-void Sub421CE0(HWND hDlg, int mode, int idx);                // VA 0x00421CE0
-void Sub4220F0(HWND hDlg);                                   // VA 0x004220F0
-void Sub420DC0(HWND hDlg);                                   // VA 0x00420DC0
+void AddRigidBody(HWND hDlg);                                // was Sub45F480, VA 0x0045F480
+LRESULT CALLBACK PhysicsEditSubclassProc(HWND, UINT, WPARAM, LPARAM);  // was Sub41EC50, VA 0x0041EC50
+void InitPhysicsModelDialog(HWND hDlg);                      // was Sub45F670, VA 0x0045F670
+void CollectBodyEdits(MMDApp* app);                          // was Sub41FF30, VA 0x0041FF30
+void CollectJointEdits(MMDApp* app);                         // was Sub4204F0, VA 0x004204F0
+void AddJoint(HWND hDlg);                                    // was Sub43CA50, VA 0x0043CA50
+void ApplyBodyRecordToEdits(HWND hDlg, int idx);             // was Sub43CCD0, VA 0x0043CCD0
+void ApplyJointRecordToEdits(HWND hDlg, int idx);            // was Sub4214A0, VA 0x004214A0
+void FlipPhysicsDialogPage(HWND hDlg, int flag);             // was Sub421C20, VA 0x00421C20
+void UpdateShapeControls(HWND hDlg, int mode, int idx);      // was Sub421CE0, VA 0x00421CE0
+void CommitPhysicsEdits(HWND hDlg);                          // was Sub4220F0, VA 0x004220F0
+void PickPivotBone(HWND hDlg);                               // was Sub420DC0, VA 0x00420DC0
 
 // ---- control IDs ----------------------------------------------------------
 constexpr int kAddBodyButton = 685;        // 0x2AD
@@ -144,6 +145,30 @@ constexpr int kBodyBCombo = 742;
 constexpr int kPivotBoneCombo = 743;
 constexpr int kCopyJointButton = 738;      // 0x2E2
 constexpr int kPasteJointButton = 739;     // 0x2E3
+constexpr int kJointPosXEdit = 744;
+constexpr int kJointPosYEdit = 745;
+constexpr int kJointPosZEdit = 746;
+constexpr int kLinLowerXEdit = 747;      // linear lower limit x
+constexpr int kSpringLinXEdit = 748;     // spring linear x
+constexpr int kSpringLinYEdit = 749;
+constexpr int kSpringLinZEdit = 750;
+constexpr int kSpringAngXEdit = 751;     // spring angular x
+constexpr int kSpringAngYEdit = 752;
+constexpr int kSpringAngZEdit = 753;
+constexpr int kJointRotXEdit = 754;
+constexpr int kJointRotYEdit = 755;
+constexpr int kJointRotZEdit = 756;
+constexpr int kLinUpperXEdit = 757;      // linear upper limit x
+constexpr int kLinLowerYEdit = 758;
+constexpr int kLinUpperYEdit = 759;
+constexpr int kLinLowerZEdit = 760;
+constexpr int kLinUpperZEdit = 761;
+constexpr int kAngLowerXEdit = 762;      // angular lower limit x (deg)
+constexpr int kAngUpperXEdit = 763;      // angular upper limit x (deg)
+constexpr int kAngLowerYEdit = 764;      // y axis: clamped to +-80
+constexpr int kAngUpperYEdit = 765;      // y axis: clamped to +-80
+constexpr int kAngLowerZEdit = 766;
+constexpr int kAngUpperZEdit = 767;
 constexpr int kBodyPageRadio = 800;        // 0x320
 constexpr int kJointPageRadio = 801;       // 0x321
 
@@ -210,11 +235,11 @@ using Joint = mdl::JointRecord;
 
 Rigid* EditBodies() {
     MMDApp* app = g_Block;
-    return static_cast<Rigid*>(app->state.cameraRecordArray);
+    return static_cast<Rigid*>(app->state.rigidScratchArray);
 }
 Joint* EditJoints() {
     MMDApp* app = g_Block;
-    return static_cast<Joint*>(app->state.boneRecordArray);
+    return static_cast<Joint*>(app->state.jointScratchArray);
 }
 
 // The scratch copies reuse RigidRecord::keyData as the body-list combo index
@@ -297,8 +322,8 @@ void ReadEditDegrees(HWND hWnd, float& field) {
 // Rename-commit for the body name edit: refresh the entry in the list combo
 // and the joint body-A/B combos in place (delete + insert at the same slot).
 void CommitNameToCombo(HWND hList, int current, const char* text) {
-    SendMessageA(hList, 0x144 /*CB_DELETESTRING*/, current, 0);
-    SendMessageA(hList, 0x14A /*CB_INSERTSTRING*/, current,
+    SendMessageA(hList, CB_DELETESTRING, current, 0);
+    SendMessageA(hList, CB_INSERTSTRING, current,
                  reinterpret_cast<LPARAM>(text));
 }
 
@@ -336,7 +361,7 @@ float CheckYAngleLimit(HWND hDlg, HWND hEdit, float value) {
 // entry in their list combos (and the joint body-A/B combos for bodies).
 // Everything else forwards to the saved edit proc of 705.
 // ---------------------------------------------------------------------------
-LRESULT CALLBACK Sub41EC50(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK PhysicsEditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {  // was Sub41EC50, VA 0x0041EC50
     MMDApp* app = g_Block;
     if (msg != WM_KEYDOWN || wParam != VK_RETURN)
         return CallWindowProcA(app->FrameCopyEditProc(), hWnd, msg, wParam,
@@ -347,8 +372,8 @@ LRESULT CALLBACK Sub41EC50(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     HWND hDlg = app->state.frameCopyDialog;
     Rigid* bodies = EditBodies();
     Joint* joints = EditJoints();
-    Rigid& rb = bodies[app->state.selAcc];
-    Joint& jt = joints[app->state.sel8c];
+    Rigid& rb = bodies[app->state.selectedRigidIndex];
+    Joint& jt = joints[app->state.selectedJointIndex];
 
     if (hWnd == GetDlgItem(hDlg, kBodyNameEdit)) {
         char text[256];
@@ -356,11 +381,11 @@ LRESULT CALLBACK Sub41EC50(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (std::strlen(text) > 20)
             text[19] = '\0';
         const int current = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x147, 0, 0));
+            SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_GETCURSEL, 0, 0));
         CommitNameToCombo(GetDlgItem(hDlg, kBodyListCombo), current, text);
         CommitNameToCombo(GetDlgItem(hDlg, kBodyACombo), current, text);
         CommitNameToCombo(GetDlgItem(hDlg, kBodyBCombo), current, text);
-        SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x14E /*CB_SETCURSEL*/,
+        SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_SETCURSEL,
                      current, 0);
         sprintf_s(rb.name, sizeof rb.name, "%s", text);
         return 0;
@@ -386,38 +411,38 @@ LRESULT CALLBACK Sub41EC50(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (std::strlen(text) > 20)
             text[19] = '\0';
         const int current = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x147, 0, 0));
+            SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_GETCURSEL, 0, 0));
         CommitNameToCombo(GetDlgItem(hDlg, kJointListCombo), current, text);
-        SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x14E /*CB_SETCURSEL*/,
+        SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_SETCURSEL,
                      current, 0);
         sprintf_s(jt.name, sizeof jt.name, "%s", text);
         return 0;
     }
-    if (hWnd == GetDlgItem(hDlg, 744)) { ReadEditFloat(hWnd, jt.position[0]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 745)) { ReadEditFloat(hWnd, jt.position[1]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 746)) { ReadEditFloat(hWnd, jt.position[2]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 754)) { ReadEditDegrees(hWnd, jt.rotation[0]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 755)) { ReadEditDegrees(hWnd, jt.rotation[1]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 756)) { ReadEditDegrees(hWnd, jt.rotation[2]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 757)) { ReadEditFloat(hWnd, jt.limits[0]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 759)) { ReadEditFloat(hWnd, jt.limits[1]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 761)) { ReadEditFloat(hWnd, jt.limits[2]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 747)) { ReadEditFloat(hWnd, jt.limits[3]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 758)) { ReadEditFloat(hWnd, jt.limits[4]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 760)) { ReadEditFloat(hWnd, jt.limits[5]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 763)) { ReadEditDegrees(hWnd, jt.limits[6]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 767)) { ReadEditDegrees(hWnd, jt.limits[8]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 762)) { ReadEditDegrees(hWnd, jt.limits[9]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 766)) { ReadEditDegrees(hWnd, jt.limits[11]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 748)) { ReadEditFloat(hWnd, jt.springs[0]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 749)) { ReadEditFloat(hWnd, jt.springs[1]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 750)) { ReadEditFloat(hWnd, jt.springs[2]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 751)) { ReadEditFloat(hWnd, jt.springs[3]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 752)) { ReadEditFloat(hWnd, jt.springs[4]); return 0; }
-    if (hWnd == GetDlgItem(hDlg, 753)) { ReadEditFloat(hWnd, jt.springs[5]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kJointPosXEdit)) { ReadEditFloat(hWnd, jt.position[0]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kJointPosYEdit)) { ReadEditFloat(hWnd, jt.position[1]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kJointPosZEdit)) { ReadEditFloat(hWnd, jt.position[2]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kJointRotXEdit)) { ReadEditDegrees(hWnd, jt.rotation[0]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kJointRotYEdit)) { ReadEditDegrees(hWnd, jt.rotation[1]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kJointRotZEdit)) { ReadEditDegrees(hWnd, jt.rotation[2]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kLinUpperXEdit)) { ReadEditFloat(hWnd, jt.limits[0]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kLinUpperYEdit)) { ReadEditFloat(hWnd, jt.limits[1]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kLinUpperZEdit)) { ReadEditFloat(hWnd, jt.limits[2]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kLinLowerXEdit)) { ReadEditFloat(hWnd, jt.limits[3]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kLinLowerYEdit)) { ReadEditFloat(hWnd, jt.limits[4]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kLinLowerZEdit)) { ReadEditFloat(hWnd, jt.limits[5]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kAngUpperXEdit)) { ReadEditDegrees(hWnd, jt.limits[6]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kAngUpperZEdit)) { ReadEditDegrees(hWnd, jt.limits[8]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kAngLowerXEdit)) { ReadEditDegrees(hWnd, jt.limits[9]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kAngLowerZEdit)) { ReadEditDegrees(hWnd, jt.limits[11]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kSpringLinXEdit)) { ReadEditFloat(hWnd, jt.springs[0]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kSpringLinYEdit)) { ReadEditFloat(hWnd, jt.springs[1]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kSpringLinZEdit)) { ReadEditFloat(hWnd, jt.springs[2]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kSpringAngXEdit)) { ReadEditFloat(hWnd, jt.springs[3]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kSpringAngYEdit)) { ReadEditFloat(hWnd, jt.springs[4]); return 0; }
+    if (hWnd == GetDlgItem(hDlg, kSpringAngZEdit)) { ReadEditFloat(hWnd, jt.springs[5]); return 0; }
 
     // edits 765 / 764 (y-axis angular limits) validate against +-90 here too
-    if (hWnd == GetDlgItem(hDlg, 765)) {
+    if (hWnd == GetDlgItem(hDlg, kAngUpperYEdit)) {
         char text[256];
         GetWindowTextA(hWnd, text, 256);
         float value = static_cast<float>(atof(text));
@@ -425,7 +450,7 @@ LRESULT CALLBACK Sub41EC50(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         jt.limits[7] = value / 180.0f * kPiShort;
         return 0;
     }
-    if (hWnd == GetDlgItem(hDlg, 764)) {
+    if (hWnd == GetDlgItem(hDlg, kAngLowerYEdit)) {
         char text[256];
         GetWindowTextA(hWnd, text, 256);
         float value = static_cast<float>(atof(text));
@@ -445,20 +470,20 @@ LRESULT CALLBACK Sub41EC50(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 // mask), fills the list/bone/group combos and parks the dialog on the
 // rigid-body page.
 // ---------------------------------------------------------------------------
-void Sub45F670(HWND hDlg) {
+void InitPhysicsModelDialog(HWND hDlg) {  // was Sub45F670, VA 0x0045F670
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
 
-    EnableWindow(GetDlgItem(app->state.hwnd, 408), FALSE);
+    EnableWindow(GetDlgItem(app->state.hwnd, panel::kPlayButton), FALSE);
 
-    app->state.cameraRecordArray =
+    app->state.rigidScratchArray =
         std::calloc(kMaxEditRecords, sizeof(Rigid));
     Rigid* bodies = EditBodies();
     for (int i = 0; i < kMaxEditRecords; ++i) {
         SetBodyComboIndex(bodies[i], -1);
         bodies[i].body = nullptr;
     }
-    app->state.boneRecordArray =
+    app->state.jointScratchArray =
         std::calloc(kMaxEditRecords, sizeof(Joint));
     Joint* joints = EditJoints();
     for (int i = 0; i < kMaxEditRecords; ++i) {
@@ -472,7 +497,7 @@ void Sub45F670(HWND hDlg) {
     CheckRadioButton(hDlg, kBodyPageRadio, kJointPageRadio, kBodyPageRadio);
     s_jointPageVisible = 0;
 
-    SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x14B /*CB_RESETCONTENT*/,
+    SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_RESETCONTENT,
                  0, 0);
     for (std::uint32_t i = 0; i < model->rigidCount; ++i) {
         Rigid& dst = bodies[i];
@@ -488,56 +513,56 @@ void Sub45F670(HWND hDlg) {
         // PMD no-collapse mask -> positive collision mask for editing
         dst.noCollapse = static_cast<std::uint16_t>(~dst.noCollapse);
         const LPARAM name = reinterpret_cast<LPARAM>(dst.name);
-        SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x143, 0, name);
-        SendMessageA(GetDlgItem(hDlg, kBodyACombo), 0x143, 0, name);
-        SendMessageA(GetDlgItem(hDlg, kBodyBCombo), 0x143, 0, name);
+        SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_ADDSTRING, 0, name);
+        SendMessageA(GetDlgItem(hDlg, kBodyACombo), CB_ADDSTRING, 0, name);
+        SendMessageA(GetDlgItem(hDlg, kBodyBCombo), CB_ADDSTRING, 0, name);
         SetBodyComboIndex(dst, static_cast<int>(i));
     }
     for (std::uint32_t i = 0; i < model->jointCount; ++i) {
         Joint& dst = joints[i];
         std::memcpy(&dst, &model->jointTable[i], sizeof(Joint));
-        SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x143, 0,
+        SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(dst.name));
         dst.constraint = static_cast<int>(i);
     }
 
-    SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x14E, 0, 0);
-    SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x14E, 0, 0);
-    SendMessageA(GetDlgItem(hDlg, kBodyACombo), 0x14E, 0, 0);
-    SendMessageA(GetDlgItem(hDlg, kBodyBCombo), 0x14E, 0, 0);
+    SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_SETCURSEL, 0, 0);
+    SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_SETCURSEL, 0, 0);
+    SendMessageA(GetDlgItem(hDlg, kBodyACombo), CB_SETCURSEL, 0, 0);
+    SendMessageA(GetDlgItem(hDlg, kBodyBCombo), CB_SETCURSEL, 0, 0);
 
     // related-bone combo: "none" + every bone name (EN uses the English
     // slot, JP the primary name).  The pivot combo 743 gets the bone names
     // without the leading "none".  The JP "none" entry reaches the W API
     // as the ANSI bytes "j0W0", which little-endian-reinterpret to
     // L"なし" - reproduced by passing the wide literal directly.
-    SendMessageA(GetDlgItem(hDlg, kBoneCombo), 0x14B, 0, 0);
+    SendMessageA(GetDlgItem(hDlg, kBoneCombo), CB_RESETCONTENT, 0, 0);
     if (app->state.englishUI != 0) {
-        SendMessageA(GetDlgItem(hDlg, kBoneCombo), 0x143, 0,
+        SendMessageA(GetDlgItem(hDlg, kBoneCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("none"));
     } else {
-        SendMessageW(GetDlgItem(hDlg, kBoneCombo), 0x143, 0,
+        SendMessageW(GetDlgItem(hDlg, kBoneCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(L"\x306A\x3057"));
     }
     mdl::BoneRecord* bones = model->boneTable;
     for (std::uint32_t b = 0; b < model->boneCount; ++b) {
         const char* name =
             app->state.englishUI != 0 ? bones[b].nameEn : bones[b].name;
-        SendMessageA(GetDlgItem(hDlg, kBoneCombo), 0x143, 0,
+        SendMessageA(GetDlgItem(hDlg, kBoneCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(name));
-        SendMessageA(GetDlgItem(hDlg, kPivotBoneCombo), 0x143, 0,
+        SendMessageA(GetDlgItem(hDlg, kPivotBoneCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(name));
     }
 
     // group combo: "1".."15" + "16(F)"
-    SendMessageA(GetDlgItem(hDlg, kGroupCombo), 0x14B, 0, 0);
+    SendMessageA(GetDlgItem(hDlg, kGroupCombo), CB_RESETCONTENT, 0, 0);
     char text[8];
     for (int n = 1; n <= 15; ++n) {
         sprintf_s(text, sizeof text, "%d", n);
-        SendMessageA(GetDlgItem(hDlg, kGroupCombo), 0x143, 0,
+        SendMessageA(GetDlgItem(hDlg, kGroupCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(text));
     }
-    SendMessageA(GetDlgItem(hDlg, kGroupCombo), 0x143, 0,
+    SendMessageA(GetDlgItem(hDlg, kGroupCombo), CB_ADDSTRING, 0,
                  reinterpret_cast<LPARAM>(
                      app->state.englishUI != 0 ? "16(F)" : kGroup16Jp));
 
@@ -549,18 +574,18 @@ void Sub45F670(HWND hDlg) {
     }
 
     if (model->rigidCount != 0) {
-        Sub43CCD0(hDlg, 0);
-        app->state.selAcc = 0;
+        ApplyBodyRecordToEdits(hDlg, 0);
+        app->state.selectedRigidIndex = 0;
     } else {
-        Sub43CCD0(hDlg, -1);
-        app->state.selAcc = -1;
+        ApplyBodyRecordToEdits(hDlg, -1);
+        app->state.selectedRigidIndex = -1;
     }
     if (model->jointCount != 0) {
-        Sub4214A0(hDlg, 0);
-        app->state.sel8c = 0;
+        ApplyJointRecordToEdits(hDlg, 0);
+        app->state.selectedJointIndex = 0;
     } else {
-        Sub4214A0(hDlg, -1);
-        app->state.sel8c = -1;
+        ApplyJointRecordToEdits(hDlg, -1);
+        app->state.selectedJointIndex = -1;
     }
 }
 
@@ -570,10 +595,10 @@ void Sub45F670(HWND hDlg) {
 // (deg -> rad), mass, damping/restitution/friction, and the group-list text
 // ("1 5 9 " -> 16-bit collision mask, bit N set = group N+1).
 // ---------------------------------------------------------------------------
-void Sub41FF30(MMDApp* app) {
-    if (app->state.selAcc == -1)
+void CollectBodyEdits(MMDApp* app) {  // was Sub41FF30, VA 0x0041FF30
+    if (app->state.selectedRigidIndex == -1)
         return;
-    Rigid& rb = EditBodies()[app->state.selAcc];
+    Rigid& rb = EditBodies()[app->state.selectedRigidIndex];
     HWND hDlg = app->state.frameCopyDialog;
     char text[256];
 
@@ -618,7 +643,7 @@ void Sub41FF30(MMDApp* app) {
 // fill editor defaults (shape sphere, size 2, mass 1, damping 0.5,
 // friction 0.5, restitution 0, bone/group 0, mode 0).
 // ---------------------------------------------------------------------------
-void Sub45F480(HWND hDlg) {
+void AddRigidBody(HWND hDlg) {  // was Sub45F480, VA 0x0045F480
     MMDApp* app = g_Block;
     Rigid* bodies = EditBodies();
 
@@ -629,14 +654,14 @@ void Sub45F480(HWND hDlg) {
     Rigid& rb = bodies[slot];
     sprintf_s(rb.name, sizeof rb.name, "BODY_%d", slot);
     const LRESULT comboIndex = SendMessageA(
-        GetDlgItem(hDlg, kBodyListCombo), 0x143 /*CB_ADDSTRING*/, 0,
+        GetDlgItem(hDlg, kBodyListCombo), CB_ADDSTRING, 0,
         reinterpret_cast<LPARAM>(rb.name));
-    SendMessageA(GetDlgItem(hDlg, kBodyACombo), 0x143, 0,
+    SendMessageA(GetDlgItem(hDlg, kBodyACombo), CB_ADDSTRING, 0,
                  reinterpret_cast<LPARAM>(rb.name));
-    SendMessageA(GetDlgItem(hDlg, kBodyBCombo), 0x143, 0,
+    SendMessageA(GetDlgItem(hDlg, kBodyBCombo), CB_ADDSTRING, 0,
                  reinterpret_cast<LPARAM>(rb.name));
     SetBodyComboIndex(rb, static_cast<int>(comboIndex));
-    SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x14E, comboIndex, 0);
+    SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_SETCURSEL, comboIndex, 0);
 
     rb.boneIndex = 0;
     rb.mode = 0;
@@ -652,8 +677,8 @@ void Sub45F480(HWND hDlg) {
     rb.rotation[0] = rb.rotation[1] = rb.rotation[2] = 0.0f;
     rb.size[0] = rb.size[1] = rb.size[2] = 2.0f;
 
-    app->state.selAcc = slot;
-    Sub43CCD0(hDlg, slot);
+    app->state.selectedRigidIndex = slot;
+    ApplyBodyRecordToEdits(hDlg, slot);
 }
 
 // ---------------------------------------------------------------------------
@@ -662,52 +687,52 @@ void Sub45F480(HWND hDlg) {
 // are validated against -90..90 with a message box and clamped to +-80,
 // matching the Bullet 6DOF y-rotation restriction.
 // ---------------------------------------------------------------------------
-void Sub4204F0(MMDApp* app) {
-    if (app->state.sel8c == -1)
+void CollectJointEdits(MMDApp* app) {  // was Sub4204F0, VA 0x004204F0
+    if (app->state.selectedJointIndex == -1)
         return;
-    Joint& jt = EditJoints()[app->state.sel8c];
+    Joint& jt = EditJoints()[app->state.selectedJointIndex];
     HWND hDlg = app->state.frameCopyDialog;
     char text[256];
 
     GetWindowTextA(GetDlgItem(hDlg, kJointNameEdit), text, 100);
     strcpy_s(jt.name, sizeof jt.name, text);
 
-    ReadEditFloat(GetDlgItem(hDlg, 744), jt.position[0]);
-    ReadEditFloat(GetDlgItem(hDlg, 745), jt.position[1]);
-    ReadEditFloat(GetDlgItem(hDlg, 746), jt.position[2]);
-    ReadEditDegrees(GetDlgItem(hDlg, 754), jt.rotation[0]);
-    ReadEditDegrees(GetDlgItem(hDlg, 755), jt.rotation[1]);
-    ReadEditDegrees(GetDlgItem(hDlg, 756), jt.rotation[2]);
-    ReadEditFloat(GetDlgItem(hDlg, 757), jt.limits[0]);
-    ReadEditFloat(GetDlgItem(hDlg, 759), jt.limits[1]);
-    ReadEditFloat(GetDlgItem(hDlg, 761), jt.limits[2]);
-    ReadEditFloat(GetDlgItem(hDlg, 747), jt.limits[3]);
-    ReadEditFloat(GetDlgItem(hDlg, 758), jt.limits[4]);
-    ReadEditFloat(GetDlgItem(hDlg, 760), jt.limits[5]);
+    ReadEditFloat(GetDlgItem(hDlg, kJointPosXEdit), jt.position[0]);
+    ReadEditFloat(GetDlgItem(hDlg, kJointPosYEdit), jt.position[1]);
+    ReadEditFloat(GetDlgItem(hDlg, kJointPosZEdit), jt.position[2]);
+    ReadEditDegrees(GetDlgItem(hDlg, kJointRotXEdit), jt.rotation[0]);
+    ReadEditDegrees(GetDlgItem(hDlg, kJointRotYEdit), jt.rotation[1]);
+    ReadEditDegrees(GetDlgItem(hDlg, kJointRotZEdit), jt.rotation[2]);
+    ReadEditFloat(GetDlgItem(hDlg, kLinUpperXEdit), jt.limits[0]);
+    ReadEditFloat(GetDlgItem(hDlg, kLinUpperYEdit), jt.limits[1]);
+    ReadEditFloat(GetDlgItem(hDlg, kLinUpperZEdit), jt.limits[2]);
+    ReadEditFloat(GetDlgItem(hDlg, kLinLowerXEdit), jt.limits[3]);
+    ReadEditFloat(GetDlgItem(hDlg, kLinLowerYEdit), jt.limits[4]);
+    ReadEditFloat(GetDlgItem(hDlg, kLinLowerZEdit), jt.limits[5]);
 
-    ReadEditDegrees(GetDlgItem(hDlg, 763), jt.limits[6]);
+    ReadEditDegrees(GetDlgItem(hDlg, kAngUpperXEdit), jt.limits[6]);
     {   // 765: angular y - validated
-        GetWindowTextA(GetDlgItem(hDlg, 765), text, 10);
+        GetWindowTextA(GetDlgItem(hDlg, kAngUpperYEdit), text, 10);
         float value = static_cast<float>(atof(text));
-        value = CheckYAngleLimit(hDlg, GetDlgItem(hDlg, 765), value);
+        value = CheckYAngleLimit(hDlg, GetDlgItem(hDlg, kAngUpperYEdit), value);
         jt.limits[7] = value / 180.0f * kPiShort;
     }
-    ReadEditDegrees(GetDlgItem(hDlg, 767), jt.limits[8]);
-    ReadEditDegrees(GetDlgItem(hDlg, 762), jt.limits[9]);
+    ReadEditDegrees(GetDlgItem(hDlg, kAngUpperZEdit), jt.limits[8]);
+    ReadEditDegrees(GetDlgItem(hDlg, kAngLowerXEdit), jt.limits[9]);
     {   // 764: angular y - validated
-        GetWindowTextA(GetDlgItem(hDlg, 764), text, 10);
+        GetWindowTextA(GetDlgItem(hDlg, kAngLowerYEdit), text, 10);
         float value = static_cast<float>(atof(text));
-        value = CheckYAngleLimit(hDlg, GetDlgItem(hDlg, 764), value);
+        value = CheckYAngleLimit(hDlg, GetDlgItem(hDlg, kAngLowerYEdit), value);
         jt.limits[10] = value / 180.0f * kPiShort;
     }
-    ReadEditDegrees(GetDlgItem(hDlg, 766), jt.limits[11]);
+    ReadEditDegrees(GetDlgItem(hDlg, kAngLowerZEdit), jt.limits[11]);
 
-    ReadEditFloat(GetDlgItem(hDlg, 748), jt.springs[0]);
-    ReadEditFloat(GetDlgItem(hDlg, 749), jt.springs[1]);
-    ReadEditFloat(GetDlgItem(hDlg, 750), jt.springs[2]);
-    ReadEditFloat(GetDlgItem(hDlg, 751), jt.springs[3]);
-    ReadEditFloat(GetDlgItem(hDlg, 752), jt.springs[4]);
-    ReadEditFloat(GetDlgItem(hDlg, 753), jt.springs[5]);
+    ReadEditFloat(GetDlgItem(hDlg, kSpringLinXEdit), jt.springs[0]);
+    ReadEditFloat(GetDlgItem(hDlg, kSpringLinYEdit), jt.springs[1]);
+    ReadEditFloat(GetDlgItem(hDlg, kSpringLinZEdit), jt.springs[2]);
+    ReadEditFloat(GetDlgItem(hDlg, kSpringAngXEdit), jt.springs[3]);
+    ReadEditFloat(GetDlgItem(hDlg, kSpringAngYEdit), jt.springs[4]);
+    ReadEditFloat(GetDlgItem(hDlg, kSpringAngZEdit), jt.springs[5]);
 }
 
 // ---------------------------------------------------------------------------
@@ -716,7 +741,7 @@ void Sub4204F0(MMDApp* app) {
 // JOINT_<slot>, registers it in the joint list and zeroes every numeric
 // field (both link indices point at scratch slot 0).
 // ---------------------------------------------------------------------------
-void Sub43CA50(HWND hDlg) {
+void AddJoint(HWND hDlg) {  // was Sub43CA50, VA 0x0043CA50
     MMDApp* app = g_Block;
     Rigid* bodies = EditBodies();
     Joint* joints = EditJoints();
@@ -742,10 +767,10 @@ void Sub43CA50(HWND hDlg) {
     Joint& jt = joints[slot];
     sprintf_s(jt.name, sizeof jt.name, "JOINT_%d", slot);
     const LRESULT comboIndex = SendMessageA(
-        GetDlgItem(hDlg, kJointListCombo), 0x143 /*CB_ADDSTRING*/, 0,
+        GetDlgItem(hDlg, kJointListCombo), CB_ADDSTRING, 0,
         reinterpret_cast<LPARAM>(jt.name));
     jt.constraint = static_cast<int>(comboIndex);
-    SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x14E, comboIndex, 0);
+    SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_SETCURSEL, comboIndex, 0);
 
     jt.rigidA = 0;
     jt.rigidB = 0;
@@ -756,8 +781,8 @@ void Sub43CA50(HWND hDlg) {
     for (float& spring : jt.springs)
         spring = 0.0f;
 
-    app->state.sel8c = slot;
-    Sub4214A0(hDlg, slot);
+    app->state.selectedJointIndex = slot;
+    ApplyJointRecordToEdits(hDlg, slot);
 }
 
 // ---------------------------------------------------------------------------
@@ -768,7 +793,7 @@ void Sub43CA50(HWND hDlg) {
 // edits instead (no selection); the original would sprintf from slot -1
 // for the non-sphere shapes, the port skips the refill in that case.
 // ---------------------------------------------------------------------------
-void Sub421CE0(HWND hDlg, int shape, int idx) {
+void UpdateShapeControls(HWND hDlg, int shape, int idx) {  // was Sub421CE0, VA 0x00421CE0
     MMDApp* app = g_Block;
     const bool english = app->state.englishUI != 0;
     Rigid* bodies = EditBodies();
@@ -837,7 +862,7 @@ void Sub421CE0(HWND hDlg, int shape, int idx) {
 // 0x421C20 (x64 sub_7FF7CB4B3720) - body/joint page flip: shows one page's
 // control range (685..734 body, 735..799 joint) and hides the other.
 // ---------------------------------------------------------------------------
-void Sub421C20(HWND hDlg, int bodyPage) {
+void FlipPhysicsDialogPage(HWND hDlg, int bodyPage) {  // was Sub421C20, VA 0x00421C20
     if (bodyPage != 0) {
         for (int id = kJointPageFirst; id <= kJointPageLast; ++id)
             ShowWindow(GetDlgItem(hDlg, id), SW_HIDE);
@@ -858,12 +883,12 @@ void Sub421C20(HWND hDlg, int bodyPage) {
 // bone's model-space position into the joint position and refreshes the
 // position edits.
 // ---------------------------------------------------------------------------
-void Sub420DC0(HWND hDlg) {
+void PickPivotBone(HWND hDlg) {  // was Sub420DC0, VA 0x00420DC0
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
     const int sel = static_cast<int>(
-        SendMessageA(GetDlgItem(hDlg, kPivotBoneCombo), 0x147, 0, 0));
-    Joint& jt = EditJoints()[app->state.sel8c];
+        SendMessageA(GetDlgItem(hDlg, kPivotBoneCombo), CB_GETCURSEL, 0, 0));
+    Joint& jt = EditJoints()[app->state.selectedJointIndex];
     const mdl::BoneRecord& bone = model->boneTable[sel];
     jt.position[0] = bone.position[0];
     jt.position[1] = bone.position[1];
@@ -871,7 +896,7 @@ void Sub420DC0(HWND hDlg) {
     char text[256];
     for (int axis = 0; axis < 3; ++axis) {
         sprintf_s(text, sizeof text, "%5.4f", jt.position[axis]);
-        SetWindowTextA(GetDlgItem(hDlg, 744 + axis), text);
+        SetWindowTextA(GetDlgItem(hDlg, kJointPosXEdit + axis), text);
     }
 }
 
@@ -883,7 +908,7 @@ void Sub420DC0(HWND hDlg) {
 // the physical/bone radio + bone-alignment checkbox.  idx == -1 disables
 // and clears the whole body group instead.
 // ---------------------------------------------------------------------------
-void Sub43CCD0(HWND hDlg, int idx) {
+void ApplyBodyRecordToEdits(HWND hDlg, int idx) {  // was Sub43CCD0, VA 0x0043CCD0
     MMDApp* app = g_Block;
     Rigid* bodies = EditBodies();
     char text[256];
@@ -892,9 +917,9 @@ void Sub43CCD0(HWND hDlg, int idx) {
         for (int id = kBodyNameEdit; id <= kBoneAlignCheckbox; ++id)
             EnableWindow(GetDlgItem(hDlg, id), FALSE);
         SetWindowTextA(GetDlgItem(hDlg, kBodyNameEdit), "");
-        SendMessageA(GetDlgItem(hDlg, kBoneCombo), 0x14E, 1, 0);
-        SendMessageA(GetDlgItem(hDlg, kGroupCombo), 0x14E, 0, 0);
-        Sub421CE0(hDlg, 0, -1);
+        SendMessageA(GetDlgItem(hDlg, kBoneCombo), CB_SETCURSEL, 1, 0);
+        SendMessageA(GetDlgItem(hDlg, kGroupCombo), CB_SETCURSEL, 0, 0);
+        UpdateShapeControls(hDlg, 0, -1);
         for (int id = kPosXEdit; id <= kFrictionEdit; ++id)
             SetWindowTextA(GetDlgItem(hDlg, id), "");
         CheckRadioButton(hDlg, kPhysicalRadio, kBoneFollowRadio,
@@ -906,9 +931,9 @@ void Sub43CCD0(HWND hDlg, int idx) {
     for (int id = kBodyNameEdit; id <= kBoneAlignCheckbox; ++id)
         EnableWindow(GetDlgItem(hDlg, id), TRUE);
     SetWindowTextA(GetDlgItem(hDlg, kBodyNameEdit), rb.name);
-    SendMessageA(GetDlgItem(hDlg, kBoneCombo), 0x14E, rb.boneIndex + 1, 0);
-    SendMessageA(GetDlgItem(hDlg, kGroupCombo), 0x14E, rb.group, 0);
-    Sub421CE0(hDlg, rb.shape, idx);
+    SendMessageA(GetDlgItem(hDlg, kBoneCombo), CB_SETCURSEL, rb.boneIndex + 1, 0);
+    SendMessageA(GetDlgItem(hDlg, kGroupCombo), CB_SETCURSEL, rb.group, 0);
+    UpdateShapeControls(hDlg, rb.shape, idx);
 
     for (int axis = 0; axis < 3; ++axis) {
         sprintf_s(text, sizeof text, "%3.2f", rb.position[axis]);
@@ -946,10 +971,10 @@ void Sub43CCD0(HWND hDlg, int idx) {
         CheckRadioButton(hDlg, kPhysicalRadio, kBoneFollowRadio,
                          kBoneFollowRadio);
         SendMessageA(GetDlgItem(hDlg, kBoneAlignCheckbox),
-                     0xF1 /*BM_SETCHECK*/, 0, 0);
+                     BM_SETCHECK, 0, 0);
         EnableWindow(GetDlgItem(hDlg, kBoneAlignCheckbox), FALSE);
     }
-    SendMessageA(GetDlgItem(hDlg, kBoneAlignCheckbox), 0xF1 /*BM_SETCHECK*/,
+    SendMessageA(GetDlgItem(hDlg, kBoneAlignCheckbox), BM_SETCHECK,
                  rb.mode == 2 ? 1 : 0, 0);
 }
 
@@ -959,42 +984,44 @@ void Sub43CCD0(HWND hDlg, int idx) {
 // position (%5.4f), rotation (rad -> deg), the four limit triples and both
 // spring triples (%3.2f).  idx == -1 disables and clears the joint group.
 // ---------------------------------------------------------------------------
-void Sub4214A0(HWND hDlg, int idx) {
+void ApplyJointRecordToEdits(HWND hDlg, int idx) {  // was Sub4214A0, VA 0x004214A0
     MMDApp* app = g_Block;
     Rigid* bodies = EditBodies();
     Joint* joints = EditJoints();
     char text[256];
 
     if (idx == -1) {
-        for (int id = 737; id <= 767; ++id)
+        for (int id = kDeleteJointButton; id <= kAngUpperZEdit; ++id)
             EnableWindow(GetDlgItem(hDlg, id), FALSE);
-        SendMessageA(GetDlgItem(hDlg, kBodyACombo), 0x14E, 0, 0);
-        SendMessageA(GetDlgItem(hDlg, kBodyBCombo), 0x14E, 0, 0);
-        SendMessageA(GetDlgItem(hDlg, kPivotBoneCombo), 0x14E, -1, 0);
-        for (int id = 744; id <= 767; ++id)
+        SendMessageA(GetDlgItem(hDlg, kBodyACombo), CB_SETCURSEL, 0, 0);
+        SendMessageA(GetDlgItem(hDlg, kBodyBCombo), CB_SETCURSEL, 0, 0);
+        SendMessageA(GetDlgItem(hDlg, kPivotBoneCombo), CB_SETCURSEL, -1, 0);
+        for (int id = kJointPosXEdit; id <= kAngUpperZEdit; ++id)
             SetWindowTextA(GetDlgItem(hDlg, id), "");
         return;
     }
 
     const Joint& jt = joints[idx];
-    for (int id = 737; id <= 767; ++id)
+    for (int id = kDeleteJointButton; id <= kAngUpperZEdit; ++id)
         EnableWindow(GetDlgItem(hDlg, id), TRUE);
     SetWindowTextA(GetDlgItem(hDlg, kJointNameEdit), jt.name);
-    SendMessageA(GetDlgItem(hDlg, kBodyACombo), 0x14E,
+    SendMessageA(GetDlgItem(hDlg, kBodyACombo), CB_SETCURSEL,
                  BodyComboIndex(bodies[jt.rigidA]), 0);
-    SendMessageA(GetDlgItem(hDlg, kBodyBCombo), 0x14E,
+    SendMessageA(GetDlgItem(hDlg, kBodyBCombo), CB_SETCURSEL,
                  BodyComboIndex(bodies[jt.rigidB]), 0);
 
     for (int axis = 0; axis < 3; ++axis) {
         sprintf_s(text, sizeof text, "%5.4f", jt.position[axis]);
-        SetWindowTextA(GetDlgItem(hDlg, 744 + axis), text);
+        SetWindowTextA(GetDlgItem(hDlg, kJointPosXEdit + axis), text);
         sprintf_s(text, sizeof text, "%3.2f",
                   jt.rotation[axis] / kPiShort * 180.0f);
-        SetWindowTextA(GetDlgItem(hDlg, 754 + axis), text);
+        SetWindowTextA(GetDlgItem(hDlg, kJointRotXEdit + axis), text);
     }
     // linear upper (757/759/761), linear lower (747/758/760)
-    const int kLinearUpperEdits[3] = {757, 759, 761};
-    const int kLinearLowerEdits[3] = {747, 758, 760};
+    const int kLinearUpperEdits[3] = {kLinUpperXEdit, kLinUpperYEdit,
+                                      kLinUpperZEdit};
+    const int kLinearLowerEdits[3] = {kLinLowerXEdit, kLinLowerYEdit,
+                                      kLinLowerZEdit};
     for (int axis = 0; axis < 3; ++axis) {
         sprintf_s(text, sizeof text, "%3.2f", jt.limits[axis]);
         SetWindowTextA(GetDlgItem(hDlg, kLinearUpperEdits[axis]), text);
@@ -1002,8 +1029,10 @@ void Sub4214A0(HWND hDlg, int idx) {
         SetWindowTextA(GetDlgItem(hDlg, kLinearLowerEdits[axis]), text);
     }
     // angular upper (763/765/767), angular lower (762/764/766) - degrees
-    const int kAngUpperEdits[3] = {763, 765, 767};
-    const int kAngLowerEdits[3] = {762, 764, 766};
+    const int kAngUpperEdits[3] = {kAngUpperXEdit, kAngUpperYEdit,
+                                   kAngUpperZEdit};
+    const int kAngLowerEdits[3] = {kAngLowerXEdit, kAngLowerYEdit,
+                                   kAngLowerZEdit};
     for (int axis = 0; axis < 3; ++axis) {
         sprintf_s(text, sizeof text, "%3.2f",
                   jt.limits[6 + axis] / kPiShort * 180.0f);
@@ -1015,9 +1044,9 @@ void Sub4214A0(HWND hDlg, int idx) {
     // spring linear (748..750), spring angular (751..753)
     for (int axis = 0; axis < 3; ++axis) {
         sprintf_s(text, sizeof text, "%3.2f", jt.springs[axis]);
-        SetWindowTextA(GetDlgItem(hDlg, 748 + axis), text);
+        SetWindowTextA(GetDlgItem(hDlg, kSpringLinXEdit + axis), text);
         sprintf_s(text, sizeof text, "%3.2f", jt.springs[3 + axis]);
-        SetWindowTextA(GetDlgItem(hDlg, 751 + axis), text);
+        SetWindowTextA(GetDlgItem(hDlg, kSpringAngXEdit + axis), text);
     }
 }
 
@@ -1031,7 +1060,7 @@ void Sub4214A0(HWND hDlg, int idx) {
 // negated body rotations), renumbering the scratch combo indices to the
 // compacted order.
 // ---------------------------------------------------------------------------
-void Sub4220F0(HWND hDlg) {
+void CommitPhysicsEdits(HWND hDlg) {  // was Sub4220F0, VA 0x004220F0
     (void)hDlg;
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
@@ -1065,7 +1094,7 @@ void Sub4220F0(HWND hDlg) {
     // clear the bone "has dynamic rigid" flags before re-linking
     mdl::BoneRecord* bones = model->boneTable;
     for (std::uint32_t b = 0; b < model->boneCount; ++b)
-        bones[b].f492 = 0;
+        bones[b].hasRigidBody = 0;
 
     int bodyIndex = 0;
     for (int i = 0; i < kMaxEditRecords; ++i) {
@@ -1106,7 +1135,7 @@ void Sub4220F0(HWND hDlg) {
         dst.body = bodyOut[1];
         SetBodyComboIndex(ed, bodyIndex);
         if (ed.mode > 0 && ed.boneIndex >= 0)
-            bones[ed.boneIndex].f492 = 1;
+            bones[ed.boneIndex].hasRigidBody = 1;
 
         // inverse transform T(-bonePos)*T(-position)*Ry(-y)*Rx(-x)*Rz(-z)
         D3DXMATRIXF inv, t2;
@@ -1213,7 +1242,7 @@ void Sub4220F0(HWND hDlg) {
 // ---------------------------------------------------------------------------
 // 0x465020 (x64 sub_7FF7CB4AD800) - the dialog proc.
 // WM_INITDIALOG: subclass the name/float edits (705, 709..723, 740,
-// 744..767) with Sub41EC50, saving 705's old proc, then Sub45F670 init.
+// 744..767) with PhysicsEditSubclassProc, saving 705's old proc, then InitPhysicsModelDialog init.
 // WM_COMMAND (sets the cached-time dirty word first):
 //   0x2AD/0x2DF   add body / add joint (collect current edits first)
 //   0x2C2         delete body: drop it from the three body combos, drop
@@ -1229,13 +1258,13 @@ void Sub4220F0(HWND hDlg) {
 //   0x320/0x321   body / joint page flip
 //   CBN_SELCHANGE of 704/736 (list selection), 741/742 (joint body A/B),
 //   707/708 (related bone / group), 743 (pivot bone)
-//   id 1 (OK): seek+re-eval (Sub4220C0), collect both records, commit
-//   (Sub4220F0), free the scratch arrays, close, re-enable the main
+//   id 1 (OK): seek+re-eval (SeekSelectedModelToCurrentFrame), collect both records, commit
+//   (CommitPhysicsEdits), free the scratch arrays, close, re-enable the main
 //   combos 436/408, show the preserve-model box, set the enhanced-model
 //   dirty flag
 //   id 2 (Cancel): seek+re-eval, free, close, re-enable
 // ---------------------------------------------------------------------------
-INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK PhysicsModelDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {  // was Sub465020, VA 0x00465020
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
         if (app->state.floatingWindow != 0)
@@ -1245,16 +1274,16 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         app->FrameCopyEditProc() = reinterpret_cast<WNDPROC>(
             GetWindowLongPtrA(nameEdit, GWLP_WNDPROC));
         SetWindowLongPtrA(nameEdit, GWLP_WNDPROC,
-                          reinterpret_cast<LONG_PTR>(Sub41EC50));
+                          reinterpret_cast<LONG_PTR>(PhysicsEditSubclassProc));
         for (int id = 709; id <= 723; ++id)
             SetWindowLongPtrA(GetDlgItem(hDlg, id), GWLP_WNDPROC,
-                              reinterpret_cast<LONG_PTR>(Sub41EC50));
-        for (int id = 744; id <= 767; ++id)
+                              reinterpret_cast<LONG_PTR>(PhysicsEditSubclassProc));
+        for (int id = kJointPosXEdit; id <= kAngUpperZEdit; ++id)
             SetWindowLongPtrA(GetDlgItem(hDlg, id), GWLP_WNDPROC,
-                              reinterpret_cast<LONG_PTR>(Sub41EC50));
+                              reinterpret_cast<LONG_PTR>(PhysicsEditSubclassProc));
         SetWindowLongPtrA(GetDlgItem(hDlg, kJointNameEdit), GWLP_WNDPROC,
-                          reinterpret_cast<LONG_PTR>(Sub41EC50));
-        Sub45F670(hDlg);
+                          reinterpret_cast<LONG_PTR>(PhysicsEditSubclassProc));
+        InitPhysicsModelDialog(hDlg);
         return 0;
     }
     if (msg != WM_COMMAND)
@@ -1269,24 +1298,24 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     switch (LOWORD(wParam)) {
     case 0x2AD:  // add body
-        Sub41FF30(app);
-        Sub45F480(hDlg);
+        CollectBodyEdits(app);
+        AddRigidBody(hDlg);
         return 0;
     case 0x2DF:  // add joint
-        Sub4204F0(app);
-        Sub43CA50(hDlg);
+        CollectJointEdits(app);
+        AddJoint(hDlg);
         return 0;
     case 0x2C2: {  // delete body (also deletes its joints)
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x147, 0, 0));
-        SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x144, sel, 0);
-        SendMessageA(GetDlgItem(hDlg, kBodyACombo), 0x144, sel, 0);
-        SendMessageA(GetDlgItem(hDlg, kBodyBCombo), 0x144, sel, 0);
+            SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_GETCURSEL, 0, 0));
+        SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_DELETESTRING, sel, 0);
+        SendMessageA(GetDlgItem(hDlg, kBodyACombo), CB_DELETESTRING, sel, 0);
+        SendMessageA(GetDlgItem(hDlg, kBodyBCombo), CB_DELETESTRING, sel, 0);
         for (int i = 0; i < kMaxEditRecords; ++i) {
             if (joints[i].constraint >= 0 &&
-                (joints[i].rigidA == app->state.selAcc ||
-                 joints[i].rigidB == app->state.selAcc)) {
-                SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x144,
+                (joints[i].rigidA == app->state.selectedRigidIndex ||
+                 joints[i].rigidB == app->state.selectedRigidIndex)) {
+                SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_DELETESTRING,
                              joints[i].constraint, 0);
                 for (int m = 0; m < kMaxEditRecords; ++m)
                     if (joints[m].constraint > joints[i].constraint)
@@ -1294,54 +1323,54 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
                 joints[i].constraint = -1;
             }
         }
-        SetBodyComboIndex(bodies[app->state.selAcc], -1);
+        SetBodyComboIndex(bodies[app->state.selectedRigidIndex], -1);
         for (int n = 0; n < kMaxEditRecords; ++n)
             if (BodyComboIndex(bodies[n]) > sel)
                 SetBodyComboIndex(bodies[n], BodyComboIndex(bodies[n]) - 1);
-        if (SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x146, 0, 0) != 0) {
+        if (SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_GETCOUNT, 0, 0) != 0) {
             if (BodyComboIndex(bodies[0]) == 0)
-                app->state.selAcc = 0;
+                app->state.selectedRigidIndex = 0;
         } else {
-            app->state.selAcc = -1;
+            app->state.selectedRigidIndex = -1;
         }
-        SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x14E, 0, 0);
-        Sub43CCD0(hDlg, app->state.selAcc);
-        if (SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x146, 0, 0) != 0) {
+        SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_SETCURSEL, 0, 0);
+        ApplyBodyRecordToEdits(hDlg, app->state.selectedRigidIndex);
+        if (SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_GETCOUNT, 0, 0) != 0) {
             if (joints[0].constraint == 0)
-                app->state.sel8c = 0;
+                app->state.selectedJointIndex = 0;
         } else {
-            app->state.sel8c = -1;
+            app->state.selectedJointIndex = -1;
         }
-        SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x14E, 0, 0);
-        Sub4214A0(hDlg, app->state.sel8c);
+        SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_SETCURSEL, 0, 0);
+        ApplyJointRecordToEdits(hDlg, app->state.selectedJointIndex);
         return 0;
     }
     case 0x2E1: {  // delete joint
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x147, 0, 0));
-        SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x144, sel, 0);
-        joints[app->state.sel8c].constraint = -1;
+            SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_GETCURSEL, 0, 0));
+        SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_DELETESTRING, sel, 0);
+        joints[app->state.selectedJointIndex].constraint = -1;
         for (int i = 0; i < kMaxEditRecords; ++i)
             if (joints[i].constraint > sel)
                 --joints[i].constraint;
-        if (SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x146, 0, 0) != 0) {
+        if (SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_GETCOUNT, 0, 0) != 0) {
             if (joints[0].constraint == 0)
-                app->state.sel8c = 0;
+                app->state.selectedJointIndex = 0;
         } else {
-            app->state.sel8c = -1;
+            app->state.selectedJointIndex = -1;
         }
-        SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x14E, 0, 0);
-        Sub4214A0(hDlg, app->state.sel8c);
+        SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_SETCURSEL, 0, 0);
+        ApplyJointRecordToEdits(hDlg, app->state.selectedJointIndex);
         return 0;
     }
     case 0x2D4:  // copy body
-        Sub41FF30(app);
-        std::memcpy(&s_bodyCopyScratch, &bodies[app->state.selAcc],
+        CollectBodyEdits(app);
+        std::memcpy(&s_bodyCopyScratch, &bodies[app->state.selectedRigidIndex],
                     sizeof(Rigid));
         return 0;
     case 0x2D5: {  // paste body (restitution/friction stay untouched, as
                    // in the original field list)
-        Rigid& rb = bodies[app->state.selAcc];
+        Rigid& rb = bodies[app->state.selectedRigidIndex];
         const Rigid& src = s_bodyCopyScratch;
         rb.boneIndex = src.boneIndex;
         rb.mode = src.mode;
@@ -1355,16 +1384,16 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             rb.size[axis] = src.size[axis];
         }
         rb.shape = src.shape;
-        Sub43CCD0(hDlg, app->state.selAcc);
+        ApplyBodyRecordToEdits(hDlg, app->state.selectedRigidIndex);
         return 0;
     }
     case 0x2E2:  // copy joint
-        Sub4204F0(app);
-        std::memcpy(&s_jointCopyScratch, &joints[app->state.sel8c],
+        CollectJointEdits(app);
+        std::memcpy(&s_jointCopyScratch, &joints[app->state.selectedJointIndex],
                     sizeof(Joint));
         return 0;
     case 0x2E3: {  // paste joint
-        Joint& jt = joints[app->state.sel8c];
+        Joint& jt = joints[app->state.selectedJointIndex];
         const Joint& src = s_jointCopyScratch;
         jt.rigidA = src.rigidA;
         jt.rigidB = src.rigidB;
@@ -1378,52 +1407,52 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
             jt.limits[f] = src.limits[f];
         for (int f = 0; f < 6; ++f)
             jt.springs[f] = src.springs[f];
-        Sub4214A0(hDlg, app->state.sel8c);
+        ApplyJointRecordToEdits(hDlg, app->state.selectedJointIndex);
         return 0;
     }
     case 0x2D6:  // shape: sphere
-        bodies[app->state.selAcc].shape = 0;
-        Sub421CE0(hDlg, 0, app->state.selAcc);
+        bodies[app->state.selectedRigidIndex].shape = 0;
+        UpdateShapeControls(hDlg, 0, app->state.selectedRigidIndex);
         return 0;
     case 0x2D7:  // shape: box
-        bodies[app->state.selAcc].shape = 1;
-        Sub421CE0(hDlg, 1, app->state.selAcc);
+        bodies[app->state.selectedRigidIndex].shape = 1;
+        UpdateShapeControls(hDlg, 1, app->state.selectedRigidIndex);
         return 0;
     case 0x2D8:  // shape: capsule
-        bodies[app->state.selAcc].shape = 2;
-        Sub421CE0(hDlg, 2, app->state.selAcc);
+        bodies[app->state.selectedRigidIndex].shape = 2;
+        UpdateShapeControls(hDlg, 2, app->state.selectedRigidIndex);
         return 0;
     case 0x2D9:  // physical radio clicked
         EnableWindow(GetDlgItem(hDlg, kBoneAlignCheckbox), TRUE);
         if (IsDlgButtonChecked(hDlg, kBoneAlignCheckbox) == 1) {
-            bodies[app->state.selAcc].mode = 2;
-            bodies[app->state.selAcc].kinematicFlag = 1;
+            bodies[app->state.selectedRigidIndex].mode = 2;
+            bodies[app->state.selectedRigidIndex].kinematicFlag = 1;
         } else {
-            bodies[app->state.selAcc].mode = 1;
-            bodies[app->state.selAcc].kinematicFlag = 0;
+            bodies[app->state.selectedRigidIndex].mode = 1;
+            bodies[app->state.selectedRigidIndex].kinematicFlag = 0;
         }
         return 0;
     case 0x2DA:  // bone-follow radio clicked
         EnableWindow(GetDlgItem(hDlg, kBoneAlignCheckbox), FALSE);
-        bodies[app->state.selAcc].mode = 0;
-        bodies[app->state.selAcc].kinematicFlag = 0;
+        bodies[app->state.selectedRigidIndex].mode = 0;
+        bodies[app->state.selectedRigidIndex].kinematicFlag = 0;
         return 0;
     case 0x2DB:  // bone-alignment checkbox toggled while physical
-        if (bodies[app->state.selAcc].mode == 2) {
-            bodies[app->state.selAcc].mode = 1;
-            bodies[app->state.selAcc].kinematicFlag = 0;
-        } else if (bodies[app->state.selAcc].mode == 1) {
-            bodies[app->state.selAcc].mode = 2;
-            bodies[app->state.selAcc].kinematicFlag = 1;
+        if (bodies[app->state.selectedRigidIndex].mode == 2) {
+            bodies[app->state.selectedRigidIndex].mode = 1;
+            bodies[app->state.selectedRigidIndex].kinematicFlag = 0;
+        } else if (bodies[app->state.selectedRigidIndex].mode == 1) {
+            bodies[app->state.selectedRigidIndex].mode = 2;
+            bodies[app->state.selectedRigidIndex].kinematicFlag = 1;
         }
         return 0;
     case 0x320:  // body page radio: collect the joint edits being left
-        Sub4204F0(app);
-        Sub421C20(hDlg, 1);
+        CollectJointEdits(app);
+        FlipPhysicsDialogPage(hDlg, 1);
         return 0;
     case 0x321:  // joint page radio: collect the body edits being left
-        Sub41FF30(app);
-        Sub421C20(hDlg, 0);
+        CollectBodyEdits(app);
+        FlipPhysicsDialogPage(hDlg, 0);
         return 0;
     default:
         break;
@@ -1432,22 +1461,22 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (HIWORD(wParam) != 1 /*CBN_SELCHANGE*/) {
         if (LOWORD(wParam) == 1) {
             // OK: seek, collect, commit, close, preserve-model notice
-            Sub4220C0(app);   // 0x4220C0 = x64 sub_7FF7CB4B3D00
-            Sub41FF30(app);
-            Sub4204F0(app);
-            Sub4220F0(hDlg);
-            if (app->state.cameraRecordArray != nullptr) {
-                std::free(app->state.cameraRecordArray);
-                app->state.cameraRecordArray = nullptr;
+            SeekSelectedModelToCurrentFrame(app);   // 0x4220C0 = x64 sub_7FF7CB4B3D00
+            CollectBodyEdits(app);
+            CollectJointEdits(app);
+            CommitPhysicsEdits(hDlg);
+            if (app->state.rigidScratchArray != nullptr) {
+                std::free(app->state.rigidScratchArray);
+                app->state.rigidScratchArray = nullptr;
             }
-            if (app->state.boneRecordArray != nullptr) {
-                std::free(app->state.boneRecordArray);
-                app->state.boneRecordArray = nullptr;
+            if (app->state.jointScratchArray != nullptr) {
+                std::free(app->state.jointScratchArray);
+                app->state.jointScratchArray = nullptr;
             }
             DestroyWindow(hDlg);
             app->state.frameCopyDialog = nullptr;
-            EnableWindow(GetDlgItem(app->state.hwnd, 436), TRUE);
-            EnableWindow(GetDlgItem(app->state.hwnd, 408), TRUE);
+            EnableWindow(GetDlgItem(app->state.hwnd, panel::kMainComboModel), TRUE);
+            EnableWindow(GetDlgItem(app->state.hwnd, panel::kPlayButton), TRUE);
             if (app->state.englishUI != 0) {
                 MessageBoxA(app->state.hwnd,
                             "Please preserve the edit result as a new model "
@@ -1462,19 +1491,19 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         if (LOWORD(wParam) == 2) {
             // Cancel: seek, close (the editor arrays are simply dropped)
-            Sub4220C0(app);   // 0x4220C0 = x64 sub_7FF7CB4B3D00
-            if (app->state.cameraRecordArray != nullptr) {
-                std::free(app->state.cameraRecordArray);
-                app->state.cameraRecordArray = nullptr;
+            SeekSelectedModelToCurrentFrame(app);   // 0x4220C0 = x64 sub_7FF7CB4B3D00
+            if (app->state.rigidScratchArray != nullptr) {
+                std::free(app->state.rigidScratchArray);
+                app->state.rigidScratchArray = nullptr;
             }
-            if (app->state.boneRecordArray != nullptr) {
-                std::free(app->state.boneRecordArray);
-                app->state.boneRecordArray = nullptr;
+            if (app->state.jointScratchArray != nullptr) {
+                std::free(app->state.jointScratchArray);
+                app->state.jointScratchArray = nullptr;
             }
             DestroyWindow(hDlg);
             app->state.frameCopyDialog = nullptr;
-            EnableWindow(GetDlgItem(app->state.hwnd, 436), TRUE);
-            EnableWindow(GetDlgItem(app->state.hwnd, 408), TRUE);
+            EnableWindow(GetDlgItem(app->state.hwnd, panel::kMainComboModel), TRUE);
+            EnableWindow(GetDlgItem(app->state.hwnd, panel::kPlayButton), TRUE);
             return 0;
         }
         return 0;
@@ -1482,26 +1511,26 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     if (hCtrl == GetDlgItem(hDlg, kBodyListCombo)) {
         // body list selection
-        Sub41FF30(app);
+        CollectBodyEdits(app);
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kBodyListCombo), 0x147, 0, 0));
+            SendMessageA(GetDlgItem(hDlg, kBodyListCombo), CB_GETCURSEL, 0, 0));
         for (int idx = 0; idx < kMaxEditRecords; ++idx) {
             if (BodyComboIndex(bodies[idx]) == sel) {
-                Sub43CCD0(hDlg, idx);
-                app->state.selAcc = idx;
+                ApplyBodyRecordToEdits(hDlg, idx);
+                app->state.selectedRigidIndex = idx;
             }
         }
         return 0;
     }
     if (hCtrl == GetDlgItem(hDlg, kJointListCombo)) {
         // joint list selection
-        Sub4204F0(app);
+        CollectJointEdits(app);
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kJointListCombo), 0x147, 0, 0));
+            SendMessageA(GetDlgItem(hDlg, kJointListCombo), CB_GETCURSEL, 0, 0));
         for (int idx = 0; idx < kMaxEditRecords; ++idx) {
             if (joints[idx].constraint == sel) {
-                Sub4214A0(hDlg, idx);
-                app->state.sel8c = idx;
+                ApplyJointRecordToEdits(hDlg, idx);
+                app->state.selectedJointIndex = idx;
             }
         }
         return 0;
@@ -1509,36 +1538,36 @@ INT_PTR CALLBACK Sub465020(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (hCtrl == GetDlgItem(hDlg, kBodyACombo)) {
         // joint body-A pick: map the combo entry to its scratch slot
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kBodyACombo), 0x147, 0, 0));
+            SendMessageA(GetDlgItem(hDlg, kBodyACombo), CB_GETCURSEL, 0, 0));
         for (int idx = 0; idx < kMaxEditRecords; ++idx) {
             if (BodyComboIndex(bodies[idx]) == sel)
-                joints[app->state.sel8c].rigidA = idx;
+                joints[app->state.selectedJointIndex].rigidA = idx;
         }
         return 0;
     }
     if (hCtrl == GetDlgItem(hDlg, kBodyBCombo)) {
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kBodyBCombo), 0x147, 0, 0));
+            SendMessageA(GetDlgItem(hDlg, kBodyBCombo), CB_GETCURSEL, 0, 0));
         for (int idx = 0; idx < kMaxEditRecords; ++idx) {
             if (BodyComboIndex(bodies[idx]) == sel)
-                joints[app->state.sel8c].rigidB = idx;
+                joints[app->state.selectedJointIndex].rigidB = idx;
         }
         return 0;
     }
     if (hCtrl == GetDlgItem(hDlg, kBoneCombo)) {
         // related bone: combo index 0 is "none" -> stored index -1
-        bodies[app->state.selAcc].boneIndex = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, kBoneCombo), 0x147, 0, 0) &
+        bodies[app->state.selectedRigidIndex].boneIndex = static_cast<int>(
+            SendMessageA(GetDlgItem(hDlg, kBoneCombo), CB_GETCURSEL, 0, 0) &
             0xFFFF) - 1;
         return 0;
     }
     if (hCtrl == GetDlgItem(hDlg, kGroupCombo)) {
-        bodies[app->state.selAcc].group = static_cast<std::uint8_t>(
-            SendMessageA(GetDlgItem(hDlg, kGroupCombo), 0x147, 0, 0));
+        bodies[app->state.selectedRigidIndex].group = static_cast<std::uint8_t>(
+            SendMessageA(GetDlgItem(hDlg, kGroupCombo), CB_GETCURSEL, 0, 0));
         return 0;
     }
     if (hCtrl == GetDlgItem(hDlg, kPivotBoneCombo)) {
-        Sub420DC0(hDlg);
+        PickPivotBone(hDlg);
         return 0;
     }
     return 0;

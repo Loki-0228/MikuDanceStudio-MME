@@ -44,7 +44,7 @@ void MMDApp::InitDefaults() {
     s.PlaybackActive() = 0;
     s.CameraReferenceMode() = CameraAttachmentReference::None;
     s.PlaybackLoopEnabled() = 0;
-    state.v342 = 0;
+    state.playbackReturnsToStartFrame = 0;
     state.viewportToolHovered = 0;
     state.viewToolDragOperation = 0;
     state.interactionDragMode = 0;
@@ -67,9 +67,9 @@ void MMDApp::InitDefaults() {
         state.lightD[i] = 127;
     }
 
-    state.v350Clipboard = nullptr;
-    for (std::int32_t& v : state.v9da24)
-        v = 0;
+    state.boneCopyRecords = nullptr;
+    state.copiedBoneCount = 0;
+    state.clipboardCounts = mdl::ClipboardSelectionCounts{};
     s.CameraKeys() = nullptr;
     s.LightKeys() = nullptr;
     s.ShadowKeys() = nullptr;
@@ -78,7 +78,7 @@ void MMDApp::InitDefaults() {
         s.AccessoryKeys(i) = nullptr;
         s.AccessorySlot(i) = nullptr;
     }
-    state.v9e650 = 0.0f;
+    state.keyRepeatTimer = 0.0f;
     s.FpsLimit() = 60.0f;
     state.modelOffsetX = 0.0f;
     s.LastRegisteredFrame() = 0;
@@ -93,7 +93,7 @@ void MMDApp::InitDefaults() {
     s.AviFrameReader() = nullptr;
     s.AviUsesThirtyFpsTiming() = 0;
     s.PictureBackgroundEnabled() = 0;
-    state.v9eb7e = 0;
+    state.characterTransparentMode = 0;
     state.blinkPhase = 0;
     s.DisplayObjectListMatchCount() = 0;
     s.DisplayObjectListScrollPosition() = 0;
@@ -102,18 +102,18 @@ void MMDApp::InitDefaults() {
     s.CaptureRenderTarget() = nullptr;
     s.FrameStepPlayback() = 0;
     s.SceneModified() = 0;
-    state.v9ed98 = 0;
+    state.followCameraEnabled = 0;
     s.PlaybackStartsAtCurrentFrame() = 0;
     state.a0B10 = 0;
     s.GroundShadowColorDialog() = nullptr;
-    state.modelInfoDialog = nullptr;
+    state.edgeThicknessDialog = nullptr;
     state.projectedShadowBlendEnabled = 1;
-    state.v9ed9c = 0;
+    state.coordinateSystem = 0;
     state.englishUI = 1;
     FrameRangeDialog() = nullptr;
     s.EnhancedModelDirty() = 0;
     state.frameCopyDialog = nullptr;
-    state.cameraRecordArray = nullptr;
+    state.rigidScratchArray = nullptr;
     // Frame-config trio 0xA0B00/0xA0B04/0xA0B08 (start frame / end frame /
     // fps).  Original InitDefaults leaves these alone - the ONLY writer in
     // the whole binary is the frame-range dialog OK handler (0x40F3C4:
@@ -125,20 +125,20 @@ void MMDApp::InitDefaults() {
     // HWND 0xA0D24 (a no-op SetWindowTextW).  The phase-15 30.0f seed
     // was reclaimed in phase 19.
     s.PlaybackPhysicsMode() = 2;
-    state.a0CC8OrUint32 = 0;
+    state.rigidBodyDisplayEnabled = 0;
     s.PhysicsResetPending() = 0;
     s.PlaybackFrameChanged() = 0;
-    state.a0CD4 = 0;
+    state.gravityNoiseEnabled = 0;
     state.gravityNoise = 10;
     s.AccessoryRenderSplitOrder() = 1;
     s.GravityMagnitude() = 9.8000002f;
-    state.v9edcc = 0.0f;
+    state.gravityNoiseTimer = 0.0f;
     s.GravityX() = 0.0f;
     s.GravityY() = -1.0f;
     s.GravityZ() = 0.0f;
-    state.v9edd0 = 0;
+    state.timelineAdvanceDue = 0;
     s.RecordingCompletionFlag() = nullptr;
-    state.v9edd8 = 0;
+    state.recordPlaybackStartPending = 0;
     state.groundGridIndices = nullptr;
     state.spriteOverlayPrimitiveCount = 0;
     // fcn_0040a730 lines 161-182: six dwords zeroed in two blocks of three
@@ -152,12 +152,12 @@ void MMDApp::InitDefaults() {
     sprintf_s(RecentFile(2), 0x100, "%s", g_Locale);
     state.overlayTexture = nullptr;        // 0x9EE14
     state.spriteOverlayPrimitiveCount = 0; // 0x9EE10
-    state.v9ee0cOrUint32 = nullptr;        // 0x9EE0C
+    state.spriteOverlayVertices = nullptr;        // 0x9EE0C
     state.lineOverlayPrimitiveCount = 0;
     state.groundPlaneVertices = nullptr;
     s.AviBackgroundTexture() = nullptr;                    // original writes twice
     s.PictureOverlayVertices() = nullptr;
-    state.v9f12c = 0;
+    state.separateWindowMouseSeen = 0;
     s.RecordingWindow() = nullptr;
     s.CaptureReadbackPixels() = nullptr;
     state.projectedShadowRestoreTexture = nullptr;
@@ -167,54 +167,54 @@ void MMDApp::InitDefaults() {
     s.PhysicsInterval() = 0.01125f;
     s.FloatingWindow() = nullptr;
     state.selectionBoxDragging = 0;
-    state.a0194 = 0;
-    state.modelOutlineRenderingSuppressed = 0;
-    state.a0196 = 0;
-    state.a0197 = 1;
+    state.blackBackgroundEnabled = 0;
+    state.modelNonDisplayMode = 0;
+    state.wavPlaysOnFrameMove = 0;
+    state.floorVisible = 1;
     state.modelOutlineColorRed = 0;
     state.modelOutlineColorGreen = 0;
     state.modelOutlineColorBlue = 0;
-    std::memset(state.buf655780, 0, 0x40);
+    std::memset(state.customColorTable, 0, 0x40);
     state.wireframeRenderingEnabled = 0;
     state.activeRenderObject = nullptr;
     state.activeRenderPass = 0;
-    state.a0270 = 0;
+    state.renderPassCount = 0;
     s.FullscreenMode() = 0;
     s.SavedPlacement().length = sizeof(WINDOWPLACEMENT);  // 44
-    state.a02A8 = 0;
-    state.a02B5 = 0;
-    state.a02B4 = 0;
+    state.fullscreenFlagsSaved = 0;
+    state.stereoActivated = 0;
+    state.recordFullscreenActive = 0;
     s.AudioSeekReady() = 0;
     s.AviStereoOutput() = 0;
-    state.a03B7 = 0;
+    state.timelineAdvanceRequested = 0;
     s.AviStereoWidthMultiplier() = 2;
     state.depthDeviceEnabled = 0;
-    state.a03BC = nullptr;
-    state.a03C0 = nullptr;
-    state.a03C4 = nullptr;
-    state.a03C8 = 0;
+    state.oniModule = nullptr;
+    state.oniExportSlot0 = nullptr;
+    state.oniExportSlot1 = nullptr;
+    state.oniExportSlot2 = 0;
     state.depthTextureCallback = nullptr;
-    state.a03D0 = 0;
+    state.oniExportSlot4 = 0;
     s.OpenniTrackingCallback() = nullptr;
-    state.a03DC = 1;
-    state.a03DD = 0;
+    state.kinectMirrorEnabled = 1;
+    state.kinectInitLostBone = 0;
     state.depthTextureCompositionEnabled = 1;
-    state.a03DF = 0;
+    state.kinectCaptureActive = 0;
     s.SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
-    state.a03E5 = 0;
-    state.a03E6 = 0;
-    state.a03E7 = 0;
+    state.globalTrackSelected[1] = 0;
+    state.globalTrackSelected[2] = 0;
+    state.globalTrackSelected[3] = 0;
     state.a03E8 = 0;
     state.automaticFrameAdvanceEnabled = 0;
     state.messageSeen = 1;
     s.TimelineSelectionChanged() = 0;
-    s.ViewModeComboSelection() = 0;
+    s.MainModelComboSelection() = 0;
     s.CameraParentModel() = -1;
     s.CameraParentBone() = 0;
     state.displayClipboard = nullptr;
     s.FrameVolumeControlEnabled() = 0;
     s.FrameNormalization() = 100;
-    state.sub04b0OrUint32 = nullptr;
+    state.axisMeshObject = nullptr;
 
     // 16-float colour cluster: zero all, then identity diagonals at
     // rows 0/2/4/6 (original writes 1.0 at +0/+20/+40/+60).
@@ -226,17 +226,17 @@ void MMDApp::InitDefaults() {
     state.cameraAttachmentBasis[0] = 1.0f;
 
     s.CameraAttachmentTransformSuppressed() = 0;
-    state.a04B8 = 0;
+    state.modelReloadPending = 0;
     s.WindowLayoutReady() = 1;
     std::memset(state.buf656632, 0, 0xC8);
-    state.b6568480 = 0;
-    state.b6568481 = 0;
+    state.timelineRangeApplyEnabled = 0;
+    state.viewDirty = 0;
     state.b6568482 = 0;
-    state.b6568483 = 0;
-    state.a0668OrUint32 = 0;
-    state.a0665 = 0;
-    state.a066C = 0;
-    state.a066D = 0;
+    state.mouseJumped = 0;
+    state.selectNavRecords = 0;
+    state.accessoryEditDialogOpen = 0;
+    state.physicsBodiesMoved = 0;
+    state.playbackAlwaysOnOffMode = 0;
     state.a06B4 = 0;
     state.a06B5 = 0;
     state.a06B6 = 0;

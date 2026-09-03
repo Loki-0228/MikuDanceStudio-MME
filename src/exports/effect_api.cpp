@@ -551,12 +551,12 @@ __declspec(dllexport) int ExpGetCurrentTechnic() {
 
 // 0x4C39D0 -> 0x42ADF0.
 __declspec(dllexport) void ExpSetRenderRepeatCount(int count) {
-    mikudancestudio::g_Block->state.a0270 = count;
+    mikudancestudio::g_Block->state.renderPassCount = count;
 }
 
 // 0x4C39F0 -> 0x42AE00.
 __declspec(dllexport) int ExpGetRenderRepeatCount() {
-    return mikudancestudio::g_Block->state.a0270;
+    return mikudancestudio::g_Block->state.renderPassCount;
 }
 
 // 0x4C3A00 -> 0x42AE10: English UI flag byte (app+0xA0B4C).
@@ -570,7 +570,7 @@ __declspec(dllexport) int ExpGetEnglishMode() {
 __declspec(dllexport) float ExpGetFrameTime() {
     MMDApp* app = mikudancestudio::g_Block;
     if (app->state.playbackActive != 0)
-        return app->state.f9e64c;
+        return app->state.playbackCursorSeconds;
     const std::int32_t frame = app->state.currentFrame;
     // fild / fadds flt_52B9F0 (2^32) when negative / fdivl dbl_52BA68 (30.0)
     return static_cast<float>(static_cast<double>(

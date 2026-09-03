@@ -18,121 +18,19 @@
 #include <timeapi.h>   // timeGetTime (excluded by WIN32_LEAN_AND_MEAN)
 #include <new>
 
-#include <cstdio>
 #include <cstdint>
-#include <cstdlib>
 #include <cwchar>
-#include <cstring>
+#include <cstdio>
 
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
-
-namespace {
-
-LONG CALLBACK DiagnosticExceptionHandler(EXCEPTION_POINTERS* info) {
-    if (info == nullptr || info->ExceptionRecord == nullptr ||
-        info->ContextRecord == nullptr)
-        return EXCEPTION_CONTINUE_SEARCH;
-    const DWORD code = info->ExceptionRecord->ExceptionCode;
-    if (code != EXCEPTION_ACCESS_VIOLATION &&
-        code != EXCEPTION_ILLEGAL_INSTRUCTION &&
-        code != EXCEPTION_ARRAY_BOUNDS_EXCEEDED &&
-        code != EXCEPTION_STACK_OVERFLOW)
-        return EXCEPTION_CONTINUE_SEARCH;
-    char directory[MAX_PATH]{};
-    const DWORD length = GetEnvironmentVariableA(
-        "MIKUDANCESTUDIO_STATE_DUMP_DIR", directory, MAX_PATH);
-    if (length == 0 || length >= MAX_PATH)
-        return EXCEPTION_CONTINUE_SEARCH;
-    char path[MAX_PATH]{};
-    std::snprintf(path, sizeof(path), "%s\\first_chance_exception.txt",
-                  directory);
-    if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES)
-        return EXCEPTION_CONTINUE_SEARCH;
-    FILE* stream = nullptr;
-    if (fopen_s(&stream, path, "wb") != 0 || stream == nullptr)
-        return EXCEPTION_CONTINUE_SEARCH;
-    CONTEXT* context = info->ContextRecord;
-    MEMORY_BASIC_INFORMATION memory{};
-    VirtualQuery(info->ExceptionRecord->ExceptionAddress, &memory,
-                 sizeof(memory));
-    char modulePath[MAX_PATH]{};
-    GetModuleFileNameA(static_cast<HMODULE>(memory.AllocationBase), modulePath,
-                       MAX_PATH);
-#if defined(_M_IX86)
-    std::fprintf(stream,
-        "code=0x%08X address=%p image_base=%p module_base=%p "
-        "module=%s eip=%08X esp=%08X ebp=%08X "
-        "eax=%08X ebx=%08X ecx=%08X edx=%08X esi=%08X edi=%08X\r\n",
-        static_cast<unsigned>(code), info->ExceptionRecord->ExceptionAddress,
-        GetModuleHandleA(nullptr), memory.AllocationBase, modulePath,
-        context->Eip, context->Esp, context->Ebp, context->Eax,
-        context->Ebx, context->Ecx, context->Edx, context->Esi,
-        context->Edi);
-#else
-    std::fprintf(stream,
-        "code=0x%08X address=%p image_base=%p module_base=%p "
-        "module=%s rip=%016llX rsp=%016llX rbp=%016llX "
-        "rax=%016llX rbx=%016llX rcx=%016llX rdx=%016llX "
-        "rsi=%016llX rdi=%016llX\r\n",
-        static_cast<unsigned>(code), info->ExceptionRecord->ExceptionAddress,
-        GetModuleHandleA(nullptr), memory.AllocationBase, modulePath,
-        static_cast<unsigned long long>(context->Rip),
-        static_cast<unsigned long long>(context->Rsp),
-        static_cast<unsigned long long>(context->Rbp),
-        static_cast<unsigned long long>(context->Rax),
-        static_cast<unsigned long long>(context->Rbx),
-        static_cast<unsigned long long>(context->Rcx),
-        static_cast<unsigned long long>(context->Rdx),
-        static_cast<unsigned long long>(context->Rsi),
-        static_cast<unsigned long long>(context->Rdi));
-#endif
-#if defined(_M_IX86)
-    const std::uintptr_t* stack =
-        reinterpret_cast<const std::uintptr_t*>(context->Esp);
-#else
-    const std::uintptr_t* stack =
-        reinterpret_cast<const std::uintptr_t*>(context->Rsp);
-#endif
-    __try {
-        for (int i = 0; i < 32; ++i)
-            std::fprintf(stream, "stack[%02d]=%p\r\n", i,
-                         reinterpret_cast<const void*>(stack[i]));
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-    }
-    // Module-range scan of the faulting stack: every dword that lands in
-    // the main image is a candidate return address (the raw stack[0..31)
-    // window starts at Esp and misses deeper frames when the fault is a
-    // jump through a bad pointer).
-    const std::uintptr_t imageBase = reinterpret_cast<std::uintptr_t>(
-        GetModuleHandleA(nullptr));
-    __try {
-        for (int i = 0; i < 4096; ++i) {
-            const std::uintptr_t address = stack[i];
-            if (address >= imageBase && address < imageBase + 0x140000)
-                std::fprintf(stream,
-                             "ret_candidate[sp+%04X]=%p (rva %06X)\r\n",
-                             static_cast<unsigned>(i * sizeof(*stack)),
-                             reinterpret_cast<const void*>(address),
-                             static_cast<unsigned>(address - imageBase));
-        }
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-    }
-    std::fclose(stream);
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-}  // namespace
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                    LPSTR lpCmdLine, int nShowCmd) {
     using namespace mikudancestudio;
 
     (void)hPrevInstance;
-
-    if (GetEnvironmentVariableA("MIKUDANCESTUDIO_STATE_DUMP_DIR", nullptr, 0) != 0)
-        AddVectoredExceptionHandler(1, DiagnosticExceptionHandler);
 
     // operator new(0xA4530) with the original's null-check (VC9 new
     // semantics), then ctor 0x42AE60 and the global Block assignment.
@@ -168,10 +66,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     app->MilliToSec() = 0.001f;         // [Block+0xA0B70] = flt_5318D0
 
     PeekMessageA(&msg, nullptr, 0, 0, 0);  // PM_NOREMOVE prime, original arg set
+    // DIAG(fps): once per second append loop/pump/sleep statistics to the
+    // file named by MIKUDANCESTUDIO_PUMP_STATS.  Purely observational -
+    // the loop below is untouched when the variable is unset.
+    char pumpStatsPath[MAX_PATH]{};
+    std::FILE* pumpStats = nullptr;
+    if (GetEnvironmentVariableA("MIKUDANCESTUDIO_PUMP_STATS",
+                                pumpStatsPath, MAX_PATH) > 0) {
+        pumpStats = std::fopen(pumpStatsPath, "a");
+    }
+    DWORD statsT0 = timeGetTime();
+    std::uint64_t statsLoops = 0, statsMsgs = 0, statsPumps = 0;
+    double statsSleepMs = 0.0, statsPumpMs = 0.0;
     while (msg.message != WM_QUIT) {       // 18
         if (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
+            if (pumpStats != nullptr) ++statsMsgs;
         } else {
             std::uint32_t nowLow = timeGetTime();           // v9
             std::uint32_t nowHigh = 0;                       // v10
@@ -183,21 +94,44 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             // v14 = 1/fpsLimit - delta;  Sleep when cap enabled and positive.
             float sleepSec = 1.0f / app->FpsLimit() - delta;
             if (app->RecordingWindow() == nullptr && sleepSec > 0.0f) {
+                DWORD pre = timeGetTime();
                 Sleep(static_cast<DWORD>(sleepSec * 1000.0f));
                 std::uint64_t addMs =
                     static_cast<std::uint64_t>(sleepSec / 0.001000000047497451);
                 nowHigh = static_cast<std::uint32_t>(addMs >> 32);
                 nowLow += static_cast<std::uint32_t>(addMs);
                 app->DeltaTime() = sleepSec + app->DeltaTime();
+                if (pumpStats != nullptr) statsSleepMs += timeGetTime() - pre;
             }
             app->TimeNowLow() = nowLow;                      // [Block+0xA0B68]
             app->TimeNowHigh() = nowHigh;                    // [Block+0xA0B6C]
             timeLow = nowLow;
             timeHigh = nowHigh;
 
+            DWORD pumpT0 = pumpStats != nullptr ? timeGetTime() : 0;
             FrameDriver(g_Block);                            // 0x46B090
+            if (pumpStats != nullptr) {
+                statsPumpMs += timeGetTime() - pumpT0;
+                ++statsPumps;
+                ++statsLoops;
+                DWORD elapsed = timeGetTime() - statsT0;
+                if (elapsed >= 1000) {
+                    std::fprintf(pumpStats,
+                        "loops=%llu msgs=%llu pump=%llu pumpMs=%.0f "
+                        "sleepMs=%.0f fpsLimit=%.2f\n",
+                        (unsigned long long)statsLoops,
+                        (unsigned long long)statsMsgs,
+                        (unsigned long long)statsPumps,
+                        statsPumpMs, statsSleepMs, app->FpsLimit());
+                    std::fflush(pumpStats);
+                    statsT0 += elapsed;
+                    statsLoops = statsMsgs = statsPumps = 0;
+                    statsSleepMs = statsPumpMs = 0.0;
+                }
+            }
         }
     }
+    if (pumpStats != nullptr) std::fclose(pumpStats);
 
     if (g_Block != nullptr) {
         MMDApp* victim = g_Block;

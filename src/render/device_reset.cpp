@@ -85,9 +85,9 @@ void PostDeviceReset(MMDApp* app) {
     }
 
     if (app->FullscreenMode() != 0) {
-        Sub4290F0(app);                                           // 0x4290F0
+        RefreshSeparateWindowViewport(app);                                           // 0x4290F0
     } else {
-        Sub42C810(app);                                           // 0x42C810
+        RefreshMainWindowViewport(app);                                           // 0x42C810
     }
 
     app->state.recentFile0[0] = 0;                                 // 0x440FE2

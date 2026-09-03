@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "mikudancestudio/raw_pad.hpp"
 #include "mikudancestudio/undo_layout.hpp"
 
 namespace mikudancestudio { class PhysicsScene; }
@@ -31,11 +32,7 @@ struct PmdVertex;
 struct PmdVertexMorphEntry;
 struct PmxVertex;
 
-#ifndef MIKUDANCESTUDIO_MDL_RAWPAD
-#define MIKUDANCESTUDIO_MDL_RAWPAD
-template <std::size_t N>
-struct RawPad { unsigned char b[N]; };
-#endif
+using mikudancestudio::RawPad;
 
 struct ModelRecord {
     void* hwnd;  // 0  (dialog owner (0x4BF42B this[0]))
@@ -86,14 +83,14 @@ struct ModelRecord {
     std::int32_t maxBoneLayer;  // 8772  (maximum PMX bone transform layer)
     char name[20];  // 8776  (SJIS)
     RawPad<30> gap8;  // 8796..8826 (unrecovered)
-#ifdef _M_X64
+#if defined(_M_X64)
     RawPad<52> x64NameStorage;  // original x64-only name metadata
 #endif
     char nameEn[20];  // 8826  (x64 anchor 8946 verified)
     RawPad<30> gap9;  // 8846..8876 (unrecovered)
     char comment[256];  // 8876
     char commentEn[256];  // 9132
-#ifdef _M_X64
+#if defined(_M_X64)
     // x64 PMX loader sub_1400A9AC0 stores its four text pointers at
     // +0x2528..+0x2540; the four-byte gap aligns the first qword.
     RawPad<4> pmxTextAlignment;
@@ -134,14 +131,14 @@ struct ModelRecord {
     // The x64 PMX loader allocates them at +0x3148 and +0x3150.
     std::uint32_t* boneKeyIndices;  // 11700 (x64 0x3148)
     std::uint32_t* morphKeyIndices;  // 11704 (x64 0x3150)
-#ifdef _M_X64
+#if defined(_M_X64)
     // The two pointer fields above grow by eight bytes on x64; preserve the
     // directly recovered offsets of the following timeline fields.
     RawPad<996> gap15;  // x64: 0x3158..0x353c (unrecovered)
 #else
     RawPad<1004> gap15;  // 11708..12712 (unrecovered)
 #endif
-#ifdef _M_X64
+#if defined(_M_X64)
     RawPad<8> x64UndoStorage;  // x64-only undo bookkeeping
 #endif
     std::int32_t boneListRows;  // 12712  (scrollbar 0x47C0A0)
@@ -192,7 +189,7 @@ struct ModelRecord {
     // 600000 bytes at model+0x3CAC (memset 0x927C0, x64 0x7FF7CB4E819F);
     // the four alignment bytes before boneOrderTable (x64 0x96470) come
     // from pointer alignment, so the tail anchors below still hold.
-#ifdef _M_X64
+#if defined(_M_X64)
     unsigned char keyVisitMap[600000];  // 15532 (0x3CAC)
 #else
     unsigned char keyVisitMap[300000];  // 14596
@@ -203,7 +200,7 @@ struct ModelRecord {
     std::int32_t frameRegistrationSelection;  // 314608  (combo 434 selection)
 };
 
-#ifndef _M_X64
+#if !defined(_M_X64)
 static_assert(offsetof(ModelRecord, hwnd) == 0,
               "hwnd x86");
 static_assert(offsetof(ModelRecord, vertexCount) == 4,

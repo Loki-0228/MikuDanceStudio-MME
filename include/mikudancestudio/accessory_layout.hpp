@@ -41,22 +41,34 @@ struct AccessoryRecord {
 
 #if defined(_M_X64)
 static_assert(sizeof(AccessoryRecord) == 0x4C0, "accessory x64 size");
-static_assert(offsetof(AccessoryRecord, visible) == 544, "");
-static_assert(offsetof(AccessoryRecord, position) == 548, "");
-static_assert(offsetof(AccessoryRecord, parentModel) == 576, "");
-static_assert(offsetof(AccessoryRecord, name) == 584, "");
-static_assert(offsetof(AccessoryRecord, shadowEnabled) == 1196, "");
-static_assert(offsetof(AccessoryRecord, opacity) == 1200, "");
+static_assert(offsetof(AccessoryRecord, visible) == 544,
+          "AccessoryRecord.visible x64 ABI");
+static_assert(offsetof(AccessoryRecord, position) == 548,
+          "AccessoryRecord.position x64 ABI");
+static_assert(offsetof(AccessoryRecord, parentModel) == 576,
+          "AccessoryRecord.parentModel x64 ABI");
+static_assert(offsetof(AccessoryRecord, name) == 584,
+          "AccessoryRecord.name x64 ABI");
+static_assert(offsetof(AccessoryRecord, shadowEnabled) == 1196,
+          "AccessoryRecord.shadowEnabled x64 ABI");
+static_assert(offsetof(AccessoryRecord, opacity) == 1200,
+          "AccessoryRecord.opacity x64 ABI");
 static_assert(offsetof(AccessoryRecord, rowSelected) == 1212,
               "rowSelected x64 (+0x4BC)");
 #else
 static_assert(sizeof(AccessoryRecord) == 0x4B0, "accessory x86 size");
-static_assert(offsetof(AccessoryRecord, visible) == 528, "");
-static_assert(offsetof(AccessoryRecord, position) == 532, "");
-static_assert(offsetof(AccessoryRecord, parentModel) == 560, "");
-static_assert(offsetof(AccessoryRecord, name) == 568, "");
-static_assert(offsetof(AccessoryRecord, shadowEnabled) == 1180, "");
-static_assert(offsetof(AccessoryRecord, opacity) == 1184, "");
+static_assert(offsetof(AccessoryRecord, visible) == 528,
+          "AccessoryRecord.visible x86 ABI");
+static_assert(offsetof(AccessoryRecord, position) == 532,
+          "AccessoryRecord.position x86 ABI");
+static_assert(offsetof(AccessoryRecord, parentModel) == 560,
+          "AccessoryRecord.parentModel x86 ABI");
+static_assert(offsetof(AccessoryRecord, name) == 568,
+          "AccessoryRecord.name x86 ABI");
+static_assert(offsetof(AccessoryRecord, shadowEnabled) == 1180,
+          "AccessoryRecord.shadowEnabled x86 ABI");
+static_assert(offsetof(AccessoryRecord, opacity) == 1184,
+          "AccessoryRecord.opacity x86 ABI");
 static_assert(offsetof(AccessoryRecord, rowSelected) == 1196,
               "rowSelected x86 (+0x4AC)");
 #endif

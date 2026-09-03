@@ -29,6 +29,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -153,7 +154,7 @@ void HandleWindowPaint(MMDApp* app) {
     // v9 accumulates the horizontal shift of the right-hand panels exactly
     // like the original (each active panel reserves its width).
     const BottomPanelLayout panelLayout = ComputeBottomPanelLayout(app);
-    int v9 = panelLayout.leading;
+    int panelShift = panelLayout.leading;
     if (app->state.optflag[0] != 0) {
         if (app->state.optflag[1] != 0) {
             if (en) {
@@ -205,183 +206,183 @@ void HandleWindowPaint(MMDApp* app) {
     if (app->state.optflag[0] != 0) {
         if (app->state.optflag[2] != 0) {
             if (en) {
-                Lbl(app, "light manipulation", hdc, 12, 548 - v9, rc.bottom - 155);
-                Lbl(app, "R", hdc, 12, 502 - v9, rc.bottom - 137);
-                Lbl(app, "G", hdc, 12, 502 - v9, rc.bottom - 119);
-                Lbl(app, "B", hdc, 12, 502 - v9, rc.bottom - 101);
-                Lbl(app, "X", hdc, 12, 502 - v9, rc.bottom - 81);
-                Lbl(app, "Y", hdc, 12, 502 - v9, rc.bottom - 63);
-                Lbl(app, "Z", hdc, 12, 502 - v9, rc.bottom - 45);
+                Lbl(app, "light manipulation", hdc, 12, 548 - panelShift, rc.bottom - 155);
+                Lbl(app, "R", hdc, 12, 502 - panelShift, rc.bottom - 137);
+                Lbl(app, "G", hdc, 12, 502 - panelShift, rc.bottom - 119);
+                Lbl(app, "B", hdc, 12, 502 - panelShift, rc.bottom - 101);
+                Lbl(app, "X", hdc, 12, 502 - panelShift, rc.bottom - 81);
+                Lbl(app, "Y", hdc, 12, 502 - panelShift, rc.bottom - 63);
+                Lbl(app, "Z", hdc, 12, 502 - panelShift, rc.bottom - 45);
             } else {
-                Lbl(app, kJpLblLightManip, hdc, 12, 563 - v9, rc.bottom - 155);
-                Lbl(app, kJpLblAka, hdc, 12, 503 - v9, rc.bottom - 137);
-                Lbl(app, kJpLblMidori, hdc, 12, 503 - v9, rc.bottom - 119);
-                Lbl(app, kJpLblAo, hdc, 12, 503 - v9, rc.bottom - 101);
-                Lbl(app, kJpLblX, hdc, 12, 504 - v9, rc.bottom - 81);
-                Lbl(app, kJpLblY, hdc, 12, 505 - v9, rc.bottom - 63);
-                Lbl(app, kJpLblZ, hdc, 12, 505 - v9, rc.bottom - 45);
+                Lbl(app, kJpLblLightManip, hdc, 12, 563 - panelShift, rc.bottom - 155);
+                Lbl(app, kJpLblAka, hdc, 12, 503 - panelShift, rc.bottom - 137);
+                Lbl(app, kJpLblMidori, hdc, 12, 503 - panelShift, rc.bottom - 119);
+                Lbl(app, kJpLblAo, hdc, 12, 503 - panelShift, rc.bottom - 101);
+                Lbl(app, kJpLblX, hdc, 12, 504 - panelShift, rc.bottom - 81);
+                Lbl(app, kJpLblY, hdc, 12, 505 - panelShift, rc.bottom - 63);
+                Lbl(app, kJpLblZ, hdc, 12, 505 - panelShift, rc.bottom - 45);
             }
         } else {
             if (en) {
-                Lbl(app, "l", hdc, 12, 505 - v9, rc.bottom - 130);
-                Lbl(app, "i", hdc, 12, 505 - v9, rc.bottom - 110);
-                Lbl(app, "g", hdc, 12, 504 - v9, rc.bottom - 90);
-                Lbl(app, "h", hdc, 12, 504 - v9, rc.bottom - 70);
-                Lbl(app, "t", hdc, 12, 505 - v9, rc.bottom - 50);
+                Lbl(app, "l", hdc, 12, 505 - panelShift, rc.bottom - 130);
+                Lbl(app, "i", hdc, 12, 505 - panelShift, rc.bottom - 110);
+                Lbl(app, "g", hdc, 12, 504 - panelShift, rc.bottom - 90);
+                Lbl(app, "h", hdc, 12, 504 - panelShift, rc.bottom - 70);
+                Lbl(app, "t", hdc, 12, 505 - panelShift, rc.bottom - 50);
             } else {
-                Lbl(app, kJpLblShou, hdc, 12, 502 - v9, rc.bottom - 130);
-                Lbl(app, kJpLblMei, hdc, 12, 502 - v9, rc.bottom - 110);
-                Lbl(app, kJpLblSou, hdc, 12, 502 - v9, rc.bottom - 90);
-                Lbl(app, kJpLblSaku, hdc, 12, 502 - v9, rc.bottom - 70);
+                Lbl(app, kJpLblShou, hdc, 12, 502 - panelShift, rc.bottom - 130);
+                Lbl(app, kJpLblMei, hdc, 12, 502 - panelShift, rc.bottom - 110);
+                Lbl(app, kJpLblSou, hdc, 12, 502 - panelShift, rc.bottom - 90);
+                Lbl(app, kJpLblSaku, hdc, 12, 502 - panelShift, rc.bottom - 70);
             }
         }
     } else if (app->state.optflag[5] != 0) {
         // facial panel
         if (en) {
-            Lbl(app, "facial manipulation", hdc, 12, 683 - v9, rc.bottom - 155);
-            Lbl(app, "eyes", hdc, 12, 606 - v9, rc.bottom - 137);
-            Lbl(app, "brow", hdc, 12, 606 - v9, rc.bottom - 67);
-            Lbl(app, "mouth", hdc, 12, 736 - v9, rc.bottom - 137);
-            Lbl(app, "other", hdc, 12, 736 - v9, rc.bottom - 67);
+            Lbl(app, "facial manipulation", hdc, 12, 683 - panelShift, rc.bottom - 155);
+            Lbl(app, "eyes", hdc, 12, 606 - panelShift, rc.bottom - 137);
+            Lbl(app, "brow", hdc, 12, 606 - panelShift, rc.bottom - 67);
+            Lbl(app, "mouth", hdc, 12, 736 - panelShift, rc.bottom - 137);
+            Lbl(app, "other", hdc, 12, 736 - panelShift, rc.bottom - 67);
         } else {
-            Lbl(app, kJpLblFacialManip, hdc, 12, 703 - v9, rc.bottom - 155);
-            Lbl(app, kJpLblMe2, hdc, 12, 606 - v9, rc.bottom - 137);
-            Lbl(app, kJpLblMayu, hdc, 12, 606 - v9, rc.bottom - 67);
-            Lbl(app, kJpLblLip, hdc, 12, 736 - v9, rc.bottom - 137);
-            Lbl(app, kJpLblSonota, hdc, 12, 736 - v9, rc.bottom - 67);
+            Lbl(app, kJpLblFacialManip, hdc, 12, 703 - panelShift, rc.bottom - 155);
+            Lbl(app, kJpLblMe2, hdc, 12, 606 - panelShift, rc.bottom - 137);
+            Lbl(app, kJpLblMayu, hdc, 12, 606 - panelShift, rc.bottom - 67);
+            Lbl(app, kJpLblLip, hdc, 12, 736 - panelShift, rc.bottom - 137);
+            Lbl(app, kJpLblSonota, hdc, 12, 736 - panelShift, rc.bottom - 67);
         }
     } else {
         if (en) {
-            Lbl(app, "f", hdc, 12, 602 - v9, rc.bottom - 130);
-            Lbl(app, "a", hdc, 12, 601 - v9, rc.bottom - 110);
-            Lbl(app, "c", hdc, 12, 601 - v9, rc.bottom - 90);
-            Lbl(app, "e", hdc, 12, 601 - v9, rc.bottom - 70);
+            Lbl(app, "f", hdc, 12, 602 - panelShift, rc.bottom - 130);
+            Lbl(app, "a", hdc, 12, 601 - panelShift, rc.bottom - 110);
+            Lbl(app, "c", hdc, 12, 601 - panelShift, rc.bottom - 90);
+            Lbl(app, "e", hdc, 12, 601 - panelShift, rc.bottom - 70);
         } else {
-            Lbl(app, kJpLblHyou, hdc, 12, 599 - v9, rc.bottom - 130);
-            Lbl(app, kJpLblJou, hdc, 12, 599 - v9, rc.bottom - 110);
-            Lbl(app, kJpLblSou, hdc, 12, 599 - v9, rc.bottom - 90);
-            Lbl(app, kJpLblSaku, hdc, 12, 599 - v9, rc.bottom - 70);
+            Lbl(app, kJpLblHyou, hdc, 12, 599 - panelShift, rc.bottom - 130);
+            Lbl(app, kJpLblJou, hdc, 12, 599 - panelShift, rc.bottom - 110);
+            Lbl(app, kJpLblSou, hdc, 12, 599 - panelShift, rc.bottom - 90);
+            Lbl(app, kJpLblSaku, hdc, 12, 599 - panelShift, rc.bottom - 70);
         }
     }
-    v9 = panelLayout.afterLightOrFace;
+    panelShift = panelLayout.afterLightOrFace;
 
     // self-shadow panel
     if (app->state.optflag[0] != 0) {
         if (app->state.optflag[6] != 0) {
             if (en) {
-                Lbl(app, "self_shadow manipulation", hdc, 12, 708 - v9, rc.bottom - 155);
-                Lbl(app, "shadow range", hdc, 12, 690 - v9, rc.bottom - 95);
-                Lbl(app, "detail", hdc, 12, 690 - v9, rc.bottom - 54);
-                Lbl(app, "far", hdc, 12, 840 - v9, rc.bottom - 54);
+                Lbl(app, "self_shadow manipulation", hdc, 12, 708 - panelShift, rc.bottom - 155);
+                Lbl(app, "shadow range", hdc, 12, 690 - panelShift, rc.bottom - 95);
+                Lbl(app, "detail", hdc, 12, 690 - panelShift, rc.bottom - 54);
+                Lbl(app, "far", hdc, 12, 840 - panelShift, rc.bottom - 54);
             } else {
-                Lbl(app, kJpLblSelfShadow, hdc, 12, 733 - v9, rc.bottom - 155);
-                Lbl(app, kJpLblShadowRange, hdc, 12, 690 - v9, rc.bottom - 100);
-                Lbl(app, kJpLblKirei, hdc, 12, 690 - v9, rc.bottom - 53);
-                Lbl(app, kJpLblEnpou, hdc, 12, 830 - v9, rc.bottom - 53);
+                Lbl(app, kJpLblSelfShadow, hdc, 12, 733 - panelShift, rc.bottom - 155);
+                Lbl(app, kJpLblShadowRange, hdc, 12, 690 - panelShift, rc.bottom - 100);
+                Lbl(app, kJpLblKirei, hdc, 12, 690 - panelShift, rc.bottom - 53);
+                Lbl(app, kJpLblEnpou, hdc, 12, 830 - panelShift, rc.bottom - 53);
             }
         } else {
             if (en) {
-                Lbl(app, "s", hdc, 12, 688 - v9, rc.bottom - 130);
-                Lbl(app, "s", hdc, 12, 688 - v9, rc.bottom - 109);
-                Lbl(app, "h", hdc, 12, 688 - v9, rc.bottom - 96);
-                Lbl(app, "a", hdc, 12, 688 - v9, rc.bottom - 83);
-                Lbl(app, "d", hdc, 12, 688 - v9, rc.bottom - 70);
-                Lbl(app, "o", hdc, 12, 688 - v9, rc.bottom - 57);
-                Lbl(app, "w", hdc, 12, 687 - v9, rc.bottom - 44);
+                Lbl(app, "s", hdc, 12, 688 - panelShift, rc.bottom - 130);
+                Lbl(app, "s", hdc, 12, 688 - panelShift, rc.bottom - 109);
+                Lbl(app, "h", hdc, 12, 688 - panelShift, rc.bottom - 96);
+                Lbl(app, "a", hdc, 12, 688 - panelShift, rc.bottom - 83);
+                Lbl(app, "d", hdc, 12, 688 - panelShift, rc.bottom - 70);
+                Lbl(app, "o", hdc, 12, 688 - panelShift, rc.bottom - 57);
+                Lbl(app, "w", hdc, 12, 687 - panelShift, rc.bottom - 44);
             } else {
-                Lbl(app, kJpLblSe, hdc, 12, 685 - v9, rc.bottom - 130);
-                Lbl(app, kJpLblRu, hdc, 12, 685 - v9, rc.bottom - 110);
-                Lbl(app, kJpLblFu, hdc, 12, 685 - v9, rc.bottom - 90);
-                Lbl(app, kJpLblKage, hdc, 12, 685 - v9, rc.bottom - 70);
-                Lbl(app, kJpLblSou, hdc, 12, 685 - v9, rc.bottom - 50);
-                Lbl(app, kJpLblSaku, hdc, 12, 685 - v9, rc.bottom - 30);
+                Lbl(app, kJpLblSe, hdc, 12, 685 - panelShift, rc.bottom - 130);
+                Lbl(app, kJpLblRu, hdc, 12, 685 - panelShift, rc.bottom - 110);
+                Lbl(app, kJpLblFu, hdc, 12, 685 - panelShift, rc.bottom - 90);
+                Lbl(app, kJpLblKage, hdc, 12, 685 - panelShift, rc.bottom - 70);
+                Lbl(app, kJpLblSou, hdc, 12, 685 - panelShift, rc.bottom - 50);
+                Lbl(app, kJpLblSaku, hdc, 12, 685 - panelShift, rc.bottom - 30);
             }
         }
     }
-    v9 = panelLayout.afterSelfShadow;
+    panelShift = panelLayout.afterSelfShadow;
 
     // accessory panel
     if (app->state.optflag[0] != 0) {
-        v9 = panelLayout.accessory;
+        panelShift = panelLayout.accessory;
         if (app->state.optflag[3] != 0) {
             if (en) {
-                Lbl(app, "accessory manipulation", hdc, 12, 723 - v9, rc.bottom - 155);
-                Lbl(app, "X", hdc, 12, 686 - v9, rc.bottom - 68);
-                Lbl(app, "Y", hdc, 12, 749 - v9, rc.bottom - 68);
-                Lbl(app, "Z", hdc, 12, 812 - v9, rc.bottom - 68);
-                Lbl(app, "Rx", hdc, 12, 684 - v9, rc.bottom - 48);
-                Lbl(app, "Ry", hdc, 12, 747 - v9, rc.bottom - 48);
-                Lbl(app, "Rz", hdc, 12, 810 - v9, rc.bottom - 48);
-                Lbl(app, "Si", hdc, 12, 687 - v9, rc.bottom - 28);
-                Lbl(app, "Tr", hdc, 12, 747 - v9, rc.bottom - 28);
-                Lbl(app, "display", hdc, 12, 837 - v9, rc.bottom - 141);
-                Lbl(app, "shadow", hdc, 12, 837 - v9, rc.bottom - 126);
+                Lbl(app, "accessory manipulation", hdc, 12, 723 - panelShift, rc.bottom - 155);
+                Lbl(app, "X", hdc, 12, 686 - panelShift, rc.bottom - 68);
+                Lbl(app, "Y", hdc, 12, 749 - panelShift, rc.bottom - 68);
+                Lbl(app, "Z", hdc, 12, 812 - panelShift, rc.bottom - 68);
+                Lbl(app, "Rx", hdc, 12, 684 - panelShift, rc.bottom - 48);
+                Lbl(app, "Ry", hdc, 12, 747 - panelShift, rc.bottom - 48);
+                Lbl(app, "Rz", hdc, 12, 810 - panelShift, rc.bottom - 48);
+                Lbl(app, "Si", hdc, 12, 687 - panelShift, rc.bottom - 28);
+                Lbl(app, "Tr", hdc, 12, 747 - panelShift, rc.bottom - 28);
+                Lbl(app, "display", hdc, 12, 837 - panelShift, rc.bottom - 141);
+                Lbl(app, "shadow", hdc, 12, 837 - panelShift, rc.bottom - 126);
             } else {
-                Lbl(app, kJpLblAccManip, hdc, 12, 738 - v9, rc.bottom - 155);
-                Lbl(app, kJpLblX, hdc, 12, 685 - v9, rc.bottom - 68);
-                Lbl(app, kJpLblY, hdc, 12, 748 - v9, rc.bottom - 68);
-                Lbl(app, kJpLblZ, hdc, 12, 811 - v9, rc.bottom - 68);
-                Lbl(app, "Rx", hdc, 12, 683 - v9, rc.bottom - 48);
-                Lbl(app, "Ry", hdc, 12, 746 - v9, rc.bottom - 48);
-                Lbl(app, "Rz", hdc, 12, 809 - v9, rc.bottom - 48);
-                Lbl(app, "Si", hdc, 12, 684 - v9, rc.bottom - 28);
-                Lbl(app, "Tr", hdc, 12, 747 - v9, rc.bottom - 28);
-                Lbl(app, kJpLblDisp, hdc, 12, 840 - v9, rc.bottom - 141);
-                Lbl(app, kJpLblKage, hdc, 12, 840 - v9, rc.bottom - 126);
+                Lbl(app, kJpLblAccManip, hdc, 12, 738 - panelShift, rc.bottom - 155);
+                Lbl(app, kJpLblX, hdc, 12, 685 - panelShift, rc.bottom - 68);
+                Lbl(app, kJpLblY, hdc, 12, 748 - panelShift, rc.bottom - 68);
+                Lbl(app, kJpLblZ, hdc, 12, 811 - panelShift, rc.bottom - 68);
+                Lbl(app, "Rx", hdc, 12, 683 - panelShift, rc.bottom - 48);
+                Lbl(app, "Ry", hdc, 12, 746 - panelShift, rc.bottom - 48);
+                Lbl(app, "Rz", hdc, 12, 809 - panelShift, rc.bottom - 48);
+                Lbl(app, "Si", hdc, 12, 684 - panelShift, rc.bottom - 28);
+                Lbl(app, "Tr", hdc, 12, 747 - panelShift, rc.bottom - 28);
+                Lbl(app, kJpLblDisp, hdc, 12, 840 - panelShift, rc.bottom - 141);
+                Lbl(app, kJpLblKage, hdc, 12, 840 - panelShift, rc.bottom - 126);
             }
         } else {
             if (en) {
-                Lbl(app, "a", hdc, 12, 688 - v9, rc.bottom - 130);
-                Lbl(app, "c", hdc, 12, 688 - v9, rc.bottom - 117);
-                Lbl(app, "c", hdc, 12, 688 - v9, rc.bottom - 104);
-                Lbl(app, "e", hdc, 12, 688 - v9, rc.bottom - 91);
-                Lbl(app, "s", hdc, 12, 688 - v9, rc.bottom - 78);
-                Lbl(app, "s", hdc, 12, 688 - v9, rc.bottom - 65);
-                Lbl(app, "o", hdc, 12, 688 - v9, rc.bottom - 52);
-                Lbl(app, "r", hdc, 12, 689 - v9, rc.bottom - 39);
-                Lbl(app, "y", hdc, 12, 688 - v9, rc.bottom - 26);
+                Lbl(app, "a", hdc, 12, 688 - panelShift, rc.bottom - 130);
+                Lbl(app, "c", hdc, 12, 688 - panelShift, rc.bottom - 117);
+                Lbl(app, "c", hdc, 12, 688 - panelShift, rc.bottom - 104);
+                Lbl(app, "e", hdc, 12, 688 - panelShift, rc.bottom - 91);
+                Lbl(app, "s", hdc, 12, 688 - panelShift, rc.bottom - 78);
+                Lbl(app, "s", hdc, 12, 688 - panelShift, rc.bottom - 65);
+                Lbl(app, "o", hdc, 12, 688 - panelShift, rc.bottom - 52);
+                Lbl(app, "r", hdc, 12, 689 - panelShift, rc.bottom - 39);
+                Lbl(app, "y", hdc, 12, 688 - panelShift, rc.bottom - 26);
             } else {
-                Lbl(app, kJpLblA, hdc, 12, 685 - v9, rc.bottom - 130);
-                Lbl(app, kJpLblKu, hdc, 12, 685 - v9, rc.bottom - 115);
-                Lbl(app, kJpLblSe, hdc, 12, 685 - v9, rc.bottom - 100);
-                Lbl(app, kJpLblSa, hdc, 12, 685 - v9, rc.bottom - 85);
-                Lbl(app, kJpLblRi, hdc, 12, 687 - v9, rc.bottom - 70);
-                Lbl(app, kJpLblSou, hdc, 12, 685 - v9, rc.bottom - 55);
-                Lbl(app, kJpLblSaku, hdc, 12, 685 - v9, rc.bottom - 40);
+                Lbl(app, kJpLblA, hdc, 12, 685 - panelShift, rc.bottom - 130);
+                Lbl(app, kJpLblKu, hdc, 12, 685 - panelShift, rc.bottom - 115);
+                Lbl(app, kJpLblSe, hdc, 12, 685 - panelShift, rc.bottom - 100);
+                Lbl(app, kJpLblSa, hdc, 12, 685 - panelShift, rc.bottom - 85);
+                Lbl(app, kJpLblRi, hdc, 12, 687 - panelShift, rc.bottom - 70);
+                Lbl(app, kJpLblSou, hdc, 12, 685 - panelShift, rc.bottom - 55);
+                Lbl(app, kJpLblSaku, hdc, 12, 685 - panelShift, rc.bottom - 40);
             }
         }
     }
-    v9 = panelLayout.final;
+    panelShift = panelLayout.final;
 
     // viewpoint cluster
     if (en) {
-        Lbl(app, "view", hdc, 12, 949 - v9, rc.bottom - 155);
-        Lbl(app, "model", hdc, 12, 918 - v9, rc.bottom - 98);
-        Lbl(app, "bone", hdc, 12, 988 - v9, rc.bottom - 98);
+        Lbl(app, "view", hdc, 12, 949 - panelShift, rc.bottom - 155);
+        Lbl(app, "model", hdc, 12, 918 - panelShift, rc.bottom - 98);
+        Lbl(app, "bone", hdc, 12, 988 - panelShift, rc.bottom - 98);
     } else {
-        Lbl(app, kJpLblShiten, hdc, 12, 943 - v9, rc.bottom - 155);
-        Lbl(app, kJpLblModel, hdc, 12, 918 - v9, rc.bottom - 98);
-        Lbl(app, kJpLblBone, hdc, 12, 988 - v9, rc.bottom - 98);
+        Lbl(app, kJpLblShiten, hdc, 12, 943 - panelShift, rc.bottom - 155);
+        Lbl(app, kJpLblModel, hdc, 12, 918 - panelShift, rc.bottom - 98);
+        Lbl(app, kJpLblBone, hdc, 12, 988 - panelShift, rc.bottom - 98);
     }
 
     // play controls
     if (en) {
-        Lbl(app, "-", hdc, 12, 945 - v9, rc.bottom - 34);
-        Lbl(app, "play", hdc, 12, 932 - v9, rc.bottom - 77);
-        Lbl(app, "repeat", hdc, 10, 974 - v9, rc.bottom - 57);
-        Lbl(app, "from flame", hdc, 10, 902 - v9, rc.bottom - 18);
-        Lbl(app, "stop flame", hdc, 10, 967 - v9, rc.bottom - 18);
+        Lbl(app, "-", hdc, 12, 945 - panelShift, rc.bottom - 34);
+        Lbl(app, "play", hdc, 12, 932 - panelShift, rc.bottom - 77);
+        Lbl(app, "repeat", hdc, 10, 974 - panelShift, rc.bottom - 57);
+        Lbl(app, "from flame", hdc, 10, 902 - panelShift, rc.bottom - 18);
+        Lbl(app, "stop flame", hdc, 10, 967 - panelShift, rc.bottom - 18);
     } else {
-        Lbl(app, kJpLblWave, hdc, 12, 939 - v9, rc.bottom - 34);
-        Lbl(app, kJpLblPlay, hdc, 12, 929 - v9, rc.bottom - 77);
-        Lbl(app, kJpLblRepeat, hdc, 10, 969 - v9, rc.bottom - 57);
-        Lbl(app, kJpLblFlameStart, hdc, 10, 903 - v9, rc.bottom - 18);
-        Lbl(app, kJpLblFlameStop, hdc, 10, 968 - v9, rc.bottom - 18);
+        Lbl(app, kJpLblWave, hdc, 12, 939 - panelShift, rc.bottom - 34);
+        Lbl(app, kJpLblPlay, hdc, 12, 929 - panelShift, rc.bottom - 77);
+        Lbl(app, kJpLblRepeat, hdc, 10, 969 - panelShift, rc.bottom - 57);
+        Lbl(app, kJpLblFlameStart, hdc, 10, 903 - panelShift, rc.bottom - 18);
+        Lbl(app, kJpLblFlameStop, hdc, 10, 968 - panelShift, rc.bottom - 18);
     }
     if (en)
-        Lbl(app, "vol", hdc, 12, 1021 - v9, rc.bottom - 77);
+        Lbl(app, "vol", hdc, 12, 1021 - panelShift, rc.bottom - 77);
     else
-        Lbl(app, kJpLblVolume, hdc, 12, 1016 - v9, rc.bottom - 77);
+        Lbl(app, kJpLblVolume, hdc, 12, 1016 - panelShift, rc.bottom - 77);
 
     if (app->FloatingWindow() == nullptr)
         HandlePaletteChanged2(hdc);                               // 0x42C140
@@ -417,7 +418,7 @@ void HandleWindowPaint(MMDApp* app) {
     const int page = (rc.bottom - 398) / 14 - 1;
     app->state.scrollNMax += page;
     app->state.scrollNPage = page;
-    SetScrollInfo(GetDlgItem(hwnd, 427), SB_CTL,
+    SetScrollInfo(GetDlgItem(hwnd, panel::kTimelineVScroll), SB_CTL,
                   reinterpret_cast<SCROLLINFO*>(&app->state.scrollCbSize), TRUE);
 }
 

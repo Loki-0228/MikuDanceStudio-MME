@@ -1,13 +1,18 @@
 // ===========================================================================
 // Gap ports: wave-context reset, physics-pose key registration and the
 // standard-skeleton base-quaternion initializer
-//   VA 0x004C2430 - Sub4C2430  wave/timeline 0x25C-context field clear
-//   VA 0x004A4A50 - Sub4A4A50  physics-pose key registrar (per-bone chain,
+//   VA 0x004C2430 - ClearWaveContextFields (was Sub4C2430)
+//                              wave/timeline 0x25C-context field clear
+//   VA 0x004A4A50 - RegisterPhysicsPoseChain (was Sub4A4A50)
+//                              physics-pose key registrar (per-bone chain,
 //                              model+14584 consecutive frames)
-//   VA 0x004A5690 - Sub4A5690  "register physics pose" driver (undo snapshot
-//                              + standard-bone probes -> Sub4A4A50)
-//   VA 0x004A60F0 - Sub4A60F0  look-at quaternion builder (__stdcall)
-//   VA 0x004A6520 - Sub4A6520  standard-skeleton base quaternion setup
+//   VA 0x004A5690 - RegisterPhysicsPose (was Sub4A5690)
+//                              "register physics pose" driver (undo snapshot
+//                              + standard-bone probes -> RegisterPhysicsPoseChain)
+//   VA 0x004A60F0 - BuildLookAtQuaternion (was Sub4A60F0)
+//                              look-at quaternion builder (__stdcall)
+//   VA 0x004A6520 - InitStandardSkeletonQuats (was Sub4A6520)
+//                              standard-skeleton base quaternion setup
 // ===========================================================================
 // Scope note: the other VAs handed out with this batch were adjudicated as
 // already covered and are NOT re-ported here:
@@ -76,6 +81,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/wave_audio_context.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 #include "../model/keyframe_common.hpp"
 
@@ -240,13 +246,13 @@ int FindBoneByName(unsigned char* m, const void* name, std::size_t cb) {
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// VA 0x004C2430 - Sub4C2430(this): clear five fields of the 0x25C wave/
+// VA 0x004C2430 - ClearWaveContextFields(this) (was Sub4C2430): clear five fields of the 0x25C wave/
 // timeline context object.  Called from the WinMain init path 0x47A5B0
 // (0x47A665) right after the zeroing ctor 0x4C2450; the array pointers are
 // nulled WITHOUT freeing (leak-preserving, matching the original).
 // __thiscall(ctx) -> returns ctx.
 // ---------------------------------------------------------------------------
-void* Sub4C2430(void* obj) {
+void* ClearWaveContextFields(void* obj) {
     auto* audio = static_cast<WaveAudioContext*>(obj);
     audio->path[0] = L'\0';                              // 0x4C2434
     audio->englishUI = 0;                                // 0x4C2438
@@ -257,17 +263,18 @@ void* Sub4C2430(void* obj) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004A4A50 - Sub4A4A50(model, boneIdx, srcIdx, mode, startFrame).
+// VA 0x004A4A50 - RegisterPhysicsPoseChain(model, boneIdx, srcIdx, mode,
+// startFrame) (was Sub4A4A50).
 // Physics-pose key registrar: walks the per-bone sorted chain of 60-byte
 // records from record `boneIdx` and registers model+14584 consecutive
 // frames (startFrame, startFrame+1, ...), sourcing each frame's pose from
 // the model+8620 array (77-float stride, 7-float window per frame at float
 // index srcIdx + 77*k).  Returns 0 on record exhaustion (box shown), 1 on
-// success.  Uses the same Sub49D410 selection-unlink hook as the VMD
+// success.  Uses the same AppendBoneKeyToUndo selection-unlink hook as the VMD
 // registrars.  Sole caller: 0x4A5690.
 // ---------------------------------------------------------------------------
-bool Sub4A4A50(unsigned char* m, int boneIdx, int srcIdx, int mode,
-               std::uint32_t startFrame) {
+bool RegisterPhysicsPoseChain(unsigned char* m, int boneIdx, int srcIdx,
+                              int mode, std::uint32_t startFrame) {
     mdl::BoneKey* const keys = mdl::BoneKeys(m);
 
     // chain walk: advance while frame < startFrame (unsigned, 0x4A4A8F..)
@@ -302,9 +309,9 @@ bool Sub4A4A50(unsigned char* m, int boneIdx, int srcIdx, int mode,
                      srcIdx;                                      // i = 4*srcIdx+8
     unsigned int iter = 0;                                        // v22
     for (;;) {
-        Sub49D410(m, cur);                                        // 0x4A4B47
-        Sub49D410(m, next);                                       // 0x4A4B53
-        Sub49D410(m, scan);                                       // 0x4A4B5B
+        AppendBoneKeyToUndo(m, cur);                                        // 0x4A4B47
+        AppendBoneKeyToUndo(m, next);                                       // 0x4A4B53
+        AppendBoneKeyToUndo(m, scan);                                       // 0x4A4B5B
 
         if (keys[cur].frame == frame) {
             // exact-frame overwrite at cur (unlink, rewrite, relink below)
@@ -363,15 +370,16 @@ bool Sub4A4A50(unsigned char* m, int boneIdx, int srcIdx, int mode,
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004A5690 - Sub4A5690(model, frame): the "register physics-driven
+// VA 0x004A5690 - RegisterPhysicsPose(model, frame) (was Sub4A5690): the
+// "register physics-driven
 // pose" driver.  Clears every mark byte in the three key arrays, snapshots
 // the current pose into the undo ring (slot = model+12724, 30-deep), then
-// probes the standard skeleton by SJIS bone name and runs Sub4A4A50 for
+// probes the standard skeleton by SJIS bone name and runs RegisterPhysicsPoseChain for
 // each found chain.  On any registrar failure it returns EARLY, skipping
 // the model+8620 free and the model+14584 reset (original leak/quirk).
 // __thiscall(model).  Sole caller: 0x46B090.
 // ---------------------------------------------------------------------------
-void Sub4A5690(unsigned char* m, std::uint32_t frame) {
+void RegisterPhysicsPose(unsigned char* m, std::uint32_t frame) {
     mdl::ModelRecord& model = *mdl::Mdl(m);
     mdl::BoneKey* const boneKeys = mdl::BoneKeys(m);
     for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i)
@@ -395,8 +403,8 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
     }
 
     HWND hwnd = static_cast<HWND>(model.hwnd);
-    EnableWindow(GetDlgItem(hwnd, 400), 1);                        // 0x4A5713
-    EnableWindow(GetDlgItem(hwnd, 401), 0);                        // 0x4A572A
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), 1);                        // 0x4A5713
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), 0);                        // 0x4A572A
 
     if (++model.undoState[0] >= 30)
         model.undoState[0] = 0;                                   // 0x4A574D
@@ -447,27 +455,27 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
     // standard-bone probes (order and srcIdx/mode pairs from the original)
     int i;
     i = FindBoneByName(m, kNameCenter, 9);                         // 0x4A5A00
-    if (i != -1 && !Sub4A4A50(m, i, 0, 0, frame)) return;          // 0x4A5A2D
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 0, 0, frame)) return;          // 0x4A5A2D
     i = FindBoneByName(m, kNameUpper, 7);                          // 0x4A5A53
-    if (i != -1 && !Sub4A4A50(m, i, 3, 1, frame)) return;          // 0x4A5A80
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 3, 1, frame)) return;          // 0x4A5A80
     if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {        // 0x4A5A8D
         i = FindBoneByName(m, kNameNeck, 3);                      // 0x4A5AB0
-        if (i != -1 && !Sub4A4A50(m, i, 7, 1, frame)) return;      // 0x4A5ADD
+        if (i != -1 && !RegisterPhysicsPoseChain(m, i, 7, 1, frame)) return;      // 0x4A5ADD
     }
     i = FindBoneByName(m, kNameLArm, 5);                      // 0x4A5B03
-    if (i != -1 && !Sub4A4A50(m, i, 11, 1, frame)) return;         // 0x4A5B30
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 11, 1, frame)) return;         // 0x4A5B30
     i = FindBoneByName(m, kNameLElbow, 7);                         // 0x4A5B60
-    if (i != -1 && !Sub4A4A50(m, i, 15, 1, frame)) return;         // 0x4A5B8D
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 15, 1, frame)) return;         // 0x4A5B8D
     i = FindBoneByName(m, kNameRArm, 5);                      // 0x4A5BB3
-    if (i != -1 && !Sub4A4A50(m, i, 19, 1, frame)) return;         // 0x4A5BE0
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 19, 1, frame)) return;         // 0x4A5BE0
     i = FindBoneByName(m, kNameRElbow, 7);                         // 0x4A5C10
-    if (i != -1 && !Sub4A4A50(m, i, 23, 1, frame)) return;         // 0x4A5C3D
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 23, 1, frame)) return;         // 0x4A5C3D
     i = FindBoneByName(m, kNameLower, 7);                          // 0x4A5C63
-    if (i != -1 && !Sub4A4A50(m, i, 27, 1, frame)) return;         // 0x4A5C90
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 27, 1, frame)) return;         // 0x4A5C90
     i = FindBoneByName(m, kNameLLeg, 5);                          // 0x4A5CC0
-    if (i != -1 && !Sub4A4A50(m, i, 31, 1, frame)) return;         // 0x4A5CED
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 31, 1, frame)) return;         // 0x4A5CED
     i = FindBoneByName(m, kNameRLeg, 5);                          // 0x4A5D13
-    if (i != -1 && !Sub4A4A50(m, i, 35, 1, frame)) return;         // 0x4A5D40
+    if (i != -1 && !RegisterPhysicsPoseChain(m, i, 35, 1, frame)) return;         // 0x4A5D40
 
     // wrist IK chains (model+9920, 24-byte structs: +0 root bone idx,
     // +18 enabled flag): enabled -> wrist bone pose, else the knee
@@ -483,10 +491,10 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
         if (chain >= 0) {
             if (chains[chain].enabled != 0) {                      // 0x4A5A9D
                 i = FindBoneByName(m, kNameLLegIk, 9);             // 0x4A5DD0
-                if (i != -1 && !Sub4A4A50(m, i, 47, 2, frame)) return; // 0x4A5DF3
+                if (i != -1 && !RegisterPhysicsPoseChain(m, i, 47, 2, frame)) return; // 0x4A5DF3
             } else {
                 i = FindBoneByName(m, kNameLKnee, 7);              // 0x4A5E14
-                if (i != -1 && !Sub4A4A50(m, i, 39, 1, frame)) return; // 0x4A5E3A
+                if (i != -1 && !RegisterPhysicsPoseChain(m, i, 39, 1, frame)) return; // 0x4A5E3A
             }
         }
     }
@@ -502,31 +510,37 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
         if (chain >= 0) {
             if (chains[chain].enabled != 0) {                      // 0x4A5E9D
                 i = FindBoneByName(m, kNameRLegIk, 9);             // 0x4A5ED0
-                if (i != -1 && !Sub4A4A50(m, i, 54, 2, frame)) return; // 0x4A5EF3
+                if (i != -1 && !RegisterPhysicsPoseChain(m, i, 54, 2, frame)) return; // 0x4A5EF3
             } else {
                 i = FindBoneByName(m, kNameRKnee, 7);              // 0x4A5F14
-                if (i != -1 && !Sub4A4A50(m, i, 43, 1, frame)) return; // 0x4A5F3A
+                if (i != -1 && !RegisterPhysicsPoseChain(m, i, 43, 1, frame)) return; // 0x4A5F3A
             }
         }
     }
 
     if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {        // 0x4A5F4E
         i = FindBoneByName(m, kNameLWrist, 7);                  // 0x4A5F74
-        if (i != -1 && !Sub4A4A50(m, i, 61, 1, frame)) return;     // 0x4A5FA1
+        if (i != -1 && !RegisterPhysicsPoseChain(m, i, 61, 1, frame)) return;     // 0x4A5FA1
+        // 0x4A5FAE is a REAL re-test of the spec gate in the binary (cmp
+        // byte ptr [ebp+38FDh], 0Eh / jl), not decompiler noise.  Nothing
+        // in FindBoneByName/RegisterPhysicsPoseChain writes model+14589, so the re-test
+        // always re-enters here; kept verbatim for structural fidelity.
         if (*reinterpret_cast<signed char*>(m + 14589) >= 14) {    // 0x4A5FAE
             i = FindBoneByName(m, kNameRWrist, 7);              // 0x4A5FD0
-            if (i != -1 && !Sub4A4A50(m, i, 65, 1, frame)) return; // 0x4A5FFD
+            if (i != -1 && !RegisterPhysicsPoseChain(m, i, 65, 1, frame)) return; // 0x4A5FFD
         }
     }
     if (*reinterpret_cast<signed char*>(m + 14589) >= 15) {        // 0x4A600A
         i = FindBoneByName(m, kNameLShoulder, 5);                      // 0x4A6030
         // 0x4A6056/0x4A60B6: like every other probe, a LFoot/RFoot
         // failure is a PLAIN return in the original - no cleanup.
-        if (i != -1 && !Sub4A4A50(m, i, 69, 1, frame))             // 0x4A6056
+        if (i != -1 && !RegisterPhysicsPoseChain(m, i, 69, 1, frame))             // 0x4A6056
             return;
+        // 0x4A606A: same real re-test in the binary (cmp byte ptr
+        // [ebp+38FDh], 0Fh / jl); always true here, kept verbatim.
         if (*reinterpret_cast<signed char*>(m + 14589) >= 15) {    // 0x4A606A
             i = FindBoneByName(m, kNameRShoulder, 5);                  // 0x4A6090
-            if (i != -1 && !Sub4A4A50(m, i, 73, 1, frame))         // 0x4A60B6
+            if (i != -1 && !RegisterPhysicsPoseChain(m, i, 73, 1, frame))         // 0x4A60B6
                 return;
         }
     }
@@ -534,7 +548,8 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004A60F0 - Sub4A60F0(out, quat, ax, ay, az, bx, by, bz, mode):
+// VA 0x004A60F0 - BuildLookAtQuaternion(out, quat, ax, ay, az, bx, by, bz,
+// mode) (was Sub4A60F0):
 // look-at quaternion builder.  Rotates the (b - a) direction by
 // inverse(quat) * RotY(pi), normalizes it (mode 5 zeroes Y first), then
 // constructs a yaw/roll rotation for the chosen axis mode (0..5) and
@@ -542,8 +557,9 @@ void Sub4A5690(unsigned char* m, std::uint32_t frame) {
 // __stdcall; `out` is the return value (4 floats).  Sole caller: 0x4A6520
 // (10 call sites).
 // ---------------------------------------------------------------------------
-float* Sub4A60F0(float out[4], const float quat[4], float ax, float ay,
-                 float az, float bx, float by, float bz, unsigned char mode) {
+float* BuildLookAtQuaternion(float out[4], const float quat[4], float ax,
+                             float ay, float az, float bx, float by, float bz,
+                             unsigned char mode) {
     auto* d3 = &d3dx::Get();
     FnQuatInverseLocal quatInverse = LocalQuatInverse();
     if (d3->module == nullptr || quatInverse == nullptr ||
@@ -649,7 +665,8 @@ build:
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004A6520 - Sub4A6520(model, flag): standard-skeleton base-quaternion
+// VA 0x004A6520 - InitStandardSkeletonQuats(model, flag) (was Sub4A6520):
+// standard-skeleton base-quaternion
 // initializer.  Using the standard-bone probe positions cached at
 // model+14284..14568 (-999.0 = absent), builds the rest orientation
 // quaternions for the upper body (model+64), neck (+80), arm chains
@@ -660,7 +677,7 @@ build:
 // preserved).  Original returns an undefined eax; ported as void.
 // __thiscall(model).  Sole caller: 0x4B5760.
 // ---------------------------------------------------------------------------
-void Sub4A6520(unsigned char* m, unsigned char flag) {
+void InitStandardSkeletonQuats(unsigned char* m, unsigned char flag) {
     auto* d3 = &d3dx::Get();
     FnQuatRotationAxisLocal quatRotationAxis = LocalQuatRotationAxis();
     if (d3->module == nullptr || quatRotationAxis == nullptr ||
@@ -728,7 +745,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
         const float ang = acosf(dot);                              // 0x4A697E
         quatRotationAxis(qA, axis, ang);                           // 0x4A6994
         std::memcpy(qByVal, m + 64, 16);
-        Sub4A60F0(q150, qByVal, F(14376), F(14380), F(14384),
+        BuildLookAtQuaternion(q150, qByVal, F(14376), F(14380), F(14384),
                   F(14328), F(14332), F(14336), 4);                // 0x4A6A06
         std::memcpy(QOut(64), q150, 16);                           // 0x4A6A0D..
         d3->quatMultiply(t1, QOut(64), qA);                        // 0x4A6A30
@@ -744,12 +761,12 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
     if (F(14284) != kSentinel && F(14320) != kSentinel &&
         F(14308) != kSentinel) {
         std::memcpy(qByVal, m + 64, 16);
-        Sub4A60F0(t1, qByVal, F(14316), F(14320), F(14324),
+        BuildLookAtQuaternion(t1, qByVal, F(14316), F(14320), F(14324),
                   F(14304), F(14308), F(14312), 1);                // 0x4A6B33
         std::memcpy(QOut(80), t1, 16);                             // 0x4A6B4B..
         if (F(14548) != kSentinel) {                               // 0x4A6B49
             d3->quatMultiply(qB, QOut(80), QOut(64));              // 0x4A6B75
-            Sub4A60F0(qA, qB, F(14544), F(14548), F(14552),
+            BuildLookAtQuaternion(qA, qB, F(14544), F(14548), F(14552),
                       F(14316), F(14320), F(14324), 5);            // 0x4A6BE4
             d3->quatMultiply(t1, qA, QOut(80));                    // 0x4A6C0F
             std::memcpy(QOut(80), t1, 16);                         // 0x4A6C2C..
@@ -794,11 +811,11 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
         quatRotationAxis(qA, kAxisZ, -k35deg5311A4);               // 0x4A6EFB
         if (F(14524) == kSentinel) {                               // 0x4A6F11
             std::memcpy(qByVal, m + 64, 16);
-            Sub4A60F0(q150, qByVal, F(14328), F(14332), F(14336),
+            BuildLookAtQuaternion(q150, qByVal, F(14328), F(14332), F(14336),
                       F(14340), F(14344), F(14348), 0);            // 0x4A6FF2
         } else {
             d3->quatMultiply(qB, QOut(320), QOut(64));             // 0x4A6F1D
-            Sub4A60F0(q150, qB, F(14520), F(14524), F(14528),
+            BuildLookAtQuaternion(q150, qB, F(14520), F(14524), F(14528),
                       F(14340), F(14344), F(14348), 0);            // 0x4A6F8A
         }
         d3->quatMultiply(QOut(144), qA, q150);                     // 0x4A7023
@@ -813,7 +830,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
         quatRotationAxis(qA, kAxisZ, -k30deg53119C);               // 0x4A70EF
         d3->quatMultiply(t1, q150, QOut(320));                     // 0x4A70FF
         d3->quatMultiply(t2, t1, QOut(64));                        // 0x4A7112
-        Sub4A60F0(q155, t2, F(14340), F(14344), F(14348),
+        BuildLookAtQuaternion(q155, t2, F(14340), F(14344), F(14348),
                   F(14352), F(14356), F(14360), 0);                // 0x4A7181
         d3->quatMultiply(QOut(176), qA, q155);                     // 0x4A71C1
         quatRotationAxis(qA, kAxisZ, k30deg53119C);                // 0x4A71DA
@@ -839,7 +856,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
             d3->quatMultiply(t1, q155, q150);                      // 0x4A72FA
             d3->quatMultiply(t2, t1, QOut(320));                   // 0x4A730D
             d3->quatMultiply(qB, t2, QOut(64));                    // 0x4A7323
-            Sub4A60F0(q159, qB, F(14352), F(14356), F(14360),
+            BuildLookAtQuaternion(q159, qB, F(14352), F(14356), F(14360),
                       F(14364), F(14368), F(14372), 0);            // 0x4A7392
             d3->quatMultiply(QOut(160), qA, q159);                 // 0x4A73D2
             quatRotationAxis(qA, kAxisZ, k30deg53119C);            // 0x4A73EB
@@ -884,11 +901,11 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
         quatRotationAxis(qA, kAxisZ, k35deg5311A4);                // 0x4A76CE
         if (F(14536) == kSentinel) {                               // 0x4A76E4
             std::memcpy(qByVal, m + 64, 16);
-            Sub4A60F0(q150, qByVal, F(14388), F(14392), F(14396),
+            BuildLookAtQuaternion(q150, qByVal, F(14388), F(14392), F(14396),
                       F(14376), F(14380), F(14384), 0);            // 0x4A77B7
         } else {
             d3->quatMultiply(qB, QOut(304), QOut(64));             // 0x4A76F0
-            Sub4A60F0(q150, qB, F(14388), F(14392), F(14396),
+            BuildLookAtQuaternion(q150, qB, F(14388), F(14392), F(14396),
                       F(14532), F(14536), F(14540), 0);            // 0x4A774F
         }
         d3->quatMultiply(QOut(96), qA, q150);                      // 0x4A77E5
@@ -903,7 +920,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
         quatRotationAxis(qA, kAxisZ, k30deg53119C);                // 0x4A78A5
         d3->quatMultiply(t1, q150, QOut(304));                     // 0x4A78B8
         d3->quatMultiply(t2, t1, QOut(64));                        // 0x4A78CE
-        Sub4A60F0(q155, t2, F(14400), F(14404), F(14408),
+        BuildLookAtQuaternion(q155, t2, F(14400), F(14404), F(14408),
                   F(14388), F(14392), F(14396), 0);                // 0x4A793D
         d3->quatMultiply(QOut(128), qA, q155);                     // 0x4A797D
         quatRotationAxis(qA, kAxisZ, -k30deg53119C);               // 0x4A7996
@@ -929,7 +946,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
             d3->quatMultiply(t1, q155, q150);                      // 0x4A7AAD
             d3->quatMultiply(t2, t1, QOut(304));                   // 0x4A7AC0
             d3->quatMultiply(qB, t2, QOut(64));                    // 0x4A7AD3
-            Sub4A60F0(q159, qB, F(14412), F(14416), F(14420),
+            BuildLookAtQuaternion(q159, qB, F(14412), F(14416), F(14420),
                       F(14400), F(14404), F(14408), 0);            // 0x4A7B42
             d3->quatMultiply(QOut(112), qA, q159);                 // 0x4A7B7F
             quatRotationAxis(qA, kAxisZ, -k30deg53119C);           // 0x4A7B98
@@ -959,7 +976,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
         d3->vec3Normalize(axis, axis);                              // 0x4A7D67
         const float ang = acosf(dot);                              // 0x4A7D75
         quatRotationAxis(qA, axis, ang);                           // 0x4A7D8B
-        Sub4A60F0(t1, qA, F(14472), F(14476), F(14480),
+        BuildLookAtQuaternion(t1, qA, F(14472), F(14476), F(14480),
                   F(14424), F(14428), F(14432), 4);                // 0x4A7DFD
         std::memcpy(QOut(192), t1, 16);                            // 0x4A7E04..
         d3->quatMultiply(t2, QOut(192), qA);                       // 0x4A7E2D
@@ -975,7 +992,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
     if (F(14428) != kSentinel && F(14440) != kSentinel &&
         F(14284) != kSentinel) {
         std::memcpy(qByVal, m + 192, 16);
-        Sub4A60F0(t1, qByVal, F(14424), F(14428), F(14432),
+        BuildLookAtQuaternion(t1, qByVal, F(14424), F(14428), F(14432),
                   F(14436), F(14440), F(14444), 2);                // 0x4A7F47
         std::memcpy(QOut(256), t1, 16);                            // 0x4A7F58..
     } else if (flag != 0) {                                        // 0x4A7F7D
@@ -989,7 +1006,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
     if (F(14476) != kSentinel && F(14488) != kSentinel &&
         F(14284) != kSentinel) {
         std::memcpy(qByVal, m + 192, 16);
-        Sub4A60F0(t1, qByVal, F(14472), F(14476), F(14480),
+        BuildLookAtQuaternion(t1, qByVal, F(14472), F(14476), F(14480),
                   F(14484), F(14488), F(14492), 3);                // 0x4A8069
         std::memcpy(QOut(208), t1, 16);                            // 0x4A807A..
     } else if (flag != 0) {                                        // 0x4A809F
@@ -1003,7 +1020,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
     if (F(14440) != kSentinel && F(14452) != kSentinel &&
         F(14284) != kSentinel) {
         d3->quatMultiply(qB, QOut(256), QOut(192));                // 0x4A812C
-        Sub4A60F0(t1, qB, F(14436), F(14440), F(14444),
+        BuildLookAtQuaternion(t1, qB, F(14436), F(14440), F(14444),
                   F(14448), F(14452), F(14456), 1);                // 0x4A819B
         std::memcpy(QOut(272), t1, 16);                            // 0x4A81AC..
     } else if (flag != 0) {                                        // 0x4A81D1
@@ -1017,7 +1034,7 @@ void Sub4A6520(unsigned char* m, unsigned char flag) {
     if (F(14488) != kSentinel && F(14500) != kSentinel &&
         F(14284) != kSentinel) {
         d3->quatMultiply(qB, QOut(208), QOut(192));                // 0x4A825E
-        Sub4A60F0(t1, qB, F(14484), F(14488), F(14492),
+        BuildLookAtQuaternion(t1, qB, F(14484), F(14488), F(14492),
                   F(14496), F(14500), F(14504), 1);                // 0x4A82CD
         std::memcpy(QOut(224), t1, 16);                            // 0x4A82DA..
     } else if (flag != 0) {                                        // 0x4A82FF

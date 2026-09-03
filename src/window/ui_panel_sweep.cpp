@@ -178,228 +178,218 @@ void PostLanguageSweep(MMDApp* app) {
                     sizeof(std::uint32_t) * record->morphCount);
         *reinterpret_cast<std::int32_t*>(model + kModelSelLine) = 0;
         {
-            int v17 = 0;
+            int typeCursor = 0;  // running byte offset into the 200-line type array
             for (int i = 11916; i < 12716; i += 20) {
-                model[v17 + kModelLineType] = 0;
+                model[typeCursor + kModelLineType] = 0;
                 *reinterpret_cast<std::int32_t*>(model + i - 4) = -999;
-                model[v17 + kModelLineType + 1] = 0;
+                model[typeCursor + kModelLineType + 1] = 0;
                 *reinterpret_cast<std::int32_t*>(model + i) = -999;
-                model[v17 + kModelLineType + 2] = 0;
+                model[typeCursor + kModelLineType + 2] = 0;
                 *reinterpret_cast<std::int32_t*>(model + i + 4) = -999;
-                model[v17 + kModelLineType + 3] = 0;
+                model[typeCursor + kModelLineType + 3] = 0;
                 *reinterpret_cast<std::int32_t*>(model + i + 8) = -999;
-                model[v17 + kModelLineType + 4] = 0;
+                model[typeCursor + kModelLineType + 4] = 0;
                 *reinterpret_cast<std::int32_t*>(model + i + 12) = -999;
-                v17 += 5;
+                typeCursor += 5;
             }
         }
         *reinterpret_cast<std::int32_t*>(model + kModelRecs) = rootIdx;
         record->boneListRows = 1;
 
         // --- display-frame iteration (0x42FA13..0x4304F7) -------------------
+        // Restructured from the original's LABEL_76/86/122/123/139/140 web
+        // (Wave5-C): LABEL_76/86 were skip-the-highlight gotos (now the
+        // anyFaceSelected / anyRigidVisible guards), LABEL_122 skipped the
+        // row flag for unselected faces, LABEL_123/139 formed the face-list
+        // loop and LABEL_140 the frame advance at the loop tail.  The
+        // original's `v20 = v72` re-syncs were no-ops (both always equal -
+        // only LABEL_140's `v72 = ++v20` changes either).
         const mdl::DisplayGroup* const frames = mdl::DisplayGroups(model);
         const mdl::FrameGroup* const faces = mdl::DisplayFrames(model);
         const mdl::FrameGroup* const groups = mdl::RigidGroups(model);
         const std::int32_t groupCnt =
             static_cast<std::int32_t>(record->rigidBodyCount);
-        std::uint8_t v20 = 1;  // display-frame index
-        std::uint8_t v72 = 1;  // current frame type (= v20)
-        int v21 = 1;           // tree line counter
-        std::uint8_t v74 = 0;  // face index (0x430138)
+        std::uint8_t frameIdx = 1;   // display-frame index
+        std::uint8_t frameType = 1;  // frame type carried onto the next line
+        int line = 1;                // tree line counter
+        std::uint8_t faceIdx = 0;    // face index (0x430138)
         if (mdl::Mdl(model)->groupCount <= 1) {
             PanelPaint(app);
             return;
         }
         for (;;) {
-            {
-                const int v80 = v20;
-                const bool visible = frames[v20].flags == 0;
-                const std::int32_t iter = record->boneListRows;
-                const std::int32_t iterMax = record->boneListPos;
+            const int frameNo = frameIdx;  // frame index fixed for this pass
+            const bool visible = frames[frameIdx].flags == 0;
+            const std::int32_t iter = record->boneListRows;
+            const std::int32_t iterMax = record->boneListPos;
 
-                if (visible) {
-                    // frame lists bones (0x42FA7E)
-                    if (iter > iterMax && v21 < 200) {
-                        if (english) {
-                            if (v20 > 1)
-                                DrawGlyph(app, "+", panel, 12, 1, 14 * v21 + 17, 0, 0, 0, 1);
-                            DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                          s.state.themeColors[33]);
-                        } else {
-                            if (v20 > 1)
-                                DrawGlyph(app, kJpPlus, panel, 12, 1, 14 * v21 + 17, 0, 0, 0, 1);
-                            DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                          s.state.themeColors[33]);
-                        }
-                        if (((v72 == 1) & *reinterpret_cast<std::uint8_t*>(model + kModelSelFlag)) != 0) {
-                            DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                          s.state.themeColors[34]);
-                            s.PanelRowFlags()[v21] = 1;
-                        }
-                        if (record->facialFrameCount != 0 && v72 == 2) {
-                            // frame 2: highlight when any face flag (+44) is
-                            // set - first face with a live flag (0x42FC57).
-                            unsigned int v31 = 0;
-                            while (faces[v31].selected == 0) {
-                                ++v31;
-                                if (v31 >= mdl::Mdl(model)->facialFrameCount)
-                                    goto lab76;
-                            }
-                            DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                          s.state.themeColors[34]);
-                            s.PanelRowFlags()[v21] = 1;
-                        }
-                    lab76:
-                        // highlight when a rigid group of this frame is visible (0x42FD26)
-                        {
-                            int v84 = 0;
-                            if (groupCnt) {
-                                while (groups[v84].groupIndex != v80 ||
-                                       flagTab[groups[v84].targetIndex] == 0) {
-                                    if (++v84 >= groupCnt)
-                                        goto lab86;
-                                }
-                                DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
-                                              s.state.themeColors[34]);
-                                s.PanelRowFlags()[v21] = 1;
-                            }
-                        }
-                    lab86:
-                        // line type byte + morph/rigid back-links (0x42FE37)
-                        model[v21 + kModelLineType] = v72;
-                        if (v72 == 1)
-                            *reinterpret_cast<std::int32_t*>(model + kModelSelLine) = v21;
-                        for (std::uint8_t j = 0;
-                             j < mdl::Mdl(model)->facialFrameCount; ++j) {
-                            const mdl::FrameGroup& face = faces[j];
-                            if (face.groupIndex + 1 == v80)
-                                morphLineByIndex[face.targetIndex] = -v21;
-                        }
-                        if (groupCnt) {
-                            unsigned int v40 = 0;
-                            do {
-                                const mdl::FrameGroup& rigid = groups[v40];
-                                if (rigid.groupIndex == v80)
-                                    boneLineByIndex[rigid.targetIndex] = -v21;
-                                ++v40;
-                            } while (v40 < static_cast<unsigned int>(groupCnt));
-                        }
-                        v20 = v72;
-                        ++v21;
-                    }
-                    ++record->boneListRows;
-                    goto lab140;
-                }
-
-                // frame lists faces / rigid groups (0x42FF94)
-                if (iter > iterMax && v21 < 200) {
+            if (visible) {
+                // frame lists bones (0x42FA7E)
+                if (iter > iterMax && line < 200) {
                     if (english) {
-                        if (v20 > 1)
-                            DrawGlyph(app, "-", panel, 12, 1, 14 * v21 + 17, 0, 0, 0, 1);
-                        DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
+                        if (frameIdx > 1)
+                            DrawGlyph(app, "+", panel, 12, 1, 14 * line + 17, 0, 0, 0, 1);
+                        DrawFrameName(app, frames[frameIdx], panel, 14 * line + 17,
                                       s.state.themeColors[33]);
                     } else {
-                        if (v20 > 1)
-                            DrawGlyph(app, kJpMinus, panel, 12, 1, 14 * v21 + 17, 0, 0, 0, 1);
-                        DrawFrameName(app, frames[v20], panel, 14 * v21 + 17,
+                        if (frameIdx > 1)
+                            DrawGlyph(app, kJpPlus, panel, 12, 1, 14 * line + 17, 0, 0, 0, 1);
+                        DrawFrameName(app, frames[frameIdx], panel, 14 * line + 17,
                                       s.state.themeColors[33]);
                     }
-                    model[v21++ + kModelLineType] = v72;
-                    v20 = v72;
+                    if (((frameType == 1) & *reinterpret_cast<std::uint8_t*>(model + kModelSelFlag)) != 0) {
+                        DrawFrameName(app, frames[frameIdx], panel, 14 * line + 17,
+                                      s.state.themeColors[34]);
+                        s.PanelRowFlags()[line] = 1;
+                    }
+                    if (record->facialFrameCount != 0 && frameType == 2) {
+                        // frame 2: highlight when any face flag (+44) is
+                        // set - first face with a live flag (0x42FC57,
+                        // LABEL_76 skipped when none is live).
+                        bool anyFaceSelected = false;
+                        for (unsigned int f = 0;
+                             f < mdl::Mdl(model)->facialFrameCount; ++f) {
+                            if (faces[f].selected != 0) {
+                                anyFaceSelected = true;
+                                break;
+                            }
+                        }
+                        if (anyFaceSelected) {
+                            DrawFrameName(app, frames[frameIdx], panel,
+                                          14 * line + 17,
+                                          s.state.themeColors[34]);
+                            s.PanelRowFlags()[line] = 1;
+                        }
+                    }
+                    // highlight when a rigid group of this frame is visible
+                    // (0x42FD26; LABEL_86 skipped when none matched).
+                    if (groupCnt) {
+                        bool anyRigidVisible = false;
+                        for (int g = 0; g < groupCnt; ++g) {
+                            if (groups[g].groupIndex == frameNo &&
+                                flagTab[groups[g].targetIndex] != 0) {
+                                anyRigidVisible = true;
+                                break;
+                            }
+                        }
+                        if (anyRigidVisible) {
+                            DrawFrameName(app, frames[frameIdx], panel,
+                                          14 * line + 17,
+                                          s.state.themeColors[34]);
+                            s.PanelRowFlags()[line] = 1;
+                        }
+                    }
+                    // line type byte + morph/rigid back-links (0x42FE37)
+                    model[line + kModelLineType] = frameType;
+                    if (frameType == 1)
+                        *reinterpret_cast<std::int32_t*>(model + kModelSelLine) = line;
+                    for (std::uint8_t j = 0;
+                         j < mdl::Mdl(model)->facialFrameCount; ++j) {
+                        const mdl::FrameGroup& face = faces[j];
+                        if (face.groupIndex + 1 == frameNo)
+                            morphLineByIndex[face.targetIndex] = -line;
+                    }
+                    if (groupCnt) {
+                        for (unsigned int g = 0;
+                             g < static_cast<unsigned int>(groupCnt); ++g) {
+                            const mdl::FrameGroup& rigid = groups[g];
+                            if (rigid.groupIndex == frameNo)
+                                boneLineByIndex[rigid.targetIndex] = -line;
+                        }
+                    }
+                    frameIdx = frameType;
+                    ++line;
                 }
                 ++record->boneListRows;
-                if (v20 == 1) {
-                    *reinterpret_cast<std::int32_t*>(model + kModelSelLine) = v21 - 1;
-                    goto lab140;
-                }
-                if (record->facialFrameCount == 0 || v20 != 2) {
-                    // rigid-group section (0x43031D..0x4304D8)
-                    if (groupCnt) {
-                        int v87 = 4 * v21 + kModelRecs;
-                        int v58 = 14 * v21 + 17;
-                        unsigned int v85 = 0;
-                        do {
-                            const mdl::FrameGroup& rigid = groups[v85];
-                            if (rigid.groupIndex == v80) {
-                                if (record->boneListRows > record->boneListPos &&
-                                    v21 < 200) {
-                                    if (flagTab[rigid.targetIndex] != 0) {
-                                        DrawRecordName(app, rigid, panel, v58,
-                                                       s.state.themeColors[34]);
-                                        s.PanelRowFlags()[v21] = 1;
-                                    } else {
-                                        DrawRecordName(app, rigid, panel, v58,
-                                                       s.state.themeColors[33]);
-                                    }
-                                    *reinterpret_cast<std::int32_t*>(model + v87) =
-                                        rigid.targetIndex;
-                                    boneLineByIndex[rigid.targetIndex] = v21++;
-                                    v87 += 4;
-                                    v58 += 14;
-                                }
-                                ++record->boneListRows;
-                            }
-                            ++v85;
-                        } while (v85 < static_cast<unsigned int>(groupCnt));
-                        v20 = v72;  // LABEL_139
+            } else {
+                // frame lists faces / rigid groups (0x42FF94)
+                if (iter > iterMax && line < 200) {
+                    if (english) {
+                        if (frameIdx > 1)
+                            DrawGlyph(app, "-", panel, 12, 1, 14 * line + 17, 0, 0, 0, 1);
+                        DrawFrameName(app, frames[frameIdx], panel, 14 * line + 17,
+                                      s.state.themeColors[33]);
+                    } else {
+                        if (frameIdx > 1)
+                            DrawGlyph(app, kJpMinus, panel, 12, 1, 14 * line + 17, 0, 0, 0, 1);
+                        DrawFrameName(app, frames[frameIdx], panel, 14 * line + 17,
+                                      s.state.themeColors[33]);
                     }
-                    goto lab140;
+                    model[line++ + kModelLineType] = frameType;
+                    frameIdx = frameType;
                 }
-                // face section (frame 2) - break out to the face listing
-                v74 = 0;  // 0x430138
-                break;
+                ++record->boneListRows;
+                if (frameIdx == 1) {
+                    *reinterpret_cast<std::int32_t*>(model + kModelSelLine) = line - 1;
+                } else if (record->facialFrameCount != 0 && frameIdx == 2) {
+                    // face section (frame 2) - list the frame's face records
+                    // (0x430153..0x43030B; LABEL_122/123/139 were the skip /
+                    // advance / exhausted edges of this loop).
+                    faceIdx = 0;  // 0x430138
+                    int recOff = 4 * line + kModelRecs;
+                    int rowY = 14 * line + 17;
+                    for (;;) {
+                        if (record->boneListRows > record->boneListPos &&
+                            line < 200) {
+                            const mdl::FrameGroup& face = faces[faceIdx];
+                            if (english) {
+                                DrawPanelText(app, face.nameEn, panel, 12, 15,
+                                              rowY,
+                                              s.state.themeColors[face.selected != 0 ? 34 : 33]);
+                            } else {
+                                DrawPanelText(app, face.name, panel, 12, 15,
+                                              rowY,
+                                              s.state.themeColors[face.selected != 0 ? 34 : 33]);
+                            }
+                            if (face.selected != 0)  // LABEL_122 skip
+                                s.PanelRowFlags()[line] = 1;
+                            *reinterpret_cast<std::int32_t*>(model + recOff) =
+                                -1 - face.targetIndex;
+                            morphLineByIndex[face.targetIndex] = line++;
+                            recOff += 4;
+                            rowY += 14;
+                        }
+                        ++record->boneListRows;  // LABEL_123
+                        if (++faceIdx >= record->facialFrameCount)
+                            break;               // LABEL_139
+                    }
+                } else if (groupCnt) {
+                    // rigid-group section (0x43031D..0x4304D8)
+                    int recOff = 4 * line + kModelRecs;
+                    int rowY = 14 * line + 17;
+                    for (unsigned int g = 0;
+                         g < static_cast<unsigned int>(groupCnt); ++g) {
+                        const mdl::FrameGroup& rigid = groups[g];
+                        if (rigid.groupIndex == frameNo) {
+                            if (record->boneListRows > record->boneListPos &&
+                                line < 200) {
+                                if (flagTab[rigid.targetIndex] != 0) {
+                                    DrawRecordName(app, rigid, panel, rowY,
+                                                   s.state.themeColors[34]);
+                                    s.PanelRowFlags()[line] = 1;
+                                } else {
+                                    DrawRecordName(app, rigid, panel, rowY,
+                                                   s.state.themeColors[33]);
+                                }
+                                *reinterpret_cast<std::int32_t*>(model + recOff) =
+                                    rigid.targetIndex;
+                                boneLineByIndex[rigid.targetIndex] = line++;
+                                recOff += 4;
+                                rowY += 14;
+                            }
+                            ++record->boneListRows;
+                        }
+                    }
+                }
             }
-        lab140:
-            v72 = ++v20;
-            if (v20 >= mdl::Mdl(model)->groupCount) {
+
+            // LABEL_140 advance: next display frame
+            frameType = ++frameIdx;
+            if (frameIdx >= mdl::Mdl(model)->groupCount) {
                 PanelPaint(app);
                 return;
             }
         }
-
-        // --- face listing (0x430153..0x43030B) ------------------------------
-        {
-            int v86 = 4 * v21 + kModelRecs;
-            int v47 = 14 * v21 + 17;
-            for (;;) {
-                if (record->boneListRows > record->boneListPos &&
-                    v21 < 200)
-                    break;
-            lab123:
-                ++record->boneListRows;
-                if (++v74 >= record->facialFrameCount)
-                    goto lab139;
-            }
-            const mdl::FrameGroup& face = faces[v74];
-            if (english) {
-                if (face.selected == 0) {
-                    DrawPanelText(app, face.nameEn, panel,
-                                  12, 15, v47, s.state.themeColors[33]);
-                    goto lab122;
-                }
-                DrawPanelText(app, face.nameEn, panel,
-                              12, 15, v47, s.state.themeColors[34]);
-            } else {
-                if (face.selected == 0) {
-                    DrawPanelText(app, face.name, panel,
-                                  12, 15, v47, s.state.themeColors[33]);
-                    goto lab122;
-                }
-                DrawPanelText(app, face.name, panel,
-                              12, 15, v47, s.state.themeColors[34]);
-            }
-            s.PanelRowFlags()[v21] = 1;
-        lab122:
-            *reinterpret_cast<std::int32_t*>(model + v86) =
-                -1 - face.targetIndex;
-            morphLineByIndex[face.targetIndex] = v21++;
-            v86 += 4;
-            v47 += 14;
-            goto lab123;
-        }
-    lab139:
-        v20 = v72;
-        goto lab140;
     } else {
         // === display mode: fixed headers camera/light/shadow/gravity =======
         // (0x42F252..0x42F5F0)
@@ -459,39 +449,39 @@ void PostLanguageSweep(MMDApp* app) {
     // === joint list below the tree (0x42F5F6..0x42F72A) =====================
     std::memset(s.state.jointLineMap, 0xFF, 0x320);  // 200 ints
     s.DisplayObjectListMatchCount() = 1;
-    std::uint8_t v73 = 0;                                    // joint type 0..254
-    int v79 = 0;                                             // type counter (scroll gate)
-    int v5 = 0;                                              // joint line counter
+    std::uint8_t jointType = 0;                    // joint type byte 0..254
+    int typeOrdinal = 0;                           // type counter (scroll gate)
+    int jointLine = 0;                             // joint line counter
     do {
-        int v6 = 0;                                          // joint record index
-        int v7 = 14 * v5 + 73;
-        std::int32_t* map = s.state.jointLineMap + v5;
+        int jointSlot = 0;                         // joint record index
+        int rowY = 14 * jointLine + 73;
+        std::int32_t* map = s.state.jointLineMap + jointLine;
         do {
-            unsigned char* joint = static_cast<unsigned char*>(s.ObjectSlot(v6));
-            if (joint != nullptr && joint[kJointType] == v73) {
-                if (v79 >= s.DisplayObjectListScrollPosition() && v5 < 200) {
+            unsigned char* joint = static_cast<unsigned char*>(s.ObjectSlot(jointSlot));
+            if (joint != nullptr && joint[kJointType] == jointType) {
+                if (typeOrdinal >= s.DisplayObjectListScrollPosition() && jointLine < 200) {
                     if (joint[kJointFlag] != 0) {
                         DrawPanelText(app,
                                       reinterpret_cast<const char*>(joint + kJointName),
-                                      panel, 12, 12, v7, s.state.themeColors[34]);
-                        s.PanelRowFlags()[4 + v5] = 1;
+                                      panel, 12, 12, rowY, s.state.themeColors[34]);
+                        s.PanelRowFlags()[4 + jointLine] = 1;
                     } else {
                         DrawPanelText(app,
                                       reinterpret_cast<const char*>(joint + kJointName),
-                                      panel, 12, 12, v7, s.state.themeColors[33]);
+                                      panel, 12, 12, rowY, s.state.themeColors[33]);
                     }
-                    *map = v6;
-                    ++v5;
+                    *map = jointSlot;
+                    ++jointLine;
                     ++map;
-                    v7 += 14;
+                    rowY += 14;
                 }
                 ++s.DisplayObjectListMatchCount();
             }
-            ++v6;
-        } while (v6 < 255);
-        ++v79;
-        ++v73;
-    } while (v73 != 0xFF);
+            ++jointSlot;
+        } while (jointSlot < 255);
+        ++typeOrdinal;
+        ++jointType;
+    } while (jointType != 0xFF);
 
     PanelPaint(app);  // 0x42F730 tail call (0x414610)
 }

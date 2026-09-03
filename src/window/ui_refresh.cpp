@@ -12,7 +12,7 @@
 //           (0,0,0,1) respectively - but only if the target track flag is
 //           currently 0 (an already-active track is a no-op).
 //   other : object index into the 255-entry UI object pointer array at
-//           0x9DD70 (buf9ddx, "zeroed 0x3FC").  If the object
+//           0x9DD70 (objectSlots, "zeroed 0x3FC").  If the object
 //           exists and its +0x4AC active flag is 0, all four track flags are
 //           cleared and that object's flag is set to 1.
 //
@@ -56,7 +56,7 @@ void ClearAllObjectFlags(MMDApp* app) {
 
 // --- sub_4C2680 (CloseDataFile) field offsets -------------------------------
 // Offsets inside the 0x25C-byte stream/read context object (reached as
-// app+0xCC (sub025c); e.g. Timer100 0x429770 does
+// app+0xCC (audioContext); e.g. Timer100 0x429770 does
 // "mov ecx, [esi+0CCh]; call sub_4C2680").
 constexpr std::size_t kStreamBufOffset   = 0x14;   // read buffer offset (dword)
 constexpr std::size_t kStreamFilePtr     = 0x2C;   // FILE* stream
@@ -130,7 +130,7 @@ void RefreshRequest(int area) {
 // VA 0x004C2680 - CloseDataFile  (original: sub_4C2680)
 // ===========================================================================
 // Stream/read-context teardown for the background data loader.  The context
-// is the 0x25C-byte object reached through app+0xCC (sub025c;
+// is the 0x25C-byte object reached through app+0xCC (audioContext;
 // Timer100 0x429770 and FrameDriver 0x46B090 load it into ecx).  __thiscall,
 // no stack args; the port keeps the placeholder void* file = the context.
 //

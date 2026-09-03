@@ -92,6 +92,11 @@ void DrawFullscreenQuad(IDirect3DDevice9* device,
     device->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 2);
 }
 
+// Porting-era screen-texture readback under
+// MIKUDANCESTUDIO_SCREEN_TEXTURE_DUMP_DIR (CMake option MIKUDANCESTUDIO_DIAG,
+// default OFF); the OFF stub below keeps the call sites valid and inlines
+// away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 #pragma pack(push, 1)
 struct DumpBitmapFileHeader {
     std::uint16_t type;
@@ -241,6 +246,9 @@ void DumpAccessoryScreenTexture(MMDApp* app, IDirect3DDevice9* device) {
     system->Release();
     source->Release();
 }
+#else
+inline void DumpAccessoryScreenTexture(MMDApp*, IDirect3DDevice9*) {}
+#endif
 
 void ComposeSelfShadow(MMDApp* app, D3DRenderer* sub,
                        IDirect3DDevice9* device) { // 0x46DE61
@@ -358,7 +366,7 @@ void RenderFrameScene(MMDApp* app) {
     // (messageSeen) != 0; frames without a message leave both untouched.
     if (app->state.messageSeen == 0)
         return;
-    if (app->state.a0665 == 0) {
+    if (app->state.accessoryEditDialogOpen == 0) {
         for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* model = app->ModelSlot(slot);
             if (model != nullptr)
@@ -371,12 +379,12 @@ void RenderFrameScene(MMDApp* app) {
     if (sub->d3dInitialized != 0)
         clearFlags |= D3DCLEAR_STENCIL;
     const D3DCOLOR clearColor =
-        app->state.a0194 != 0
+        app->state.blackBackgroundEnabled != 0
             ? D3DCOLOR_XRGB(0, 0, 0)
             : D3DCOLOR_XRGB(255, 255, 255);
     device->Clear(0, nullptr, clearFlags, clearColor, 1.0f, 0);
 
-    app->state.a0270 = 1;
+    app->state.renderPassCount = 1;
     if (FAILED(device->BeginScene()))
         return;
 
@@ -386,8 +394,8 @@ void RenderFrameScene(MMDApp* app) {
 
     // 0x46DDF6..0x46DE5F is deliberately a loop: render callbacks may add
     // another pass by incrementing A0270 while a pass is in progress.
-    while (app->state.a0270 > 0) {
-        --app->state.a0270;
+    while (app->state.renderPassCount > 0) {
+        --app->state.renderPassCount;
         if (effectRenderer)
             RenderModelsEffect(app,
                 reinterpret_cast<const float*>(&frameWorld));
@@ -420,7 +428,7 @@ void RenderFrameScene(MMDApp* app) {
     }
 
     // 0x46E214..0x46E554: accessory-dialog or Bullet collision debug pass.
-    if (app->state.a0CC8OrUint32 == 1 ||
+    if (app->state.rigidBodyDisplayEnabled == 1 ||
         app->state.frameCopyDialog != 0) {
         device->SetRenderState(D3DRS_LIGHTING, FALSE);
         device->SetTexture(0, nullptr);

@@ -34,10 +34,10 @@
 //   0x00409700 FindOutputPin     - wrapper, PINDIR_OUTPUT
 //   0x00409170 BindSelectedCompressor - moniker walk + BindToObject +
 //                                      IAMVfwCompressDialogs QI
-//   0x00408F20 Sub408F20         - codec combo fill (FriendlyName, SJIS)
-//   0x00409730 Sub409730         - codec bind on combo change
-//   0x004092A0 Sub4092A0         - codec config dialog + state capture
-//   0x00409A80 Sub409A80         - full recording graph build
+//   0x00408F20 FillCodecCombo    - codec combo fill (FriendlyName, SJIS)
+//   0x00409730 RebindCodecOnComboChange - codec bind on combo change
+//   0x004092A0 ShowCodecConfigDialog - codec config dialog + state capture
+//   0x00409A80 BuildRecordingGraph - full recording graph build
 //
 // Vtable-slot notes pinned against the original disassembly:
 //   * IMoniker is IPersistStream-derived, so BindToObject lands at slot 8
@@ -234,8 +234,8 @@ cleanup:
 }
 
 // ===========================================================================
-// VA 0x00408F20 - Sub408F20: codec combo fill
-// (original: sub_408F20, method of the recorder object)
+// VA 0x00408F20 - FillCodecCombo: codec combo fill
+// (was Sub408F20; original: sub_408F20, method of the recorder object)
 // ===========================================================================
 // Clears the combo (CB_RESETCONTENT), walks the video-compressor category,
 // BindToStorage -> IPropertyBag -> Read(L"FriendlyName"), converts the BSTR
@@ -244,8 +244,8 @@ cleanup:
 // byte-exact from 0x529880) and CB_SETCURSELs it.  Returns the "AVI Raw"
 // row index (saved by the dialog to app+0xA0CD8).
 // =========================================================================//
-int Sub408F20(void* recObj, HWND hCombo, char english) {
-    SendMessageA(hCombo, 0x14B /*CB_RESETCONTENT*/, 0, 0);
+int FillCodecCombo(DShowRecorder* /*rec*/, HWND hCombo, char english) {
+    SendMessageA(hCombo, CB_RESETCONTENT, 0, 0);
     ICreateDevEnum* devEnum = nullptr;
     if (CoCreateInstance(CLSID_SystemDeviceEnum, nullptr,
                          CLSCTX_INPROC_SERVER, IID_ICreateDevEnum,
@@ -281,7 +281,7 @@ int Sub408F20(void* recObj, HWND hCombo, char english) {
                 WideCharToMultiByte(
                     3, 0, var.bstrVal, lstrlenW(var.bstrVal) + 1, name, len,
                     nullptr, nullptr);
-                SendMessageA(hCombo, 0x143 /*CB_ADDSTRING*/, 0,
+                SendMessageA(hCombo, CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>(name));
                 std::free(name);
                 SysFreeString(var.bstrVal);
@@ -295,20 +295,20 @@ int Sub408F20(void* recObj, HWND hCombo, char english) {
     }
     LRESULT index;
     if (english)
-        index = SendMessageA(hCombo, 0x143, 0,
+        index = SendMessageA(hCombo, CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>("AVI Raw"));
     else
-        index = SendMessageW(hCombo, 0x143, 0,
+        index = SendMessageW(hCombo, CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>(L"*g'W.~"));
-    SendMessageA(hCombo, 0x14E /*CB_SETCURSEL*/, index, 0);
+    SendMessageA(hCombo, CB_SETCURSEL, index, 0);
     enumMon->Release();
     devEnum->Release();
     return static_cast<int>(index);
 }
 
 // ===========================================================================
-// VA 0x00409730 - Sub409730: codec bind on combo change
-// (original: sub_409730, __thiscall)
+// VA 0x00409730 - RebindCodecOnComboChange: codec bind on combo change
+// (was Sub409730; original: sub_409730, __thiscall)
 // ===========================================================================
 // sel = new combo row.  Tears down [0]/[11]/[1]/[8]/[4]/[3], rebuilds a bare
 // graph + MMDxShow source, seeds the source with a 10x10 ARGB config, then
@@ -318,7 +318,8 @@ int Sub408F20(void* recObj, HWND hCombo, char english) {
 // "Compressor" and a trial source->compressor connection runs.  Failure
 // disables the button (bind failure also shows the EN/JP message).
 // =========================================================================//
-void Sub409730(DShowRecorder* rec, int sel, HWND hButton, char english) {
+void RebindCodecOnComboChange(DShowRecorder* rec, int sel, HWND hButton,
+                              char english) {
     rec->selectedCodec = sel;
     rec->compressorStateSize = 0;
     ReleaseCom(rec->compressor);
@@ -416,8 +417,8 @@ void Sub409730(DShowRecorder* rec, int sel, HWND hButton, char english) {
 }
 
 // ===========================================================================
-// VA 0x004092A0 - Sub4092A0: codec config dialog + state capture
-// (original: sub_4092A0, __thiscall)
+// VA 0x004092A0 - ShowCodecConfigDialog: codec config dialog + state capture
+// (was Sub4092A0; original: sub_4092A0, __thiscall)
 // ===========================================================================
 // Frees the previous state blob, shows the codec's own config dialog
 // (ShowDialog(1, hDlg)), then queries the driver for its settings blob via
@@ -425,7 +426,7 @@ void Sub409730(DShowRecorder* rec, int sel, HWND hButton, char english) {
 // zero-initialized buffer (kept in this[2]).  0x409A80 re-applies it with
 // SendDriverMessage(0x5001, ...) before recording.
 // =========================================================================//
-void Sub4092A0(DShowRecorder* rec, HWND hDlg) {
+void ShowCodecConfigDialog(DShowRecorder* rec, HWND hDlg) {
     if (rec->compressorState != nullptr) {
         std::free(rec->compressorState);
         rec->compressorState = nullptr;
@@ -447,8 +448,8 @@ void Sub4092A0(DShowRecorder* rec, HWND hDlg) {
 }
 
 // ===========================================================================
-// VA 0x00409A80 - Sub409A80: the recording graph builder
-// (original: sub_409A80, __thiscall)
+// VA 0x00409A80 - BuildRecordingGraph: the recording graph builder
+// (was Sub409A80; original: sub_409A80, __thiscall)
 // ===========================================================================
 // Full build order (each failure shows its EN/JP "DirectShow" MessageBox,
 // tears the graph down through 0x409320 and returns false):
@@ -470,7 +471,8 @@ void Sub4092A0(DShowRecorder* rec, HWND hDlg) {
 //      put_InterleaveTimes(1s/0.75s)
 //   9. IMediaEvent -> [23], IMediaControl -> [17], Run
 // =========================================================================//
-bool Sub409A80(DShowRecorder* rec, HWND hwnd, unsigned char english, void* outPath,
+bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
+                         void* outPath,
                void* config, float fps, std::uint32_t forceArgb,
                const wchar_t* wavPath, float seconds) {
     ReleaseCom(rec->compressorInput);

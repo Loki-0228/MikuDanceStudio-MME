@@ -39,12 +39,15 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
 // Already-ported callees (real bodies; PostViewRefresh is declared in
-// ported_funcs.hpp, Sub432FA0 lives in src/window/ui_frame_step.cpp).
-void Sub432FA0(MMDApp* app);   // VA 0x00432FA0 frame-apply refresh chain
+// ported_funcs.hpp, RefreshAfterFrameApply lives in
+// src/window/ui_frame_step.cpp).
+void RefreshAfterFrameApply(MMDApp* app);   // VA 0x00432FA0, was Sub432FA0
+                                            // frame-apply refresh chain
 
 namespace {
 
@@ -477,9 +480,9 @@ void JumpNextKeyframe(MMDApp* app) {  // 0x441070
             s.state.currentFrame = best;        // 0x44125a
             char buf[256];
             sprintf_s(buf, 0x100, "%d", best);                      // 0x441260
-            SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 417),
+            SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kCurrentFrameEdit),
                            buf);                                    // 0x441279/483
-            Sub432FA0(app);                                         // 0x44148c
+            RefreshAfterFrameApply(app);                            // 0x44148c
             PostViewRefresh(app);                                   // 0x441493
         }
         return;
@@ -571,9 +574,9 @@ void JumpNextKeyframe(MMDApp* app) {  // 0x441070
         s.state.currentFrame = best;            // 0x44145e
         char buf[256];
         sprintf_s(buf, 0x100, "%d", best);                          // 0x441464
-        SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 417),
+        SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kCurrentFrameEdit),
                        buf);                                        // 0x44147d/483
-        Sub432FA0(app);                                             // 0x44148c
+        RefreshAfterFrameApply(app);                                // 0x44148c
         PostViewRefresh(app);                                       // 0x441493
     }
 }
@@ -729,9 +732,9 @@ void JumpPrevKeyframe(MMDApp* app) {  // 0x4414C0
         s.state.currentFrame = best;            // 0x441753
         char buf[256];
         sprintf_s(buf, 0x100, "%d", best);                          // 0x441759
-        SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 417),
+        SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kCurrentFrameEdit),
                        buf);                                        // 0x441772/a9e
-        Sub432FA0(app);                                             // 0x441aa7
+        RefreshAfterFrameApply(app);                                // 0x441aa7
         PostViewRefresh(app);                                       // 0x441ab3
         return;
     }
@@ -837,9 +840,9 @@ void JumpPrevKeyframe(MMDApp* app) {  // 0x4414C0
     s.state.currentFrame = best;                // 0x441a79
     char buf[256];
     sprintf_s(buf, 0x100, "%d", best);                              // 0x441a7f
-    SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), 417),
+    SetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kCurrentFrameEdit),
                    buf);                                            // 0x441a98/a9e
-    Sub432FA0(app);                                                 // 0x441aa7
+    RefreshAfterFrameApply(app);                                    // 0x441aa7
     PostViewRefresh(app);                                           // 0x441ab3
 }
 

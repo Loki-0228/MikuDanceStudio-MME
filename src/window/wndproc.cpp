@@ -32,6 +32,7 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -83,7 +84,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 fprintf(f, "%d\n", s.SeparateWindowY());
                 fprintf(f, "%d\n", s.SeparateWindowWidth());
                 fprintf(f, "%d\n", s.SeparateWindowHeight());
-                HWND dlg530 = GetDlgItem(hwnd, 530);
+                HWND dlg530 = GetDlgItem(hwnd, panel::kPhysicsFrameCheckbox);
                 fprintf(f, SendMessageA(dlg530, BM_GETCHECK, 0, 0) == 1 ? "1\n" : "0\n");
                 fprintf(f, "1\n");
                 fwprintf(f, L"%s\n", app->DirModel());
@@ -128,7 +129,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                     ? MessageBoxA(hwnd,
                         "There is a enhanced model not preserved by 'save enhanced model'.\n\nDo you realy quit?",
                         "quit", 0x40001)
-                    : MessageBoxA(hwnd, "(JP text 0x531810)", "(JP 0x531864)", 0x40001);
+                    : MessageBoxA(hwnd, "(JP text 0x531810)", "(JP 0x531864)", (MB_OKCANCEL | MB_TOPMOST));
                 if (r == IDOK)                                    // original: == 1
                     return DefWindowProcA(hwnd, msg, wParam, lParam);
             } else {
@@ -138,7 +139,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                     ? MessageBoxA(hwnd,
                         "There is a change point not preserved.\n\nDo you realy quit?",
                         "quit", 0x40001)
-                    : MessageBoxA(hwnd, "(JP text 0x531794)", "(JP 0x531864)", 0x40001);
+                    : MessageBoxA(hwnd, "(JP text 0x531794)", "(JP 0x531864)", (MB_OKCANCEL | MB_TOPMOST));
                 if (r == IDOK)
                     return DefWindowProcA(hwnd, msg, wParam, lParam);
             }

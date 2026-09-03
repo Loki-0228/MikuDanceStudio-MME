@@ -1,17 +1,19 @@
 // ===========================================================================
 // Accessory-frame paste/refresh helpers ("paste to difference flame",
 // menu 0xFA) and the shared array constructor.
-//   VA 0x00401150  Sub401150  array ctor (call a ctor over count elements)
-//   VA 0x00413120  Sub413120  seek an accessory's key track and push the
+//   VA 0x00401150  ConstructArrayElements (was Sub401150)  array ctor (call
+//                            a ctor over count elements)
+//   VA 0x00413120  ApplyAccessoryTrack  seek an accessory's key track and push the
 //                            interpolated state into the accessory object
-//   VA 0x00414110  Sub414110  paste one 0x34-byte accessory key record
-//                            into the frame-sorted 60B key list
+//   VA 0x00414110  PasteAccessoryKeyRecord (was Sub414110)  paste one 0x34-byte
+//                            accessory key record into the frame-sorted 60B key list
 // ===========================================================================
 // Accessory key lists: (app+0x384)[slot] points at 10000 records of 0x3C
 // bytes - +0 frame, +4 prev, +8 next; a non-head slot with frame == 0 is
 // free.  The accessory object lives at (app+0x9DD70)[slot]; its display
-// state starts at +0x210.  Sub414110 mirrors the ported global-table
-// inserter InsertGlobalFrame (command_control_400.cpp): walk to the first
+// state starts at +0x210.  PasteAccessoryKeyRecord (was Sub414110) mirrors
+// the ported global-table inserter InsertGlobalFrame
+// (command_control_400.cpp): walk to the first
 // record with frame >= target, overwrite on exact hit, splice before it
 // otherwise, or append after the last record when the walk ran off the
 // end; the free-slot scan starts at index 1 and a full table raises the
@@ -111,48 +113,37 @@ float UnsignedFrameDelta(std::uint32_t a, std::uint32_t b) {
     return f;
 }
 
-bool IsReadableAccessory(const mdl::AccessoryRecord* object) {
-    if (object == nullptr)
-        return false;
-    MEMORY_BASIC_INFORMATION memory{};
-    if (VirtualQuery(object, &memory, sizeof memory) == 0 ||
-        memory.State != MEM_COMMIT ||
-        (memory.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0)
-        return false;
-    const auto begin = reinterpret_cast<std::uintptr_t>(object);
-    const auto end = begin + sizeof(*object);
-    const auto regionEnd = reinterpret_cast<std::uintptr_t>(memory.BaseAddress) +
-        memory.RegionSize;
-    return end >= begin && end <= regionEnd;
-}
-
 }  // namespace
 
 // ---- VA 0x00401150: array constructor --------------------------------------
-// Calls `ctor` over each of `count` elements of `size` bytes, walking from
-// the last element down to the first (the original's counting loop).  The
-// ctor receives the element address (original passes it in ECX; the
+// Calls `ctor` over each of `count` elements of `elementSize` bytes, walking
+// from the last element down to the first (the original's counting loop).
+// The ctor receives the element address (original passes it in ECX; the
 // ported no-op 0x4C46F0 takes it as a plain pointer argument).
-void* Sub401150(void* block, std::uint32_t size, std::uint32_t count,
-                void* ctor) {
+// was Sub401150
+void* ConstructArrayElements(void* block, std::uint32_t elementSize,
+                             std::uint32_t count, void* ctor) {
     const auto fn = reinterpret_cast<void (*)(void*)>(ctor);
     unsigned char* p = static_cast<unsigned char*>(block);
     for (std::int32_t i = static_cast<std::int32_t>(count) - 1; i >= 0;
          --i) {
-        fn(p + static_cast<std::size_t>(i) * size);
+        fn(p + static_cast<std::size_t>(i) * elementSize);
     }
     return block;
 }
 
 // ---- VA 0x00413120: accessory track seek / object state push ---------------
-void Sub413120(MMDApp* app, int slot) {
+void ApplyAccessoryTrack(MMDApp* app, int slot) {  // was Sub413120, VA 0x00413120
     if (app == nullptr || slot < 0 || slot >= 255)
         return;
     const std::uint32_t cur =
         static_cast<std::uint32_t>(app->CurrentFrame());
     mdl::AccessoryKey* keys = app->AccessoryKeys(slot);
     auto* obj = app->AccessorySlot(slot);
-    if (keys == nullptr || !IsReadableAccessory(obj))
+    // The original dereferences the slot pointer directly; callers keep the
+    // null-object slots out of this path, so the plain null check below
+    // matches the reachable behaviour.
+    if (keys == nullptr || obj == nullptr)
         return;
 
     // Walk the frame-sorted chain (0x413131..0x41316B).
@@ -214,15 +205,16 @@ void Sub413120(MMDApp* app, int slot) {
 }
 
 // ---- VA 0x00414110: paste one accessory key record --------------------------
-// `rec` points at the 0x34-byte clipboard record; `flag` != 0 targets the
-// currently selected accessory slot (app+0x9E170) instead of the record's
-// own slot byte.  Returns 0 when the table is full (the replay loop in
-// the 0xFA handler stops); 1 otherwise.
-int Sub414110(MMDApp* app, void* recData, int flag) {
+// `rec` points at the 0x34-byte clipboard record; `useSelectedSlot` != 0
+// targets the currently selected accessory slot (app+0x9E170) instead of
+// the record's own slot byte.  Returns 0 when the table is full (the
+// replay loop in the 0xFA handler stops); 1 otherwise.
+// was Sub414110
+int PasteAccessoryKeyRecord(MMDApp* app, void* recData, int useSelectedSlot) {
     const auto& src =
         *static_cast<const mdl::AccessoryClipboardKey*>(recData);
     const std::uint8_t slot =
-        flag != 0 ? app->SelectedAccessorySlot() : src.slot;
+        useSelectedSlot != 0 ? app->SelectedAccessorySlot() : src.slot;
 
     // No accessory loaded: the original returns through its epilogue
     // without touching anything (0x41411E..0x414164).

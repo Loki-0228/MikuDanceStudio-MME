@@ -74,25 +74,6 @@ namespace {
 
 constexpr double kPiOver180 = 0.01745329238474369;   // dbl_52BB20 region
 
-// A PMM may retain an accessory animation track after the corresponding
-// object could not be restored.  Keep that sparse-project state explicit:
-// playback can retire the orphaned track, but must never treat its slot as a
-// live AccessoryRecord.
-bool IsReadableAccessoryRecord(const void* accessory) {
-    if (accessory == nullptr)
-        return false;
-    MEMORY_BASIC_INFORMATION memory{};
-    if (VirtualQuery(accessory, &memory, sizeof memory) == 0 ||
-        memory.State != MEM_COMMIT ||
-        (memory.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0)
-        return false;
-    const std::uintptr_t begin = reinterpret_cast<std::uintptr_t>(accessory);
-    const std::uintptr_t end = begin + sizeof(mdl::AccessoryRecord);
-    const std::uintptr_t regionEnd =
-        reinterpret_cast<std::uintptr_t>(memory.BaseAddress) + memory.RegionSize;
-    return end >= begin && end <= regionEnd;
-}
-
 // VA 0x00410140 - camera-channel bezier easing.  ch 0..5 selects the
 // control-byte column; the X curve 3(1-u)^2 u x1 + 3(1-u) u^2 x2 + u^3 is
 // inverted by 12 halving steps starting at u = 0.5, then the Y curve
@@ -153,7 +134,8 @@ void CopyLightKey(MMDApp* app, const mdl::LightKey& key, bool apply) {
 
 }  // namespace
 
-// VA 0x0042E640 - seek/evaluate the global camera key list.  This is the
+// VA 0x0042E640 (was Sub42E640) - seek/evaluate the global camera key list.
+// This is the
 // state-producing core shared by frame stepping, delete/paste refresh and the
 // camera register button.  The original function also echoes every value to
 // the camera controls; those controls are already refreshed by the panel/UI
@@ -261,10 +243,6 @@ void ReloadModels(MMDApp* app) {
     }
 }
 
-void Sub42E640(MMDApp* app) {
-    ReloadModels(app);
-}
-
 // VA 0x004175A0 - see file header.
 void PlaybackPoseAdvance(MMDApp* app, int advance) {
     auto& s = *app;
@@ -273,7 +251,7 @@ void PlaybackPoseAdvance(MMDApp* app, int advance) {
     unsigned char** models = s.ModelSlots();
     for (int j = 0; j < kModelSlotCount; ++j)
         if (models[j] != nullptr)
-            Sub4A31D0(models[j], s.PlaybackCursorSeconds(),
+            AdvanceModelKeyframes(models[j], s.PlaybackCursorSeconds(),
                       s.PlaybackPhysicsMode());
 
     if (advance != 0)
@@ -289,7 +267,7 @@ void PlaybackPoseAdvance(MMDApp* app, int advance) {
     }
 
     const bool editGate = s.state.optflag[0] != 0 ||
-                          s.state.v9ed98 != 0;
+                          s.state.followCameraEnabled != 0;
 
     // ---- 4A. camera track (0x417656..0x417A48) ----------------------------
     if (editGate && s.CameraTrackActive() != 0) {
@@ -530,8 +508,12 @@ void PlaybackPoseAdvance(MMDApp* app, int advance) {
             continue;
         auto& cursor = s.AccessoryTrackCursor(i);
         mdl::AccessoryKey* keys = s.AccessoryKeys(i);
+        // The original dereferences the slot pointer directly; a null slot
+        // means the track is orphaned (object never restored), so the plain
+        // null check below retires it exactly like the reachable original
+        // behaviour (same form Wave1-C left in accessory_paste.cpp).
         mdl::AccessoryRecord* const accessorySlot = s.AccessorySlot(i);
-        if (keys == nullptr || !IsReadableAccessoryRecord(accessorySlot)) {
+        if (keys == nullptr || accessorySlot == nullptr) {
             s.AccessoryTrackActive(i) = 0;
             cursor = 0;
             continue;

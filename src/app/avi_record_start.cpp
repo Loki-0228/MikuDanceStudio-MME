@@ -23,7 +23,7 @@
 //
 // NOTE: the shared stubs.cpp still exports the names Sub45E820/Sub464760;
 // the 0xDF dispatch (command_file_menu.cpp case 223) calls these
-// implementations instead.  Sub4629D0 previously lived as an inline stub in
+// implementations instead.  ApplyFullscreenWindowState previously lived as an inline stub in
 // command_view_menu.cpp; the real body replaces it here.
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
@@ -42,11 +42,12 @@
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
 // Bodies live in other translation units (see ported_funcs.hpp / their TUs).
-void Sub432FA0(MMDApp* app);                       // VA 0x00432FA0
+void RefreshAfterFrameApply(MMDApp* app);          // VA 0x00432FA0, was Sub432FA0
 void DisablePlaybackMenus(HWND hwnd);              // VA 0x00429790
 void RestorePlaybackMenus(MMDApp* app);            // VA 0x004298E0
 
@@ -63,15 +64,17 @@ void RestorePlaybackMenus(MMDApp* app);            // VA 0x004298E0
 // vtable did not match (AVI output stuck at 0 bytes, AV at
 // RecordStartTail 0x41C1ED).  Skip the dispatch entirely - the
 // observable behaviour (nothing) is identical.
-void Sub401BD0(MMDApp* app) {
+void KickRecordPhysics(MMDApp* app) {  // was Sub401BD0
     (void)app;
 }
 
 // VA 0x00409A80 - DirectShow recording graph builder (thiscall on the
 // app+0xA06C0 object); defined in src/app/dshow_record_graph.cpp.
-bool Sub409A80(DShowRecorder* recorder, HWND hwnd, unsigned char english,
-               void* recStruct, void* config, float fps, std::uint32_t one,
-               const wchar_t* wavPath, float seconds);
+bool BuildRecordingGraph(DShowRecorder* recorder, HWND hwnd,
+                         unsigned char english,
+                         void* recStruct, void* config, float fps,
+                         std::uint32_t one,
+                         const wchar_t* wavPath, float seconds);  // was Sub409A80
 
 namespace {
 
@@ -185,6 +188,7 @@ void EnsureRecordRenderTarget(MMDApp* app) {
 // (0x45EC27..0x45EC67 / 0x4649AE..0x4649EB).
 void RecordStartTail(MMDApp* app) {
     auto& s = *app;
+#ifdef MIKUDANCESTUDIO_DIAG
     if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
         FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
         if (tf) {
@@ -192,18 +196,20 @@ void RecordStartTail(MMDApp* app) {
             fclose(tf);
         }
     }
-    s.state.f9eddc =
+#endif
+    s.state.recordSavedFrame =
         s.state.currentFrame;               // 0x45EC35
     if (s.AviRecordStartFrame() !=
         s.state.currentFrame) {
         s.state.currentFrame =
             s.AviRecordStartFrame();                            // 0x45EC3D
-        Sub432FA0(app);                                        // 0x432FA0
+        RefreshAfterFrameApply(app);                           // 0x432FA0
         PostViewRefresh(app);                                  // 0x40D130
     }
-    s.state.v9edd8 = 1;              // 0x45EC52
+    s.state.recordPlaybackStartPending = 1;              // 0x45EC52
     timeBeginPeriod(1);                                        // 0x45EC58
-    Sub401BD0(app);                                            // 0x401BD0
+    KickRecordPhysics(app);                                            // 0x401BD0
+#ifdef MIKUDANCESTUDIO_DIAG
     if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
         FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
         if (tf) {
@@ -211,6 +217,7 @@ void RecordStartTail(MMDApp* app) {
             fclose(tf);
         }
     }
+#endif
 }
 
 // Shared config/seconds computation and 0x409A80 invocation
@@ -247,7 +254,7 @@ bool StartRecordGraph(MMDApp* app, std::int32_t outW, std::int32_t outH) {
     DShowRecorder* recorder = s.Recorder();
     if (recorder == nullptr)
         return false;  // port-side guard: 0x466D20 allocation
-    return Sub409A80(recorder,
+    return BuildRecordingGraph(recorder,
                      static_cast<HWND>(s.state.hwnd),
                      static_cast<unsigned char>(s.EnglishUI() != 0),
                      s.AviOutputPath(), &config, fpsF, 1, wavPath,
@@ -272,12 +279,13 @@ void StartAviRecordWindow(MMDApp* app) {
     GrowRenderTarget(app, s.RenderWidth(), s.RenderHeight());
 
     RECT rc{0, 0, s.RenderWidth(), s.RenderHeight()};
-    AdjustWindowRect(&rc, 0x80C00000, FALSE);                  // 0x45E95F
+    AdjustWindowRect(&rc, WS_POPUP | WS_CAPTION, FALSE);                  // 0x45E95F
     char title[0x32];
     strcpy_s(title, 0x32, s.EnglishUI() != 0 ? kRecTitleEn : kRecTitleJp);
     HINSTANCE hInst = static_cast<HINSTANCE>(s.HInstance());  // this+0
     HWND recWnd = CreateWindowExA(                             // 0x45E9C6
-        0, "RecWindow", title, 0x80CA0000, 100, 100,
+        0, "RecWindow", title,
+        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 100, 100,
         rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInst,
         nullptr);
     s.RecordingWindow() = recWnd;                              // 0xA0D24
@@ -293,7 +301,7 @@ void StartAviRecordWindow(MMDApp* app) {
     UpdateWindow(recWnd);
 
     EnsureRecordRenderTarget(app);
-    Sub42C810(app);                                            // 0x45EACC
+    RefreshMainWindowViewport(app);                                            // 0x45EACC
     InvalidateRect(s.MainWindow(), &s.ViewportRect(), FALSE);   // 0x45EAE9
 
     if (!StartRecordGraph(app, s.RenderWidth(), s.RenderHeight())) {
@@ -303,7 +311,7 @@ void StartAviRecordWindow(MMDApp* app) {
         PicBgOverlayRefresh(app);                              // 0x45EBE0
     }
     HWND main = static_cast<HWND>(s.state.hwnd);
-    EnableWindow(GetDlgItem(main, 0x198), FALSE);             // 0x45EBFB
+    EnableWindow(GetDlgItem(main, panel::kPlayButton), FALSE);             // 0x45EBFB
     ShowWindow(main, SW_HIDE);                                // 0x45EC0B
     ShowWindow(main, SW_HIDE);                                // 0x45EC18
     if (s.state.floatingWindow != 0) {
@@ -333,12 +341,12 @@ void StartAviRecordFullscreen(MMDApp* app) {
     }
 
     s.FullscreenMode() = 1;
-    Sub4629D0(app);                                            // 0x4629D0
+    ApplyFullscreenWindowState(app);                                            // 0x4629D0
     PostDeviceReset(app);                                  // 0x440DB0
     s.RecordingWindow() = main;                                // 0xA0D24
 
     EnsureRecordRenderTarget(app);
-    Sub42C810(app);                                            // 0x464889
+    RefreshMainWindowViewport(app);                                            // 0x464889
 
     const std::int32_t scale = s.AviStereoWidthMultiplier();
     const std::int32_t scaledW = w * scale;
@@ -360,7 +368,7 @@ void StartAviRecordFullscreen(MMDApp* app) {
 // frame, sizes to the screen, hides the control band and mirrors the client
 // size into the present parameters.  Restore: reapplies the saved style,
 // placement and menu, shows the control band and restores the RT dimensions.
-void Sub4629D0(MMDApp* app) {
+void ApplyFullscreenWindowState(MMDApp* app) {  // was Sub4629D0
     auto& s = *app;
     const HWND main = static_cast<HWND>(s.state.hwnd);
     if (main == nullptr)
@@ -372,17 +380,17 @@ void Sub4629D0(MMDApp* app) {
             s.SeparateWindowSidebarWidth() = s.SidebarWidth();
         } else {
             SaveFlagSubsystem(app);                              // 0x461FA0
-            s.state.a02A8 = 1;
+            s.state.fullscreenFlagsSaved = 1;
         }
         GetWindowPlacement(main,
                            &s.SavedPlacement());
         s.state.savedMenu = GetMenu(main);
-        SetWindowLongA(main, GWL_STYLE, 0x90000000);             // 0x462A44
+        SetWindowLongA(main, GWL_STYLE, WS_POPUP | WS_VISIBLE);             // 0x462A44
         SetWindowPos(main, reinterpret_cast<HWND>(static_cast<LONG_PTR>(
                                0xFFFFFFFE /*HWND_NOTOPMOST*/)),
                      0, 0, GetSystemMetrics(SM_CXSCREEN),
                      GetSystemMetrics(SM_CYSCREEN),
-                     0x40 /*SWP_SHOWWINDOW*/);                   // 0x462A73
+                     SWP_SHOWWINDOW);                   // 0x462A73
         SetMenu(main, nullptr);
         for (int id = 400; id <= 0x213; ++id) {                  // 0x462A9F
             ShowWindow(GetDlgItem(main, id), SW_HIDE);
@@ -395,22 +403,24 @@ void Sub4629D0(MMDApp* app) {
             r->presentParameters.BackBufferHeight = rc.bottom;
             r->presentParameters.Windowed = 0;
         }
-        s.state.a02B4 = 1;
+        s.state.recordFullscreenActive = 1;
         return;
     }
 
     // Restore (0x462AF5..0x462BDF).
-    if (s.state.a02A8 != 0) {
-        s.state.a02A8 = 0;
+    if (s.state.fullscreenFlagsSaved != 0) {
+        s.state.fullscreenFlagsSaved = 0;
         InitFlagSubsystem(app);                                  // 0x461E00
     }
     s.SidebarWidth() = s.SeparateWindowSidebarWidth();
-    SetWindowLongA(main, GWL_STYLE, 0x12CF0000);                 // 0x462B44
+    SetWindowLongA(main, GWL_STYLE,
+                  WS_VISIBLE | WS_CLIPCHILDREN | WS_CAPTION | WS_SYSMENU |
+                      WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);                 // 0x462B44
     SetWindowPlacement(main,
                        &s.SavedPlacement());
     SetWindowPos(main, reinterpret_cast<HWND>(static_cast<LONG_PTR>(
                            0xFFFFFFFE /*HWND_NOTOPMOST*/)),
-                 0, 0, 0, 0, 0x43 /*NOSIZE|NOMOVE|SHOWWINDOW*/); // 0x462B71
+                 0, 0, 0, 0, (SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW)); // 0x462B71
     SetMenu(main, s.state.savedMenu);
     for (int id = 400; id <= 0x213; ++id) {                      // 0x462BA2
         ShowWindow(GetDlgItem(main, id), SW_SHOW);
@@ -428,8 +438,8 @@ void Sub4629D0(MMDApp* app) {
         r->presentParameters.Windowed = 1;
         r->presentParameters.FullScreen_RefreshRateInHz = 0;
     }
-    s.state.a02B5 = 0;
-    s.state.a02B4 = 0;
+    s.state.stereoActivated = 0;
+    s.state.recordFullscreenActive = 0;
 }
 
 }  // namespace mikudancestudio

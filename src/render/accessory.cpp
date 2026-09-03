@@ -24,10 +24,12 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 void RefreshRequest(int area);
-void Sub40D070(MMDApp* app);
+void PostLanguageSweep2(MMDApp* app);  // VA 0x0040D070, was declared here as
+                                       // Sub40D070 (real body: ui_view_refresh.cpp)
 
 namespace {
 
@@ -116,6 +118,10 @@ void ReleaseCom(void* object) {
     reinterpret_cast<Fn>((*reinterpret_cast<void***>(object))[2])(object);
 }
 
+// Porting-era trace under MIKUDANCESTUDIO_PMM_TRACE_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call sites
+// valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void TraceAccessoryLoadStage(const char* stage, const void* value) {
     const char* directory = std::getenv("MIKUDANCESTUDIO_PMM_TRACE_DIR");
     if (directory == nullptr || directory[0] == '\0')
@@ -128,6 +134,9 @@ void TraceAccessoryLoadStage(const char* stage, const void* value) {
     fprintf(stream, "stage=accessory-load-%s value=%p\r\n", stage, value);
     fclose(stream);
 }
+#else
+inline void TraceAccessoryLoadStage(const char*, const void*) {}
+#endif
 
 IDirect3DTexture9* CachedTexture(D3DRenderer* sub, const wchar_t* path) {
     if (path == nullptr || path[0] == L'\0')
@@ -262,29 +271,14 @@ IDirect3DTexture9* AccessoryScreenTexture(MMDApp* app) {
         : app->CaptureTexture();
 }
 
-// The slot table is rebuilt while a PMM project is loaded.  Rendering can
-// observe a stale pointer for one frame, so validate the complete native
-// record before consulting its fields.  This is intentionally centralized:
-// every render pass and order lookup then follows the same ownership rule.
-bool IsReadableAccessoryRecord(const void* accessory) {
-    if (accessory == nullptr)
-        return false;
-    MEMORY_BASIC_INFORMATION memory{};
-    if (VirtualQuery(accessory, &memory, sizeof memory) == 0 ||
-        memory.State != MEM_COMMIT ||
-        (memory.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0)
-        return false;
-    const std::uintptr_t begin = reinterpret_cast<std::uintptr_t>(accessory);
-    const std::uintptr_t end = begin + sizeof(mdl::AccessoryRecord);
-    const std::uintptr_t regionEnd =
-        reinterpret_cast<std::uintptr_t>(memory.BaseAddress) + memory.RegionSize;
-    return end >= begin && end <= regionEnd;
-}
-
+// The original order lookup dereferences the slot pointer directly; the
+// plain null check keeps the empty slots out of the walk exactly like the
+// reachable original behaviour (same form Wave1-C left in
+// accessory_paste.cpp's ApplyAccessoryTrack).
 void* FindAccessoryByOrder(MMDApp* app, int order) {
     for (int slot = 0; slot < 255; ++slot) {
         void* accessory = app->AccessorySlot(slot);
-        if (IsReadableAccessoryRecord(accessory) &&
+        if (accessory != nullptr &&
             mdl::Accessory(accessory)->order == order)
             return accessory;
     }
@@ -512,7 +506,7 @@ void ShowCannotFindXfile(MMDApp* app) {
 
 // VA 0x004C4700 - moved out of the anonymous namespace so the PMM loaders
 // (0x459221 / 0x4541D9) and the shutdown chain (0x462F9C / 0x46324D) bind to
-// this one definition instead of the old no-op Sub4C4700 stub.
+// this one definition instead of the old no-op stub (was Sub4C4700).
 void DisposeAccessory(void* accessory) {
     if (accessory == nullptr)
         return;
@@ -689,10 +683,11 @@ void SetEditFloat(HWND hwnd, int id, const char* format, float value) {
 }
 
 
-void Sub40A6F0(void* object, int releaseObject) {                // 0x40A6F0
-    DisposeAccessory(object);
+void DeleteAccessory(mdl::AccessoryRecord* accessory,  // was Sub40A6F0
+                     int releaseObject) {                              // 0x40A6F0
+    DisposeAccessory(accessory);
     if ((releaseObject & 1) != 0)
-        ::operator delete(object);
+        ::operator delete(accessory);
 }
 
 void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
@@ -703,7 +698,7 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
     while (slot < 255 && app->AccessorySlot(slot) != nullptr)
         ++slot;
     if (slot >= 255) {
-        app->state.bC = 1;
+        app->state.enterKeyState = 1;
         static const char kJpAccLimit[] =
             "\x92\xc7\x89\xc1\x82\xc5\x82\xab\x82\xe9\x83\x41\x83\x4e"
             "\x83\x5a\x83\x54\x83\x8a\x82\xcc\x8d\xc5\x91\xe5\x90\x94"
@@ -746,20 +741,20 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
     app->state.sceneModified = 1;
     const char* name = mdl::Accessory(accessory)->name;
     LRESULT displayIndex = SendDlgItemMessageA(
-        hwnd, 471, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
+        hwnd, panel::kAccessoryCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
     mdl::Accessory(accessory)->order =
         static_cast<std::uint8_t>(displayIndex);
     if (displayIndex >= 0)
         app->AccessoryRenderSplitOrder() = std::max(
             app->AccessoryRenderSplitOrder(),
             static_cast<std::int32_t>(displayIndex + 1));
-    SendDlgItemMessageA(hwnd, 471, CB_SETCURSEL, displayIndex, 0);
+    SendDlgItemMessageA(hwnd, panel::kAccessoryCombo, CB_SETCURSEL, displayIndex, 0);
     app->SelectedAccessorySlot() = static_cast<std::uint8_t>(slot);
-    SendDlgItemMessageA(hwnd, 434, CB_ADDSTRING, 0,
+    SendDlgItemMessageA(hwnd, panel::kRegisterScopeCombo, CB_ADDSTRING, 0,
                         reinterpret_cast<LPARAM>(name));
-    SendDlgItemMessageA(hwnd, 474, CB_SETCURSEL, 0, 0);
-    SendDlgItemMessageA(hwnd, 475, CB_SHOWDROPDOWN, 0, 0);
-    CheckDlgButton(hwnd, 476, BST_CHECKED);
+    SendDlgItemMessageA(hwnd, panel::kMainComboGround, CB_SETCURSEL, 0, 0);
+    SendDlgItemMessageA(hwnd, panel::kAttachBoneCombo, CB_SHOWDROPDOWN, 0, 0);
+    CheckDlgButton(hwnd, panel::kAccessoryVisibleCheckbox, BST_CHECKED);
     mdl::Accessory(accessory)->parentModel = -1;
     SetEditFloat(hwnd, 478, "%3.4f", mdl::Accessory(accessory)->position[0]);
     SetEditFloat(hwnd, 479, "%3.4f", mdl::Accessory(accessory)->position[1]);
@@ -771,8 +766,8 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
     SetEditFloat(hwnd, 484, "%3.4f", mdl::Accessory(accessory)->scale);
     SetEditFloat(hwnd, 485, "%3.2f", mdl::Accessory(accessory)->opacity);
     EnableMenuItem(GetMenu(hwnd), 0xF9, MF_ENABLED);
-    CheckDlgButton(hwnd, 477, BST_UNCHECKED);
-    CheckDlgButton(hwnd, 486,
+    CheckDlgButton(hwnd, panel::kAccessoryAddBlendCheckbox, BST_UNCHECKED);
+    CheckDlgButton(hwnd, panel::kAccessoryShadowCheckbox,
                    mdl::Accessory(accessory)->shadowEnabled ? BST_CHECKED
                                                      : BST_UNCHECKED);
 
@@ -789,10 +784,14 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
         frame[0].shadowEnabled = mdl::Accessory(accessory)->shadowEnabled;
     }
     RefreshRequest(app->SelectedAccessorySlot());
-    Sub40D070(app);
+    PostLanguageSweep2(app);
 }
 
-void Sub413CB0(MMDApp* app, int frameArg, int slot) {           // 0x413CB0
+// was Sub413CB0, VA 0x00413CB0 - register the accessory's current state at
+// one frame into its 10000-record key list (visible/shadow/parent fields +
+// pos/rot/scale/opacity), the same walk/overwrite/splice insert as the
+// other registrars.
+void RegisterAccessoryKey(MMDApp* app, int frameArg, int slot) {  // 0x413CB0
     if (app == nullptr || slot < 0 || slot >= 255)
         return;
     auto* object = reinterpret_cast<unsigned char*>(app->AccessorySlot(slot));
@@ -928,8 +927,6 @@ void RenderAccessoriesProjectedGroundShadowGeometry(MMDApp* app) {
     for (int slot = 0; slot < 255; ++slot) {
         void* accessory = app->AccessorySlot(slot);
         if (accessory == nullptr)
-            continue;
-        if (!IsReadableAccessoryRecord(accessory))
             continue;
         if (mdl::Accessory(accessory)->shadowEnabled == 0)
             continue;

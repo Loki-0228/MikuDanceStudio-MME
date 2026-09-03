@@ -142,12 +142,12 @@ void UpdateFrameStereo(MMDApp* app) {  // 0x46DC75..0x46DC9F
     D3DRenderer* wrapper = app->Renderer();
     if (wrapper == nullptr || wrapper->stereoEnabled == 0)
         return;
-    if (app->state.a02B5 == 0 &&
-        app->state.a02B4 != 0) {
-        app->state.a02B5 =
+    if (app->state.stereoActivated == 0 &&
+        app->state.recordFullscreenActive != 0) {
+        app->state.stereoActivated =
             ActivateStereo(wrapper) ? 1 : 0;
     }
-    if (app->state.a02B5 != 0)
+    if (app->state.stereoActivated != 0)
         SetStereoConvergence(wrapper, -app->CameraDistance());
 }
 

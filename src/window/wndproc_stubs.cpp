@@ -1,10 +1,11 @@
 // ===========================================================================
 // Window procedures (separate/recording windows)
 // ===========================================================================
-// Real bodies pending: 0x004620A0 (separate window WM_COMMAND child
-// dispatch, 0x8CF bytes).  The main WndProc 0x004C3A10 is ported in
-// src/window/wndproc.cpp; the separate-window WndProc 0x00466A10 and its
-// mouse filter 0x00428FF0 are ported in src/window/mic_window.cpp.
+// The separate window WM_COMMAND child dispatch 0x004620A0 is a full port
+// below (DispatchSeparateWindowCommand, was Sub4620A0).  The main WndProc
+// 0x004C3A10 is ported in src/window/wndproc.cpp; the separate-window WndProc
+// 0x00466A10 and its mouse filter 0x00428FF0 are ported in
+// src/window/mic_window.cpp.
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -18,12 +19,14 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
 // Full-port callees defined in other TUs (local declarations).
-void Sub432FA0(MMDApp* app);                   // VA 0x432FA0 (ui_frame_step.cpp)
-void Sub42D6E0(MMDApp* app);                   // VA 0x42D6E0 (bone_edit_undo.cpp)
+void RefreshAfterFrameApply(MMDApp* app);      // VA 0x432FA0 (ui_frame_step.cpp),
+                                                // was Sub432FA0
+void PushBoneEditUndo(MMDApp* app);                   // VA 0x42D6E0 (bone_edit_undo.cpp)
 
 // 0x52EB80: "録画を中断してもよいですか" / 0x52EB9C: "録画中断確認"
 static const char kJpRecStopText[] =
@@ -56,23 +59,25 @@ LRESULT CALLBACK RecWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         english
             ? MessageBoxA(hwnd, "Do you want to stop recording?",
                           "recording", 0x24u)
-            : MessageBoxA(hwnd, kJpRecStopText, kJpRecStopCaption, 0x24u);
+            : MessageBoxA(hwnd, kJpRecStopText, kJpRecStopCaption,
+                    (MB_YESNO | MB_ICONQUESTION));
     if (choice == 6 /*IDYES*/) {
-        Sub464A00(app);                                          // 0x464A00
+        FinishAviRecord(app);                                          // 0x464A00
         return 0;
     }
     return 0;
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004620A0 - Sub4620A0(app, id): separate-window WM_COMMAND dispatch
+// VA 0x004620A0 - DispatchSeparateWindowCommand(app, id) (was Sub4620A0):
+//   separate-window WM_COMMAND dispatch
 // over child controls 0x218..0x22D (called from the separate WndProc at
 // 0x466B9E with LOWORD(wParam)).  Cases verbatim:
 //   0x218 camera/light/accessory combo 436 re-select (stored index 0xA046C
-//         or 0; Sub44D940; no-index+model-mode reposts WM_COMMAND 0x1B3)
+//         or 0; ApplyModelComboSelection; no-index+model-mode reposts WM_COMMAND 0x1B3)
 //   0x219/0x21A/0x21B axis clear: model-mode branch zeroes bone position
 //         x/y/z (&bones[idx+320/324/328], idx = model+0x2D90, guard <0)
-//         after Sub42D6E0 undo, marks the bone edit flag (model+0x2DA8
+//         after PushBoneEditUndo undo, marks the bone edit flag (model+0x2DA8
 //         byte array + idx); camera branch zeroes 0x334/0x338/0x33C ->
 //         820/824/828 + RefreshRequest(-1)
 //   0x21C/0x21D/0x21E rotation clear (model branch): degree caches
@@ -93,7 +98,7 @@ LRESULT CALLBACK RecWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 //         shadowSurface (+0x1D548/+0x1D554/+0x1D550)
 //   0x22D toggle byte 0x31D + menu 0xD7
 // ---------------------------------------------------------------------------
-void Sub4620A0(MMDApp* app, unsigned short id) {
+void DispatchSeparateWindowCommand(MMDApp* app, unsigned short id) {  // was Sub4620A0, VA 0x004620A0
     auto& s = *app;
     HWND main = static_cast<HWND>(s.Hwnd());
     HWND separate = s.FloatingWindow();
@@ -101,17 +106,19 @@ void Sub4620A0(MMDApp* app, unsigned short id) {
     switch (id) {
     case 0x218: {                                                // 0x4620D5
         if (s.CameraMode() != 0) {
-            const std::int32_t sel = s.ViewModeComboSelection();
+            const std::int32_t sel = s.MainModelComboSelection();
             if (sel != 0) {
-                SendMessageA(GetDlgItem(main, 436), CB_SETCURSEL,
+                SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_SETCURSEL,
                              static_cast<WPARAM>(sel), 0);
-                Sub44D940(app);                                  // 0x462127
+                ApplyModelComboSelection(app);                                  // 0x462127
             } else {
+                // raw command id kept (no macro): 0x1B3 is the
+                // original's model-combo re-dispatch command.
                 SendMessageA(main, WM_COMMAND, 0x1B3, 0);        // 0x4620FB
             }
         } else {
-            SendMessageA(GetDlgItem(main, 436), CB_SETCURSEL, 0, 0);
-            Sub44D940(app);                                      // 0x462153
+            SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_SETCURSEL, 0, 0);
+            ApplyModelComboSelection(app);                                      // 0x462153
         }
         break;
     }
@@ -127,7 +134,7 @@ void Sub4620A0(MMDApp* app, unsigned short id) {
             unsigned char* model = s.SelectedModel();
             const std::int32_t bone = mikudancestudio::mdl::Mdl(model)->selectedBone;
             if (bone >= 0) {
-                Sub42D6E0(app);                                  // 0x42D6E0
+                PushBoneEditUndo(app);                                  // 0x42D6E0
                 mikudancestudio::mdl::BoneRecord* bones =
                     mikudancestudio::mdl::Bones(model);
                 bones[bone].trans[axis] = 0.0f;
@@ -149,7 +156,7 @@ void Sub4620A0(MMDApp* app, unsigned short id) {
             unsigned char* model = s.SelectedModel();
             const std::int32_t bone = mikudancestudio::mdl::Mdl(model)->selectedBone;
             if (bone >= 0) {
-                Sub42D6E0(app);
+                PushBoneEditUndo(app);
                 constexpr float kPiLow = 3.141592025756836f;   // 0x52B968?
                 constexpr float kPiHigh = 3.141594886779785f;  // 0x21D x
                 float& degX = s.BoneRotationEditDegreesX();
@@ -222,25 +229,25 @@ void Sub4620A0(MMDApp* app, unsigned short id) {
         break;
     }
     case 0x229: {                                                // 0x462810
-        GetWindowTextA(GetDlgItem(separate, 554), text, 10);
+        GetWindowTextA(GetDlgItem(separate, panel::kGotoFrameEdit), text, 10);
         std::int32_t frame = atol(text);
         if (frame < 0)
             frame = 0;
         s.CurrentFrame() = frame;                                // 0x980
-        Sub432FA0(app);                                          // 0x432FA0
+        RefreshAfterFrameApply(app);                             // 0x432FA0
         PostViewRefresh(app);
         sprintf_s(text, 0x100, "%d",
                   s.CurrentFrame());
-        SetWindowTextA(GetDlgItem(main, 417), text);
+        SetWindowTextA(GetDlgItem(main, panel::kCurrentFrameEdit), text);
         break;
     }
     case 0x22B: {                                                // 0x4627C6
         sprintf_s(text, 0x100, "%d", s.CurrentFrame());
-        SetWindowTextA(GetDlgItem(separate, 554), text);
+        SetWindowTextA(GetDlgItem(separate, panel::kGotoFrameEdit), text);
         break;
     }
     case 0x22C: {                                                // 0x46289B
-        const bool on = SendMessageA(GetDlgItem(separate, 556),
+        const bool on = SendMessageA(GetDlgItem(separate, panel::kSelfShadowCheckbox),
                                      BM_GETCHECK, 0, 0) == 1;
         const std::int32_t value = on ? 4096 : 2048;
         D3DRenderer* sub = s.Renderer();

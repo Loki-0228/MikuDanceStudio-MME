@@ -23,10 +23,15 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
 
+// Porting-era trace under MIKUDANCESTUDIO_STATE_DUMP_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call sites
+// valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void TraceRange(const char* stage, int value = -1) {
     char directory[MAX_PATH]{};
     const DWORD length = GetEnvironmentVariableA(
@@ -44,6 +49,9 @@ void TraceRange(const char* stage, int value = -1) {
         std::fprintf(stream, "%s\n", stage);
     std::fclose(stream);
 }
+#else
+inline void TraceRange(const char*, int = -1) {}
+#endif
 
 template <typename T>
 T& At(unsigned char* base, std::size_t offset) {
@@ -96,7 +104,7 @@ struct DisplayCopy {
 
 void ScaleBoneKeys(MMDApp* app, unsigned char* model, HWND hDlg,
                    std::uint32_t start, std::uint32_t end, double scale) {
-    if (IsDlgButtonChecked(hDlg, 688) != BST_CHECKED)
+    if (IsDlgButtonChecked(hDlg, panel::kScaleBoneCheckbox) != BST_CHECKED)
         return;
 
     mdl::BoneKey* const keys = mdl::BoneKeys(model);
@@ -145,13 +153,13 @@ void ScaleBoneKeys(MMDApp* app, unsigned char* model, HWND hDlg,
     // Deleting the marked originals creates the first type-2 snapshot.
     // The inline block turns it into type 4 and opens the paired insertion
     // snapshot before the registrar starts touching the new records.
-    Sub4316B0(app);
+    DeleteMarkedKeyframes(app);
     TraceRange("bone.deleted");
     BeginRangeScaleBoneUndo(model, app->CurrentFrame(), count);
     TraceRange("bone.undo_open");
-    Sub4A4940(model);
+    ResetBoneKeyCursor(model);
     for (auto& copy : copies) {
-        if (!Sub49D880(model, copy.data(), static_cast<int>(start), 0))
+        if (!RegisterBoneKey(model, copy.data(), static_cast<int>(start), 0))
             break;
     }
     TraceRange("bone.inserted");
@@ -159,7 +167,7 @@ void ScaleBoneKeys(MMDApp* app, unsigned char* model, HWND hDlg,
 
 void ScaleMorphKeys(MMDApp* app, unsigned char* model, HWND hDlg,
                     std::uint32_t start, std::uint32_t end, double scale) {
-    if (IsDlgButtonChecked(hDlg, 689) != BST_CHECKED)
+    if (IsDlgButtonChecked(hDlg, panel::kScaleMorphCheckbox) != BST_CHECKED)
         return;
 
     mdl::BoneKey* const boneKeys = mdl::BoneKeys(model);
@@ -201,11 +209,11 @@ void ScaleMorphKeys(MMDApp* app, unsigned char* model, HWND hDlg,
         std::memcpy(out.data() + 36, &key.value, sizeof(key.value));
     }
 
-    Sub4316B0(app);
+    DeleteMarkedKeyframes(app);
     TraceRange("morph.deleted");
-    Sub4A49A0(model);
+    ResetMorphKeyCursor(model);
     for (const auto& copy : copies) {
-        if (!Sub49F190(model, copy.data(), static_cast<int>(start)))
+        if (!RegisterMorphKeyFromRecord(model, copy.data(), static_cast<int>(start)))
             break;
     }
     TraceRange("morph.inserted");
@@ -213,7 +221,7 @@ void ScaleMorphKeys(MMDApp* app, unsigned char* model, HWND hDlg,
 
 void ScaleDisplayKeys(MMDApp* app, unsigned char* model, HWND hDlg,
                       std::uint32_t start, std::uint32_t end, double scale) {
-    if (IsDlgButtonChecked(hDlg, 690) != BST_CHECKED)
+    if (IsDlgButtonChecked(hDlg, panel::kScaleDispIkCheckbox) != BST_CHECKED)
         return;
 
     mdl::BoneKey* const boneKeys = mdl::BoneKeys(model);
@@ -279,11 +287,11 @@ void ScaleDisplayKeys(MMDApp* app, unsigned char* model, HWND hDlg,
         copies.push_back(std::move(copy));
     }
 
-    Sub4316B0(app);
+    DeleteMarkedKeyframes(app);
     TraceRange("display.deleted");
-    Sub4A4A00(model);
+    ResetDisplayKeyCursor(model);
     for (const auto& copy : copies) {
-        if (!Sub49F8C0(model, static_cast<int>(copy.frame), copy.view,
+        if (!RegisterDisplayKeyFromRecord(model, static_cast<int>(copy.frame), copy.view,
                        ikCount, copy.ik.data(), relationCount,
                        copy.relations.data(), static_cast<int>(start)))
             break;
@@ -293,7 +301,9 @@ void ScaleDisplayKeys(MMDApp* app, unsigned char* model, HWND hDlg,
 
 }  // namespace
 
-void Sub43E970(HWND hDlg) {
+// was Sub43E970, VA 0x0043E970 - read the dialog's start/end/scale fields
+// and re-register the selected key families through the scaled range.
+void ApplyFrameRangeScale(HWND hDlg) {
     TraceRange("entered");
     MMDApp* const app = g_Block;
     if (app == nullptr)
@@ -303,9 +313,9 @@ void Sub43E970(HWND hDlg) {
         return;
 
     char text[256]{};
-    GetWindowTextA(GetDlgItem(hDlg, 686), text, 8);
+    GetWindowTextA(GetDlgItem(hDlg, panel::kScaleFromEdit), text, 8);
     const std::int32_t startSigned = std::atol(text);
-    GetWindowTextA(GetDlgItem(hDlg, 687), text, 8);
+    GetWindowTextA(GetDlgItem(hDlg, panel::kScaleToEdit), text, 8);
     const std::int32_t endSigned = std::atol(text);
     TraceRange("start", startSigned);
     TraceRange("end", endSigned);
@@ -314,7 +324,7 @@ void Sub43E970(HWND hDlg) {
 
     // (between modelOffsetZ and morphFrameShift), no state member yet.
     app->FrameRangeStartFrame() = startSigned;
-    GetWindowTextA(GetDlgItem(hDlg, 605), text, 8);
+    GetWindowTextA(GetDlgItem(hDlg, panel::kScaleRateEdit), text, 8);
     const double scale = std::atof(text);
     TraceRange("scale_x1000", static_cast<int>(scale * 1000.0));
     if (scale < 0.0000099999997 || scale == 1.0)
@@ -331,7 +341,7 @@ void Sub43E970(HWND hDlg) {
     const std::uint32_t modelMax = mdl::Mdl(model)->maxFrame;
     if (app->LastRegisteredFrame() < modelMax)
         app->LastRegisteredFrame() = modelMax;
-    Sub4B4260(model, app->CurrentFrame(),
+    SeekModelFrame(model, app->CurrentFrame(),
               app->PlaybackPhysicsMode());
     PanelPaint(app);
     SelectionReeval(app);

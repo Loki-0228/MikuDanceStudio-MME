@@ -204,6 +204,10 @@ void SkipTextBuf(int fh) {
     }
 }
 
+// Porting-era trace under MIKUDANCESTUDIO_PMX_TRACE_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call sites
+// valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void TracePmxOffset(int fh, const char* phase, int index, int value) {
     char directory[MAX_PATH];
     const DWORD length = GetEnvironmentVariableA(
@@ -219,6 +223,9 @@ void TracePmxOffset(int fh, const char* phase, int index, int value) {
             value, _tell(fh));
     fclose(stream);
 }
+#else
+inline void TracePmxOffset(int, const char*, int, int) {}
+#endif
 
 }  // namespace
 
@@ -743,7 +750,7 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             if (mdl::Mdl(m)->maxBoneLayer < bone->layer)
                 mdl::Mdl(m)->maxBoneLayer = bone->layer;
             _read(fh, &bone->flags, 2);                       // flags
-            if (bone->flags & 1) {         // tail is bone
+            if (bone->flags & mdl::kBoneFlagTailIsBone) {
                 bone->tailBone = readBoneIdx();
             } else {                                        // tail offset
                 _read(fh, bone->tailOffset, 4);
@@ -753,14 +760,14 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                 bone->tailOffset[1] += bone->position[1];
                 bone->tailOffset[2] += bone->position[2];
             }
-            if (bone->flags & 4)
-                bone->type = 1;
-            if (bone->flags & 0x300) {     // inheritance
+            if (bone->flags & mdl::kBoneFlagMovable)
+                bone->type = mdl::BoneType::Move;             // 0x4BA033
+            if (bone->flags & mdl::kBoneFlagInheritMask) {    // inheritance
                 bone->tailIdx = readBoneIdx();
                 _read(fh, &bone->inheritRatio, 4);
             }
-            if (bone->flags & 0x400) {     // fixed axis
-                bone->type = 8;
+            if (bone->flags & mdl::kBoneFlagFixedAxis) {
+                bone->type = mdl::BoneType::FixedAxis;        // 0x4BA127
                 _read(fh, bone->axis, 4);
                 _read(fh, &bone->axis[1], 4);
                 _read(fh, &bone->axis[2], 4);
@@ -772,13 +779,13 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                 bone->axis[1] = axis[1];
                 bone->axis[2] = axis[2];
             }
-            if (bone->flags & 0x800) {     // local axes
+            if (bone->flags & mdl::kBoneFlagLocalAxes) {
                 for (int f = 0; f < 6; ++f)
                     _read(fh, bone->localAxes + f, 4);
             }
-            if (bone->flags & 0x2000)      // external parent
+            if (bone->flags & mdl::kBoneFlagExternalParent)
                 _read(fh, &bone->extParent, 4);
-            if (bone->flags & 0x20) {      // IK
+            if (bone->flags & mdl::kBoneFlagIk) {             // IK
                 ++ikBoneCount;
                 bone->ikTarget = readBoneIdx();  // target
                 _read(fh, &bone->ikLoop, 4);                   // loop count
@@ -800,8 +807,8 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                     }
                 }
             }
-            if (!(bone->flags & 8))
-                bone->type = 7;                              // rotate+move
+            if (!(bone->flags & mdl::kBoneFlagVisible))
+                bone->type = mdl::BoneType::InertTip;        // 0x4BA5DF
             bone->rotQuat[3] = 1.0f;
             bone->rotQuat2[3] = 1.0f;
             bone->matWorld[14] = 0.0f;
@@ -824,10 +831,10 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             int chain = 0;
             for (std::int32_t i = 0; i < boneCount; ++i) {
                 mikudancestudio::mdl::BoneRecord* bone = &bones[i];
-                if (!(bone->flags & 0x20))
+                if (!(bone->flags & mdl::kBoneFlagIk))
                     continue;
-                bone->type = 2;                              // IK bone type
-                bones[bone->ikTarget].type = 6;
+                bone->type = mdl::BoneType::Ik;               // 0x4BA740
+                bones[bone->ikTarget].type = mdl::BoneType::Effector;
                 mdl::IkChain& ch = mdl::IkChains(m)[chain];
                 ch.boneIndex = i;
                 ch.targetBone = bone->ikTarget;
@@ -849,7 +856,8 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                         operator new(sizeof(std::uint16_t) * linkCount));
                     for (int l = 0; l < linkCount; ++l) {
                         const mdl::PmxIkLinkRecord& link = bone->ikLinks[l];
-                        bones[link.boneIndex].type = 4;      // IK link type
+                        bones[link.boneIndex].type =
+                            mdl::BoneType::UnderIk;           // IK link
                         ch.links[l] =
                             static_cast<std::uint16_t>(link.boneIndex);
                         if (link.hasLimits == 1) {
@@ -873,19 +881,21 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             const std::int32_t parent = bone->parent;
             if (parent >= 0 && bones[parent].hasFlag) {
                 bone->hasFlag = 1;
-            } else if ((bone->type == 5
-                        || ((bone->flags & 0x300) != 0
+            } else if ((bone->type == mdl::BoneType::RotateGrant
+                        || ((bone->flags & mdl::kBoneFlagInheritMask) != 0
                             && model.physicsMode == 2))
                        && bones[bone->tailIdx].type
-                              == 4) {
+                              == mdl::BoneType::UnderIk) {
                 bone->hasFlag = 1;
             } else if (parent >= 0) {
                 const std::int32_t pl = bones[parent].layer;
                 if (bone->layer < pl)
                     bone->layer = pl;
-                const std::uint8_t pt = bones[parent].type;
-                const bool parentIk = (pt == 4 || pt == 6);
-                if (bone->type != 4 && bone->type != 6
+                const mdl::BoneType pt = bones[parent].type;
+                const bool parentIk = (pt == mdl::BoneType::UnderIk ||
+                                       pt == mdl::BoneType::Effector);
+                if (bone->type != mdl::BoneType::UnderIk &&
+                    bone->type != mdl::BoneType::Effector
                     && model.physicsMode == 2 && parentIk) {
                     ++bone->layer;
                     if (mdl::Mdl(m)->maxBoneLayer < bone->layer)
@@ -1440,7 +1450,7 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                 rb.keyData = bodyOut[0];
                 rb.body = bodyOut[1];
                 if (rb.mode > 0 && bi >= 0)
-                    bones[bi].f492 = 1;
+                    bones[bi].hasRigidBody = 1;
                 // inverse transform into rb+108
                 // `float[77..79]` is the x86 spelling of BoneRecord::position.
                 // It is not valid after the x64 text-pointer expansion and

@@ -87,31 +87,6 @@ IDirect3DDevice9* DeviceOf(MMDApp* app) {
 
 bool InitToonTextures(MMDApp* app) {
     auto& s = *app;
-    // TEMP x64 diagnostic: dump the toon-slot region before the release loop
-    // to identify what pollutes it (removed once the writer is found).
-    {
-        char dir[MAX_PATH]{};
-        if (GetEnvironmentVariableA("MIKUDANCESTUDIO_STATE_DUMP_DIR", dir, MAX_PATH) > 0) {
-            char path[MAX_PATH]{};
-            std::snprintf(path, sizeof(path), "%s\\toon_region.txt", dir);
-            if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) {
-                FILE* fp = nullptr;
-                if (fopen_s(&fp, path, "wb") == 0 && fp != nullptr) {
-                    std::fprintf(fp, "app=%p\n", app);
-                    for (int row = 654700; row < 655000; row += 16) {
-                        std::fprintf(fp, "%06X:", row);
-                        const unsigned char* blob = reinterpret_cast<
-                            const unsigned char*>(&app->state);
-                        for (int b = 0; b < 16; ++b)
-                            std::fprintf(fp, " %02X",
-                                blob[row + b]);
-                        std::fprintf(fp, "\n");
-                    }
-                    std::fclose(fp);
-                }
-            }
-        }
-    }
     IDirect3DDevice9* device = DeviceOf(app);
     if (device == nullptr || !g_d3dx.Load())
         return false;   // original would fail on the resource-path call chain

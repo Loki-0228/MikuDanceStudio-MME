@@ -9,7 +9,7 @@
 //
 // Original signature: BOOL __thiscall sub_4C2A00(HDC* this, int x, char* ho)
 //   ECX (this) = app+0xCC  -> the 0x25C wave/timeline subsystem object
-//                (app+0xCC sub025c; ctor 0x4C2450 zeroes +0x00/+0x04).
+//                (app+0xCC audioContext; ctor 0x4C2450 zeroes +0x00/+0x04).
 //   x  = frame offset - callers pass app+2428 (current frame, kDword97C).
 //   ho = timeline strip width - callers pass app+657096 (sidebar width,
 //        kDwordSidebar).  The project placeholder signature types this
@@ -53,14 +53,14 @@ namespace mikudancestudio {
 
 void TimelineDrawTicks(int frameOffset, int width) {
     // param mapping (original __thiscall sub_4C2A00(HDC* this, int x, char* ho)):
-    //   this -> g_Block->state.sub025c    (Sub025C wave/timeline subsystem)
+    //   this -> g_Block->state.audioContext    (Sub025C wave/timeline subsystem)
     //   x    -> frameOffset (current frame)
     //   ho   -> strip width (sidebar width)
     MMDApp* app = g_Block;
     WaveAudioContext* audio = app->Audio();
 
-    int v4 = 13 * frameOffset - 101;    // wave sample cursor (13 samples per frame, -101 offset)
-    int v5 = width - 10;
+    int sampleCursor = 13 * frameOffset - 101;  // 13 samples per frame, -101 offset
+    int xMax = width - 10;
 
     HDC strip = audio->timelineDC;
     char* bufA = reinterpret_cast<char*>(audio->waveformMax);
@@ -71,7 +71,7 @@ void TimelineDrawTicks(int frameOffset, int width) {
     HBRUSH whiteBrush = CreateSolidBrush(0xFFFFFF);
     HGDIOBJ oldPen = SelectObject(strip, whitePen);         // save DC's old pen
     HGDIOBJ oldBrush = SelectObject(strip, whiteBrush);     // save DC's old brush
-    Rectangle(strip, 0, 0, v5, 50);                         // (0,0)-(width-10,50)
+    Rectangle(strip, 0, 0, xMax, 50);                       // (0,0)-(width-10,50)
     SelectObject(strip, oldPen);
     DeleteObject(whitePen);
 
@@ -79,16 +79,16 @@ void TimelineDrawTicks(int frameOffset, int width) {
     HPEN redPen = CreatePen(PS_SOLID, 1, 0xFF0000);         // red
     SelectObject(strip, redPen);                            // result discarded (old pen still in oldPen)
     int xa = 0;                                             // xa = column from previous iteration (v9-register twin)
-    int v6 = 0;                                             // v6 = current column (eax)
-    for (xa = 0; v6 < v5; xa = v6) {                        // loop bound v6 < width-10
-        if (v4 >= 0 && v4 < audio->waveformColumns) {
-            // vertical bar at column v6 (xa == v6 here): y from bufA[v4] to bufB[v4]
-            MoveToEx(strip, v6, bufA[v4], nullptr);         // y = (signed char)bufA[v4]
-            LineTo(strip, xa, bufB[v4]);                    // y = (signed char)bufB[v4]
-            v6 = xa;
+    int columnX = 0;                                        // current column (eax)
+    for (xa = 0; columnX < xMax; xa = columnX) {            // loop bound columnX < width-10
+        if (sampleCursor >= 0 && sampleCursor < audio->waveformColumns) {
+            // vertical bar at column columnX (xa == columnX here): y from bufA[sampleCursor] to bufB[sampleCursor]
+            MoveToEx(strip, columnX, bufA[sampleCursor], nullptr);   // y = (signed char)bufA[sampleCursor]
+            LineTo(strip, xa, bufB[sampleCursor]);           // y = (signed char)bufB[sampleCursor]
+            columnX = xa;
         }
-        ++v6;
-        ++v4;
+        ++columnX;
+        ++sampleCursor;
     }
     SelectObject(strip, oldPen);
     DeleteObject(redPen);
@@ -97,7 +97,7 @@ void TimelineDrawTicks(int frameOffset, int width) {
     HPEN blackPen = CreatePen(PS_SOLID, 1, 0);              // black
     SelectObject(strip, blackPen);
     MoveToEx(strip, 0, 25, nullptr);
-    LineTo(strip, v5, 25);                                  // horizontal baseline, x = width-10
+    LineTo(strip, xMax, 25);                                // horizontal baseline, x = width-10
     SelectObject(strip, oldPen);
     SelectObject(strip, oldBrush);
     DeleteObject(blackPen);
@@ -142,7 +142,7 @@ void TimelineDrawTicks(int frameOffset, int width) {
 // =========================================================================//
 void SetFrameNormalized(int frame) {
     // param mapping (original __thiscall sub_4C2B80(_DWORD* this, int a2)):
-    //   this -> g_Block->state.sub025c    (Sub025C wave/timeline subsystem)
+    //   this -> g_Block->state.audioContext    (Sub025C wave/timeline subsystem)
     //   a2   -> frame (position in 1/100 units)
     MMDApp* app = g_Block;
     WaveAudioContext* audio = app->Audio();
@@ -151,15 +151,15 @@ void SetFrameNormalized(int frame) {
     if (player == nullptr)                                  // original returns undefined eax here
         return;
 
-    // v5 = (float)((double)frame / 100.0)   (float store/reload like fstp/fld)
-    float v5 = static_cast<float>(static_cast<double>(frame) / 100.0);
+    // seconds = (float)((double)frame / 100.0)   (float store/reload like fstp/fld)
+    float seconds = static_cast<float>(static_cast<double>(frame) / 100.0);
 
-    if (v5 < 1.0f) {
-        if (v5 > 0.0f) {
-            // log10 path: v6 = (float)log10(v5), then trunc(v6 * 33.2f * 100.0)
-            float v6 = static_cast<float>(std::log10(static_cast<double>(v5)));
+    if (seconds < 1.0f) {
+        if (seconds > 0.0f) {
+            // log10 path: log10Val = (float)log10(seconds), then trunc(log10Val * 33.2f * 100.0)
+            float log10Val = static_cast<float>(std::log10(static_cast<double>(seconds)));
             audio->volume =
-                static_cast<int>(static_cast<double>(v6) *
+                static_cast<int>(static_cast<double>(log10Val) *
                                  33.20000076293945 *          // (double)33.2f = 0x40409999A0000000
                                  100.0);
             // vtable slot +0x3C (index 15) of the playback object, __stdcall(obj, pos)

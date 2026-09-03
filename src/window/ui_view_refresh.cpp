@@ -42,6 +42,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -103,7 +104,7 @@ void PostLanguageSweep2(MMDApp* app) {
 // [byte this+0x910]; selected bone index = model+0x2D90; if < 0, all seven
 // controls get "-----".  Otherwise bone record = (model+0x26BC) + sizeof(mikudancestudio::mdl::BoneRecord) *idx
 // (604 = 0x25C stride) and the layout is picked by
-//     (this+0xA0CC4 == 3) & &bone->f492:
+//     (this+0xA0CC4 == 3) & &bone->hasRigidBody:
 //   rotation layout  : "%1.2f" of bone->ikBackup/0x18C/0x190, quat at +0x194
 //   position layout  : "%1.2f" of bone->trans/0x144/0x148, quat at +0x14C
 // The original re-derives the model pointer before every access (no side
@@ -145,30 +146,30 @@ void PostViewRefresh(MMDApp* app) {
         // ---- camera / light readout ----------------------------------------
         sprintf_s(text, 0x100, "%1.2f",
                   static_cast<double>(app->CameraPositionX()));
-        SetWindowTextA(GetDlgItem(hwnd, 0x220), text);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutPosXEdit), text);
         sprintf_s(text, 0x100, "%1.2f",
                   static_cast<double>(app->CameraPositionY()));
-        SetWindowTextA(GetDlgItem(hwnd, 0x221), text);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutPosYEdit), text);
         float posz = app->CameraPositionZ();
         if (app->CameraParentModel() >= 0)
             posz = -posz;
         sprintf_s(text, 0x100, "%1.2f", static_cast<double>(posz));
-        SetWindowTextA(GetDlgItem(hwnd, 0x222), text);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutPosZEdit), text);
         float ang = static_cast<float>(                       // 0x40D25C
             -static_cast<double>(app->CameraPitch()) /
             3.141592f * 180.0f);
         if (std::fabs(static_cast<double>(ang)) < 1e-7f)      // 0x40D26E
             ang = 0.0f;
         sprintf_s(text, 0x100, "%1.1f", static_cast<double>(ang));
-        SetWindowTextA(GetDlgItem(hwnd, 0x223), text);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutRotXEdit), text);
         sprintf_s(text, 0x100, "%1.1f",                       // 0x40D2E3
                   static_cast<double>(app->CameraYaw()) /
                       3.141592f * 180.0f);
-        SetWindowTextA(GetDlgItem(hwnd, 0x224), text);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutRotYEdit), text);
         sprintf_s(text, 0x100, "%1.1f",                       // 0x40D329
                   static_cast<double>(app->CameraRoll()) /
                       3.141592f * 180.0f);
-        SetWindowTextA(GetDlgItem(hwnd, 0x225), text);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutRotZEdit), text);
         if (app->CameraParentModel() < 0) {
             float camAngle = static_cast<float>(
                 -static_cast<double>(app->CameraDistance()));
@@ -178,7 +179,7 @@ void PostViewRefresh(MMDApp* app) {
         } else {
             sprintf_s(text, 0x100, "%1.2f", 0.0);
         }
-        SetWindowTextA(GetDlgItem(hwnd, 0x226), text);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutDistEdit), text);
         return;
     }
 
@@ -195,7 +196,7 @@ void PostViewRefresh(MMDApp* app) {
     const float* display;
     const float* quat;
     if (((app->PlaybackPhysicsMode() == 3) &                 // 0x40D417
-         (*reinterpret_cast<unsigned char*>(&bone->f492) != 0)) != 0) {
+         (*reinterpret_cast<unsigned char*>(&bone->hasRigidBody) != 0)) != 0) {
         // rotation-mode layout
         display = reinterpret_cast<const float*>(bone->ikBackup);  // +0x18C/+0x190
         quat = reinterpret_cast<const float*>(bone->ikBackup + 3);
@@ -205,11 +206,11 @@ void PostViewRefresh(MMDApp* app) {
         quat = reinterpret_cast<const float*>(bone->rotQuat);
     }
     sprintf_s(text, 0x100, "%1.2f", static_cast<double>(display[0]));
-    SetWindowTextA(GetDlgItem(hwnd, 0x220), text);
+    SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutPosXEdit), text);
     sprintf_s(text, 0x100, "%1.2f", static_cast<double>(display[1]));
-    SetWindowTextA(GetDlgItem(hwnd, 0x221), text);
+    SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutPosYEdit), text);
     sprintf_s(text, 0x100, "%1.2f", static_cast<double>(display[2]));
-    SetWindowTextA(GetDlgItem(hwnd, 0x222), text);
+    SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutPosZEdit), text);
 
     d3dx::D3DXMATRIXF m;  // 64 bytes @ ebp-148h; filled by the D3DX call
     auto* d3dx = &d3dx::Get();
@@ -265,17 +266,17 @@ void PostViewRefresh(MMDApp* app) {
     if (std::fabs(static_cast<double>(d)) < 1e-7f)      // 0x40D7D7 dbl_52B758
         d = 0.0f;
     sprintf_s(text, 0x100, "%1.1f", static_cast<double>(d));
-    SetWindowTextA(GetDlgItem(hwnd, 0x223), text);
+    SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutRotXEdit), text);
     d = app->BoneRotationEditDegreesY();
     if (std::fabs(static_cast<double>(d)) < 1e-7f)
         d = 0.0f;
     sprintf_s(text, 0x100, "%1.1f", static_cast<double>(d));
-    SetWindowTextA(GetDlgItem(hwnd, 0x224), text);
+    SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutRotYEdit), text);
     d = app->BoneRotationEditDegreesZ();
     if (std::fabs(static_cast<double>(d)) < 1e-7f)
         d = 0.0f;
     sprintf_s(text, 0x100, "%1.1f", static_cast<double>(d));
-    SetWindowTextA(GetDlgItem(hwnd, 0x225), text);
+    SetWindowTextA(GetDlgItem(hwnd, panel::kReadoutRotZEdit), text);
 }
 
 }  // namespace mikudancestudio

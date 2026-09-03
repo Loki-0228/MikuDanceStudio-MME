@@ -50,6 +50,11 @@ void ReleaseCom(void* object) {
         object);
 }
 
+// Porting-era error/state dumps under MIKUDANCESTUDIO_STATE_DUMP_DIR /
+// MIKUDANCESTUDIO_VB_DUMP_DIR (CMake option MIKUDANCESTUDIO_DIAG, default
+// OFF); the OFF stubs below keep the call sites valid and inline away to
+// nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void DumpCreateDeviceFailure(const D3DPRESENT_PARAMETERS& pp,
                              const HRESULT* attempts, int attemptCount,
                              D3DFORMAT depthFormat) {
@@ -133,6 +138,12 @@ void DumpEffectStatus(bool haveD3dx, int vsMajor, int psMajor,
         renderer->shadowDepthSurface, renderer->effect);
     std::fclose(stream);
 }
+#else
+inline void DumpCreateDeviceFailure(const D3DPRESENT_PARAMETERS&,
+                                    const HRESULT*, int, D3DFORMAT) {}
+inline void DumpEffectFailure(HRESULT, int, void*) {}
+inline void DumpEffectStatus(bool, int, int, int, int, D3DRenderer*) {}
+#endif
 
 }  // namespace
 

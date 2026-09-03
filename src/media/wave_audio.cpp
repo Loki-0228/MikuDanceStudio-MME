@@ -7,12 +7,12 @@
 // VA 0x004C2C90 - WaveStreamFeed     (original: sub_4C2C90)
 // VA 0x004C2F70 - WaveLoadFile       (original: sub_4C2F70)
 // Playback runtime trio, NOT in this TU (see the note below the field map):
-// 0x4C2CE0 WaveFeedThread / 0x4C34A0 Sub4C34A0 / 0x4C3530 Sub4C3530.
+// 0x4C2CE0 WaveFeedThread / 0x4C34A0 WaveSeekAndFeed / 0x4C3530 WaveRestartAt.
 // ===========================================================================
 // The WAV open/play chain behind menu 0xCE ("load WAV file").
 //
 // 0x025C audio/timeline context object (reached as app+0xCC,
-// app+0xCC (sub025c); ctor 0x4C2450, DirectSound init 0x4C2470 =
+// app+0xCC (audioContext); ctor 0x4C2450, DirectSound init 0x4C2470 =
 // InitTimelineAudio in src/window/ui_init.cpp).  Field map recovered from
 // sub_4C2660/4C26F0/4C2760/4C2960/4C2F70:
 //   +0x00/+0x04  waveform max/min byte arrays (malloc'd, +0x250 entries;
@@ -38,31 +38,33 @@
 //
 // 0x418500 is __thiscall(app); the wave path is NOT a parameter - it reads
 // app+0xD0 (kWcsWavpath), so this overload supersedes the old path-taking
-// stub declaration (kept in stubs.cpp untouched, no longer referenced).
+// stub declaration (that twin has since been deleted from stubs.cpp; this
+// file holds the only definition).
 //
 // Playback runtime trio - PORTED, but in src/app/subsystem_init.cpp (phase
 // scaffolding cleanup TU), not here; do not re-port in this file or the link
-// will see duplicate Sub4C34A0/Sub4C3530 symbols:
+// will see duplicate WaveSeekAndFeed/WaveRestartAt symbols:
 //   0x4C2CE0  WaveFeedThread(void*) - the _beginthread proc: per-half Lock/
 //             WaveStreamFeed/Unlock loop (half = 1 s = nAvgBytesPerSec) with
 //             DSERR_BUFFERLOST -> Restore -> single Lock retry, a play-cursor
 //             chase (GetCurrentPosition + Sleep(10) x10), stop-flag checks
 //             and the Stop/Release/ctx+0x14=0/stopFlag=2/_endthread epilogue.
-//   0x4C34A0  Sub4C34A0(this, double t) - guard on the streaming buffer,
+//   0x4C34A0  WaveSeekAndFeed(this, double t) - guard on the streaming buffer,
 //             stopFlag/failureCount = 0, SetFilePointer(fileHandle,
 //             dataOffset + (int)(avg*t) - (int)(avg*t)%nBlockAlign,
 //             FILE_BEGIN), _beginthread(WaveFeedThread, 0, this) -> +0x234.
-//   0x4C3530  Sub4C3530(this, double t) - KillTimer(hwnd, 100),
+//   0x4C3530  WaveRestartAt(this, double t) (was Sub4C3530) - KillTimer(hwnd, 100),
 //             CloseDataFile, WaveStartPlayback, buffer->SetVolume(ctx+0x258)
 //             [IDirectSoundBuffer vtable slot 15; the 2026-09 audit note
 //             "SetCurrentPosition" was wrong - confirmed against both the
 //             x86 vtable offset 0x3C and the x64 twin slot +120], then
-//             Sub4C34A0(this, t), SetTimer(hwnd, 100, 33 ms, null).
+//             WaveSeekAndFeed(this, t), SetTimer(hwnd, 100, 33 ms, null).
 // x64 twins (behavior basis): 0x7FF7CB4FAD40 / 0x7FF7CB4FAB80 /
-// 0x7FF7CB4FAC20.  Call sites (already wired): Sub4C34A0 from
+// 0x7FF7CB4FAC20.  Call sites (already wired): WaveSeekAndFeed from
 // src/app/playback_catchup.cpp and src/window/command_control_400.cpp
 // (x86 0x46F383 / 0x4876CA, time = the +0x9E654 start-seconds float);
-// Sub4C3530 from ui_frame_step.cpp StepFrame (covers x86 0x431296/0x431666),
+// WaveRestartAt (was Sub4C3530) from ui_frame_step.cpp StepFrame (covers x86
+// 0x431296/0x431666),
 // ui_editor_click.cpp (0x44A834) and ui_mouse_misc.cpp (0x44AEA8).
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
@@ -90,7 +92,10 @@ constexpr double kDbl52EAB0 = 13.0;                  // dbl @0x52EAB0
 constexpr double kDbl531718 = -390.0;                // dbl @0x531718
 constexpr float  kFlt52B9F0 = 4294967296.0f;         // 2^32 unsigned fixup
 
-// Diagnostic-only file trace (gated by MIKUDANCESTUDIO_TRACE_WAVE).
+// Diagnostic-only file trace under MIKUDANCESTUDIO_TRACE_WAVE (CMake
+// option MIKUDANCESTUDIO_DIAG, default OFF); the OFF stubs keep the call
+// sites valid and inline away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 bool MIKUDANCESTUDIO_WAVE_TRACE() { return getenv("MIKUDANCESTUDIO_TRACE_WAVE") != nullptr; }
 void WaveTrace(const char* fmt, ...) {
     FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_WAVE"), "a");
@@ -100,6 +105,10 @@ void WaveTrace(const char* fmt, ...) {
     va_end(ap);
     fclose(tf);
 }
+#else
+inline bool MIKUDANCESTUDIO_WAVE_TRACE() { return false; }
+inline void WaveTrace(const char*, ...) {}
+#endif
 
 // 0x52BB2C: "DirectSoundの初期化に失敗しているため、WAVは鳴らせません"
 static const char kMsgWaveNoSoundJp[] =
@@ -346,27 +355,27 @@ bool WaveLoadFile(void* obj, const wchar_t* path,
 
             int maxV = 0, minV = 0;                                // 0x4C32DF
             for (int off = 0; off < colBytes; off += blockAlign) { // 0x4C3300
-                int v1, v2;
+                int sampleL, sampleR;
                 if (k == 3) {          // 16-bit stereo 0x4C3309
-                    v1 = (static_cast<signed char>(scratch[off + 1]) << 8) +
+                    sampleL = (static_cast<signed char>(scratch[off + 1]) << 8) +
                          static_cast<signed char>(scratch[off]);
-                    v2 = (static_cast<signed char>(scratch[off + 3]) << 8) +
+                    sampleR = (static_cast<signed char>(scratch[off + 3]) << 8) +
                          static_cast<signed char>(scratch[off + 2]);
                 } else if (k == 2) {   // 8-bit stereo 0x4C334D
-                    v1 = static_cast<signed char>(scratch[off]);
-                    v2 = static_cast<signed char>(scratch[off + 1]);
+                    sampleL = static_cast<signed char>(scratch[off]);
+                    sampleR = static_cast<signed char>(scratch[off + 1]);
                 } else if (k == 1) {   // 16-bit mono 0x4C3379
-                    v1 = (static_cast<signed char>(scratch[off + 1]) << 8) +
+                    sampleL = (static_cast<signed char>(scratch[off + 1]) << 8) +
                          static_cast<signed char>(scratch[off]);
-                    v2 = v1;
+                    sampleR = sampleL;
                 } else {               // 8-bit mono 0x4C3389
-                    v1 = static_cast<signed char>(scratch[off]);
-                    v2 = v1;
+                    sampleL = static_cast<signed char>(scratch[off]);
+                    sampleR = sampleL;
                 }
-                if (maxV < v1) maxV = v1;                          // 0x4C3326
-                if (minV > v1) minV = v1;
-                if (maxV < v2) maxV = v2;
-                if (minV > v2) minV = v2;
+                if (maxV < sampleL) maxV = sampleL;                          // 0x4C33260x4C3326
+                if (minV > sampleL) minV = sampleL;
+                if (maxV < sampleR) maxV = sampleR;
+                if (minV > sampleR) minV = sampleR;
             }
             // 0x4C33AF..0x4C33F6: value*25, >>7 (8-bit modes k==0/k==2) or
             // >>15 (16-bit k==1/k==3), + 25; max -> ctx+0x00 array, min ->
@@ -389,7 +398,7 @@ bool WaveLoadFile(void* obj, const wchar_t* path,
 // ---------------------------------------------------------------------------
 // VA 0x004C2760 - WaveStartPlayback(this): re-parse the header from the
 // path at ctx+0x30 and (re)create the 2-second streaming DirectSound
-// buffer.  The feed thread itself is spawned by Sub4C34A0 (real body in
+// buffer.  The feed thread itself is spawned by WaveSeekAndFeed (real body in
 // src/app/subsystem_init.cpp); neither the x86 original (ret at 0x4C2955)
 // nor the x64 twin 0x7FF7CB4FA930 spawns it from here.
 // ---------------------------------------------------------------------------

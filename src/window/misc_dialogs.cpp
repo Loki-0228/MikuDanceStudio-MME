@@ -6,20 +6,21 @@
 // Every function keeps its original x86 VA; behaviour notes live in the
 // per-function comments.  The x64 confirmation addresses (MikuMikuDance
 // v932x64) are recorded per function:
-//   Sub43E000  ->  sub_7FF7CB4BC330   (called by dialog proc sub_7FF7CB478860)
-//   Sub43E680  ->  sub_7FF7CB4BD120   (called by dialog proc sub_7FF7CB478B40)
-//   Sub41E810  ->  sub_7FF7CB4A98C0   (array builder; the listbox fill + the
+//   ApplyCameraFrameScaleAdd  ->  sub_7FF7CB4BC330   (called by dialog proc sub_7FF7CB478860)
+//   ApplyMorphScaleAdd  ->  sub_7FF7CB4BD120   (called by dialog proc sub_7FF7CB478B40)
+//   InitModelOrderDialog  ->  sub_7FF7CB4A98C0   (array builder; the listbox fill + the
 //                                       allocation live in dialog proc
 //                                       sub_7FF7CB477D70's WM_INITDIALOG -
 //                                       the x86 0x41E810 rolls all three
 //                                       together because its caller
-//                                       Sub42E370 only passes (count, hDlg))
-//   Sub423160  ->  sub_7FF7CB4B5F00   (gravity cluster echo into 709..713)
-//   Sub4403C0  ->  sub_7FF7CB4BED40   (called by dialog proc sub_7FF7CB4BEC00)
+//                                       ModelCalculateOrderDlgProc only passes (count, hDlg))
+//   InitGravityDialog  ->  sub_7FF7CB4B5F00   (gravity cluster echo into 709..713)
+//   ApplyPhysicsOnOff  ->  sub_7FF7CB4BED40   (called by dialog proc sub_7FF7CB4BEC00)
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 #include <commdlg.h>
 
 #include <cmath>
@@ -35,6 +36,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -265,7 +267,7 @@ void CurvePanelRepaint(MMDApp* app) {  // x64 0x7FF7CB482BB0
 
     const HWND window = static_cast<HWND>(app->Hwnd());
     const int channel = static_cast<int>(SendMessageA(
-        GetDlgItem(window, kInterpCurveCombo), 0x147 /*CB_GETCURSEL*/, 0, 0));
+        GetDlgItem(window, kInterpCurveCombo), CB_GETCURSEL, 0, 0));
 
     bool found = false;             // x64 v83: any active record seen
     bool perChannelUniform = true;  // x64 v84: per-channel consistency
@@ -331,11 +333,11 @@ void MorphPanelRefresh(unsigned char* model) {  // x64 0x7FF7CB4ED750
     mdl::ModelRecord* m = mdl::Mdl(model);
     HWND window = static_cast<HWND>(m->hwnd);
 
-    SendMessageA(GetDlgItem(window, kModelVisibleCheck), 0xF1 /*BM_SETCHECK*/,
+    SendMessageA(GetDlgItem(window, kModelVisibleCheck), BM_SETCHECK,
                  m->loadComplete != 0 ? 1 : 0, 0);
     if (m->ikChains != nullptr) {
         const int selection = static_cast<int>(SendMessageA(
-            GetDlgItem(window, kIkChainCombo), 0x147 /*CB_GETCURSEL*/, 0, 0));
+            GetDlgItem(window, kIkChainCombo), CB_GETCURSEL, 0, 0));
         CheckRadioButton(window, kIkOnRadio, kIkOffRadio,
                          m->ikChains[selection].enabled != 0 ? kIkOnRadio
                                                              : kIkOffRadio);
@@ -348,7 +350,7 @@ void MorphPanelRefresh(unsigned char* model) {  // x64 0x7FF7CB4ED750
                 continue;
             const float value = m->morphs[selection].value;
             SendMessageA(GetDlgItem(window, kMorphSlider[group]),
-                         0x405 /*TBM_SETPOS*/, 1,
+                         TBM_SETPOS, 1,
                          static_cast<LPARAM>(
                              static_cast<int>(value * 100.0f)));
             sprintf_s(text, 0x100, "%5.4f", static_cast<double>(value));
@@ -376,14 +378,14 @@ void MorphPanelRefresh(unsigned char* model) {  // x64 0x7FF7CB4ED750
 // prefill).  Tail: camera seek (x64 sub_7FF7CB479C30 == the ported 0x42E640
 // ReloadModels), PostViewRefresh, dirty 0xA0B0D = 1.
 // =========================================================================//
-void Sub43E000(MMDApp* app, HWND hDlg) {
+void ApplyCameraFrameScaleAdd(MMDApp* app, HWND hDlg) {  // was Sub43E000, VA 0x0043E000
     float scale[8];
     float add[8];
     char buf[20];
     for (int pair = 0; pair < 8; ++pair) {
-        GetWindowTextA(GetDlgItem(hDlg, 686 + 2 * pair), buf, 20);
+        GetWindowTextA(GetDlgItem(hDlg, panel::kCamMulPosXScaleEdit + 2 * pair), buf, 20);
         scale[pair] = static_cast<float>(atof(buf));
-        GetWindowTextA(GetDlgItem(hDlg, 687 + 2 * pair), buf, 20);
+        GetWindowTextA(GetDlgItem(hDlg, panel::kCamMulPosXOffsetEdit + 2 * pair), buf, 20);
         add[pair] = static_cast<float>(atof(buf));
     }
     // degree -> radian on the three target-angle adds (target.x negated)
@@ -431,19 +433,19 @@ void Sub43E000(MMDApp* app, HWND hDlg) {
 // identity (1.0 / 0.0), scales+shifts every allocated morph key of the
 // current model (morphKeys table, 20000 20-byte records, value +0x0C,
 // allocated byte +0x10).  Tail: PanelPaint, curve-panel repaint
-// (x64 sub_7FF7CB482BB0), model frame seek Sub4B4260(model, currentFrame,
+// (x64 sub_7FF7CB482BB0), model frame seek SeekModelFrame(model, currentFrame,
 // playbackPhysicsMode) (x64 sub_7FF7CB4EBD90), facial/IK panel refresh
 // (x64 sub_7FF7CB4ED750), dirty 0xA0B0D = 1.
 // =========================================================================//
-void Sub43E680(MMDApp* app, HWND hDlg) {
+void ApplyMorphScaleAdd(MMDApp* app, HWND hDlg) {  // was Sub43E680, VA 0x0043E680
     unsigned char* modelBytes = app->ModelSlot(app->state.slotIdx);
     if (modelBytes == nullptr)
         return;
 
     char buf[20];
-    GetWindowTextA(GetDlgItem(hDlg, 686), buf, 20);
+    GetWindowTextA(GetDlgItem(hDlg, panel::kMorphMulScaleEdit), buf, 20);
     const float scale = static_cast<float>(atof(buf));
-    GetWindowTextA(GetDlgItem(hDlg, 687), buf, 20);
+    GetWindowTextA(GetDlgItem(hDlg, panel::kMorphMulOffsetEdit), buf, 20);
     const float add = static_cast<float>(atof(buf));
 
     if (scale != 1.0f || add != 0.0f) {
@@ -456,7 +458,7 @@ void Sub43E680(MMDApp* app, HWND hDlg) {
     }
     PanelPaint(app);         // 0x414610 (x64 sub_7FF7CB480EA0)
     CurvePanelRepaint(app);  // x64 sub_7FF7CB482BB0
-    Sub4B4260(modelBytes, app->state.currentFrame,
+    SeekModelFrame(modelBytes, app->state.currentFrame,
               app->state.playbackPhysicsMode);  // 0x4B4260 (x64 0x4EBD90)
     MorphPanelRefresh(modelBytes);               // x64 sub_7FF7CB4ED750
     app->SceneModified() = 1;
@@ -465,8 +467,9 @@ void Sub43E680(MMDApp* app, HWND hDlg) {
 // ===========================================================================
 // 0x0041E810 - case-289 reorder-dialog init fill (x64 sub_7FF7CB4A98C0)
 // ===========================================================================
-// `count` is CB_GETCOUNT(main combo 0x1B4) - 1 (cached in g_dword545930 by
-// the caller Sub42E370).  The helper owns three steps the x64 dialog proc
+// `count` is CB_GETCOUNT(main combo 0x1B4) - 1 (cached in
+// g_calculateOrderDialogCount by
+// the caller ModelCalculateOrderDlgProc).  The helper owns three steps the x64 dialog proc
 // (sub_7FF7CB477D70) performs inline:
 //   1. allocate the int scratch array app+0xA0B1C (count+1 dwords - the
 //      original allocates CB_GETCOUNT entries),
@@ -474,21 +477,21 @@ void Sub43E680(MMDApp* app, HWND hDlg) {
 //      "camera/light/accessory" header row),
 //   3. build the order array: for order = 1..count scan the model slots for
 //      the model whose combo order byte (+0x2D7C) equals `order` and store
-//      slotIndex+1 (the +1 quirk Sub41E910 relies on).
+//      slotIndex+1 (the +1 quirk ApplyModelCalculateOrderDialog relies on).
 // =========================================================================//
-void Sub41E810(int count, HWND hDlg) {
+void InitModelOrderDialog(int count, HWND hDlg) {  // was Sub41E810, VA 0x0041E810
     MMDApp* app = g_Block;
     constexpr std::size_t kModelOrder2D7C = 0x2D7C;  // combo order byte
     // value-init: element 0 stays untouched by the fill below, and the OK
-    // apply (Sub41E910) walks the array from index 0
+    // apply (ApplyModelCalculateOrderDialog) walks the array from index 0
     app->AccessoryOrderArray() =
         new std::int32_t[static_cast<std::size_t>(count) + 1]();
 
     char buf[0x100];
     for (int i = 1; i <= count; ++i) {
-        SendMessageA(GetDlgItem(app->state.hwnd, 0x1B4),
-                     0x148 /*CB_GETLBTEXT*/, i, reinterpret_cast<LPARAM>(buf));
-        SendMessageA(GetDlgItem(hDlg, 628), 0x180 /*LB_ADDSTRING*/, 0,
+        SendMessageA(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
+                     CB_GETLBTEXT, i, reinterpret_cast<LPARAM>(buf));
+        SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(buf));
     }
 
@@ -519,12 +522,12 @@ void Sub41E810(int count, HWND hDlg) {
 // dword (0x9EDCC) into edit 713; checkbox 731 mirrors the noise-mode byte
 // 0xA0CD4 and gates edit 713 through EnableWindow.
 // =========================================================================//
-void Sub423160(HWND hDlg) {
+void InitGravityDialog(HWND hDlg) {  // was Sub423160, VA 0x00423160
     MMDApp* app = g_Block;
     char buf[0x100];
     sprintf_s(buf, 0x100, "%3.2f",
               static_cast<double>(app->state.gravityMagnitude));
-    SetWindowTextA(GetDlgItem(hDlg, 709), buf);
+    SetWindowTextA(GetDlgItem(hDlg, panel::kGravityAccelEdit), buf);
     const float direction[3] = {app->state.gravityX, app->state.gravityY,
                                 app->state.gravityZ};
     static const int kDirectionEdits[3] = {710, 711, 712};
@@ -534,28 +537,28 @@ void Sub423160(HWND hDlg) {
                   static_cast<double>(direction[axis]));
         SetWindowTextA(GetDlgItem(hDlg, kDirectionEdits[axis]), buf);
         SendMessageA(GetDlgItem(hDlg, kDirectionTracks[axis]),
-                     0x407 /*TBM_SETRANGEMIN*/, 0, -100);
+                     TBM_SETRANGEMIN, 0, -100);
         SendMessageA(GetDlgItem(hDlg, kDirectionTracks[axis]),
-                     0x408 /*TBM_SETRANGEMAX*/, 0, 100);
+                     TBM_SETRANGEMAX, 0, 100);
         SendMessageA(GetDlgItem(hDlg, kDirectionTracks[axis]),
-                     0x414 /*TBM_SETTICFREQ*/, 0x3E8, 0);
+                     TBM_SETTICFREQ, 0x3E8, 0);
         SendMessageA(GetDlgItem(hDlg, kDirectionTracks[axis]),
-                     0x405 /*TBM_SETPOS*/, 1,
+                     TBM_SETPOS, 1,
                      static_cast<int>(
                          static_cast<double>(direction[axis]) * 100.0));
     }
     sprintf_s(buf, 0x100, "%d", app->state.gravityNoise);
-    SetWindowTextA(GetDlgItem(hDlg, 713), buf);
-    if (app->state.a0CD4 != 0) {
-        SendMessageA(GetDlgItem(hDlg, 731), 0xF1 /*BM_SETCHECK*/, 1, 0);
-        EnableWindow(GetDlgItem(hDlg, 713), TRUE);
+    SetWindowTextA(GetDlgItem(hDlg, panel::kGravityNoiseEdit), buf);
+    if (app->state.gravityNoiseEnabled != 0) {
+        SendMessageA(GetDlgItem(hDlg, panel::kGravityNoiseCheckbox), BM_SETCHECK, 1, 0);
+        EnableWindow(GetDlgItem(hDlg, panel::kGravityNoiseEdit), TRUE);
     } else {
-        SendMessageA(GetDlgItem(hDlg, 731), 0xF1 /*BM_SETCHECK*/, 0, 0);
-        EnableWindow(GetDlgItem(hDlg, 713), FALSE);
+        SendMessageA(GetDlgItem(hDlg, panel::kGravityNoiseCheckbox), BM_SETCHECK, 0, 0);
+        EnableWindow(GetDlgItem(hDlg, panel::kGravityNoiseEdit), FALSE);
     }
 }
 
-// 0x00412330 Sub412330 (gravity-track apply + physics dialog refresh) is
+// 0x00412330 ApplyGravityTrack (gravity-track apply + physics dialog refresh) is
 // ported in src/model/track_apply.cpp.
 
 // ===========================================================================
@@ -564,7 +567,7 @@ void Sub423160(HWND hDlg) {
 // `on` is (CB_GETCURSEL(combo 669) != 0): 0 = "ON (X mark)", 1 = "OFF" - it
 // lands in BoneKey::physicsDisabled of every registered key.  Body:
 //   * walk the current model's bone keys (bones gated on the physics X-mark
-//     list flag BoneRecord::f492) and count the allocated keys along each
+//     list flag BoneRecord::hasRigidBody) and count the allocated keys along each
 //     bone's key chain - the count sizes the undo auxiliary buffer,
 //   * enable undo (button 400) / disable redo (401), advance the undo ring
 //     (undoDirty=1, redoDirty=0, cursor wrap at 30, redo cursor mirrors),
@@ -573,11 +576,11 @@ void Sub423160(HWND hDlg) {
 //     physicsDisabled from bonePhysicsState[i]) and allocate the 64-byte
 //     auxiliary records,
 //   * clear keyVisitMap and re-register a physics key for every allocated
-//     key of the f492 bones, writing `on` into physicsDisabled,
-//   * tail: PanelPaint + model frame seek Sub4B4260(model, currentFrame,
+//     key of the hasRigidBody bones, writing `on` into physicsDisabled,
+//   * tail: PanelPaint + model frame seek SeekModelFrame(model, currentFrame,
 //     playbackPhysicsMode).
 // =========================================================================//
-void Sub4403C0(int on) {
+void ApplyPhysicsOnOff(int on) {  // was Sub4403C0, VA 0x004403C0
     MMDApp* app = g_Block;
     unsigned char* modelBytes = app->ModelSlot(app->state.slotIdx);
     if (modelBytes == nullptr)
@@ -597,7 +600,7 @@ void Sub4403C0(int on) {
     // - kept as-is since it only sizes the undo buffer) -------------------
     int marked = 0;
     for (int i = 0; i < boneCount; ++i) {
-        if (bones[i].f492 == 0)
+        if (bones[i].hasRigidBody == 0)
             continue;
         if (keys[i].allocated != 0)
             ++marked;
@@ -615,8 +618,8 @@ void Sub4403C0(int on) {
 
     // ---- undo ring slot --------------------------------------------------
     HWND hwnd = app->state.hwnd;
-    EnableWindow(GetDlgItem(hwnd, 400), TRUE);
-    EnableWindow(GetDlgItem(hwnd, 401), FALSE);
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
     model->undoDirty = 1;
     model->redoDirty = 0;
     std::uint32_t& cursor = model->undoState[0];
@@ -680,7 +683,7 @@ void Sub4403C0(int on) {
         ++undo.dirty;
     };
     for (int i = 0; i < boneCount; ++i) {
-        if (bones[i].f492 == 0)
+        if (bones[i].hasRigidBody == 0)
             continue;
         if (keys[i].allocated != 0) {
             appendAux(i);
@@ -700,7 +703,7 @@ void Sub4403C0(int on) {
         }
     }
     PanelPaint(app);  // 0x414610 (x64 sub_7FF7CB480EA0)
-    Sub4B4260(modelBytes, app->state.currentFrame,
+    SeekModelFrame(modelBytes, app->state.currentFrame,
               app->state.playbackPhysicsMode);  // 0x4B4260 (x64 0x4EBD90)
 }
 

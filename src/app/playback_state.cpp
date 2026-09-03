@@ -17,12 +17,13 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
-void Sub4A02C0(unsigned char* model);  // VA 0x004A02C0
-void Sub413120(MMDApp* app, int index);  // VA 0x00413120
-void Sub412330(MMDApp* app);  // VA 0x00412330
+void SyncModelEditControls(unsigned char* model);  // VA 0x004A02C0, was Sub4A02C0
+void ApplyAccessoryTrack(MMDApp* app, int index);  // VA 0x00413120
+void ApplyGravityTrack(MMDApp* app);  // VA 0x00412330
 
 namespace {
 
@@ -93,7 +94,7 @@ void RestorePlaybackMenus(MMDApp* app) {
             EnableMenuItem(menu, id, MF_GRAYED);
         SetMenuRange(menu, 224, 231, MF_GRAYED);
         SetMenuRange(menu, 273, 275, MF_GRAYED);
-        EnableWindow(GetDlgItem(hwnd, 424), FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kExpandShrinkButton), FALSE);
         EnableRange(hwnd, 437, 445, FALSE);
     } else {
         SetMenuRange(menu, 237, 242, MF_GRAYED);
@@ -102,7 +103,7 @@ void RestorePlaybackMenus(MMDApp* app) {
             EnableMenuItem(menu, id, MF_ENABLED);
         SetMenuRange(menu, 224, 231, MF_ENABLED);
         SetMenuRange(menu, 273, 275, MF_ENABLED);
-        EnableWindow(GetDlgItem(hwnd, 424), TRUE);
+        EnableWindow(GetDlgItem(hwnd, panel::kExpandShrinkButton), TRUE);
 
         unsigned char* model = app->SelectedModel();
         const UINT state = model != nullptr && mikudancestudio::mdl::Mdl(model)->physicsMode == 2
@@ -269,8 +270,8 @@ void SavePlaybackUndoSnapshot(MMDApp* app, unsigned char* model) {
         return;
 
     HWND hwnd = static_cast<HWND>(app->Hwnd());
-    EnableWindow(GetDlgItem(hwnd, 400), TRUE);
-    EnableWindow(GetDlgItem(hwnd, 401), FALSE);
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
     state.undoDirty = 1;
     state.redoDirty = 0;
     std::uint32_t& undoIndex = state.undoState[0];
@@ -303,13 +304,13 @@ void SavePlaybackUndoSnapshot(MMDApp* app, unsigned char* model) {
 void UpdateBoneFrames(MMDApp* app) {
     const float cursor = app->PlaybackCursorSeconds();
     app->SavedPlaybackPhysicsMode() = app->PlaybackPhysicsMode();
-    if (app->state.a066D != 0)
+    if (app->state.playbackAlwaysOnOffMode != 0)
         app->PlaybackPhysicsMode() = 2;
 
     for (int i = 0; i < kModelSlotCount; ++i) {
         unsigned char* model = app->ModelSlot(i);
         if (model != nullptr)
-            Sub4A2CD0(model, cursor,
+            InitModelTrackCursors(model, cursor,
                       app->PlaybackPhysicsMode());
     }
 
@@ -321,7 +322,7 @@ void UpdateBoneFrames(MMDApp* app) {
     const float frame = static_cast<float>(
         static_cast<double>(cursor) * kFrameRate);
     if (app->state.optflag[0] != 0 ||
-        app->state.v9ed98 != 0)
+        app->state.followCameraEnabled != 0)
         InitGlobalTracks(app, frame);
     InitAccessoryTracks(app, frame);
 
@@ -338,11 +339,13 @@ void UpdateBoneFrames(MMDApp* app) {
     PostLanguageSweep2(app);
 }
 
-void Sub4341E0(MMDApp* app) {
+void StopPlayback(MMDApp* app) {  // was Sub4341E0
+#ifdef MIKUDANCESTUDIO_DIAG
     if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
         FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
-        if (tf) { fputs("Sub4341E0 stop-playback enter\n", tf); fclose(tf); }
+        if (tf) { fputs("StopPlayback stop-playback enter\n", tf); fclose(tf); }
     }
+#endif
     HWND hwnd = static_cast<HWND>(app->Hwnd());
     EnableRange(hwnd, 400, 401, TRUE);
     EnableRange(hwnd, 409, 410, TRUE);
@@ -355,19 +358,19 @@ void Sub4341E0(MMDApp* app) {
 
     // snapshot bytes saved at playback start (command_control_400.cpp):
     // [0]=497 [1]=498 [2]=421 [3]=422 [4]=431 [5]=400 [6]=401
-    EnableWindow(GetDlgItem(hwnd, 497),
+    EnableWindow(GetDlgItem(hwnd, panel::kBonePasteButton),
                  app->state.playbackEnabledSnapshot[0]);
-    EnableWindow(GetDlgItem(hwnd, 498),
+    EnableWindow(GetDlgItem(hwnd, panel::kBoneReversePasteButton),
                  app->state.playbackEnabledSnapshot[1]);
-    EnableWindow(GetDlgItem(hwnd, 431),
+    EnableWindow(GetDlgItem(hwnd, panel::kCurvePasteButton),
                  app->state.playbackEnabledSnapshot[4]);
-    EnableWindow(GetDlgItem(hwnd, 421),
+    EnableWindow(GetDlgItem(hwnd, panel::kPasteButton),
                  app->state.playbackEnabledSnapshot[2]);
-    EnableWindow(GetDlgItem(hwnd, 422),
+    EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton),
                  app->state.playbackEnabledSnapshot[3]);
-    EnableWindow(GetDlgItem(hwnd, 400),
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton),
                  app->state.playbackEnabledSnapshot[5]);
-    EnableWindow(GetDlgItem(hwnd, 401),
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton),
                  app->state.playbackEnabledSnapshot[6]);
 
     const bool enable250 =
@@ -382,7 +385,7 @@ void Sub4341E0(MMDApp* app) {
     app->PlaybackPhysicsMode() = app->SavedPlaybackPhysicsMode();
 
     unsigned char* activeModel = app->SelectedModel();
-    if (app->state.v342 != 0) {
+    if (app->state.playbackReturnsToStartFrame != 0) {
         if (activeModel != nullptr)
             SavePlaybackUndoSnapshot(app, activeModel);
         const int frame = static_cast<int>(
@@ -393,7 +396,7 @@ void Sub4341E0(MMDApp* app) {
             frame > 6 ? frame - 6 : 0;
         char text[50];
         sprintf_s(text, "%d", frame);
-        HWND edit = GetDlgItem(hwnd, 417);
+        HWND edit = GetDlgItem(hwnd, panel::kCurrentFrameEdit);
         SendMessageA(edit, EM_SETSEL, 0, GetWindowTextLengthA(edit));
         SendMessageA(edit, EM_REPLACESEL, FALSE,
                      reinterpret_cast<LPARAM>(text));
@@ -411,23 +414,23 @@ void Sub4341E0(MMDApp* app) {
     for (int i = 0; i < kModelSlotCount; ++i) {
         unsigned char* model = app->ModelSlot(i);
         if (model != nullptr)
-            Sub4B4260(model, frame, app->PlaybackPhysicsMode());
+            SeekModelFrame(model, frame, app->PlaybackPhysicsMode());
     }
     if (app->state.optflag[0] == 0 &&
         activeModel != nullptr)
-        Sub4A02C0(activeModel);
+        SyncModelEditControls(activeModel);
 
     app->CameraParentModel() = -1;
-    SendMessageA(GetDlgItem(hwnd, 450), CB_SETCURSEL, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kBoneRegisterCombo), CB_SETCURSEL, 0, 0);
 
     if (app->state.optflag[0] != 0) {
         app->ViewOffsetX() = 0.0f;
         app->ViewOffsetY() = 0.0f;
         ReloadModels(app);
-        Sub411070(app);
-        Sub411B90(app);
-        Sub412330(app);
-    } else if (app->state.v9ed98 != 0) {
+        RefreshLightPanel(app);
+        RefreshSelfShadowPanel(app);
+        ApplyGravityTrack(app);
+    } else if (app->state.followCameraEnabled != 0) {
         if (app->CameraParentModel() >= 0) {
             ModelApplyMorphs(activeModel);
             SetPhysicsMode(activeModel, 0, app->ModelSlots(),
@@ -436,20 +439,20 @@ void Sub4341E0(MMDApp* app) {
         app->ViewOffsetX() = 0.0f;
         app->ViewOffsetY() = 0.0f;
         ReloadModels(app);
-        Sub411070(app);
-        Sub411B90(app);
-        Sub412330(app);
+        RefreshLightPanel(app);
+        RefreshSelfShadowPanel(app);
+        ApplyGravityTrack(app);
         app->CameraAttachmentTransformSuppressed() = 0;
         PostModelReload(app);
-        app->state.a04B8 = 1;
+        app->state.modelReloadPending = 1;
     }
 
     for (int i = 0; i < 255; ++i)
         if (app->AccessorySlot(i) != nullptr)
-            Sub413120(app, i);
-    Sub4134E0(app);
+            ApplyAccessoryTrack(app, i);
+    SyncAccessoryEditPanel(app);
     if (app->EditMode() == ViewportEditMode::BoneBox)
-        Sub4168D0(app);
+        AviBgOverlayRefresh(app);
     app->PhysicsResetPending() = 1;
     PostViewRefresh(app);
     PostLanguageSweep2(app);

@@ -54,6 +54,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -64,7 +65,7 @@ void FineShadowModeNotice(MMDApp* app);
 
 // ui_frame_step.cpp - frame-apply chain; declared locally like
 // command_control_500.cpp does (not in ported_funcs.hpp).
-void Sub432FA0(MMDApp* app);                              // VA 0x432FA0
+void RefreshAfterFrameApply(MMDApp* app);                 // VA 0x432FA0, was Sub432FA0
 
 // pump_navigation.cpp - arrow-key navigation and numpad presets, called
 // from the ladder at their binary positions (see the call sites below).
@@ -133,11 +134,11 @@ void ConsumeLetterHotkeys(MMDApp* app) {
     // app+0xA0194 and mirror menu item 0x11A.
     if (focusOK && !focusInEdit && pressed(kSlotB)) {
         HMENU menu = GetMenu(main);
-        if (state.a0194 != 0) {
-            state.a0194 = 0;
+        if (state.blackBackgroundEnabled != 0) {
+            state.blackBackgroundEnabled = 0;
             CheckMenuItem(menu, 0x11A, MF_UNCHECKED);
         } else {
-            state.a0194 = 1;
+            state.blackBackgroundEnabled = 1;
             CheckMenuItem(menu, 0x11A, MF_CHECKED);
         }
     }
@@ -150,11 +151,11 @@ void ConsumeLetterHotkeys(MMDApp* app) {
             // Body = command case 283 minus dialogFlags[5]: flip the
             // outline-suppression byte and menu 0x11B.
             HMENU menu = GetMenu(main);
-            if (state.modelOutlineRenderingSuppressed != 0) {
-                state.modelOutlineRenderingSuppressed = 0;
+            if (state.modelNonDisplayMode != 0) {
+                state.modelNonDisplayMode = 0;
                 CheckMenuItem(menu, 0x11B, MF_UNCHECKED);
             } else {
-                state.modelOutlineRenderingSuppressed = 1;
+                state.modelNonDisplayMode = 1;
                 CheckMenuItem(menu, 0x11B, MF_CHECKED);
             }
         } else {
@@ -163,13 +164,13 @@ void ConsumeLetterHotkeys(MMDApp* app) {
             // loaded model's displayState (the pump walks the whole slot
             // array, kModelSlotCount wide in both layouts).
             HMENU menu = GetMenu(main);
-            state.v9eb7e = state.v9eb7e != 0 ? 0 : 1;
+            state.characterTransparentMode = state.characterTransparentMode != 0 ? 0 : 1;
             CheckMenuItem(menu, 0xD6,
-                          state.v9eb7e != 0 ? MF_CHECKED : MF_UNCHECKED);
+                          state.characterTransparentMode != 0 ? MF_CHECKED : MF_UNCHECKED);
             for (int slot = 0; slot < kModelSlotCount; ++slot) {
                 unsigned char* model = app->ModelSlot(slot);
                 if (model != nullptr)
-                    mdl::Mdl(model)->displayState = state.v9eb7e;
+                    mdl::Mdl(model)->displayState = state.characterTransparentMode;
             }
         }
     }
@@ -179,15 +180,15 @@ void ConsumeLetterHotkeys(MMDApp* app) {
         if (ctrl) {
             SendMenuCommand(app, 0x1A4);                   // case 420 copy
         } else if (modelMode) {
-            SendMessageA(GetDlgItem(main, 0x1EB), BM_SETCHECK, 0, 0);
-            SendMessageA(GetDlgItem(main, 0x1EC), BM_SETCHECK, 0, 0);
-            SendMessageA(GetDlgItem(main, 0x1ED), BM_SETCHECK, 0, 0);
-            if (IsDlgButtonChecked(main, 0x1EA) != 1) {
+            SendMessageA(GetDlgItem(main, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoneMoveRadio), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoneRotateRadio), BM_SETCHECK, 0, 0);
+            if (IsDlgButtonChecked(main, panel::kBoneSelectRadio) != 1) {
                 app->EditMode() = ViewportEditMode::Bone;
-                SendMessageA(GetDlgItem(main, 0x1EA), BM_SETCHECK, 1, 0);
+                SendMessageA(GetDlgItem(main, panel::kBoneSelectRadio), BM_SETCHECK, 1, 0);
             } else {
                 app->EditMode() = ViewportEditMode::None;
-                SendMessageA(GetDlgItem(main, 0x1EA), BM_SETCHECK, 0, 0);
+                SendMessageA(GetDlgItem(main, panel::kBoneSelectRadio), BM_SETCHECK, 0, 0);
             }
         }
     }
@@ -200,19 +201,19 @@ void ConsumeLetterHotkeys(MMDApp* app) {
 
     // ---- 'I' (0x472375): insert bone/camera frame line -------------------
     if (focusOK && !playing && !focusInEdit && pressed(kSlotI))
-        Sub439E40(app);                                    // 0x439E40
+        InsertBoneCameraFrameLine(app);                                    // 0x439E40
 
     // ---- 'K' (0x4723AB): delete bone/camera frame line -------------------
     if (focusOK && !playing && !focusInEdit && pressed(kSlotK))
-        Sub43A650(app);                                    // 0x43A650
+        DeleteBoneCameraFrameLine(app);                                    // 0x43A650
 
     // ---- 'U' (0x4723E1): insert facial/light frame line ------------------
     if (focusOK && !playing && !focusInEdit && pressed(kSlotU))
-        Sub43B720(app);                                    // 0x43B720
+        InsertFacialLightFrameLine(app);                                    // 0x43B720
 
     // ---- 'J' (0x472417): delete facial/light frame line ------------------
     if (focusOK && !playing && !focusInEdit && pressed(kSlotJ))
-        Sub43BB30(app);                                    // 0x43BB30
+        DeleteFacialLightFrameLine(app);                                    // 0x43BB30
 
     // ---- 'G' (0x4726B2): seek frame / shadow map / fine shadow -----------
     if (focusOK && !focusInEdit && pressed(kSlotG)) {
@@ -231,27 +232,27 @@ void ConsumeLetterHotkeys(MMDApp* app) {
             // as the current frame (0x980), run the frame-apply chain and
             // echo "%d" into 0x1A1 on the main window.
             char buf[0x100];
-            GetWindowTextA(GetDlgItem(LadderOwner(app), 0x22A), buf, 0xA);
+            GetWindowTextA(GetDlgItem(LadderOwner(app), panel::kGotoFrameEdit), buf, 0xA);
             long value = std::atol(buf);
             if (value < 0)
                 value = 0;
             app->CurrentFrame() = static_cast<std::int32_t>(value);
-            Sub432FA0(app);                                // 0x432FA0
+            RefreshAfterFrameApply(app);                   // 0x432FA0
             PostViewRefresh(app);                          // 0x40D130
             sprintf_s(buf, 0x100u, "%d", app->CurrentFrame());
-            SetWindowTextA(GetDlgItem(main, 0x1A1), buf);
+            SetWindowTextA(GetDlgItem(main, panel::kCurrentFrameEdit), buf);
         }
     }
 
     // ---- 'L' (0x472804): cycle the transform-channel selector ------------
     // ++app+0x9ED9C, wrapping mod 3 in camera/accessory mode, mod 2 in
     // model mode (the consumer is the mouse-wheel channel chain,
-    // ModeCameraAdjust / frame_modes.cpp v9ed9c).
+    // ModeCameraAdjust / frame_modes.cpp coordinateSystem).
     if (focusOK && !focusInEdit && pressed(kSlotL)) {
-        ++state.v9ed9c;
+        ++state.coordinateSystem;
         const int limit = modelMode ? 2 : 3;
-        if (state.v9ed9c >= limit)
-            state.v9ed9c = 0;
+        if (state.coordinateSystem >= limit)
+            state.coordinateSystem = 0;
     }
 
     // x86 0x47283F..0x472A49: the arrow-key camera/light navigation (with
@@ -269,7 +270,7 @@ void ConsumeLetterHotkeys(MMDApp* app) {
         !focusInEdit && pressed(kSlotP)) {
         // The BM_SETCHECK wParam keys on app+0x330, which the gate already
         // forced to 0 - always 1 here.
-        SendMessageA(GetDlgItem(main, 0x198), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(main, panel::kPlayButton), BM_SETCHECK, 1, 0);
         SendMenuCommand(app, 0x198);                       // case 408 play
         SetFocus(main);
     }
@@ -290,26 +291,26 @@ void ConsumeLetterHotkeys(MMDApp* app) {
             // frame when the new ring head is not a pose-only record.
             // The original passes &app+0x980 so the redo can move the
             // current frame itself.
-            Sub4A2490(model, &app->CurrentFrame());
+            RedoModelEdit(model, &app->CurrentFrame());
             auto* record = mdl::Mdl(model);
             if (record->undoState[0] == record->undoState[1]) {
-                EnableWindow(GetDlgItem(main, 0x191), FALSE);
+                EnableWindow(GetDlgItem(main, panel::kRedoButton), FALSE);
                 record->redoDirty = 0;
             }
-            EnableWindow(GetDlgItem(main, 0x190), TRUE);
+            EnableWindow(GetDlgItem(main, panel::kUndoButton), TRUE);
             record->undoDirty = 1;
             PanelPaint(app);                               // 0x414610
             SelectionReeval(app);                          // 0x430510
             if (record->undoRings[0].slots[record->undoState[0]].operation
                     != 1) {
-                Sub4B4260(model, static_cast<int>(app->CurrentFrame()),
+                SeekModelFrame(model, static_cast<int>(app->CurrentFrame()),
                           app->PlaybackPhysicsMode());
             }
         } else if (!ctrl) {
-            SendMessageA(GetDlgItem(main, 0x1EA), BM_SETCHECK, 0, 0);
-            SendMessageA(GetDlgItem(main, 0x1EB), BM_SETCHECK, 0, 0);
-            SendMessageA(GetDlgItem(main, 0x1EC), BM_SETCHECK, 0, 0);
-            SendMessageA(GetDlgItem(main, 0x1ED), BM_SETCHECK, 1, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoneSelectRadio), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoneMoveRadio), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoneRotateRadio), BM_SETCHECK, 1, 0);
             app->EditMode() = ViewportEditMode::Camera;    // 0x914 = 3
         }
     }
@@ -322,26 +323,26 @@ void ConsumeLetterHotkeys(MMDApp* app) {
             // Undo one ring entry (0x4A1870), then the mirror-image button
             // tail of the X branch.  Like the redo, the frame pointer aims
             // straight at app+0x980.
-            Sub4A1870(model, &app->CurrentFrame());
+            UndoModelEdit(model, &app->CurrentFrame());
             auto* record = mdl::Mdl(model);
             if (record->undoRings[0].slots[record->undoState[0]].operation
                     == 0) {
-                EnableWindow(GetDlgItem(main, 0x190), FALSE);
+                EnableWindow(GetDlgItem(main, panel::kUndoButton), FALSE);
                 record->undoDirty = 0;
             }
             if (record->undoState[0] == record->undoState[1]) {
-                EnableWindow(GetDlgItem(main, 0x190), FALSE);
+                EnableWindow(GetDlgItem(main, panel::kUndoButton), FALSE);
                 record->undoDirty = 0;
             }
-            EnableWindow(GetDlgItem(main, 0x191), TRUE);
+            EnableWindow(GetDlgItem(main, panel::kRedoButton), TRUE);
             record->redoDirty = 1;
             PanelPaint(app);                               // 0x414610
             SelectionReeval(app);                          // 0x430510
         } else if (!ctrl) {
-            SendMessageA(GetDlgItem(main, 0x1EA), BM_SETCHECK, 0, 0);
-            SendMessageA(GetDlgItem(main, 0x1EB), BM_SETCHECK, 0, 0);
-            SendMessageA(GetDlgItem(main, 0x1ED), BM_SETCHECK, 0, 0);
-            SendMessageA(GetDlgItem(main, 0x1EC), BM_SETCHECK, 1, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoneSelectRadio), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoxSelectRadio), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoneRotateRadio), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(main, panel::kBoneMoveRadio), BM_SETCHECK, 1, 0);
             app->EditMode() = ViewportEditMode::Light;     // 0x914 = 4
         }
     }

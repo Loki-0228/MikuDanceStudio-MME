@@ -22,6 +22,10 @@ namespace {
 
 using Matrix = d3dx::D3DXMATRIXF;
 
+// Porting-era material-state capture under MIKUDANCESTUDIO_VB_DUMP_DIR
+// (CMake option MIKUDANCESTUDIO_DIAG, default OFF); the OFF stubs below
+// keep the call sites valid and inline away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 struct MaterialStateCapture {
     FILE* stream = nullptr;
     bool first = true;
@@ -220,6 +224,12 @@ void EndMaterialStateCapture() {
     std::fclose(g_materialCapture.stream);
     g_materialCapture.stream = nullptr;
 }
+#else
+inline bool BeginMaterialStateCapture() { return false; }
+inline void DumpMaterialState(MMDApp*, IDirect3DDevice9*, unsigned char*,
+                              unsigned char*, UINT, UINT) {}
+inline void EndMaterialStateCapture() {}
+#endif
 
 template <typename Fn>
 Fn FxMethod(void* effect, std::size_t byteOffset) {
@@ -1197,7 +1207,7 @@ void DrawModelOutlines(MMDApp* app, bool effectEdge) {
     // edgeScale/postLoad/camera gates); the fixed frame's copy has no
     // reference to it anywhere in sub_7FF7CB4BFB20.
     const bool suppressed = effectEdge &&
-        app->ModelOutlineRenderingSuppressed() != 0;
+        app->ModelNonDisplayMode() != 0;
     for (int order = 0; order < kModelSlotCount; ++order) {
         unsigned char* model = nullptr;
         for (int slot = 0; slot < kModelSlotCount; ++slot) {
@@ -1301,7 +1311,7 @@ bool EffectRenderEnabled(const MMDApp* app) {
     const bool cameraGate = app->PlaybackActive() != 0 ||
         app->UsesViewportTool();
     return cameraGate && app->state.selfShadowMode > 0 &&    // 0xA0D30
-           app->state.selfShadowCfgOrUint32 != 0;            // 0xA0188
+           app->state.selfShadowEnabled != 0;            // 0xA0188
 }
 
 void RestoreTextureStages(IDirect3DDevice9* device) {
@@ -1441,7 +1451,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
                 reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
     FxSetMatrix(effect, "matRotate",
                 reinterpret_cast<const Matrix*>(&app->ViewRotationTransform()));
-    FxSetInt(effect, "transp", app->state.v9eb7e != 0);
+    FxSetInt(effect, "transp", app->state.characterTransparentMode != 0);
     device->SetTexture(0, sub->hdrTexture);
     device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     device->SetRenderState(D3DRS_FILLMODE,
@@ -1468,7 +1478,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
             auto* model = app->ModelSlot(slot);
             if (model == nullptr || mdl::Mdl(model)->comboSelIndex != order)
                 continue;
-            if (app->ModelOutlineRenderingSuppressed() != 0)
+            if (app->ModelNonDisplayMode() != 0)
                 break;
             app->ActiveRenderObject() = model;
             if (mdl::Mdl(model)->toonFlag != 0) {

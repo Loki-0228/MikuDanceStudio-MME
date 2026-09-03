@@ -51,6 +51,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 #include <d3d9.h>
 
 #include <cstdint>
@@ -62,13 +63,15 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/d3dx_dyn.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
-// Dependencies still stubbed (stubs.cpp): Sub432FA0 frame-apply refresh
-// chain, Sub42D6E0 bone-edit keyframe register.
-void Sub432FA0(MMDApp* app);                       // VA 0x00432FA0
-void Sub42D6E0(MMDApp* app);                       // VA 0x0042D6E0
+// Dependencies still stubbed (stubs.cpp): RefreshAfterFrameApply frame-apply
+// refresh chain (real body: ui_frame_step.cpp), PushBoneEditUndo bone-edit
+// keyframe register.
+void RefreshAfterFrameApply(MMDApp* app);          // VA 0x00432FA0, was Sub432FA0
+void PushBoneEditUndo(MMDApp* app);                       // VA 0x0042D6E0
 void RefreshRequest(int area);                     // VA 0x00440AC0 (ui_refresh)
 
 // Deg->rad literal of 0x463640/0x44BEF0: dbl_52BB20 bits 0x3F91DF46A0000000
@@ -114,13 +117,13 @@ void ComposeEulerToBone(MMDApp* app, unsigned char* model, int sel) {
 // ---------------------------------------------------------------------------
 // VA 0x0044BEF0 - per-edit tail; owns ids 544..550 (see file header).
 // ---------------------------------------------------------------------------
-void Sub44BEF0(MMDApp* app, HWND edit) {
+void CommitEditControlTail(MMDApp* app, HWND edit) {  // was Sub44BEF0
     HWND base = app->FloatingWindow();
     if (base == nullptr)
         base = app->MainWindow();
     const bool cameraMode = app->CameraMode() != 0;
 
-    if (edit == GetDlgItem(base, 544)) {           // 0x44BF31
+    if (edit == GetDlgItem(base, panel::kReadoutPosXEdit)) {           // 0x44BF31
         char text[256];
         GetWindowTextA(edit, text, 100);
         const double v = atof(text);
@@ -128,7 +131,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
             unsigned char* model = SlotModel(app);
             const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
             if (sel >= 0) {
-                Sub42D6E0(app);
+                PushBoneEditUndo(app);
                 mikudancestudio::mdl::Bones(model)[sel].trans[0] = static_cast<float>(v);
                 mikudancestudio::mdl::Mdl(model)->bonePhysicsState[sel] = 1;
             }
@@ -140,7 +143,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         PostViewRefresh(app);
         return;
     }
-    if (edit == GetDlgItem(base, 545)) {           // 0x44BFE5
+    if (edit == GetDlgItem(base, panel::kReadoutPosYEdit)) {           // 0x44BFE5
         char text[256];
         GetWindowTextA(edit, text, 100);
         const double v = atof(text);
@@ -148,7 +151,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
             unsigned char* model = SlotModel(app);
             const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
             if (sel >= 0) {
-                Sub42D6E0(app);
+                PushBoneEditUndo(app);
                 mikudancestudio::mdl::Bones(model)[sel].trans[1] = static_cast<float>(v);
                 mikudancestudio::mdl::Mdl(model)->bonePhysicsState[sel] = 1;
             }
@@ -160,7 +163,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         PostViewRefresh(app);
         return;
     }
-    if (edit == GetDlgItem(base, 546)) {           // 0x44C099
+    if (edit == GetDlgItem(base, panel::kReadoutPosZEdit)) {           // 0x44C099
         char text[256];
         GetWindowTextA(edit, text, 100);
         double v = atof(text);
@@ -168,7 +171,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
             unsigned char* model = SlotModel(app);
             const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
             if (sel >= 0) {
-                Sub42D6E0(app);
+                PushBoneEditUndo(app);
                 mikudancestudio::mdl::Bones(model)[sel].trans[2] = static_cast<float>(v);
                 mikudancestudio::mdl::Mdl(model)->bonePhysicsState[sel] = 1;
             }
@@ -182,7 +185,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         PostViewRefresh(app);
         return;
     }
-    if (edit == GetDlgItem(base, 547)) {           // 0x44C158
+    if (edit == GetDlgItem(base, panel::kReadoutRotXEdit)) {           // 0x44C158
         char text[256];
         GetWindowTextA(edit, text, 100);
         const double v = atof(text);
@@ -190,7 +193,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
             unsigned char* model = SlotModel(app);
             const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
             if (sel >= 0) {
-                Sub42D6E0(app);
+                PushBoneEditUndo(app);
                 app->state.eulerX =
                     static_cast<float>(v * kPiLit / 180.0);
                 app->state.eulerY =
@@ -212,7 +215,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         PostViewRefresh(app);
         return;
     }
-    if (edit == GetDlgItem(base, 548)) {           // 0x44C2C7
+    if (edit == GetDlgItem(base, panel::kReadoutRotYEdit)) {           // 0x44C2C7
         char text[256];
         GetWindowTextA(edit, text, 100);
         const double v = atof(text);
@@ -225,7 +228,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         unsigned char* model = SlotModel(app);
         const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
         if (sel >= 0) {
-            Sub42D6E0(app);
+            PushBoneEditUndo(app);
             app->state.eulerX =      // re-convert stored
                 static_cast<float>(                        // degrees
                     static_cast<double>(
@@ -243,7 +246,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         PostViewRefresh(app);
         return;
     }
-    if (edit == GetDlgItem(base, 549)) {           // 0x44C434
+    if (edit == GetDlgItem(base, panel::kReadoutRotZEdit)) {           // 0x44C434
         char text[256];
         GetWindowTextA(edit, text, 100);
         const double v = atof(text);
@@ -256,7 +259,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         unsigned char* model = SlotModel(app);
         const int sel = mikudancestudio::mdl::Mdl(model)->selectedBone;
         if (sel >= 0) {
-            Sub42D6E0(app);
+            PushBoneEditUndo(app);
             app->state.eulerX =
                 static_cast<float>(
                     static_cast<double>(
@@ -273,7 +276,7 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
         PostViewRefresh(app);
         return;
     }
-    if (edit == GetDlgItem(base, 550) && cameraMode) {  // 0x44C561
+    if (edit == GetDlgItem(base, panel::kReadoutDistEdit) && cameraMode) {  // 0x44C561
         char text[256];
         GetWindowTextA(edit, text, 100);
         const double v = atof(text);
@@ -288,12 +291,12 @@ void Sub44BEF0(MMDApp* app, HWND edit) {
 // ---------------------------------------------------------------------------
 // VA 0x00463640 - edit commit (see file header for the per-id behaviour).
 // ---------------------------------------------------------------------------
-void Sub463640(MMDApp* app, HWND edit) {
+void CommitEditControl(MMDApp* app, HWND edit) {  // was Sub463640
     auto& s = *app;
     const HWND main = s.MainWindow();
-    s.state.bC = 1;    // 0x463672 dword store
+    s.state.enterKeyState = 1;    // 0x463672 dword store
 
-    if (edit == GetDlgItem(main, 417)) {            // frame number
+    if (edit == GetDlgItem(main, panel::kCurrentFrameEdit)) {            // frame number
         char text[256];
         GetWindowTextA(edit, text, 8);
         const long v = atol(text);
@@ -302,45 +305,45 @@ void Sub463640(MMDApp* app, HWND edit) {
             s.CurrentFrame() = 0;
             SetWindowTextA(edit, "0");
         }
-        Sub432FA0(app);
+        RefreshAfterFrameApply(app);
         PostViewRefresh(app);
-        Sub44BEF0(app, edit);
+        CommitEditControlTail(app, edit);
         return;
     }
-    if (edit == GetDlgItem(main, 461) ||            // center x
-        edit == GetDlgItem(main, 462) || edit == GetDlgItem(main, 463)) {
+    if (edit == GetDlgItem(main, panel::kLightColorEditR) ||            // center x
+        edit == GetDlgItem(main, panel::kLightColorEditG) || edit == GetDlgItem(main, panel::kLightColorEditB)) {
         char text[256];
         GetWindowTextA(edit, text, 8);
         const double v = static_cast<double>(atol(text)) * 0.00390625;
-        const int id = edit == GetDlgItem(main, 461) ? 461
-                     : edit == GetDlgItem(main, 462) ? 462 : 463;
+        const int id = edit == GetDlgItem(main, panel::kLightColorEditR) ? 461
+                     : edit == GetDlgItem(main, panel::kLightColorEditG) ? 462 : 463;
         s.LightColor()[id - 461] = static_cast<float>(v);
-        SendMessageA(GetDlgItem(main, 455 + (id - 461)), 0x405, 1,
+        SendMessageA(GetDlgItem(main, 455 + (id - 461)), TBM_SETPOS, 1,
                      static_cast<LPARAM>(static_cast<int>(v * 256.0)));
         RefreshRequest(-2);
-        Sub44BEF0(app, edit);
+        CommitEditControlTail(app, edit);
         return;
     }
-    if (edit == GetDlgItem(main, 464) ||            // rot x/y/z mirror
-        edit == GetDlgItem(main, 465) || edit == GetDlgItem(main, 466)) {
+    if (edit == GetDlgItem(main, panel::kLightDirEditX) ||            // rot x/y/z mirror
+        edit == GetDlgItem(main, panel::kLightDirEditY) || edit == GetDlgItem(main, panel::kLightDirEditZ)) {
         char text[256];
         GetWindowTextA(edit, text, 8);
         const double v = atof(text);
-        const int id = edit == GetDlgItem(main, 464) ? 464
-                     : edit == GetDlgItem(main, 465) ? 465 : 466;
+        const int id = edit == GetDlgItem(main, panel::kLightDirEditX) ? 464
+                     : edit == GetDlgItem(main, panel::kLightDirEditY) ? 465 : 466;
         s.LightDirection()[id - 464] = static_cast<float>(v);
-        SendMessageA(GetDlgItem(main, 458 + (id - 464)), 0x405, 1,
+        SendMessageA(GetDlgItem(main, 458 + (id - 464)), TBM_SETPOS, 1,
                      static_cast<LPARAM>(static_cast<int>(v * 100.0)));
         RefreshRequest(-2);
-        Sub44BEF0(app, edit);
+        CommitEditControlTail(app, edit);
         return;
     }
-    if (edit == GetDlgItem(main, 448)) {            // fov + projection
+    if (edit == GetDlgItem(main, panel::kFovEdit)) {            // fov + projection
         char text[256];
         GetWindowTextA(edit, text, 8);
         const float v = static_cast<float>(atol(text));
         s.CameraFov() = v;
-        SendMessageA(GetDlgItem(main, 447), 0x405, 1,
+        SendMessageA(GetDlgItem(main, panel::kFovSlider), TBM_SETPOS, 1,
                      static_cast<LPARAM>(static_cast<int>(v)));
         D3DRenderer* r = s.Renderer();
         const float fovRad = static_cast<float>(
@@ -354,21 +357,21 @@ void Sub463640(MMDApp* app, HWND edit) {
         dev->SetTransform(D3DTS_PROJECTION,
                           reinterpret_cast<const D3DMATRIX*>(&mat));
         RefreshRequest(-1);
-        Sub44BEF0(app, edit);
+        CommitEditControlTail(app, edit);
         return;
     }
     // 478..485: light-accessory fields (id = 0x1DE..0x1E5).
     {
         mdl::AccessoryRecord* acc = LightAccessory(app);
         int lightId = 0;
-        if (edit == GetDlgItem(main, 478)) lightId = 478;
-        else if (edit == GetDlgItem(main, 479)) lightId = 479;
-        else if (edit == GetDlgItem(main, 480)) lightId = 480;
-        else if (edit == GetDlgItem(main, 481)) lightId = 481;
-        else if (edit == GetDlgItem(main, 482)) lightId = 482;
-        else if (edit == GetDlgItem(main, 483)) lightId = 483;
-        else if (edit == GetDlgItem(main, 484)) lightId = 484;
-        else if (edit == GetDlgItem(main, 485)) lightId = 485;
+        if (edit == GetDlgItem(main, panel::kAccPosXEdit)) lightId = 478;
+        else if (edit == GetDlgItem(main, panel::kAccPosYEdit)) lightId = 479;
+        else if (edit == GetDlgItem(main, panel::kAccPosZEdit)) lightId = 480;
+        else if (edit == GetDlgItem(main, panel::kAccRotXEdit)) lightId = 481;
+        else if (edit == GetDlgItem(main, panel::kAccRotYEdit)) lightId = 482;
+        else if (edit == GetDlgItem(main, panel::kAccRotZEdit)) lightId = 483;
+        else if (edit == GetDlgItem(main, panel::kAccScaleXEdit)) lightId = 484;
+        else if (edit == GetDlgItem(main, panel::kAccScaleYEdit)) lightId = 485;
         if (lightId != 0 && acc != nullptr) {
             char text[256];
             GetWindowTextA(edit, text, 8);
@@ -388,34 +391,34 @@ void Sub463640(MMDApp* app, HWND edit) {
                 else if (v > 1.0)
                     out = 1.0;
                 acc->opacity = static_cast<float>(out);
-                const HWND same = GetDlgItem(main, 485);
+                const HWND same = GetDlgItem(main, panel::kAccScaleYEdit);
                 const LPARAM len = GetWindowTextLengthA(same);
-                SendMessageA(same, 0xB1 /*EM_SETSEL*/, 0, len);
+                SendMessageA(same, EM_SETSEL, 0, len);
                 char fmt[256];
                 sprintf_s(fmt, 0x100, "%3.2f", out);
-                SendMessageA(same, 0xC2 /*WM_SETTEXT*/, 0,
+                SendMessageA(same, EM_REPLACESEL, 0,
                              reinterpret_cast<LPARAM>(fmt));
             }
             RefreshRequest(s.SelectedAccessorySlot());
-            Sub44BEF0(app, edit);
+            CommitEditControlTail(app, edit);
             return;
         }
         if (lightId != 0) {                          // acc == null: tail only
             RefreshRequest(s.SelectedAccessorySlot());
-            Sub44BEF0(app, edit);
+            CommitEditControlTail(app, edit);
             return;
         }
     }
-    if (edit == GetDlgItem(main, 561)) {            // 0x231 shadow range
+    if (edit == GetDlgItem(main, panel::kSelfShadowRangeEdit)) {            // 0x231 shadow range
         char text[256];
         GetWindowTextA(edit, text, 8);
         const double v = atof(text);
         s.state.physicsInterval =   // 0xA0D2C
             static_cast<float>((10000.0 - v) / 100000.0);
-        SendMessageA(GetDlgItem(main, 560), 0x405, 1,
+        SendMessageA(GetDlgItem(main, panel::kSelfShadowRangeSlider), TBM_SETPOS, 1,
                      static_cast<LPARAM>(static_cast<int>(v)));
         RefreshRequest(-3);
-        Sub44BEF0(app, edit);
+        CommitEditControlTail(app, edit);
         return;
     }
     // 506/511/516/521: morph values of the active model.  The four controls
@@ -423,10 +426,10 @@ void Sub463640(MMDApp* app, HWND edit) {
     // by five, but their model fields are consecutive.
     {
         int morphEdit = 0;
-        if (edit == GetDlgItem(main, 506)) morphEdit = 506;
-        else if (edit == GetDlgItem(main, 511)) morphEdit = 511;
-        else if (edit == GetDlgItem(main, 516)) morphEdit = 516;
-        else if (edit == GetDlgItem(main, 521)) morphEdit = 521;
+        if (edit == GetDlgItem(main, panel::kMorphEdit0)) morphEdit = 506;
+        else if (edit == GetDlgItem(main, panel::kMorphEdit1)) morphEdit = 511;
+        else if (edit == GetDlgItem(main, panel::kMorphEdit2)) morphEdit = 516;
+        else if (edit == GetDlgItem(main, panel::kMorphEdit3)) morphEdit = 521;
         if (morphEdit != 0) {
             char text[256];
             GetWindowTextA(edit, text, 8);
@@ -438,13 +441,13 @@ void Sub463640(MMDApp* app, HWND edit) {
             if (mikudancestudio::mdl::Morphs(model) != nullptr && selector >= 0)
                 mikudancestudio::mdl::Morphs(model)[selector].value =
                     static_cast<float>(v);
-            SendMessageA(GetDlgItem(main, morphEdit - 1), 0x405, 1,
+            SendMessageA(GetDlgItem(main, morphEdit - 1), TBM_SETPOS, 1,
                          static_cast<LPARAM>(static_cast<int>(v * 100.0)));
-            Sub44BEF0(app, edit);
+            CommitEditControlTail(app, edit);
             return;
         }
     }
-    Sub44BEF0(app, edit);                           // default tail
+    CommitEditControlTail(app, edit);                           // default tail
 }
 
 // ---------------------------------------------------------------------------
@@ -455,12 +458,12 @@ LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT Msg, WPARAM wParam,
     MMDApp* app = g_Block;
     if (Msg == WM_KEYDOWN) {
         if (wParam == 13) {                          // VK_RETURN
-            Sub463640(app, hWnd);
+            CommitEditControl(app, hWnd);
             SetFocus(app->MainWindow());
             return 0;
         }
     } else if (Msg == WM_KILLFOCUS) {
-        Sub463640(app, reinterpret_cast<HWND>(wParam));
+        CommitEditControl(app, reinterpret_cast<HWND>(wParam));
     }
     return CallWindowProcA(
         app->OriginalEditProc(),
@@ -498,13 +501,13 @@ void InstallControlSubclasses(MMDApp* app, HWND hwnd) {
         505, 510, 515, 520, 534, 560,
     };
 
-    HWND firstEdit = GetDlgItem(hwnd, 417);
+    HWND firstEdit = GetDlgItem(hwnd, panel::kCurrentFrameEdit);
     app->OriginalEditProc() = reinterpret_cast<WNDPROC>(
         GetWindowLongPtrA(firstEdit, GWLP_WNDPROC));     // 0x467BD7
     SetWindowLongPtrA(firstEdit, GWLP_WNDPROC,
                    reinterpret_cast<LONG_PTR>(EditSubclassProc));
 
-    HWND firstTrack = GetDlgItem(hwnd, 447);
+    HWND firstTrack = GetDlgItem(hwnd, panel::kFovSlider);
     app->OriginalTrackbarProc() = reinterpret_cast<WNDPROC>(
         GetWindowLongPtrA(firstTrack, GWLP_WNDPROC));    // 0x4686E2
     SetWindowLongPtrA(firstTrack, GWLP_WNDPROC,

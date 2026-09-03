@@ -3,19 +3,19 @@
 // ===========================================================================
 // VA 0x004C2450 - Sub025CInit : zeroing ctor of the 0x25C audio/timeline ctx
 // VA 0x00401360 - Sub048Init  : zeroing ctor of the 0x48 physics-scene wrapper
-// VA 0x004C34A0 - Sub4C34A0  : wave seek + feed-thread spawn (restart path)
+// VA 0x004C34A0 - WaveSeekAndFeed  : wave seek + feed-thread spawn (restart path)
 //
 // Not re-ported here (already covered elsewhere):
 //   0x004C2760 - WaveStartPlayback, real body in src/media/wave_audio.cpp
-//                (the void Sub4C2760(void*) no-op in src/unported/stubs.cpp
-//                is unreferenced and can simply be deleted).
-//   0x0044D610 - Sub44D610 ("PostModelReload3"), real body in
+//                (its former no-op twin in src/unported/stubs.cpp has since
+//                been deleted; wave_audio.cpp is the only definition).
+//   0x0044D610 - RebuildModelModePanel ("PostModelReload3"), real body in
 //                src/window/ui_model_reload.cpp; two field deviations found
 //                against the disassembly are fixed in that file.
 //
-// NOTE: src/unported/stubs.cpp still defines no-op Sub025CInit/Sub048Init/
-// Sub4C34A0 - those three rows must be deleted there or the link will see
-// duplicate symbols with this TU.
+// NOTE: the no-op Sub025CInit/Sub048Init/WaveSeekAndFeed twins formerly
+// kept in src/unported/stubs.cpp are gone; this TU holds the only (full
+// port) definitions, so there is no duplicate-symbol hazard any more.
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -195,7 +195,7 @@ void PhysicsSceneInit(PhysicsScene* scene) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004C34A0 - Sub4C34A0(this, double): wave seek-and-respawn used by the
+// VA 0x004C34A0 - WaveSeekAndFeed(this, double): wave seek-and-respawn used by the
 // loop-playback restart paths (FrameDriver 0x46F383, command dispatch
 // 0x4876CA, and 0x4C3530).  Guards on the streaming buffer, clears the feed
 // stop/fail counters, aligns the target file offset down to a whole block,
@@ -209,7 +209,7 @@ void PhysicsSceneInit(PhysicsScene* scene) {
 // The original returns char (0 no-buffer / 1 spawned); the shared header
 // declares the return void and no caller checks it - kept void.
 // ---------------------------------------------------------------------------
-void Sub4C34A0(void* obj, double v) {
+void WaveSeekAndFeed(void* obj, double seconds) {  // was Sub4C34A0
     auto* audio = static_cast<WaveAudioContext*>(obj);
     if (audio->streamingBuffer == nullptr)                      // 0x4C34A4
         return;                                                 // 0x4C34AA
@@ -221,7 +221,7 @@ void Sub4C34A0(void* obj, double v) {
     if (avgBytes < 0)                                           // 0x4C34DA jge
         avg += 4294967296.0;                                    // 0x4C34DC
     const double t = static_cast<double>(blkAlign) *
-                     ((avg * v) / static_cast<double>(blkAlign));
+                     ((avg * seconds) / static_cast<double>(blkAlign));
     const std::int32_t whole = static_cast<std::int32_t>(t);    // 0x4C34EA ftol
     const std::int32_t rem = whole % blkAlign;                  // 0x4C34F2 idiv
     const std::int32_t dataOff = audio->dataOffset;              // 0x4C34F4
@@ -231,15 +231,17 @@ void Sub4C34A0(void* obj, double v) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004C3530 - Sub4C3530(this, double): audio-timer restart (the seek
+// VA 0x004C3530 - WaveRestartAt(this, double) (was Sub4C3530): audio-timer
+// restart (the seek
 // entry from ui_frame_step / ui_mouse_misc / ui_editor_click and the frame
 // drivers 0x430F20/0x4312E0/0x446A70/0x44AAA0).  Sequence verbatim:
 // KillTimer(hwnd, 0x64) on the ctx main HWND (+0x0C), CloseDataFile
 // (0x4C2680), WaveStartPlayback (0x4C2760), restore the streaming buffer's
 // volume - IDirectSoundBuffer vtable slot 15 (0x3C = SetVolume) with the
-// ctx dword at +0x258, Sub4C34A0(this, v), SetTimer(hwnd, 0x64, 0x21, 0).
+// ctx dword at +0x258, WaveSeekAndFeed(this, seconds), SetTimer(hwnd, 0x64,
+// 0x21, 0).
 // ---------------------------------------------------------------------------
-void Sub4C3530(void* obj, double v) {
+void WaveRestartAt(void* obj, double seconds) {  // was Sub4C3530, VA 0x004C3530
     auto* audio = static_cast<WaveAudioContext*>(obj);
     HWND hwnd = audio->mainWindow;                              // 0x4C3533
     KillTimer(hwnd, 0x64);                                      // 0x4C3539
@@ -247,7 +249,7 @@ void Sub4C3530(void* obj, double v) {
     WaveStartPlayback(obj);                                     // 0x4C3548
     IDirectSoundBuffer* buffer = audio->streamingBuffer;
     buffer->SetVolume(audio->volume);                            // 0x4C355D
-    Sub4C34A0(obj, v);                                          // 0x4C356B
+    WaveSeekAndFeed(obj, seconds);                              // 0x4C356B
     SetTimer(hwnd, 0x64, 0x21, nullptr);                        // 0x4C3580
 }
 

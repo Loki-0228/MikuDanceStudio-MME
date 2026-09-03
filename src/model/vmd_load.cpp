@@ -3,7 +3,7 @@
 // ===========================================================================
 // __thiscall on the APP block (not the model):
 //
-//   Sub434B60(app, FileName)   FileName = ANSI path (the original's
+//   LoadVmdMotion(app, FileName)   FileName = ANSI path (the original's
 //                               GetOpenFileNameA buffer; the ported file
 //                               dialog hands over a wide path, so the
 //                               LoadVmdFile wrapper below converts with
@@ -47,7 +47,7 @@
 //             max-frame bump again.
 //
 // Tail for the model path: _close, PanelPaint (0x414610), SelectionReeval
-// (0x430510), then Sub4B4260(model, app+0x980 current frame, app+0xA0CC4
+// (0x430510), then SeekModelFrame(model, app+0x980 current frame, app+0xA0CC4
 // physics mode) - the frame-seek ported in model_frame_seek.cpp.
 //
 // The register chain now calls the real (app, rec) overloads of
@@ -78,14 +78,15 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 // loader-tail helpers defined in src/unported/stubs.cpp (window-session
 // convention: local declarations for stubbed targets)
 void SelectionReeval(MMDApp* app);                   // 0x430510
-void Sub411070(MMDApp* app);                         // 0x411070
-void Sub411B90(MMDApp* app);                         // 0x411B90
-void Sub412330(MMDApp* app);                        // 0x412330 (void in port)
+void RefreshLightPanel(MMDApp* app);                         // 0x411070
+void RefreshSelfShadowPanel(MMDApp* app);                         // 0x411B90
+void ApplyGravityTrack(MMDApp* app);                        // 0x412330 (void in port)
 
 namespace {
 
@@ -132,7 +133,7 @@ const char kJpModelMismatch[] =  // 0x52CB48 "... %s ..."
 }  // namespace
 
 // ---- VA 0x00434B60 --------------------------------------------------------
-int Sub434B60(MMDApp* app, const char* fileName) {
+int LoadVmdMotion(MMDApp* app, const char* fileName) {  // was Sub434B60, VA 0x00434B60
     auto& s = *app;
     unsigned char* const model = app->SelectedModel();
 
@@ -234,7 +235,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
                 }
                 *reinterpret_cast<int*>(rec + 28) = 45;  // fov default
                 rec[32] = 0;                             // view flag
-                if (ok && !Sub410AA0(app, rec)) ok = 0;
+                if (ok && !RegisterCameraKey(app, rec)) ok = 0;
             }
         } else {
             unsigned char ok = 1;
@@ -259,7 +260,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
                 _read(fileHandle, rec + 28, 4);   // fov
                 _read(fileHandle, &word, 1);
                 rec[32] = static_cast<unsigned char>(word != 0);
-                if (ok && !Sub410AA0(app, rec)) ok = 0;
+                if (ok && !RegisterCameraKey(app, rec)) ok = 0;
             }
         }
         // light keys
@@ -274,7 +275,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
             _read(fileHandle, rec + 4, 4);    // position xyz
             _read(fileHandle, rec + 8, 4);
             _read(fileHandle, rec + 12, 4);
-            if (lightOk && !Sub411900(app, rec)) lightOk = 0;
+            if (lightOk && !RegisterLightKey(app, rec)) lightOk = 0;
         }
         // self-shadow keys (ver 2 only)
         unsigned char shadowOk = 1;
@@ -284,16 +285,16 @@ int Sub434B60(MMDApp* app, const char* fileName) {
                 _read(fileHandle, rec + 0, 4);
                 _read(fileHandle, rec + 4, 1);
                 _read(fileHandle, rec + 8, 4);
-                if (shadowOk && !Sub4120B0(app, rec)) shadowOk = 0;
+                if (shadowOk && !RegisterSelfShadowKey(app, rec)) shadowOk = 0;
             }
         }
         _close(fileHandle);
         PanelPaint(app);
         SelectionReeval(app);
         ReloadModels(app);                              // 0x42E640
-        Sub411070(app);
-        Sub411B90(app);
-        Sub412330(app);
+        RefreshLightPanel(app);
+        RefreshSelfShadowPanel(app);
+        ApplyGravityTrack(app);
         return 0;  // original chains 0x412330's return value
     }
 
@@ -333,8 +334,8 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     for (int i = 0; i < 20000; ++i) mkeys[i].allocated = 0;
     for (int i = 0; i < 1000; ++i) ikeys[i].allocated = 0;
 
-    EnableWindow(GetDlgItem(hwnd, 400), TRUE);
-    EnableWindow(GetDlgItem(hwnd, 401), FALSE);
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
     mdl::ModelRecord& record = *mdl::Mdl(model);
     record.undoDirty = 1;
     record.redoDirty = 0;
@@ -374,7 +375,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     std::memset(rawKeys, 0, 192 * boneKeyCount);
     std::memset(mdl::Mdl(model)->keyVisitMap, 0,
                 sizeof(mdl::Mdl(model)->keyVisitMap));
-    Sub4A4940(model);
+    ResetBoneKeyCursor(model);
     (void)rawKeys;  // consumed by the registrar family (0x49D880 et al.)
 
     // bone keys
@@ -409,12 +410,12 @@ int Sub434B60(MMDApp* app, const char* fileName) {
             rec[ch + 77] = static_cast<unsigned char>(scratch);
         }
         if (boneOk) {
-            if (!Sub49D880(model, rec,
+            if (!RegisterBoneKey(model, rec,
                            s.state.currentFrame, 0))
                 boneOk = 0;
         }
     }
-    Sub4A49A0(model);
+    ResetMorphKeyCursor(model);
 
     // morph keys
     _read(fileHandle, &count, 4);
@@ -429,7 +430,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
         if (!_finite(*reinterpret_cast<float*>(rec + 36)))
             *reinterpret_cast<float*>(rec + 36) = 0.0f;
         if (morphOk) {
-            if (!Sub49F190(model, rec,
+            if (!RegisterMorphKeyFromRecord(model, rec,
                            s.state.currentFrame))
                 morphOk = 0;
         }
@@ -443,7 +444,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     _read(fileHandle, &count, 4);
     _read(fileHandle, &count, 4);
     if (_read(fileHandle, &count, 4) > 0) {
-        Sub4A4A00(model);
+        ResetDisplayKeyCursor(model);
         unsigned char ikOk = 1;
         for (unsigned int k = 0; k < count; ++k) {
             _read(fileHandle, rec + 0, 4);   // frame
@@ -463,7 +464,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
             }
             *reinterpret_cast<int*>(rec + 16) = 0;
             if (ikOk) {
-                if (!Sub49F8C0(model, *reinterpret_cast<int*>(rec), rec[4],
+                if (!RegisterDisplayKeyFromRecord(model, *reinterpret_cast<int*>(rec), rec[4],
                                n, entries, 0, nullptr,
                                s.state.currentFrame))
                     ikOk = 0;
@@ -478,7 +479,7 @@ int Sub434B60(MMDApp* app, const char* fileName) {
     _close(fileHandle);
     PanelPaint(app);                                    // 0x414610
     SelectionReeval(app);                               // 0x430510
-    return Sub4B4260(model, s.state.currentFrame,
+    return SeekModelFrame(model, s.state.currentFrame,
                      s.PlaybackPhysicsMode());
 }
 
@@ -488,7 +489,7 @@ void LoadVmdFile(const wchar_t* path) {
     if (g_Block == nullptr) return;
     char ansi[MAX_PATH];
     WideCharToMultiByte(CP_ACP, 0, path, -1, ansi, MAX_PATH, nullptr, nullptr);
-    Sub434B60(g_Block, ansi);
+    LoadVmdMotion(g_Block, ansi);
 }
 
 }  // namespace mikudancestudio

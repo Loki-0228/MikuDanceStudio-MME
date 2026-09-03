@@ -98,7 +98,7 @@ constexpr UINT kD3dxDefault = 0xFFFFFFFFu;
 //     will report failure.
 // Returns 1 when every non-default name resolved.
 // ===========================================================================
-int Sub41EA20(HWND hDlg) {
+int CollectToonFileNames(HWND hDlg) {  // was Sub41EA20, VA 0x0041EA20
     MMDApp* app = g_Block;
     mdl::ModelRecord& model = *mdl::Mdl(app->SelectedModel());
     D3DRenderer* renderer = app->Renderer();
@@ -175,7 +175,7 @@ int Sub41EA20(HWND hDlg) {
 // Quirk kept verbatim: before writing vertices, every morph-0 entry
 // OVERWRITES (not adds to) the raw vertex position with its offset.
 // ===========================================================================
-void Sub41EC10(MMDApp* app, const wchar_t* path) {
+void SaveEnhancedModel(MMDApp* app, const wchar_t* path) {  // was Sub41EC10, 0x41EC10
     mdl::ModelRecord& model = *mdl::Mdl(app->SelectedModel());
     D3DRenderer* renderer = app->Renderer();
 
@@ -418,13 +418,14 @@ void Sub41EC10(MMDApp* app, const wchar_t* path) {
 }
 
 // ===========================================================================
-// 0x4A4850 (x64 sub_7FF7CB4F2240) - set model colour (ground-shadow tint
-// sweep; called from pmm_load_v1/v2 and the menu-286 colour picker).
-// Skips models whose physicsMode byte is 2, then locks the 16-byte-stride
-// secondary vertex buffer (FVF 0x42: position + diffuse) and fills every
-// vertex's colour with opaque ARGB(r, g, b).
+// 0x4A4850 (x64 sub_7FF7CB4F2240) - SetModelColor (was Sub4A4850):
+// set model colour (ground-shadow tint sweep; called from pmm_load_v1/v2
+// and the menu-286 colour picker).  Skips models whose physicsMode byte is
+// 2, then locks the 16-byte-stride secondary vertex buffer (FVF 0x42:
+// position + diffuse) and fills every vertex's colour with opaque
+// ARGB(r, g, b).
 // ===========================================================================
-void Sub4A4850(MMDApp* modelPtr, int r, int g, int b) {
+void SetModelColor(MMDApp* modelPtr, int r, int g, int b) {
     mdl::ModelRecord& model =
         *mdl::Mdl(reinterpret_cast<unsigned char*>(modelPtr));
     if (model.physicsMode == 2)
@@ -454,8 +455,10 @@ void Sub4A4850(MMDApp* modelPtr, int r, int g, int b) {
 }
 
 // ---- not-yet-ported original call targets with NO stub elsewhere -------
-// (Sub439E40/43A650/43B720/43BB30 - the four frame-line edit commands -
-//  moved to src/window/frame_line_edit.cpp; declared in ported_funcs.hpp.)
+// (was Sub439E40/43A650/43B720/43BB30 - now InsertBoneCameraFrameLine /
+//  DeleteBoneCameraFrameLine / InsertFacialLightFrameLine /
+//  DeleteFacialLightFrameLine, the four frame-line edit commands in
+//  src/window/frame_line_edit.cpp; declared in ported_funcs.hpp.)
 
 // ===========================================================================
 // 0x40B5A0 (x64 sub_7FF7CB43AB40) - menu-bar language refresh after the
@@ -801,7 +804,7 @@ constexpr MenuBlock kMenus[] = {
 
 }  // namespace
 
-void Sub40B5A0(MMDApp* app) {
+void RefreshMenuLanguage(MMDApp* app) {  // was Sub40B5A0, VA 0x0040B5A0
     HWND hwnd = app->state.hwnd;
     HMENU menu = GetMenu(hwnd);
     MENUITEMINFOA mii;
@@ -850,16 +853,16 @@ void Sub40B5A0(MMDApp* app) {
 // VA 0x0042AE20 - path copy: real port moved to src/media/media_load.cpp.
 
 // ===========================================================================
-// 0x4076E0 (x64 sub_7FF7CB428F30) - locale/renderer refresh after the toon
-// reload (menu 278, thiscall on the renderer object).  Walks the shared
-// 10000-entry texture cache and reloads every named entry from disk via
-// D3DXCreateTextureFromFileExW (1024 mipmaps with the 1x1 no-mipmap
-// retry), re-sampling the bottom-left pixel colour into the entry's tag
-// bytes; entries that fail to reload keep a null texture with zeroed
-// colour.
+// 0x4076E0 (x64 sub_7FF7CB428F30) - ReloadTextureCache (was Sub4076E0):
+// renderer refresh after the toon reload (menu 278, thiscall on the
+// renderer object).  Walks the shared 10000-entry texture cache and
+// reloads every named entry from disk via D3DXCreateTextureFromFileExW
+// (1024 mipmaps with the 1x1 no-mipmap retry), re-sampling the
+// bottom-left pixel colour into the entry's tag bytes; entries that fail
+// to reload keep a null texture with zeroed colour.
 // ===========================================================================
-void Sub4076E0(void* locale) {
-    D3DRenderer* renderer = static_cast<D3DRenderer*>(locale);
+void ReloadTextureCache(void* rendererArg) {
+    D3DRenderer* renderer = static_cast<D3DRenderer*>(rendererArg);
     IDirect3DDevice9* device = renderer->device;
     auto* d3dx = &d3dx::Get();
     const bool haveD3dx = d3dx->Load() && d3dx->fromFileExW != nullptr;

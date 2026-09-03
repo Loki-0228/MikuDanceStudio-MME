@@ -30,7 +30,7 @@
 //   slots relative to CSourceStream (@0x10008440):
 //     +0x0C 0x10001950  scalar deleting dtor thunk: sub_10001A50(this-0x48)
 //     +0x20 0x10001430  CheckMediaType                  [CPushPinDIBSq]
-//     +0x3C 0x10001310  Pin_v3C / DecideBufferSize      [CPushPinDIBSq;
+//     +0x3C 0x10001310  DecideBufferSize (was Pin_v3C)  [CPushPinDIBSq;
 //                        CSourceStream has _purecall in this slot]
 //   The IPin (@0x10008194) and IQualityControl (@0x1000817C) sub-vtables
 //   contain the same function targets as CSourceStream's — no pin-specific
@@ -625,7 +625,7 @@ HRESULT CPushPinDIBSq::CheckMediaType(const AM_MEDIA_TYPE* pmt)
 }
 
 // =============================================================================
-// VA 0x10001310 — CPushPinDIBSq::Pin_v3C / DecideBufferSize
+// VA 0x10001310 — CPushPinDIBSq::DecideBufferSize (was Pin_v3C)
 //     (pin primary vtable +0x3C; CSourceStream leaves the slot pure)
 // =============================================================================
 //
@@ -644,11 +644,9 @@ HRESULT CPushPinDIBSq::CheckMediaType(const AM_MEDIA_TYPE* pmt)
 //   hr < 0                            -> return hr
 //   actual.cbBuffer < pProps->cbBuffer -> E_FAIL
 //   return S_OK
-HRESULT CPushPinDIBSq::Pin_v3C(void* a1, void* a2)
+HRESULT CPushPinDIBSq::DecideBufferSize(IMemAllocator* pAlloc,
+                                        ALLOCATOR_PROPERTIES* pProps)
 {
-    IMemAllocator*        pAlloc  = reinterpret_cast<IMemAllocator*>(a1);
-    ALLOCATOR_PROPERTIES* pProps  = reinterpret_cast<ALLOCATOR_PROPERTIES*>(a2);
-
     ::EnterCriticalSection(&m_pFilter->m_CritSec);   // filter CS (+0x58)
 
     if (pAlloc == NULL || pProps == NULL)

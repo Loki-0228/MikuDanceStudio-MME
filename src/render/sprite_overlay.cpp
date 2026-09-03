@@ -298,11 +298,11 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                     boneResult.selectedClipW = w;
                 }
                 if (mdl::Mdl(model)->physicsMode == 2 &&
-                    (bone->flags & 1) == 0) {
+                    (bone->flags & mdl::kBoneFlagTailIsBone) == 0) {
                     float secondaryW = 0.0f;
                     ProjectBonePoint(bone, 464, world, viewMatrix, projection,
-                                     view, &bone->f476,
-                                     &bone->f480, &secondaryW);
+                                     view, &bone->tailScreenX,
+                                     &bone->tailScreenY, &secondaryW);
                 }
             }
 
@@ -321,18 +321,18 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                         40 * (5000 - incomingLineCount),
                         reinterpret_cast<void**>(&lines), 0))) {
                     const auto filtered = [&](mikudancestudio::mdl::BoneRecord* bone) -> bool {
-                        return (physMode == 1 && bone->f492) ||
-                            (physMode == 2 && bone->f492 &&
-                             bone->f493 == 0);
+                        return (physMode == 1 && bone->hasRigidBody) ||
+                            (physMode == 2 && bone->hasRigidBody &&
+                             bone->physicsDisabled == 0);
                     };
                     const auto endpoint = [&](mikudancestudio::mdl::BoneRecord* bone,
                                               int* x, int* y) -> bool {
                         const std::uint16_t flags =
                             bone->flags;
                         if (mdl::Mdl(model)->physicsMode == 2 &&
-                            (flags & 1) == 0) {
-                            *x = bone->f476;
-                            *y = bone->f480;
+                            (flags & mdl::kBoneFlagTailIsBone) == 0) {
+                            *x = bone->tailScreenX;
+                            *y = bone->tailScreenY;
                             return true;
                         }
                         const int linked = bone->tailBone;
@@ -360,13 +360,14 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                             auto* bone = &bones[index];
                             const std::uint16_t flags =
                                 bone->flags;
-                            const std::uint8_t type =
+                            const mdl::BoneType type =
                                 bone->type;
-                            if ((flags & 8) == 0 || type >= 8 ||
+                            if ((flags & mdl::kBoneFlagVisible) == 0 ||
+                                type >= mdl::BoneType::FixedAxis ||
                                 filtered(bone) ||
                                 (bone->tailBone <= 0 &&
                                  !(mdl::Mdl(model)->physicsMode == 2 &&
-                                   (flags & 1) == 0)))
+                                   (flags & mdl::kBoneFlagTailIsBone) == 0)))
                                 continue;
 
                             bool inActiveRelationship = false;
@@ -426,8 +427,10 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                                 continue;
                             auto* a = &bones[first];
                             auto* b = &bones[second];
-                            if ((At<std::uint16_t>(a, 500) & 8) == 0 ||
-                                (At<std::uint16_t>(b, 500) & 8) == 0 ||
+                            if ((At<std::uint16_t>(a, 500) &
+                                 mdl::kBoneFlagVisible) == 0 ||
+                                (At<std::uint16_t>(b, 500) &
+                                 mdl::kBoneFlagVisible) == 0 ||
                                 At<int>(a, 452) == 393939 ||
                                 At<int>(a, 456) == 393939 ||
                                 At<int>(b, 452) == 393939 ||
@@ -448,8 +451,8 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                         const std::uint16_t flags =
                             bone->flags;
                         const int linked = bone->tailBone;
-                        if ((flags & 8) != 0 &&
-                            bone->type < 8 &&
+                        if ((flags & mdl::kBoneFlagVisible) != 0 &&
+                            bone->type < mdl::BoneType::FixedAxis &&
                             !filtered(bone) && linked > 0 &&
                             linked < boneCount &&
                             bone->selState != 393939 &&
@@ -481,8 +484,8 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                 for (int index = 0; index < boneCount; ++index) {
                     auto* bone = &bones[index];
                     const std::uint16_t flags = bone->flags;
-                    const std::uint8_t type = bone->type;
-                    if ((flags & 8) == 0)
+                    const mdl::BoneType type = bone->type;
+                    if ((flags & mdl::kBoneFlagVisible) == 0)
                         continue;
 
                     float v0 = 0.0f;
@@ -491,34 +494,42 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                     const bool isSecondary = secondary != nullptr && secondary[index] != 0;
                     bool emit = false;
                     if (cursorKind > 2) {
-                        if (index != selected && isActive && (type == 1 || type == 2)) {
-                            v0 = type == 1 ? 0.034456f : 0.104768f;
-                            v1 = type == 1 ? 0.069058999f : 0.13937099f;
+                        if (index != selected && isActive &&
+                            (type == mdl::BoneType::Move ||
+                             type == mdl::BoneType::Ik)) {
+                            v0 = type == mdl::BoneType::Move ? 0.034456f
+                                                             : 0.104768f;
+                            v1 = type == mdl::BoneType::Move
+                                     ? 0.069058999f
+                                     : 0.13937099f;
                             emit = true;
                         }
                     } else if (cursorKind < 2 &&
-                               !((physMode == 1 && bone->f492) ||
-                                 (physMode == 2 && bone->f492 &&
-                                  bone->f493 == 0))) {
+                               !((physMode == 1 && bone->hasRigidBody) ||
+                                 (physMode == 2 && bone->hasRigidBody &&
+                                  bone->physicsDisabled == 0))) {
                         const int state = isActive ? 0 : (isSecondary ? 1 : 2);
                         switch (type) {
-                        case 0: case 5: case 6: {
+                        case mdl::BoneType::RotateMove:
+                        case mdl::BoneType::RotateGrant:
+                        case mdl::BoneType::Effector: {
                             const float starts[] = {0.0f, 0.17508f, 0.52664f};
                             const float ends[] = {0.033902999f, 0.209683f, 0.561243f};
                             v0 = starts[state]; v1 = ends[state]; emit = true; break;
                         }
-                        case 1: {
+                        case mdl::BoneType::Move: {
                             const float starts[] = {0.034456f, 0.210236f, 0.56179601f};
                             const float ends[] = {0.069058999f, 0.244839f, 0.59639901f};
                             v0 = starts[state]; v1 = ends[state]; emit = true; break;
                         }
-                        case 2: {
+                        case mdl::BoneType::Ik: {
                             const float starts[] = {0.104768f, 0.28054801f, 0.63210797f};
                             const float ends[] = {0.13937099f, 0.31515101f, 0.66671097f};
                             v0 = starts[state]; v1 = ends[state]; emit = true; break;
                         }
-                        case 4: {
-                            const bool ik = (flags & 0x400) != 0;
+                        case mdl::BoneType::UnderIk: {
+                            const bool ik =
+                                (flags & mdl::kBoneFlagFixedAxis) != 0;
                             const float startsIk[] = {0.77328497f, 0.73812902f, 0.70297301f};
                             const float endsIk[] = {0.80788797f, 0.77273202f, 0.73757601f};
                             const float starts[] = {0.069611996f, 0.24539199f, 0.59695202f};
@@ -526,7 +537,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                             v0 = ik ? startsIk[state] : starts[state];
                             v1 = ik ? endsIk[state] : ends[state]; emit = true; break;
                         }
-                        case 8: {
+                        case mdl::BoneType::FixedAxis: {
                             const float starts[] = {0.139924f, 0.31570399f, 0.66726398f};
                             const float ends[] = {0.174527f, 0.35030699f, 0.70186698f};
                             v0 = starts[state]; v1 = ends[state]; emit = true; break;
@@ -556,25 +567,26 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                     const std::uint16_t flags =
                         bone->flags;
                     const bool filteredInMode2 =
-                        physMode == 2 && bone->f492 &&
-                        bone->f493 == 0;
+                        physMode == 2 && bone->hasRigidBody &&
+                        bone->physicsDisabled == 0;
                     float v0 = 0.0f;
                     float v1 = 0.0f;
                     bool emit = false;
-                    if ((flags & 8) != 0 && !filteredInMode2) {
+                    if ((flags & mdl::kBoneFlagVisible) != 0 &&
+                        !filteredInMode2) {
                         switch (bone->type) {
-                        case 0:
+                        case mdl::BoneType::RotateMove:
                             v0 = 0.35086f; v1 = 0.385463f; emit = true;
                             break;
-                        case 1:
+                        case mdl::BoneType::Move:
                             v0 = 0.38601601f; v1 = 0.42061901f; emit = true;
                             break;
-                        case 2:
-                        case 3:
+                        case mdl::BoneType::Ik:
+                        case mdl::BoneType::Unused3:
                             v0 = 0.456328f; v1 = 0.490931f; emit = true;
                             break;
-                        case 4:
-                            if ((flags & 0x400) != 0) {
+                        case mdl::BoneType::UnderIk:
+                            if ((flags & mdl::kBoneFlagFixedAxis) != 0) {
                                 v0 = 0.77328497f;
                                 v1 = 0.80788797f;
                             } else {
@@ -583,11 +595,11 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                             }
                             emit = true;
                             break;
-                        case 5:
-                        case 6:
+                        case mdl::BoneType::RotateGrant:
+                        case mdl::BoneType::Effector:
                             v0 = 0.0f; v1 = 0.033902999f; emit = true;
                             break;
-                        case 8:
+                        case mdl::BoneType::FixedAxis:
                             v0 = 0.49148399f; v1 = 0.52608699f; emit = true;
                             break;
                         default:
@@ -636,7 +648,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
     if (!playback) {
         float targetV0 = 0.470705f;
         float targetV1 = 0.52734601f;
-        const int target = app->state.v9ed9c;
+        const int target = app->state.coordinateSystem;
         if (target == 1) {
             targetV0 = 0.52929902f;
             targetV1 = 0.58594f;

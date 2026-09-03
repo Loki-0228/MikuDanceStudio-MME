@@ -39,6 +39,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -79,7 +80,7 @@ inline HWND AppHwnd(MMDApp* app) {
     return app->state.hwnd;
 }
 
-// VA 0x0040E3D0 - single-key edge detector, inlined into Sub42D3A0 below
+// VA 0x0040E3D0 - single-key edge detector, inlined into PollKeyboardStates below
 // (its only caller).  State cells hold 0=up, 1=just pressed, 3=held,
 // 2=just released; any 0->1 / active->2 transition latches app+658796=1.
 inline void KeyEdgeScan(MMDApp* app, int vk, std::uint32_t* cell) {
@@ -101,14 +102,14 @@ inline void KeyEdgeScan(MMDApp* app, int vk, std::uint32_t* cell) {
 }  // namespace
 
 // ===========================================================================
-// VA 0x0041A1A0 - ReadBeWord  (__stdcall, no `this`)
+// VA 0x0041A1A0 - ReadBeWord (was Sub41A1A0)  (__stdcall, no `this`)
 // ===========================================================================
 // Reads `nbytes` single bytes from `fh` and accumulates them big-endian
 // (v = byte + (v << 8), 0x41A1C9) into *outVal; nbytes <= 0 just stores 0.
 // Returns the last _read() result (or the outVal pointer in the empty case,
 // mirroring the original - no caller uses the value).
 // =========================================================================//
-int Sub41A1A0(int fh, int* outVal, int nbytes) {
+int ReadBeWord(int fh, int* outVal, int nbytes) {
     std::int32_t acc = 0;
     int result;
     if (nbytes <= 0) {                                // 0x41A1AA
@@ -130,14 +131,14 @@ int Sub41A1A0(int fh, int* outVal, int nbytes) {
 }
 
 // ===========================================================================
-// VA 0x0041A1F0 - ReadFixedString  (__stdcall, no `this`)
+// VA 0x0041A1F0 - ReadFixedString (was Sub41A1F0)  (__stdcall, no `this`)
 // ===========================================================================
 // Reads `len` bytes one at a time into a 1000-byte scratch buffer,
 // NUL-terminates and sprintf_s("%s")-copies into `out` (capacity 0x3E8).
 // (The original has no bounds check between len and the 1000-byte scratch;
 // ported 1:1.)  Returns the sprintf_s result.
 // =========================================================================//
-int Sub41A1F0(int fh, char* out, int len) {
+int ReadFixedString(int fh, char* out, int len) {
     char byteBuf = 0;
     char scratch[1000];                               // v6 @0x41A1F0
     int i = 0;
@@ -160,7 +161,7 @@ int Sub41A1F0(int fh, char* out, int len) {
 // identical because each scan writes only its own cell plus the
 // idempotent messageSeen latch.  Called once per frame from 0x46FF02.
 // =========================================================================//
-void Sub42D3A0(MMDApp* app) {
+void PollKeyboardStates(MMDApp* app) {  // was Sub42D3A0
     struct KeyCell { int vk; std::int32_t MMDAppState::* cell; };
     static constexpr KeyCell kNamedCells[] = {
         // 0x42D3AA..0x42D428 and the 0x42D5D6..0x42D6B6 non-numpad entries
@@ -177,7 +178,7 @@ void Sub42D3A0(MMDApp* app) {
         {VK_LBUTTON, &MMDAppState::leftMouseButtonState},
         {VK_RBUTTON, &MMDAppState::rightMouseButtonState},
         {VK_MBUTTON, &MMDAppState::middleMouseButtonState},
-        {VK_RETURN, &MMDAppState::bC},
+        {VK_RETURN, &MMDAppState::enterKeyState},
         {VK_MENU, &MMDAppState::menuKeyState},
         {221, &MMDAppState::keyState221},
         {226, &MMDAppState::keyState226},
@@ -221,7 +222,7 @@ void Sub42D3A0(MMDApp* app) {
 // ===========================================================================
 // VA 0x0041A280 - ScrollDisplayBoneIntoView  (__thiscall, this = MMDApp)
 // ===========================================================================
-// Called by Sub438CD0 after a display-bone selection: walks the display list
+// Called by SelectDisplayBone after a display-bone selection: walks the display list
 // rows (morph table entries at model+9936, 101 B each with visibility flag
 // at +100; group records at model+9944, 46 B with table idx at +40 and the
 // bone index WORD at +42) until the record carrying `boneIdx` is found,
@@ -231,7 +232,7 @@ void Sub42D3A0(MMDApp* app) {
 // bone or negative.  (The original's return value is the
 // low byte of a pointer - junk every caller ignores.)
 // =========================================================================//
-void Sub41A280(MMDApp* app, int boneIdx) {
+void ScrollDisplayBoneIntoView(MMDApp* app, int boneIdx) {  // was Sub41A280
     unsigned char* m = SlotModel(app);                          // 0x41A28E
     const auto* record = mdl::Mdl(m);
     if (record->displayRootBone == static_cast<std::uint32_t>(boneIdx) ||
@@ -276,16 +277,16 @@ void Sub41A280(MMDApp* app, int boneIdx) {
                 if (slack < 0) {
                     int cnt2 = 2 - ((rc.bottom - 408) / 14 - delta);
                     for (; cnt2 != 0; --cnt2)                   // 0x41A452
-                        SendMessageA(hwnd, 0x115 /*WM_VSCROLL*/, 1,
+                        SendMessageA(hwnd, WM_VSCROLL, 1,
                                      reinterpret_cast<LPARAM>(
-                                         GetDlgItem(hwnd, 427)));
+                                         GetDlgItem(hwnd, panel::kTimelineVScroll)));
                 }
             } else {
                 int cnt2 = -delta;
                 for (; cnt2 != 0; --cnt2)                       // 0x41A3D2
-                    SendMessageA(hwnd, 0x115, 0,
+                    SendMessageA(hwnd, WM_VSCROLL, 0,
                                  reinterpret_cast<LPARAM>(
-                                     GetDlgItem(hwnd, 427)));
+                                     GetDlgItem(hwnd, panel::kTimelineVScroll)));
             }
             return;                                             // 0x41A381
         }
@@ -300,7 +301,7 @@ void Sub41A280(MMDApp* app, int boneIdx) {
 // the display-list auto-scroll (0x41A280) and the label/view refresh pair
 // (0x42F1E0 / 0x40D070).  (Original returned the trailing BOOL; unused.)
 // =========================================================================//
-void Sub438CD0(MMDApp* app, int boneIdx) {
+void SelectDisplayBone(MMDApp* app, int boneIdx) {  // was Sub438CD0
     unsigned char* m = SlotModel(app);
     auto* record = mdl::Mdl(m);
     record->selectedBone = boneIdx;                             // 0x438CE5
@@ -309,7 +310,7 @@ void Sub438CD0(MMDApp* app, int boneIdx) {
     for (int i = 0; i < cap; ++i)                               // 0x438D01
         flags[i] = 0;
     flags[boneIdx] = 1;                                         // 0x438D3A
-    Sub41A280(app, boneIdx);                                    // 0x438D41
+    ScrollDisplayBoneIntoView(app, boneIdx);                    // 0x438D41
     PostLanguageSweep(app);                                     // 0x438D48
     PostLanguageSweep2(app);                                    // 0x438D54
 }
@@ -329,12 +330,12 @@ void Sub438CD0(MMDApp* app, int boneIdx) {
 //   * no match anywhere -> keep scanning later records for the current
 //     morph (outer loop at LABEL_34)
 // =========================================================================//
-void Sub438D60(MMDApp* app) {
+void SelectPreviousDisplayBone(MMDApp* app) {  // was Sub438D60
     unsigned char* m = SlotModel(app);
     const auto* record = mdl::Mdl(m);
     const int cur = record->selectedBone;                       // 0x438D71
     if (cur < 0) {
-        Sub438CD0(app, record->displayRootBone);                // 0x438D92
+        SelectDisplayBone(app, record->displayRootBone);                // 0x438D92
         return;
     }
     const int rootBone = record->displayRootBone;
@@ -355,7 +356,7 @@ void Sub438D60(MMDApp* app) {
             // previous record of the same visible group (scan downwards)
             for (int j = i - 1; j >= 0; --j) {                  // 0x438E84
                 if (grps[j].groupIndex == g) {
-                    Sub438CD0(app, grps[j].targetIndex);        // 0x438F36
+                    SelectDisplayBone(app, grps[j].targetIndex);        // 0x438F36
                     return;
                 }
             }
@@ -367,13 +368,13 @@ void Sub438D60(MMDApp* app) {
             }
         }
         if (g <= 2) {
-            Sub438CD0(app, rootBone);                           // 0x438F28
+            SelectDisplayBone(app, rootBone);                           // 0x438F28
             return;
         }
         // LAST record of that group (scan downwards from n-1)
         for (int j = n - 1; j >= 0; --j) {                      // 0x438EE4
             if (grps[j].groupIndex == g) {
-                Sub438CD0(app, grps[j].targetIndex);            // 0x438EED
+                SelectDisplayBone(app, grps[j].targetIndex);            // 0x438EED
                 return;
             }
         }
@@ -394,12 +395,12 @@ void Sub438D60(MMDApp* app) {
 //     and its FIRST record (0x4390D5 / 0x43914D); g is clamped by the
 //     entry count at model+9940 (loop exits at LABEL_41 when exhausted)
 // =========================================================================//
-void Sub438F50(MMDApp* app) {
+void SelectNextDisplayBone(MMDApp* app) {  // was Sub438F50
     unsigned char* m = SlotModel(app);
     const auto* record = mdl::Mdl(m);
     const int cur = record->selectedBone;                       // 0x438F64
     if (cur < 0) {
-        Sub438CD0(app, record->displayRootBone);                // 0x438F8C
+        SelectDisplayBone(app, record->displayRootBone);                // 0x438F8C
         return;
     }
     const mdl::FrameGroup* const grps = mdl::RigidGroups(m);
@@ -413,7 +414,7 @@ void Sub438F50(MMDApp* app) {
                 continue;
             for (int j = 0; j < n; ++j) {
                 if (grps[j].groupIndex == g) {
-                    Sub438CD0(app, grps[j].targetIndex);        // 0x43904E
+                    SelectDisplayBone(app, grps[j].targetIndex);        // 0x43904E
                     return;
                 }
             }
@@ -431,7 +432,7 @@ void Sub438F50(MMDApp* app) {
             // next record of the same visible group (scan upwards)
             for (int j = i + 1; j < n; ++j) {                   // 0x439105
                 if (grps[j].groupIndex == g) {
-                    Sub438CD0(app, grps[j].targetIndex);
+                    SelectDisplayBone(app, grps[j].targetIndex);
                     return;
                 }
             }
@@ -446,7 +447,7 @@ void Sub438F50(MMDApp* app) {
                 if (tbl[g2].flags != 0) {
                     for (int j = 0; j < n; ++j) {
                         if (grps[j].groupIndex == g2) {
-                            Sub438CD0(app, grps[j].targetIndex);
+                            SelectDisplayBone(app, grps[j].targetIndex);
                             return;
                         }
                     }
@@ -467,7 +468,7 @@ void Sub438F50(MMDApp* app) {
 // at app+645704 and the (clientHeight-452)/14 row budget.  (Original
 // returned a junk LRESULT; unused by all callers.)
 // =========================================================================//
-void Sub41A460(MMDApp* app, unsigned char slotIdx) {
+void ScrollModelListIntoView(MMDApp* app, unsigned char slotIdx) {  // was Sub41A460
     unsigned char* m = DisplayObjectAt(app, slotIdx);           // 0x41A46B
     if (m == nullptr)
         return;
@@ -481,15 +482,15 @@ void Sub41A460(MMDApp* app, unsigned char slotIdx) {
         if (slack < 0) {
             int cnt = 2 - ((rc.bottom - 452) / 14 - delta);
             for (; cnt != 0; --cnt)                             // 0x41A542
-                SendMessageA(hwnd, 0x115 /*WM_VSCROLL*/, 1,
+                SendMessageA(hwnd, WM_VSCROLL, 1,
                              reinterpret_cast<LPARAM>(
-                                 GetDlgItem(hwnd, 427)));
+                                 GetDlgItem(hwnd, panel::kTimelineVScroll)));
         }
     } else {
         int cnt = listPos - DisplayOrder(m);
         for (; cnt != 0; --cnt)                                 // 0x41A4C6
-            SendMessageA(hwnd, 0x115, 0,
-                         reinterpret_cast<LPARAM>(GetDlgItem(hwnd, 427)));
+            SendMessageA(hwnd, WM_VSCROLL, 0,
+                         reinterpret_cast<LPARAM>(GetDlgItem(hwnd, panel::kTimelineVScroll)));
     }
 }
 
@@ -512,9 +513,9 @@ inline void SelectDisplayObject(MMDApp* app, int idx) {         // 0x43974F
     HWND hwnd = AppHwnd(app);
     app->SelectedObjectSlot() = static_cast<unsigned char>(idx); // 0x43975D
     const WPARAM wp = DisplayOrder(object);                      // 0x439771
-    SendMessageA(GetDlgItem(hwnd, 471), 0x14E /*CB_SETCURSEL*/, wp, 0);
-    Sub4134E0(app);                                             // 0x43978C
-    Sub41A460(app, app->SelectedObjectSlot());
+    SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_SETCURSEL, wp, 0);
+    SyncAccessoryEditPanel(app);  // was Sub4134E0              // 0x43978C
+    ScrollModelListIntoView(app, app->SelectedObjectSlot());
     PostLanguageSweep(app);                                     // 0x4397A2
     PostLanguageSweep2(app);
 }
@@ -533,7 +534,7 @@ inline void SelectDisplayObject(MMDApp* app, int idx) {         // 0x43974F
 // accessory mode (656359=1); a missing current model resets to the bone
 // mode (656356=1).
 // =========================================================================//
-void Sub4391D0(MMDApp* app) {
+void SelectPrevEditTarget(MMDApp* app) {  // was Sub4391D0
     if (app->GlobalTrackSelected(GlobalTimelineTrack::Camera) != 0) {
         ClearAllDisplayObjectFlags(app);
         app->SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
@@ -592,7 +593,7 @@ void Sub4391D0(MMDApp* app) {
         return;
     }
     app->SelectGlobalTimelineTrack(GlobalTimelineTrack::Gravity);
-    Sub41A460(app, curSlot);                                    // 0x439441
+    ScrollModelListIntoView(app, curSlot);                                    // 0x439441
     PostLanguageSweep(app);                                     // 0x439448
     PostLanguageSweep2(app);
 }
@@ -607,7 +608,7 @@ void Sub4391D0(MMDApp* app) {
 //   frame (model+1181)+1, re-showing the CURRENT model when that frame
 //   does not exist (0x43985A).
 // =========================================================================//
-void Sub439520(MMDApp* app) {
+void SelectNextEditTarget(MMDApp* app) {  // was Sub439520
     if (app->GlobalTrackSelected(GlobalTimelineTrack::Camera) != 0) {
         ClearAllDisplayObjectFlags(app);
         app->SelectGlobalTimelineTrack(GlobalTimelineTrack::Light);
@@ -668,7 +669,7 @@ void Sub439520(MMDApp* app) {
         ++i;
         if (i >= 255) {
             DisplayObjectActive(cur) = 1;                        // 0x43985A
-            Sub41A460(app, curSlot);
+            ScrollModelListIntoView(app, curSlot);
             PostLanguageSweep(app);                             // 0x439872
             PostLanguageSweep2(app);
             return;

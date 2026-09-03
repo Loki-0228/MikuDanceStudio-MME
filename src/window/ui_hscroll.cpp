@@ -73,6 +73,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -82,6 +83,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -105,7 +107,7 @@ void HandleBoneSlider(MMDApp* app, HWND hwnd, int sliderId,
     }
 
     const LRESULT pos = SendMessageA(GetDlgItem(hwnd, sliderId),
-                                     0x400 /*TBM_GETPOS*/, 0, 0);
+                                     TBM_GETPOS, 0, 0);
     const double scaled = static_cast<double>(pos) / 100.0;
 
     model = app->SelectedModel();
@@ -128,9 +130,9 @@ void HandleBoneSlider(MMDApp* app, HWND hwnd, int sliderId,
 // each message; the handle is deterministic so one fetch suffices.
 void EchoEditText(HWND hwnd, int id, const char* text) {
     HWND edit = GetDlgItem(hwnd, id);
-    SendMessageA(edit, 0xB1 /*EM_SETSEL*/, 0,
+    SendMessageA(edit, EM_SETSEL, 0,
                  static_cast<LPARAM>(GetWindowTextLengthA(edit)));
-    SendMessageA(edit, 0xC2 /*WM_SETTEXT*/, 0,
+    SendMessageA(edit, EM_REPLACESEL, 0,
                  reinterpret_cast<LPARAM>(text));
 }
 
@@ -164,19 +166,19 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
     const std::uint32_t code = LOWORD(wParam);                // a3 low 16
 
     // ---- 505/510/515/520: bone X/Y/Z/rot sliders -------------------------
-    if (ctrl == GetDlgItem(hwnd, 505)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kMorphSlider0)) {
         HandleBoneSlider(app, hwnd, 505, 0, 506);
-    } else if (ctrl == GetDlgItem(hwnd, 510)) {
+    } else if (ctrl == GetDlgItem(hwnd, panel::kMorphSlider1)) {
         HandleBoneSlider(app, hwnd, 510, 1, 511);
-    } else if (ctrl == GetDlgItem(hwnd, 515)) {
+    } else if (ctrl == GetDlgItem(hwnd, panel::kMorphSlider2)) {
         HandleBoneSlider(app, hwnd, 515, 2, 516);
-    } else if (ctrl == GetDlgItem(hwnd, 520)) {
+    } else if (ctrl == GetDlgItem(hwnd, panel::kMorphSlider3)) {
         HandleBoneSlider(app, hwnd, 520, 3, 521);
     }
     // ---- 455/456/457: RGB sliders -----------------------------------------
-    else if (ctrl == GetDlgItem(hwnd, 455)) {
-        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 455),
-                                         0x400 /*TBM_GETPOS*/, 0, 0);
+    else if (ctrl == GetDlgItem(hwnd, panel::kLightColorSliderR)) {
+        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kLightColorSliderR),
+                                         TBM_GETPOS, 0, 0);
         const float v =
             static_cast<float>(static_cast<double>(pos) * 0.00390625);
         app->LightColor()[0] = v;
@@ -188,9 +190,9 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
                                    256.0));
         EchoEditText(hwnd, 461, buf);
         RefreshRequest(-2);
-    } else if (ctrl == GetDlgItem(hwnd, 456)) {
-        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 456),
-                                         0x400 /*TBM_GETPOS*/, 0, 0);
+    } else if (ctrl == GetDlgItem(hwnd, panel::kLightColorSliderG)) {
+        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kLightColorSliderG),
+                                         TBM_GETPOS, 0, 0);
         const float v =
             static_cast<float>(static_cast<double>(pos) * 0.00390625);
         app->LightColor()[1] = v;
@@ -202,9 +204,9 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
                                    256.0));
         EchoEditText(hwnd, 462, buf);
         RefreshRequest(-2);
-    } else if (ctrl == GetDlgItem(hwnd, 457)) {
-        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 457),
-                                         0x400 /*TBM_GETPOS*/, 0, 0);
+    } else if (ctrl == GetDlgItem(hwnd, panel::kLightColorSliderB)) {
+        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kLightColorSliderB),
+                                         TBM_GETPOS, 0, 0);
         const float v =
             static_cast<float>(static_cast<double>(pos) * 0.00390625);
         app->LightColor()[2] = v;
@@ -218,9 +220,9 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
         RefreshRequest(-2);
     }
     // ---- 458/459/460: accessory pos/rot sliders ---------------------------
-    else if (ctrl == GetDlgItem(hwnd, 458)) {
-        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 458),
-                                         0x400 /*TBM_GETPOS*/, 0, 0);
+    else if (ctrl == GetDlgItem(hwnd, panel::kLightDirSliderX)) {
+        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kLightDirSliderX),
+                                         TBM_GETPOS, 0, 0);
         app->LightDirection()[0] =
             static_cast<float>(static_cast<double>(pos) / 100.0);
         char buf[256];
@@ -228,9 +230,9 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
         EchoEditText(hwnd, 464, buf);
         ApplySceneLight(app);
         RefreshRequest(-2);
-    } else if (ctrl == GetDlgItem(hwnd, 459)) {
-        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 459),
-                                         0x400 /*TBM_GETPOS*/, 0, 0);
+    } else if (ctrl == GetDlgItem(hwnd, panel::kLightDirSliderY)) {
+        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kLightDirSliderY),
+                                         TBM_GETPOS, 0, 0);
         app->LightDirection()[1] =
             static_cast<float>(static_cast<double>(pos) / 100.0);
         char buf[256];
@@ -238,9 +240,9 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
         EchoEditText(hwnd, 465, buf);
         ApplySceneLight(app);
         RefreshRequest(-2);
-    } else if (ctrl == GetDlgItem(hwnd, 460)) {
-        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 460),
-                                         0x400 /*TBM_GETPOS*/, 0, 0);
+    } else if (ctrl == GetDlgItem(hwnd, panel::kLightDirSliderZ)) {
+        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kLightDirSliderZ),
+                                         TBM_GETPOS, 0, 0);
         app->LightDirection()[2] =
             static_cast<float>(static_cast<double>(pos) / 100.0);
         char buf[256];
@@ -250,9 +252,9 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
         RefreshRequest(-2);
     }
     // ---- 447: FOV slider ---------------------------------------------------
-    else if (ctrl == GetDlgItem(hwnd, 447)) {
-        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 447),
-                                         0x400 /*TBM_GETPOS*/, 0, 0);
+    else if (ctrl == GetDlgItem(hwnd, panel::kFovSlider)) {
+        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kFovSlider),
+                                         TBM_GETPOS, 0, 0);
         app->CameraFov() = static_cast<float>(pos);
         char buf[256];
         sprintf_s(buf, 0x100, "%3d", static_cast<int>(app->CameraFov()));
@@ -280,19 +282,19 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
         RefreshRequest(-1);
     }
     // ---- 560: physics-interval ratio slider --------------------------------
-    else if (ctrl == GetDlgItem(hwnd, 560)) {
-        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, 560),
-                                         0x400 /*TBM_GETPOS*/, 0, 0);
+    else if (ctrl == GetDlgItem(hwnd, panel::kSelfShadowRangeSlider)) {
+        const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kSelfShadowRangeSlider),
+                                         TBM_GETPOS, 0, 0);
         app->state.physicsInterval = static_cast<float>(
             static_cast<double>(10000 - static_cast<int>(pos)) / 100000.0);
         char buf[256];
         sprintf_s(buf, 0x100, "%d", static_cast<int>(pos));
-        SetWindowTextA(GetDlgItem(hwnd, 561), buf);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kSelfShadowRangeEdit), buf);
         app->SceneModified() = 1;
         RefreshRequest(-3);
     }
     // ---- 428: timeline strip ------------------------------------------------
-    else if (ctrl == GetDlgItem(hwnd, 428)) {
+    else if (ctrl == GetDlgItem(hwnd, panel::kTimelineHScroll)) {
         switch (code) {
         case 0:  // SB_LINEUP
             if (app->FloatingWindow() != nullptr ||

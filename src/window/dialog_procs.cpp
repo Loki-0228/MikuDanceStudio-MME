@@ -37,6 +37,7 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -45,18 +46,19 @@ namespace mikudancestudio {
 // the original (caller loads ECX from the Block global), so the HWND-only
 // stub signatures were missing the MMDApp* first parameter.  The bodies are
 // ported in dialog_select_ops.cpp with these corrected signatures.
-void Sub466630(MMDApp* app, HWND hDlg);              // VA 0x00466630
-void Sub461C20(MMDApp* app, HWND hDlg);              // VA 0x00461C20
-void Sub4256C0(MMDApp* app);                         // VA 0x004256C0 (stub)
-void Sub43D610(MMDApp* app, HWND hDlg);              // VA 0x0043D610
-void Sub43D2E0(MMDApp* app, HWND hDlg, int a3);      // VA 0x0043D2E0
-void Sub43D560(MMDApp* app, HWND hDlg);              // VA 0x0043D560
-void Sub43E970(HWND hDlg);                           // VA 0x0043E970
+void InitSelectNavDialog(MMDApp* app, HWND hDlg);    // was Sub466630, VA 0x00466630
+void SyncSelectAttachCombo(MMDApp* app, HWND hDlg);  // was Sub461C20, VA 0x00461C20
+void ResetModelSelection(MMDApp* app);               // was Sub4256C0, VA 0x004256C0
+void ApplyBoneAttach(MMDApp* app, HWND hDlg);        // was Sub43D610, VA 0x0043D610
+void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection);  // was Sub43D2E0, VA 0x0043D2E0
+void CommitTargetBonePick(MMDApp* app, HWND hDlg);   // was Sub43D560, VA 0x0043D560
+void ApplyFrameRangeScale(HWND hDlg);                // VA 0x0043E970, was Sub43E970
+                                                   // (frame_range_apply.cpp)
 
 // ===========================================================================
 // VA 0x0044C5D0 - FrameRangeDlgProc
 // ===========================================================================
-INT_PTR CALLBACK Sub44C5D0(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK FrameRangeDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {  // was Sub44C5D0
     (void)lParam;
     char text[256];
 
@@ -68,31 +70,31 @@ INT_PTR CALLBACK Sub44C5D0(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
 
         const HWND main = reinterpret_cast<HWND>(
             app->state.hwnd);
-        GetWindowTextA(GetDlgItem(main, 425), text, 8);           // 0x44C68E
+        GetWindowTextA(GetDlgItem(main, panel::kRangeStartEdit), text, 8);           // 0x44C68E
         sprintf_s(text, 0x100, "%d", atol(text));
-        SendMessageA(GetDlgItem(hDlg, 686), 0xC2 /*WM_SETTEXT*/, 0,
+        SendMessageA(GetDlgItem(hDlg, panel::kScaleFromEdit), EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(text));
-        GetWindowTextA(GetDlgItem(main, 426), text, 8);           // 0x44C6EB
+        GetWindowTextA(GetDlgItem(main, panel::kRangeStopEdit), text, 8);           // 0x44C6EB
         sprintf_s(text, 0x100, "%d", atol(text));
-        SendMessageA(GetDlgItem(hDlg, 687), 0xC2, 0,
+        SendMessageA(GetDlgItem(hDlg, panel::kScaleToEdit), EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(text));
 
-        SendMessageA(GetDlgItem(hDlg, 605), 0xC2, 0,
+        SendMessageA(GetDlgItem(hDlg, panel::kScaleRateEdit), EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>("1.0"));  // 0x52D740
-        SetFocus(GetDlgItem(hDlg, 605));                           // 0x44C74C
-        SendMessageA(GetDlgItem(hDlg, 605), 0xB1 /*EM_SETSEL*/, 0, 3);
-        SendMessageA(GetDlgItem(hDlg, 688), 0xF1 /*BM_SETCHECK*/, 1, 0);
-        SendMessageA(GetDlgItem(hDlg, 689), 0xF1, 1, 0);
-        SendMessageA(GetDlgItem(hDlg, 690), 0xF1, 1, 0);
+        SetFocus(GetDlgItem(hDlg, panel::kScaleRateEdit));                           // 0x44C74C
+        SendMessageA(GetDlgItem(hDlg, panel::kScaleRateEdit), EM_SETSEL, 0, 3);
+        SendMessageA(GetDlgItem(hDlg, panel::kScaleBoneCheckbox), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(hDlg, panel::kScaleMorphCheckbox), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(hDlg, panel::kScaleDispIkCheckbox), BM_SETCHECK, 1, 0);
 
-        SetFocus(GetDlgItem(hDlg, 686));                           // 0x44C7A7
-        const HWND edit = GetDlgItem(hDlg, 686);
-        SendMessageA(edit, 0xB1, 0, GetWindowTextLengthA(edit));
+        SetFocus(GetDlgItem(hDlg, panel::kScaleFromEdit));                           // 0x44C7A7
+        const HWND edit = GetDlgItem(hDlg, panel::kScaleFromEdit);
+        SendMessageA(edit, EM_SETSEL, 0, GetWindowTextLengthA(edit));
         return 0;
     }
     if (Msg == WM_COMMAND) {                        // 0x44C5FD
         if (LOWORD(wParam) == 1) {                  // OK
-            Sub43E970(hDlg);                        // 0x0043E970
+            ApplyFrameRangeScale(hDlg);              // 0x0043E970
             EndDialog(hDlg, 1);
         } else if (LOWORD(wParam) == 2) {           // Cancel
             EndDialog(hDlg, 2);
@@ -104,9 +106,9 @@ INT_PTR CALLBACK Sub44C5D0(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
 // ===========================================================================
 // VA 0x0047A3F0 - SelectNavDlgProc
 // ===========================================================================
-INT_PTR CALLBACK Sub47A3F0(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK SelectNavDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {  // was Sub47A3F0
     if (Msg == WM_INITDIALOG) {                     // 0x47A3F9
-        Sub466630(g_Block, hDlg);                   // 0x00466630 list fill
+        InitSelectNavDialog(g_Block, hDlg);                   // 0x00466630 list fill
         return 0;
     }
     if (Msg != WM_COMMAND)
@@ -117,43 +119,43 @@ INT_PTR CALLBACK Sub47A3F0(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     if (LOWORD(wParam) == 671) {                    // 0x47A42A previous
-        HWND combo = GetDlgItem(hDlg, 669);
-        const LRESULT cur = SendMessageA(combo, 0x147 /*CB_GETCURSEL*/, 0, 0);
+        HWND combo = GetDlgItem(hDlg, panel::kBoneNameCombo);
+        const LRESULT cur = SendMessageA(combo, CB_GETCURSEL, 0, 0);
         if (cur > 0) {
-            SendMessageA(combo, 0x14E /*CB_SETCURSEL*/, cur - 1, 0);
-            Sub461C20(g_Block, hDlg);
+            SendMessageA(combo, CB_SETCURSEL, cur - 1, 0);
+            SyncSelectAttachCombo(g_Block, hDlg);
         }
         return 0;
     }
     if (LOWORD(wParam) == 670) {                    // 0x47A47A next
-        HWND combo = GetDlgItem(hDlg, 669);
-        const LRESULT cur = SendMessageA(combo, 0x147, 0, 0);
-        if (cur < SendMessageA(combo, 0x146 /*CB_GETCOUNT*/, 0, 0) - 1) {
-            SendMessageA(combo, 0x14E, cur + 1, 0);
-            Sub461C20(g_Block, hDlg);
+        HWND combo = GetDlgItem(hDlg, panel::kBoneNameCombo);
+        const LRESULT cur = SendMessageA(combo, CB_GETCURSEL, 0, 0);
+        if (cur < SendMessageA(combo, CB_GETCOUNT, 0, 0) - 1) {
+            SendMessageA(combo, CB_SETCURSEL, cur + 1, 0);
+            SyncSelectAttachCombo(g_Block, hDlg);
         }
         return 0;
     }
     if (LOWORD(wParam) == 632) {                    // 0x47A4DD
-        Sub4256C0(g_Block);
+        ResetModelSelection(g_Block);
         return 0;
     }
     if (LOWORD(wParam) == 630) {                    // 0x47A4F6
-        Sub43D610(g_Block, hDlg);
+        ApplyBoneAttach(g_Block, hDlg);
         return 0;
     }
     if (HIWORD(wParam) == 1) {                      // 0x47A516 click
         const HWND ctrl = reinterpret_cast<HWND>(lParam);
-        if (ctrl == GetDlgItem(hDlg, 669)) {
-            Sub461C20(g_Block, hDlg);
+        if (ctrl == GetDlgItem(hDlg, panel::kBoneNameCombo)) {
+            SyncSelectAttachCombo(g_Block, hDlg);
             return 0;
         }
-        if (ctrl == GetDlgItem(hDlg, 673)) {
-            Sub43D2E0(g_Block, hDlg, 0);
+        if (ctrl == GetDlgItem(hDlg, panel::kMorphNameCombo)) {
+            RebuildTargetBoneList(g_Block, hDlg, 0);
             return 0;
         }
-        if (ctrl == GetDlgItem(hDlg, 677)) {
-            Sub43D560(g_Block, hDlg);
+        if (ctrl == GetDlgItem(hDlg, panel::kGroupNameCombo)) {
+            CommitTargetBonePick(g_Block, hDlg);
             return 0;
         }
     }

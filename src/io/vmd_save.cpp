@@ -164,10 +164,10 @@ void SaveVmdFile(const wchar_t* path) {
     mikudancestudio::mdl::MorphRecord* const morphs = mikudancestudio::mdl::Morphs(model);
     mikudancestudio::mdl::IkChain* const ikChains = mikudancestudio::mdl::IkChains(model);
 
-    std::uint32_t v32;
+    std::uint32_t outDword;
     // ---- bone keys --------------------------------------------------------
-    v32 = cameraMode ? 0 : boneCnt;
-    Wr(fd, &v32, 4);                                             // 0x419889
+    outDword = cameraMode ? 0 : boneCnt;
+    Wr(fd, &outDword, 4);                                             // 0x419889
     if (!cameraMode) {
         const mdl::BoneKey* keys = mdl::BoneKeys(model);
         for (unsigned int idx = 0; idx < static_cast<unsigned int>(mdl::kBoneKeyCapacity); ++idx) {
@@ -177,8 +177,8 @@ void SaveVmdFile(const wchar_t* path) {
             while (boneIdx >= static_cast<unsigned int>(boneCount))
                 boneIdx = keys[boneIdx].previous;
             Wr(fd, bones[boneIdx].name, 15);                    // 0x419904
-            v32 = rec.frame - minFrame;
-            Wr(fd, &v32, 4);
+            outDword = rec.frame - minFrame;
+            Wr(fd, &outDword, 4);
             Wr(fd, rec.position, sizeof rec.position);
             Wr(fd, rec.rotation, sizeof rec.rotation);
             // interpolation: 4 channels, transposed control-byte table
@@ -201,8 +201,8 @@ void SaveVmdFile(const wchar_t* path) {
     }
 
     // ---- morph keys -------------------------------------------------------
-    v32 = cameraMode ? 0 : morphCnt;
-    Wr(fd, &v32, 4);                                             // 0x419B8F
+    outDword = cameraMode ? 0 : morphCnt;
+    Wr(fd, &outDword, 4);                                             // 0x419B8F
     if (!cameraMode) {
         const mdl::MorphKey* mkeys = mdl::MorphKeys(model);
         for (unsigned int idx = 0; idx < 20000; ++idx) {
@@ -212,30 +212,31 @@ void SaveVmdFile(const wchar_t* path) {
             while (morphIdx >= static_cast<unsigned int>(morphCount))
                 morphIdx = mkeys[morphIdx].previous;
             Wr(fd, morphs[morphIdx].name, 15);                  // 0x419C18
-            v32 = rec.frame - minFrame;
-            Wr(fd, &v32, 4);
+            outDword = rec.frame - minFrame;
+            Wr(fd, &outDword, 4);
             Wr(fd, &rec.value, sizeof rec.value);
         }
     }
 
     // ---- camera keys ------------------------------------------------------
-    v32 = camCnt;
-    Wr(fd, &v32, 4);                                             // 0x419E60
+    outDword = camCnt;
+    Wr(fd, &outDword, 4);                                             // 0x419E60
     if (camCnt != 0) {
         const mdl::CameraKey* cam = app->CameraKeys();
         for (unsigned int i = 0; i < 10000; ++i) {
             const mdl::CameraKey& rec = cam[i];
             if (rec.selected == 0) continue;
-            v32 = rec.frame - minFrame;
-            Wr(fd, &v32, 4);
+            outDword = rec.frame - minFrame;
+            Wr(fd, &outDword, 4);
             Wr(fd, &rec.distance, sizeof rec.distance);
             Wr(fd, rec.eye, sizeof rec.eye);
             Wr(fd, rec.target, sizeof rec.target);
-            for (int i = 0; i < 6; ++i) {                        // 0x419DAA..
-                Wr(fd, &rec.interpolation[0][i], 1);
-                Wr(fd, &rec.interpolation[2][i], 1);
-                Wr(fd, &rec.interpolation[1][i], 1);
-                Wr(fd, &rec.interpolation[3][i], 1);
+            for (int j = 0; j < 6; ++j) {                        // 0x419DAA..
+                // was: inner `i`, shadowing the outer record-index i
+                Wr(fd, &rec.interpolation[0][j], 1);
+                Wr(fd, &rec.interpolation[2][j], 1);
+                Wr(fd, &rec.interpolation[1][j], 1);
+                Wr(fd, &rec.interpolation[3][j], 1);
             }
             Wr(fd, &rec.fov, sizeof rec.fov);
             const unsigned char view = rec.perspective != 0 ? 1 : 0;
@@ -244,51 +245,52 @@ void SaveVmdFile(const wchar_t* path) {
     }
 
     // ---- light keys -------------------------------------------------------
-    v32 = lightCnt;
-    Wr(fd, &v32, 4);                                             // 0x419F4D
+    outDword = lightCnt;
+    Wr(fd, &outDword, 4);                                             // 0x419F4D
     if (lightCnt != 0) {
         const mdl::LightKey* light = app->LightKeys();
         for (unsigned int i = 0; i < 10000; ++i) {
             const mdl::LightKey& rec = light[i];
             if (rec.selected == 0) continue;
-            v32 = rec.frame - minFrame;
-            Wr(fd, &v32, 4);
+            outDword = rec.frame - minFrame;
+            Wr(fd, &outDword, 4);
             Wr(fd, rec.color, sizeof rec.color);
             Wr(fd, rec.direction, sizeof rec.direction);
         }
     }
 
     // ---- self-shadow keys -------------------------------------------------
-    v32 = shadowCnt;
-    Wr(fd, &v32, 4);                                             // 0x419FD6
+    outDword = shadowCnt;
+    Wr(fd, &outDword, 4);                                             // 0x419FD6
     if (shadowCnt != 0) {
         const mdl::SelfShadowKey* shadow = app->ShadowKeys();
         for (unsigned int i = 0; i < 10000; ++i) {
             const mdl::SelfShadowKey& rec = shadow[i];
             if (rec.selected == 0) continue;
-            v32 = rec.frame - minFrame;
-            Wr(fd, &v32, 4);
+            outDword = rec.frame - minFrame;
+            Wr(fd, &outDword, 4);
             Wr(fd, &rec.mode, sizeof rec.mode);
             Wr(fd, &rec.distance, sizeof rec.distance);
         }
     }
 
     // ---- IK / display master keys ----------------------------------------
-    v32 = cameraMode ? 0 : ikCnt;
-    Wr(fd, &v32, 4);                                             // 0x41A17B..
-    if (!cameraMode && v32 != 0) {
+    outDword = cameraMode ? 0 : ikCnt;
+    Wr(fd, &outDword, 4);                                             // 0x41A17B..
+    if (!cameraMode && outDword != 0) {
         const mdl::DisplayKey* ikeys = mdl::DisplayKeys(model);
         for (unsigned int i = 0; i < 1000; ++i) {
             const mdl::DisplayKey& rec = ikeys[i];
             if (rec.allocated == 0) continue;
-            v32 = rec.frame - minFrame;
-            Wr(fd, &v32, 4);
+            outDword = rec.frame - minFrame;
+            Wr(fd, &outDword, 4);
             const unsigned char visible = rec.visible != 0 ? 1 : 0;
             Wr(fd, &visible, 1);
-            v32 = static_cast<std::uint32_t>(ikChainCount);
-            Wr(fd, &v32, 4);
-            for (int i = 0; i < ikChainCount; ++i) {             // 0x41A0F0..
-                const int boneIdx = ikChains[i].boneIndex;
+            outDword = static_cast<std::uint32_t>(ikChainCount);
+            Wr(fd, &outDword, 4);
+            for (int j = 0; j < ikChainCount; ++j) {             // 0x41A0F0..
+                // was: inner `i`, shadowing the outer record-index i
+                const int boneIdx = ikChains[j].boneIndex;
                 Wr(fd, bones[boneIdx].name, 20);
                 // 0x41A11A: the per-IK display byte array lives in a separate
                 // heap buffer pointed to by the record's +0x10 slot (written
@@ -298,7 +300,7 @@ void SaveVmdFile(const wchar_t* path) {
                 // and the padding/pair-pointer bytes instead (allocation
                 // garbage on a fresh load) - toe-IK chains came out 0.
                 const unsigned char on =
-                    mdl::IkStates(rec)[i] != 0
+                    mdl::IkStates(rec)[j] != 0
                         ? 1 : 0;
                 Wr(fd, &on, 1);
             }

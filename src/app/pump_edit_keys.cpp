@@ -19,14 +19,14 @@
 //   G6  x86 0x4721C9          | x64 0x44F06A..0x44F106
 //       ']' (VK 221) flips the interpolation-reset checkbox 0x212 (530).
 //   G8  x86 0x472246..0x472313 | x64 0x44F106..0x44F1E8
-//       DELETE rebuilds the model-edit state (Sub4316B0) unless focus is
+//       DELETE rebuilds the model-edit state (DeleteMarkedKeyframes) unless focus is
 //       inside one of the five frame edits.
 //   G5  x86 0x47244E..0x472524 (TAB) / 0x47252B..0x472609 (VK 226)
 //                           | x64 0x44F32D..0x44F42E / 0x44F42E..0x44F52F
 //       TAB and the Japanese henkan key cycle the model/accessory combo
-//       0x1B4 (436), wrapping at both ends, then apply it (Sub44D940).
+//       0x1B4 (436), wrapping at both ends, then apply it (ApplyModelComboSelection).
 //   G7  x86 0x472633..0x472698 | x64 0x44F52F..0x44F594 / 0x44F594..0x44F5D4
-//       Alt+Enter toggles fullscreen (flip 0xA0274 + Sub4629D0 +
+//       Alt+Enter toggles fullscreen (flip 0xA0274 + ApplyFullscreenWindowState +
 //       PostDeviceReset); ESC leaves it (same two calls).
 //   G2  x86 0x472B76..0x472D1E | x64 0x44FB0A..0x44FCDB
 //       Enter in camera/accessory mode: dirty 0xA0B0D, clear the selected
@@ -39,14 +39,14 @@
 //       AND G3 back to back in camera mode (case 500 has no mode gate of
 //       its own; it registers the selected model's pose).
 //   G4  x86 0x4730F8..0x473127 | x64 0x450186..0x4501B5
-//       ESC while a frame-step recording is running ends it (Sub464A00).
+//       ESC while a frame-step recording is running ends it (FinishAviRecord).
 //
 // The x86 and x64 compilers schedule these blocks differently inside the
 // pump (x86 interleaves G5/G7 between the letter blocks, x64 groups them
 // before G2); the relative order inside this family is preserved.
 //
 // Gate inputs, verified on both binaries (poll cells x64 = x86 + 4):
-//   RETURN cell x86 +0xBC (MMDAppState::bC) / x64 +0xC0 - the same cell
+//   RETURN cell x86 +0xBC (MMDAppState::enterKeyState) / x64 +0xC0 - the same cell
 //   the ~20 command handlers poke with 1 to fake an Enter; consuming it
 //   here closes that chain.
 //   MENU(Alt) +0xC4/+0xC8, ESC +0x2C/+0x30, TAB +0x80/+0x84, VK221
@@ -67,6 +67,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -74,10 +75,11 @@ namespace mikudancestudio {
 // command_control_400.cpp / ui_frame_refresh.cpp / command_view_menu.cpp
 // (not yet registered in ported_funcs.hpp; declared locally like
 // key_ladder.cpp does for its cross-TU callees).
-void Sub410560(MMDApp* app, int frame);              // VA 0x00410560
-void Sub411630(MMDApp* app, int frame);              // VA 0x00411630
-void Sub411DF0(MMDApp* app, int frame);              // VA 0x00411DF0
-void Sub412B20(MMDApp* app, std::int32_t frame);     // VA 0x00412B20
+void RegisterCameraState(MMDApp* app, int frame);    // VA 0x00410560, was Sub410560
+void RegisterLightState(MMDApp* app, int frame);     // VA 0x00411630, was Sub411630
+void RegisterSelfShadowState(MMDApp* app, int frame);  // VA 0x00411DF0, was Sub411DF0
+                                                     // (ui_frame_refresh.cpp)
+void RegisterGravityKeyCurrent(MMDApp* app, std::int32_t frame);  // VA 0x00412B20, was Sub412B20
 
 namespace {
 
@@ -228,7 +230,7 @@ bool PumpPanelFocusChain(MMDApp* app, HWND focus) {
                 moveTo(main, 0x1E4, true, false);
             } else {
                 moveTo(main, 0x1DE, true, false);
-                Sub463640(app, GetDlgItem(main, 0x1E5));     // 0x463640
+                CommitEditControl(app, GetDlgItem(main, panel::kAccScaleYEdit));     // 0x463640
             }
         }
         notInEdit = false;
@@ -289,7 +291,7 @@ bool PumpPanelFocusChain(MMDApp* app, HWND focus) {
 // G6 - ']' interpolation toggle (x86 0x4721C9, x64 0x44F06A..0x44F106).
 // Gate: focusOK && VK221 pressed && !playing && !panel-edit focus.
 // Body: flip checkbox 0x212 (530, the register-reset checkbox probed by
-// Sub410560).
+// RegisterCameraState).
 // ---------------------------------------------------------------------------
 void PumpInterpolationToggle(MMDApp* app, HWND focus,
                              bool focusNotInPanelEdit) {
@@ -297,7 +299,7 @@ void PumpInterpolationToggle(MMDApp* app, HWND focus,
           app->PlaybackActive() == 0 && focusNotInPanelEdit))
         return;
     const HWND main = static_cast<HWND>(app->Hwnd());
-    const HWND box = GetDlgItem(main, 0x212);
+    const HWND box = GetDlgItem(main, panel::kPhysicsFrameCheckbox);
     const LRESULT checked = SendMessageA(box, BM_GETCHECK, 0, 0);
     SendMessageA(box, BM_SETCHECK, checked == 1 ? 0 : 1, 0);
 }
@@ -308,7 +310,7 @@ void PumpInterpolationToggle(MMDApp* app, HWND focus,
 // Gate: focus == main && DELETE pressed && !playing && !panel-edit focus.
 // Body: a FRESH GetFocus (the chain above may have moved it after the
 // gate's snapshot was taken) must not sit in any of the five frame edits
-// {0x1AA, 0x1A9, 0x1A1, 0x19A, 0x199}, then Sub4316B0 rebuilds the
+// {0x1AA, 0x1A9, 0x1A1, 0x19A, 0x199}, then DeleteMarkedKeyframes rebuilds the
 // model-edit state.
 // ---------------------------------------------------------------------------
 void PumpDeleteRebuild(MMDApp* app, HWND focus, bool focusNotInPanelEdit) {
@@ -322,7 +324,7 @@ void PumpDeleteRebuild(MMDApp* app, HWND focus, bool focusNotInPanelEdit) {
         if (GetDlgItem(main, id) == current)
             return;
     }
-    Sub4316B0(app);                                       // 0x4316B0
+    DeleteMarkedKeyframes(app);                                       // 0x4316B0
 }
 
 // ---------------------------------------------------------------------------
@@ -332,7 +334,7 @@ void PumpDeleteRebuild(MMDApp* app, HWND focus, bool focusNotInPanelEdit) {
 // && frame-range dialog closed (0xA0B50).  Body: step the model combo
 // 0x1B4 (436) selection - Shift steps back with a wrap to count-1,
 // plain steps forward with a wrap to 0 - then CB_SETCURSEL and apply via
-// Sub44D940 (ui_model_reload.cpp).
+// ApplyModelComboSelection (ui_model_reload.cpp).
 // ---------------------------------------------------------------------------
 void PumpTabCycle(MMDApp* app, HWND focus, bool focusNotInPanelEdit) {
     const bool gate = FocusOk(app, focus) &&
@@ -343,7 +345,7 @@ void PumpTabCycle(MMDApp* app, HWND focus, bool focusNotInPanelEdit) {
         if (!gate || !cellPressed)
             return;
         const HWND main = static_cast<HWND>(app->Hwnd());
-        const HWND combo = GetDlgItem(main, 0x1B4);
+        const HWND combo = GetDlgItem(main, panel::kMainComboModel);
         int index;
         if (app->state.shiftModifierState == 3) {
             index = static_cast<int>(
@@ -359,7 +361,7 @@ void PumpTabCycle(MMDApp* app, HWND focus, bool focusNotInPanelEdit) {
                 index = 0;
         }
         SendMessageA(combo, CB_SETCURSEL, index, 0);
-        Sub44D940(app);                                   // 0x44D940
+        ApplyModelComboSelection(app);                                   // 0x44D940
     };
     cycle(app->state.tabKeyState == 1);                   // x64 0x44F32D
     cycle(app->state.keyState226 == 1);                   // x64 0x44F42E
@@ -370,7 +372,7 @@ void PumpTabCycle(MMDApp* app, HWND focus, bool focusNotInPanelEdit) {
 // x64 0x44F52F..0x44F594 and 0x44F594..0x44F5D4).
 // Enter half: frame-step idle && viewport active && !panel-edit focus &&
 // Alt held && RETURN pressed -> flip the fullscreen byte 0xA0274 and run
-// the fullscreen window manager (Sub4629D0, avi_record_start.cpp) plus
+// the fullscreen window manager (ApplyFullscreenWindowState, avi_record_start.cpp) plus
 // the device reset (PostDeviceReset).
 // ESC half: fullscreen && viewport active && !panel-edit focus -> clear
 // the byte and run the same two calls.
@@ -382,10 +384,10 @@ void PumpFullscreenKeys(MMDApp* app, HWND /*focus*/,
         app->ViewportInputActive() != 0 &&
         focusNotInPanelEdit &&
         state.menuKeyState == 3 &&                         // Alt held
-        state.bC == 1) {                                   // RETURN
+        state.enterKeyState == 1) {                                   // RETURN
         app->FullscreenMode() =
             app->FullscreenMode() == 0 ? 1 : 0;            // 0xA0274
-        Sub4629D0(app);                                    // 0x4629D0
+        ApplyFullscreenWindowState(app);                                    // 0x4629D0
         PostDeviceReset(app);                              // 0x440DB0
     }
     if (app->FullscreenMode() != 0 &&
@@ -393,7 +395,7 @@ void PumpFullscreenKeys(MMDApp* app, HWND /*focus*/,
         state.escKeyState == 1 &&
         focusNotInPanelEdit) {
         app->FullscreenMode() = 0;                         // 0xA0274
-        Sub4629D0(app);                                    // 0x4629D0
+        ApplyFullscreenWindowState(app);                                    // 0x4629D0
         PostDeviceReset(app);                              // 0x440DB0
     }
 }
@@ -415,7 +417,7 @@ void PumpEnterRegisterFrame(MMDApp* app, HWND focus,
                             bool focusNotInPanelEdit) {
     auto& state = app->state;
     const HWND main = static_cast<HWND>(app->Hwnd());
-    const bool enterPressed = state.bC == 1;               // +0xBC cell
+    const bool enterPressed = state.enterKeyState == 1;               // +0xBC cell
     const bool altHeld = state.menuKeyState == 3;          // +0xC4 cell
 
     // ---- G2: camera/accessory mode register ------------------------------
@@ -435,17 +437,17 @@ void PumpEnterRegisterFrame(MMDApp* app, HWND focus,
 
         const std::int32_t frame = app->CurrentFrame();    // 0x980
         if (app->GlobalTrackSelected(GlobalTimelineTrack::Camera) != 0)
-            Sub410560(app, frame);                         // 0x410560
+            RegisterCameraState(app, frame);               // 0x410560
         if (app->GlobalTrackSelected(GlobalTimelineTrack::Light) != 0)
-            Sub411630(app, frame);                         // 0x411630
+            RegisterLightState(app, frame);                // 0x411630
         if (app->GlobalTrackSelected(GlobalTimelineTrack::SelfShadow) != 0)
-            Sub411DF0(app, frame);                         // 0x411DF0
+            RegisterSelfShadowState(app, frame);           // 0x411DF0
         if (app->GlobalTrackSelected(GlobalTimelineTrack::Gravity) != 0)
-            Sub412B20(app, frame);                         // 0x412B20
+            RegisterGravityKeyCurrent(app, frame);         // 0x412B20
         for (int slot = 0; slot < 0xFF; ++slot) {
             mdl::AccessoryRecord* accessory = app->AccessorySlot(slot);
             if (accessory != nullptr && accessory->rowSelected != 0)
-                Sub413CB0(app, frame, slot);               // 0x413CB0
+                RegisterAccessoryKey(app, frame, slot);               // 0x413CB0
         }
         PanelPaint(app);                                   // 0x414610
         SelectionReeval(app);                              // 0x430510
@@ -453,6 +455,8 @@ void PumpEnterRegisterFrame(MMDApp* app, HWND focus,
 
     // ---- G3: model mode register button (no extra gates) -----------------
     if (enterPressed && !altHeld)
+        // raw command id kept (no macro): 0x1F4 is the original's
+        // register-button command, re-dispatched into the WM_COMMAND switch.
         SendMessageA(main, WM_COMMAND, 0x1F4, 0);          // case 500
 }
 
@@ -466,7 +470,7 @@ void PumpEscStop(MMDApp* app, bool focusNotInPanelEdit) {
         app->FrameStepPlayback() != 0 &&
         app->state.escKeyState == 1 &&
         focusNotInPanelEdit)
-        Sub464A00(app);                                    // 0x464A00
+        FinishAviRecord(app);                                    // 0x464A00
 }
 
 // ---------------------------------------------------------------------------

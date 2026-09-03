@@ -21,6 +21,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 #include <d3d9.h>
 #include <mmsystem.h>
 #include <dsound.h>
@@ -37,6 +38,7 @@
 #include <cstdio>
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 #include "ui_controls.inc"
 
 namespace mikudancestudio {
@@ -57,6 +59,10 @@ static unsigned char* NewZeroed(std::size_t bytes) {
     return p;
 }
 
+// Porting-era trace under MIKUDANCESTUDIO_PMM_TRACE_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call site
+// valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 static void TraceInitialAccessoryTrack(const MMDApp& app) {
     const char* directory = std::getenv("MIKUDANCESTUDIO_PMM_TRACE_DIR");
     if (directory == nullptr || directory[0] == '\0')
@@ -71,6 +77,9 @@ static void TraceInitialAccessoryTrack(const MMDApp& app) {
             GetModuleHandleW(nullptr), app.AccessoryKeyTracks()[174]);
     fclose(stream);
 }
+#else
+static inline void TraceInitialAccessoryTrack(const MMDApp&) {}
+#endif
 
 static bool InitTimelineAudio(MMDApp* app, HWND hwnd, HDC timeline,
                               bool english) {
@@ -78,11 +87,13 @@ static bool InitTimelineAudio(MMDApp* app, HWND hwnd, HDC timeline,
     audio->englishUI = english ? 1 : 0;
     audio->mainWindow = hwnd;
 
+#ifdef MIKUDANCESTUDIO_DIAG
     // Debug escape hatch: MSVC ASAN's CreateThread wrapper crashes the
     // DSOUND worker thread that DirectSoundCreate spawns (null read inside
     // GetDeviceID), so sanitizer builds can run without timeline audio.
     if (std::getenv("MIKUDANCESTUDIO_SKIP_DSOUND") != nullptr)
         return false;
+#endif
 
     IDirectSound*& directSound = audio->directSound;
     if (FAILED(DirectSoundCreate(nullptr, &directSound, nullptr))) {
@@ -144,7 +155,11 @@ static bool InitTimelineAudio(MMDApp* app, HWND hwnd, HDC timeline,
     return true;
 }
 
-void Sub40AE00(MMDApp* app) {
+// VA 0x0040AE00 - was Sub40AE00.  Blank the timeline strip and the
+// interpolation-curve box: white rectangles over both GDI surfaces (the
+// timeline spans the backbuffer width at 49 px, the curve is 127x127) plus
+// the black centre line at timeline y=25.
+void ClearTimelineAndCurveDCs(MMDApp* app) {
     HDC timeline = app->TimelineDC();
     HDC curve = app->CurveDC();
     D3DRenderer* r = app->Renderer();
@@ -305,7 +320,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 
     // 0x4672C2..0x4672E4: initialize the ruler/curve caches, then bind the
     // ruler HDC to the wave/timeline object while DirectSound is initialized.
-    Sub40AE00(app);
+    ClearTimelineAndCurveDCs(app);  // was Sub40AE00, 0x40AE00
     s.DirectSoundAvailable() = static_cast<std::uint8_t>(
         InitTimelineAudio(app, hwnd, s.TimelineDC(),
                           app->EnglishUI() != 0));
@@ -326,7 +341,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 
     // 0x46732D..0x467336: the recording step-flag byte.  operator new(1)
     // with NO initialization in the original; the wait loops at 0x46E8F5 /
-    // 0x46F08C and Sub464A00:0x464A28 all dereference app+0x9EDD4
+    // 0x46F08C and FinishAviRecord:0x464A28 all dereference app+0x9EDD4
     // unconditionally, so this allocation is what keeps those paths alive.
     // The fresh-heap byte reads as 0 in practice; we zero it explicitly so
     // the port stays deterministic.
@@ -347,7 +362,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         return false;
 
     // 0x467384..0x4674A6: dynamic text/sprite/line batches plus the two
-    // post-process quads. Sub42C810 rewrites the latter after every resize.
+    // post-process quads. RefreshMainWindowViewport rewrites the latter after every resize.
     IDirect3DDevice9* device = wrap->device;
     if (device != nullptr) {
         if (FAILED(device->CreateVertexBuffer(
@@ -436,6 +451,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         s.ObjectSlot(i) = nullptr;                              // 0x9DD70[i]
     }
     TraceInitialAccessoryTrack(s);
+#ifdef MIKUDANCESTUDIO_DIAG
     if (std::getenv("MIKUDANCESTUDIO_PMM_GUARD_ACCESSORY_TRACKS") != nullptr) {
         SYSTEM_INFO systemInfo{};
         GetSystemInfo(&systemInfo);
@@ -447,6 +463,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         VirtualProtect(reinterpret_cast<void*>(page), systemInfo.dwPageSize,
                        PAGE_READONLY, &previousProtection);
     }
+#endif
 
     // ---- 0x467749..0x46787B: camera work record + per-key defaults --------
     *reinterpret_cast<float*>(cam + 12) = -45.0f;   // flt_52A1E8 (angle)
@@ -512,8 +529,8 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         case 560: lo = 0; hi = 9999; break;
         default: return;
         }
-        SendMessageA(control, 0x407 /*TBM_SETRANGEMIN*/, 0, lo);
-        SendMessageA(control, 0x408 /*TBM_SETRANGEMAX*/, 0, hi);
+        SendMessageA(control, TBM_SETRANGEMIN, 0, lo);
+        SendMessageA(control, TBM_SETRANGEMAX, 0, hi);
 
         // The tick frequency is part of the original creation sequence, not
         // cosmetic post-processing.  Without it, comctl32 uses its default
@@ -522,7 +539,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         //   Light X/Y/Z  0x468B34 / 0x468BF9 / 0x468CBE
         //   Shadow range 0x46A2F2
         if (id == 458 || id == 459 || id == 460 || id == 560)
-            SendMessageA(control, 0x414 /*TBM_SETTICFREQ*/, 1000, 0);
+            SendMessageA(control, TBM_SETTICFREQ, 1000, 0);
     };
 
     for (const ui::ControlSpec& c : ui::kControls) {
@@ -550,7 +567,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     // 0x46A8ED..0x46A8F7: the current-frame edit is initialized only
     // after its numeric-edit subclass has been installed.  Leaving the
     // CreateWindow caption empty made the top overlay differ by one glyph.
-    SetWindowTextA(GetDlgItem(hwnd, 0x22A), "0");
+    SetWindowTextA(GetDlgItem(hwnd, panel::kGotoFrameEdit), "0");
 
     // UI-init tail (original 0x004675FB / 0x00467602, adjacent calls):
     // toon gradient textures, then the in-scene HUD font atlas.  Both are
@@ -563,11 +580,11 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     // ---- 0x46A99F..0x46AC5E: edit/trackbar mirrors of the work records ---
     char text[0x100];
     auto setEdit = [&](int id, const char* t) {
-        SendMessageA(GetDlgItem(hwnd, id), 0xC2 /*WM_SETTEXT*/, 0,
+        SendMessageA(GetDlgItem(hwnd, id), EM_REPLACESEL, 0,
                      reinterpret_cast<LPARAM>(t));
     };
     auto setTrack = [&](int id, int pos) {
-        SendMessageA(GetDlgItem(hwnd, id), 0x405 /*TBM_SETPOS*/, 1, pos);
+        SendMessageA(GetDlgItem(hwnd, id), TBM_SETPOS, 1, pos);
     };
     sprintf_s(text, 0x100, "%3d",
               static_cast<int>(static_cast<double>(s.LightColor()[0]) *
@@ -628,16 +645,16 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     if (w->postProcessEnabled == 0) {
         EnableMenuItem(menu, 0x117, MF_BYCOMMAND | MF_GRAYED);
         s.SelfShadowMode() = 0;
-        s.state.selfShadowCfgOrUint32 = 0;
+        s.state.selfShadowEnabled = 0;
     } else {
         CheckMenuItem(menu, 0x117, MF_BYCOMMAND | MF_CHECKED);
         s.SelfShadowMode() = 1;
-        s.state.selfShadowCfgOrUint32 = 1;
+        s.state.selfShadowEnabled = 1;
     }
 
     if (s.FrameVolumeControlEnabled() != 0) {
         CheckMenuItem(menu, 0x12B, MF_BYCOMMAND | MF_CHECKED);
-        SendMessageA(GetDlgItem(hwnd, 0x228), BM_SETCHECK, BST_CHECKED, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kFrameVolumeCheckbox), BM_SETCHECK, BST_CHECKED, 0);
     }
     static constexpr UINT kInitiallyChecked[] = {
         0x11D, 0x125, 0x127, 0x12A, 0x10D,
@@ -646,8 +663,8 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         CheckMenuItem(menu, id, MF_BYCOMMAND | MF_CHECKED);
 
     setTrack(0x216, 100 - s.FrameNormalization());
-    SendMessageA(GetDlgItem(hwnd, 0x22D), BM_SETCHECK, BST_CHECKED, 0);
-    SendMessageA(GetDlgItem(hwnd, 0x1F3), BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kCoordAxisCheckbox), BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kPhysicsCheckbox), BM_SETCHECK, BST_CHECKED, 0);
 
     // ---- 0x46AF24..0x46AFCE: submenu state and dynamic full-screen label --
     MENUITEMINFOA mii{};
@@ -677,27 +694,28 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     SetMenuItemInfoA(GetSubMenu(menu, 2), 0x1D, TRUE, &mii);
 
     // ---- 0x46AFD4..0x46B06E: self-shadow mode/range mirrors ---------------
-    SendMessageA(GetDlgItem(hwnd, 0x233), BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kEditMode1Checkbox), BM_SETCHECK, BST_CHECKED, 0);
     const double rangeValue =
         10000.0 - static_cast<double>(s.state.physicsInterval) *
                       100000.0;
     const int rangePos = static_cast<int>(rangeValue + 0.5);
     setTrack(0x230, rangePos);
     sprintf_s(text, 0x100, "%d", rangePos);
-    SetWindowTextA(GetDlgItem(hwnd, 0x231), text);
+    SetWindowTextA(GetDlgItem(hwnd, panel::kSelfShadowRangeEdit), text);
     return true;
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x00410040 - Sub410040(app, slot): bone-register combo (control 450)
-// refill.  CB_RESETCONTENT, then for the model in slot app+0x780[slot]
-// every bone whose type byte (+484) is < 7 or == 8 is appended
-// (CB_ADDSTRING) with the English (+20) or Japanese (+0) name selected by
-// the UI flag; finishes with PostLanguageSweep (0x40D070).  Negative slot
-// only clears.  (Return value is the sweep's BOOL; callers ignore it.)
+// VA 0x00410040 - was Sub410040.  RefillBoneRegisterCombo(app, slot):
+// bone-register combo (control 450) refill.  CB_RESETCONTENT, then for the
+// model in slot app+0x780[slot] every bone whose type byte (+484) is < 7
+// or == 8 is appended (CB_ADDSTRING) with the English (+20) or Japanese
+// (+0) name selected by the UI flag; finishes with PostLanguageSweep
+// (0x40D070).  Negative slot only clears.  (Return value is the sweep's
+// BOOL; callers ignore it.)
 // ---------------------------------------------------------------------------
-void Sub410040(MMDApp* app, int slot) {
-    HWND combo = GetDlgItem(static_cast<HWND>(app->Hwnd()), 450);
+void RefillBoneRegisterCombo(MMDApp* app, int slot) {
+    HWND combo = GetDlgItem(static_cast<HWND>(app->Hwnd()), panel::kBoneRegisterCombo);
     SendMessageA(combo, CB_RESETCONTENT, 0, 0);                  // 0x41006D
     if (slot >= 0) {
         unsigned char* model = app->ModelSlot(slot);
@@ -708,8 +726,9 @@ void Sub410040(MMDApp* app, int slot) {
                 mikudancestudio::mdl::Bones(model);
             for (std::int32_t i = 0; i < boneCount; ++i) {       // 0x4100B1
                 mikudancestudio::mdl::BoneRecord* bone = &bones[i];
-                const std::uint8_t type = bone->type;
-                if (type < 7 || type == 8) {
+                const mdl::BoneType type = bone->type;
+                if (type < mdl::BoneType::InertTip ||
+                    type == mdl::BoneType::FixedAxis) {
                     const char* name =
                         app->EnglishUI() != 0
                             ? reinterpret_cast<const char*>(bone->nameEn)

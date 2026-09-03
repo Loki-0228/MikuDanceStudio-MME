@@ -240,6 +240,10 @@ void SetRotationOriginal(float* basis, const float* quaternion) {
 }
 #endif
 
+// Porting-era dumps under MIKUDANCESTUDIO_STATE_DUMP_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stubs below keep the call
+// sites valid and inline away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void DumpRigidCreateState(int shape, int mode, const float* inputMatrix,
                           const float* quaternion, const btRigidBody* body) {
     char directory[MAX_PATH]{};
@@ -343,6 +347,11 @@ void DumpConstraintCreateState(
     std::fputs("]}\n", stream);
     std::fclose(stream);
 }
+#else
+inline void DumpRigidCreateState(int, int, const float*, const float*,
+                                 const btRigidBody*) {}
+inline void DumpConstraintCreateState(int, btGeneric6DofSpringConstraint*) {}
+#endif
 
 }  // namespace
 
@@ -471,6 +480,7 @@ void CreateRigidBody(PhysicsScene* scene, void** out, int shape, float sx, float
     out[1] = body;
 }
 
+#ifdef MIKUDANCESTUDIO_DIAG
 static unsigned JointBits(float value) {
     unsigned bits;
     std::memcpy(&bits, &value, 4);
@@ -486,6 +496,7 @@ static std::string WordsHex(const float* values, int count) {
     }
     return out;
 }
+#endif
 
 // VA 0x00406010 - build one 6DOF spring joint between two rigid bodies.
 // Returns the constraint id assigned from the scene counter (scene+56);
@@ -501,6 +512,7 @@ int CreatePhysJoint(PhysicsScene* scene, void* rbA, void* rbB,
                     float spring0, float spring1, float spring2,
                     float spring3, float spring4, float spring5) {
     btDiscreteDynamicsWorld* world = scene->world;
+#ifdef MIKUDANCESTUDIO_DIAG
     // Env-gated (MIKUDANCESTUDIO_DUMP_JOINTARGS=<path>) creation-argument trace -
     // the original receives the very same 32 floats on the stack at
     // 0x406010, so a probe there yields a directly comparable record.
@@ -521,6 +533,7 @@ int CreatePhysJoint(PhysicsScene* scene, void* rbA, void* rbB,
             JointBits(spring3), JointBits(spring4), JointBits(spring5));
         std::fflush(jointArgLog);
     }
+#endif
     btTransform frameA, frameB;
     frameA.setIdentity();
     frameA.setOrigin(btVector3(ax, ay, az));
@@ -530,12 +543,14 @@ int CreatePhysJoint(PhysicsScene* scene, void* rbA, void* rbB,
     frameB.setOrigin(btVector3(bx, by, bz));
     const float qb[4] = {bq0, bq1, bq2, bq3};
     SetRotationOriginal(reinterpret_cast<float*>(&frameB.getBasis()), qb);
+#ifdef MIKUDANCESTUDIO_DIAG
     if (jointArgLog) {
         std::fprintf(jointArgLog, "frm A=%s B=%s\n",
             WordsHex(reinterpret_cast<const float*>(&frameA), 16).c_str(),
             WordsHex(reinterpret_cast<const float*>(&frameB), 16).c_str());
         std::fflush(jointArgLog);
     }
+#endif
 
     auto* con = new btGeneric6DofSpringConstraint(             // 0x406048
         *static_cast<btRigidBody*>(rbA),
@@ -585,25 +600,25 @@ int CreatePhysJoint(PhysicsScene* scene, void* rbA, void* rbB,
 
 // VA 0x004A9220 - select each bone's pose source and propagate transforms.
 // For every bone (604-byte stride): bones flagged at +492 take the physics
-// result pose (+0x188 pos / +0x194 quat) when a4 says so, else the
+// result pose (+0x188 pos / +0x194 quat) when physicsMode says so, else the
 // kinematic pose (+0x140/+0x14C); the chosen pose lands at +0x16C/+0x178.
 // Physics mode 2 additionally applies the accumulated bone-morph offsets.
 // The transform updater then runs once for every bone layer through
 // ModelRecord::maxBoneLayer.
-void SetPhysicsMode(unsigned char* m, int a2,
-                    unsigned char* const* modelSlots, int a4) {
+void SetPhysicsMode(unsigned char* m, int afterPhysics,
+                    unsigned char* const* modelSlots, int physicsMode) {
     mdl::ModelRecord& model = *mdl::Mdl(m);
     const int boneCount = model.boneCount;
     mikudancestudio::mdl::BoneRecord* bones = mikudancestudio::mdl::Bones(m);
     for (int i = 0; i < boneCount; ++i) {
         mikudancestudio::mdl::BoneRecord* bone = &bones[i];
-        const unsigned char flag = bone->f492;
-        if (((a4 == 1 || (a4 >= 2 && bone->f493 == 0)) && flag) != 0) {
-            std::memcpy(bone->f364, bone->ikBackup, 12);           // pos
-            std::memcpy(bone->f376, bone->ikBackup + 3, 16);           // quat
+        const unsigned char flag = bone->hasRigidBody;
+        if (((physicsMode == 1 || (physicsMode >= 2 && bone->physicsDisabled == 0)) && flag) != 0) {
+            std::memcpy(bone->physicsOffset, bone->ikBackup, 12);           // pos
+            std::memcpy(bone->physicsQuat, bone->ikBackup + 3, 16);           // quat
         } else {
-            std::memcpy(bone->f364, bone->trans, 12);
-            std::memcpy(bone->f376, bone->rotQuat, 16);
+            std::memcpy(bone->physicsOffset, bone->trans, 12);
+            std::memcpy(bone->physicsQuat, bone->rotQuat, 16);
         }
     }
 
@@ -613,20 +628,20 @@ void SetPhysicsMode(unsigned char* m, int a2,
         for (int i = 0; i < recCount; ++i) {
             const mdl::BoneMorphOffsetRecord& record = records[i];
             mikudancestudio::mdl::BoneRecord* bone = &bones[record.boneIndex];
-            bone->f364[0] += record.translation[0];
-            bone->f364[1] += record.translation[1];
-            bone->f364[2] += record.translation[2];
+            bone->physicsOffset[0] += record.translation[0];
+            bone->physicsOffset[1] += record.translation[1];
+            bone->physicsOffset[2] += record.translation[2];
             float out[4];
             QuatMultiply(out,
-                         reinterpret_cast<const float*>(bone->f376),
+                         reinterpret_cast<const float*>(bone->physicsQuat),
                          record.rotation);
-            std::memcpy(bone->f376, out, 16);
+            std::memcpy(bone->physicsQuat, out, 16);
         }
     }
 
     const int maxLayer = model.maxBoneLayer;
     for (int i = 0; i <= maxLayer; ++i)
-        BoneFrameTransform(m, a2, i, modelSlots, a4);  // 0x493A60
+        BoneFrameTransform(m, afterPhysics, i, modelSlots, physicsMode);  // 0x493A60
 }
 
 }  // namespace mikudancestudio

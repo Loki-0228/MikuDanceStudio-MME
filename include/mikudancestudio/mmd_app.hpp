@@ -191,12 +191,13 @@ public:
 #endif
     }
 
-    // Accessory-frame dialog HWND (x86 blob slot 0xA0CCC).
-    HWND& AccessoryFrameDialog() {
+    // Gravity-setting dialog (menu 266) HWND (x86 blob slot 0xA0CCC).
+    // Was misnamed AccessoryFrameDialog before the .rc template audit.
+    HWND& GravitySettingDialog() {
 #if defined(_M_X64)
-        return m_accessoryFrameDialog;
+        return m_gravitySettingDialog;
 #else
-        return state.accessoryFrameDialog;
+        return state.gravitySettingDialog;
 #endif
     }
 
@@ -254,11 +255,13 @@ public:
     // Saved wndprocs of subclassed dialog edits (x86 blob slots
     // 0xA0B48/0xA0B54/0xA0B78/0xA0CD0) and the model-edge combo edit
     // positions (0xA0B58..0xA0B60).
-    WNDPROC& ModelInfoEditProc() {
+    WNDPROC& EdgeThicknessEditProc() {  // was ModelInfoEditProc - slot
+                                        // 0xA0B48 is the edge-thickness
+                                        // dialog (253) edit 646's proc
 #if defined(_M_X64)
-        return m_modelInfoEditProc;
+        return m_edgeThicknessEditProc;
 #else
-        return state.modelInfoEditProc;
+        return state.edgeThicknessEditProc;
 #endif
     }
     WNDPROC& ModelEdgeEditProc() {
@@ -300,8 +303,10 @@ public:
 #endif
     }
 
-    // Frame-copy dialog (menu 262) staging buffers: camera records are
-    // 172 bytes (index state.selAcc), bone records 140 bytes (sel8c).
+    // Frame-copy dialog (menu 262) staging buffers (172/140 bytes).  Note
+    // the separate physics-editor scratch arrays live in the state blob:
+    // rigidScratchArray / jointScratchArray indexed by selectedRigidIndex /
+    // selectedJointIndex (see physics_model_dialog.cpp).
     unsigned char* CameraFrameScratch() {
 #if defined(_M_X64)
         return m_cameraFrameScratch;
@@ -355,15 +360,14 @@ public:
 #if defined(_M_X64)
         return m_pathWorkspace;
 #else
-        return reinterpret_cast<PathResolutionWorkspace&>(state.fontSubOrPtr);
+        return state.pathWorkspace;
 #endif
     }
     const PathResolutionWorkspace& PathWorkspace() const {
 #if defined(_M_X64)
         return m_pathWorkspace;
 #else
-        return reinterpret_cast<const PathResolutionWorkspace&>(
-            state.fontSubOrPtr);
+        return state.pathWorkspace;
 #endif
     }
 
@@ -374,10 +378,10 @@ public:
         return AccessorySlots()[index];
     }
     mdl::AccessoryRecord** AccessorySlots() {
-        return reinterpret_cast<mdl::AccessoryRecord**>(state.buf9ddx);
+        return reinterpret_cast<mdl::AccessoryRecord**>(state.objectSlots);
     }
     mdl::AccessoryRecord* const* AccessorySlots() const {
-        return reinterpret_cast<mdl::AccessoryRecord* const*>(state.buf9ddx);
+        return reinterpret_cast<mdl::AccessoryRecord* const*>(state.objectSlots);
     }
     // The 255-entry display-object list shares storage with accessory
     // records, but also contains objects selected by the model timeline.
@@ -421,7 +425,7 @@ public:
     // Clipboard pointer family.  x86 reads the blob slots directly; on
     // x64 only displayClipboard has a blob slot, the seven siblings live
     // in mirrors (their x86 slots had no x64 mapping at all).
-    void*& V350Clipboard() { return state.v350Clipboard; }  // +0x350
+    void*& BoneCopyRecords() { return state.boneCopyRecords; }  // +0x350
     mdl::BoneClipboardRecord*& BoneClipboard() {
 #if defined(_M_X64)
         return reinterpret_cast<mdl::BoneClipboardRecord*&>(
@@ -511,19 +515,19 @@ public:
         return reinterpret_cast<mdl::AccessoryKey* const*>(state.accKeyTracks);
     }
     std::uint8_t& GlobalTrackSelected(GlobalTimelineTrack track) {
-        return *(&state.a03E4 + static_cast<std::uint8_t>(track));
+        return state.globalTrackSelected[static_cast<std::uint8_t>(track)];
     }
     std::uint8_t GlobalTrackSelected(GlobalTimelineTrack track) const {
-        return *(&state.a03E4 + static_cast<std::uint8_t>(track));
+        return state.globalTrackSelected[static_cast<std::uint8_t>(track)];
     }
     void SelectGlobalTimelineTrack(GlobalTimelineTrack track) {
         for (std::uint8_t index = 0; index < 4; ++index)
-            *(&state.a03E4 + index) =
+            state.globalTrackSelected[index] =
                 index == static_cast<std::uint8_t>(track) ? 1 : 0;
     }
     void ClearGlobalTimelineTrackSelection() {
         for (std::uint8_t index = 0; index < 4; ++index)
-            *(&state.a03E4 + index) = 0;
+            state.globalTrackSelected[index] = 0;
     }
     std::uint8_t& TimelineSelectionChanged() {
         return state.timelineSelectionChanged;
@@ -611,7 +615,7 @@ public:
 #endif
     }
     std::uint8_t& TimelineRangeApplyEnabled() {
-        return state.b6568480;
+        return state.timelineRangeApplyEnabled;
     }
     void ClearTimelineRange() {
         TimelineRangeFirstOffset() = 0;
@@ -644,12 +648,10 @@ public:
             static_cast<std::size_t>(band)];
     }
     mdl::ClipboardSelectionCounts& ClipboardCounts() {
-        return reinterpret_cast<mdl::ClipboardSelectionCounts&>(
-            state.v9da24[1]);
+        return state.clipboardCounts;
     }
     const mdl::ClipboardSelectionCounts& ClipboardCounts() const {
-        return reinterpret_cast<const mdl::ClipboardSelectionCounts&>(
-            state.v9da24[1]);
+        return state.clipboardCounts;
     }
     std::int32_t& CurrentFrame() {
         // The generated layout stores the frame counter unsigned; keep the
@@ -661,25 +663,27 @@ public:
         return state.hwnd;
     }
     float* LightDirection() {
-        return &state.lightDirection;
+        return state.lightDirection;
     }
     float* LightColor() {
-        return &state.lightColor;
+        return state.lightColor;
     }
     D3DLIGHT9& SceneLight() {
 #if defined(_M_X64)
         return m_sceneLight;
 #else
-        // The device light overlays the PMM scalars: it starts one float
-        // past v9e17c (0x9E180) and covers lightColor et al. below.
-        return reinterpret_cast<D3DLIGHT9&>(*(&state.v9e17c + 1));
+        // The device light overlays the PMM scalars: it starts right past
+        // the lightDirection triple (0x9E180) and spans 104 bytes to
+        // cameraFov - Type/Diffuse/Specular sit in pad118, Ambient covers
+        // lightColor, and Range lands on sceneLightRange.
+        return reinterpret_cast<D3DLIGHT9&>(state.lightDirection[3]);
 #endif
     }
     const D3DLIGHT9& SceneLight() const {
 #if defined(_M_X64)
         return m_sceneLight;
 #else
-        return reinterpret_cast<const D3DLIGHT9&>(*(&state.v9e17c + 1));
+        return reinterpret_cast<const D3DLIGHT9&>(state.lightDirection[3]);
 #endif
     }
     // The PMM light track stores only RGB and direction.  Its target is the
@@ -789,7 +793,7 @@ public:
         return state.aviFile;
     }
     void*& AviStream() {
-        return state.v9e400OrUint32;
+        return state.aviStream;
     }
     void*& AviFrameReader() {
         return state.aviFrameReader;
@@ -811,7 +815,7 @@ public:
 #if defined(_M_X64)
         return m_overlayVertexBuffers.avi;
 #else
-        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.v9e3f8OrPtr);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.aviOverlayVertices);
 #endif
     }
     IDirect3DTexture9*& PictureBackgroundTexture() {
@@ -822,11 +826,11 @@ public:
 #if defined(_M_X64)
         return m_overlayVertexBuffers.picture;
 #else
-        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.v9e430OrPtr);
+        return reinterpret_cast<IDirect3DVertexBuffer9*&>(state.pictureOverlayVertices);
 #endif
     }
     wchar_t* AviBackgroundPath() {
-        return state.wcs9e1ec;
+        return state.aviBackgroundPath;
     }
     wchar_t* PictureBackgroundPath() {
         return state.pictureBackgroundPath;
@@ -863,7 +867,7 @@ public:
         return reinterpret_cast<IDirect3DSurface9*&>(state.captureRenderTarget);
     }
     IDirect3DSurface9*& CaptureSystemSurface() {
-        return reinterpret_cast<IDirect3DSurface9*&>(state.v9eb8c);
+        return reinterpret_cast<IDirect3DSurface9*&>(state.captureSystemSurface);
     }
     ScreenCaptureMode& CaptureMode() {
         return reinterpret_cast<ScreenCaptureMode&>(state.captureMode);
@@ -879,7 +883,7 @@ public:
     }
     IDirect3DVertexBuffer9*& SpriteOverlayVertices() {
         return reinterpret_cast<IDirect3DVertexBuffer9*&>(
-            state.v9ee0cOrUint32);
+            state.spriteOverlayVertices);
     }
     std::uint32_t& SpriteOverlayPrimitiveCount() {
         return state.spriteOverlayPrimitiveCount;
@@ -897,8 +901,8 @@ public:
     AccessoryRenderPass& ActiveRenderPass() {
         return reinterpret_cast<AccessoryRenderPass&>(state.activeRenderPass);
     }
-    std::uint8_t& ModelOutlineRenderingSuppressed() {
-        return state.modelOutlineRenderingSuppressed;
+    std::uint8_t& ModelNonDisplayMode() {
+        return state.modelNonDisplayMode;
     }
     std::int32_t& ModelOutlineColorRed() {
         return state.modelOutlineColorRed;
@@ -914,7 +918,7 @@ public:
     }
     unsigned char* PanelRowFlags() {
         // 200-byte highlight-flag region at +0xA04F8 (x86 in-blob; the x64
-        // blob reserves only 175 bytes before b6568480, hence a mirror).
+        // blob reserves only 175 bytes before timelineRangeApplyEnabled, hence a mirror).
 #if defined(_M_X64)
         return m_panelRowFlags;
 #else
@@ -922,22 +926,22 @@ public:
 #endif
     }
     std::uint32_t& GravityNoiseModeWord() {
-        // Dword view at +0xA0CD4: byte 0 is the promoted a0CD4 noise-mode
+        // Dword view at +0xA0CD4: byte 0 is the promoted gravityNoiseEnabled noise-mode
         // flag; the upper three bytes land in pad368 on both architectures
         // (the original writes all four bytes from the gravity record).
-        return *reinterpret_cast<std::uint32_t*>(&state.a0CD4);
+        return *reinterpret_cast<std::uint32_t*>(&state.gravityNoiseEnabled);
     }
-    std::uint8_t& F9ed94Byte1() {
-        // Byte view of f9ed94+1: the original seeks poke this byte while
+    std::uint8_t& RecordedFrameCountByte1() {
+        // Byte view of recordedFrameCount+1: the original seeks poke this byte while
         // the recording catch-up reads the surrounding dword as a counter.
-        return reinterpret_cast<std::uint8_t*>(&state.f9ed94)[1];
+        return reinterpret_cast<std::uint8_t*>(&state.recordedFrameCount)[1];
     }
     std::int32_t& AccessoryRenderSplitOrder() {
         // Generated field is uint32_t; preserve the signed accessor view.
         return reinterpret_cast<std::int32_t&>(state.accessoryRenderSplitOrder);
     }
     std::uint8_t& SelectedAccessorySlot() {
-        return state.selLightAccSlotOrUint32;
+        return state.selectedObjectSlot;
     }
     // The accessory and model-display lists share this historical selection
     // byte.  Use this neutral name outside accessory-specific code.
@@ -945,7 +949,7 @@ public:
         return SelectedAccessorySlot();
     }
     std::uint8_t SelectedObjectSlot() const {
-        return state.selLightAccSlotOrUint32;
+        return state.selectedObjectSlot;
     }
     std::int32_t& DisplayObjectListScrollPosition() {
         return state.displayObjectListScrollPosition;
@@ -1116,19 +1120,19 @@ public:
         return state.playbackLoopEnabled;
     }
     std::uint8_t& FrameStepPlayback() {
-        return state.v9ed90;
+        return state.frameStepPlayback;
     }
     std::uint8_t FrameStepPlayback() const {
-        return state.v9ed90;
+        return state.frameStepPlayback;
     }
     float& PlaybackStartSeconds() {
-        return state.f9e654;
+        return state.playbackStartSeconds;
     }
     float& PlaybackCursorSeconds() {
-        return state.f9e64c;
+        return state.playbackCursorSeconds;
     }
     float& PlaybackEndSeconds() {
-        return state.f9e658;
+        return state.playbackEndSeconds;
     }
     std::uint32_t& PlaybackClockAnchorLow() {
         return state.playbackClockAnchorLow;
@@ -1182,11 +1186,11 @@ public:
         return state.separateWindowMaximized;
     }
     std::uint8_t& FrameVolumeControlEnabled() {
-        return state.flag672800;
+        return state.frameVolumeControlEnabled;
     }
     float& SidebarRatio() { return state.sidebarRatio; }
     std::int32_t& FrameNormalization() {
-        return state.val672804;
+        return state.frameNormalization;
     }
     RECT& ViewportRect() {
         return reinterpret_cast<RECT&>(state.hideRight);
@@ -1204,7 +1208,7 @@ public:
         return state.windowLayoutReady;
     }
     std::uint8_t& EnhancedModelDirty() {
-        return state.a0B64;
+        return state.enhancedModelDirty;
     }
     std::uint8_t& AutoRepeatCount() {
         return state.autoRepeat;
@@ -1213,8 +1217,8 @@ public:
         return state.optflag[index];
     }
     std::uint8_t& CameraMode() { return UiOptionFlag(0); }
-    std::uint32_t& ViewModeComboSelection() {
-        return state.a042C;
+    std::uint32_t& MainModelComboSelection() {
+        return state.mainModelComboSelection;
     }
     std::uint8_t& GroundGridEnabled() { return state.groundGridEnabled; }
     std::uint8_t& FpsOverlayEnabled() { return state.fpsOverlayEnabled; }
@@ -1325,7 +1329,7 @@ public:
         return reinterpret_cast<std::int32_t&>(state.gravityNoise);
     }
     std::uint8_t& GravityNoiseEnabled() {
-        return state.a0CD4;
+        return state.gravityNoiseEnabled;
     }
 
     // -- named fields (semantic names verified so far) -------------------
@@ -1340,7 +1344,7 @@ public:
     wchar_t* EnvFileName()          { return state.envFileName; }
 
     // Locale/font subsystem pointer consumed by ConvertAnsiToWide (0x00407A70)
-    void*& LocaleTablePtr()         { return state.rendererOrLocaleTable; }    // 657092
+    void*& LocaleTablePtr()         { return state.renderer; }    // 657092
 
     // Main window (0x0047A5B0)
     void*& Hwnd()                   { return reinterpret_cast<void*&>(state.hwnd); }        // 657080
@@ -1363,21 +1367,21 @@ public:
     // so x64 reinterprets would clobber neighbours - mirrors there.
     void*& OniExportSlot(int index) {
         switch (index) {
-        case 0: return state.a03C0;
-        case 1: return state.a03C4;
+        case 0: return state.oniExportSlot0;
+        case 1: return state.oniExportSlot1;
 #if defined(_M_X64)
         case 2: return m_oniExportSlot2;
 #else
-        case 2: return reinterpret_cast<void*&>(state.a03C8);
+        case 2: return reinterpret_cast<void*&>(state.oniExportSlot2);
 #endif
         case 3: return state.depthTextureCallback;
 #if defined(_M_X64)
         case 4: return m_oniExportSlot4;
 #else
-        case 4: return reinterpret_cast<void*&>(state.a03D0);
+        case 4: return reinterpret_cast<void*&>(state.oniExportSlot4);
 #endif
         case 5: return OpenniTrackingCallback();
-        default: return state.a03D8;
+        default: return state.oniExportSlot6;
         }
     }
     std::int32_t& FrameRangeStartFrame() {
@@ -1396,16 +1400,16 @@ public:
     }
     // Render/locale subsystem ("0x1D574 object"), allocated in
     // InitMainWindowAndD3D; layout restored in d3d_wrapper.hpp.
-    D3DRenderer*& Renderer()        { return reinterpret_cast<D3DRenderer*&>(state.rendererOrLocaleTable); }
+    D3DRenderer*& Renderer()        { return reinterpret_cast<D3DRenderer*&>(state.renderer); }
     WaveAudioContext*& Audio() {
-        return reinterpret_cast<WaveAudioContext*&>(state.sub025c);
+        return reinterpret_cast<WaveAudioContext*&>(state.audioContext);
     }
-    void*& Sub025C() { return reinterpret_cast<void*&>(Audio()); }
     DShowRecorder*& Recorder() {
-        return reinterpret_cast<DShowRecorder*&>(state.sub06c);
+        return reinterpret_cast<DShowRecorder*&>(state.recorder);
     }
-    void*& Sub06C() { return reinterpret_cast<void*&>(Recorder()); }
-    void*& Sub04B0()                { return state.sub04b0OrUint32; }     // 0x4B0 obj
+    // AccessoryRecord slot that carries the coordinate-axis gizmo X-file
+    // mesh (was sub04b0 / Sub04B0(); 0x4B0 obj, freed via DisposeAccessory).
+    void*& AxisMeshObject()        { return state.axisMeshObject; }
     // Physics scene wrapper ("0x48 object"), allocated in
     // InitMainWindowAndD3D, filled by SceneConstruct; see physics_scene.hpp.
     PhysicsScene*& Physics()        { return reinterpret_cast<PhysicsScene*&>(state.physicsScene); }
@@ -1511,7 +1515,7 @@ private:
     // so these dialog-local values live outside the compat blob on x64.
     wchar_t m_aviOutputPath[256]{};
     std::int32_t m_aviCodecSelection{};
-    HWND m_accessoryFrameDialog = nullptr;
+    HWND m_gravitySettingDialog = nullptr;
     HWND m_frameRangeDialog = nullptr;
     HWND m_groundShadowColorDialog = nullptr;
     WNDPROC m_groundShadowColorEditProc = nullptr;
@@ -1519,7 +1523,7 @@ private:
     std::int32_t m_morphFrameShift = 0;
     std::int32_t m_blinkStartFrame = 0;
     std::int32_t m_blinkEndFrame = 0;
-    WNDPROC m_modelInfoEditProc = nullptr;
+    WNDPROC m_edgeThicknessEditProc = nullptr;
     WNDPROC m_modelEdgeEditProc = nullptr;
     std::int32_t m_modelEdgeComboCursor[3] = {};
     WNDPROC m_frameCopyEditProc = nullptr;

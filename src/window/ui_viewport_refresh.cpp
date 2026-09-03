@@ -14,7 +14,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
-void Sub417130(MMDApp* app);  // VA 0x00417130
+void PicBgOverlayRefresh(MMDApp* app);  // VA 0x00417130
 namespace {
 
 struct ScreenVertex {
@@ -53,7 +53,7 @@ void WriteQuad(IDirect3DVertexBuffer9* buffer, float left, float top,
 
 }  // namespace
 
-void Sub42C810(MMDApp* app) {
+void RefreshMainWindowViewport(MMDApp* app) {  // was Sub42C810
     auto& s = *app;
     RECT& view = s.ViewportRect();                     // 0xA0D40
     const HWND hwnd = app->MainWindow();
@@ -67,7 +67,7 @@ void Sub42C810(MMDApp* app) {
     // still have to happen here before that call.
     if (s.FloatingWindow() != nullptr) {
         s.SidebarWidth() = view.right - 3;
-        Sub4290F0(app);
+        RefreshSeparateWindowViewport(app);
         return;
     }
 
@@ -161,7 +161,7 @@ void Sub42C810(MMDApp* app) {
               0.625f, 0.9375f);
 }
 
-void Sub4290F0(MMDApp* app) {  // 0x4290F0..0x42976B
+void RefreshSeparateWindowViewport(MMDApp* app) {  // was Sub4290F0, 0x4290F0..0x42976B
     auto& s = *app;
     RECT& view = s.ViewportRect();
     const int renderWidth = s.RenderWidth();
@@ -250,7 +250,7 @@ void Sub4290F0(MMDApp* app) {  // 0x4290F0..0x42976B
         TimelineDrawTicks(s.TimelineStartFrame(),
                           s.SidebarWidth());
     if (s.PictureBackgroundEnabled() != 0)
-        Sub417130(app);
+        PicBgOverlayRefresh(app);
 
     const float width = static_cast<float>(view.right - view.left);
     WriteQuad(s.LeftViewportVertices(),

@@ -49,6 +49,7 @@
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 #include "frame_state_dump.hpp"
 
 // key_ladder.cpp (registered in CMakeLists next to frame_modes_bone.cpp):
@@ -71,7 +72,7 @@ void AdvanceFrameRenderGate(MMDApp* app) {
     auto& state = app->state.messageSeen;
     if (app->PlaybackActive() != 0)
         state = 1;
-    if (app->state.flag672800 == 0)
+    if (app->state.frameVolumeControlEnabled == 0)
         state = 1;
     if (app->FrameRangeDialog() != nullptr)
         state = 1;
@@ -83,6 +84,9 @@ void AdvanceFrameRenderGate(MMDApp* app) {
     else if (state == 3)
         state = 0;
 }
+
+#ifdef MIKUDANCESTUDIO_DIAG
+// ---- A/B capture tooling (see frame_state_dump.hpp for the gate) ---------
 
 void TraceOperationInput(MMDApp* app, const char* phase) {
     char directory[MAX_PATH]{};
@@ -214,6 +218,8 @@ void HoldPresentCaptureFence() {
         Sleep(1);
 }
 
+#endif  // MIKUDANCESTUDIO_DIAG
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -241,7 +247,7 @@ void HoldPresentCaptureFence() {
 //      wait window; when the window size (0xA02AC/A02B0) exceeds the device
 //      size (wrapper 0x1D4E4/0x1D4E8), copy it into 0x1D4E4/0x1D4E8 and
 //      0x1D4FC/0x1D500 and run PostDeviceReset (0x440DB0).
-//   5. always Sub42C810 (viewport refresh) at the end (save path); the
+//   5. always RefreshMainWindowViewport (viewport refresh) at the end (save path); the
 //      blit-failed and create-failed paths only destroy + refresh.
 // ---------------------------------------------------------------------------
 void TimelineAdvance(MMDApp* app) {
@@ -260,7 +266,7 @@ void TimelineAdvance(MMDApp* app) {
             D3DMULTISAMPLE_NONE, 0, FALSE, &surf, nullptr))) {
         DestroyWindow(app->RecordingWindow());                    // 0x460177
         app->RecordingWindow() = nullptr;
-        Sub42C810(app);                                           // 0x460185
+        RefreshMainWindowViewport(app);                                           // 0x460185
         return;
     }
 
@@ -283,7 +289,7 @@ void TimelineAdvance(MMDApp* app) {
         // both blits rejected: no file is written, just clean up.
         DestroyWindow(app->RecordingWindow());                    // 0x46023B
         app->RecordingWindow() = nullptr;
-        Sub42C810(app);                                           // 0x460249
+        RefreshMainWindowViewport(app);                                           // 0x460249
         if (surf != nullptr)
             surf->Release();                                      // 0x460260
         return;
@@ -337,14 +343,11 @@ void TimelineAdvance(MMDApp* app) {
         r->screenHeight = winH;  // 0x1D4E8
         PostDeviceReset(app);                                     // 0x460410
     }
-    Sub42C810(app);                                               // 0x460417
+    RefreshMainWindowViewport(app);                                               // 0x460417
 }
 
-// TEMP(debug, keyframe-drag crash) - defined in ui_editor_click.cpp
-void TimelineCanaryCheck(MMDApp* app);
-
 void FrameDriver(MMDApp* app) {
-    TimelineCanaryCheck(app);
+#ifdef MIKUDANCESTUDIO_DIAG
     // DIAGNOSTIC ONLY: append a tick per pass to prove liveness of the
     // frame driver in real-time runs (stderr is unavailable in the GUI
     // subsystem).
@@ -358,12 +361,14 @@ void FrameDriver(MMDApp* app) {
                 std::fprintf(f, "tick %ld\n", tickCount), std::fclose(f);
         }
     }
+#endif
     AdvanceFrameRenderGate(app);
+#ifdef MIKUDANCESTUDIO_DIAG
     char freezePhysics[2]{};
     if (GetEnvironmentVariableA("MIKUDANCESTUDIO_AB_FREEZE_PHYSICS", freezePhysics,
                                 sizeof(freezePhysics)) == 1 &&
         freezePhysics[0] == '1') {
-        app->state.a0665 = 1;
+        app->state.accessoryEditDialogOpen = 1;
     }
     char requireLine[2]{};
     const bool requireLineEnabled =
@@ -376,9 +381,12 @@ void FrameDriver(MMDApp* app) {
                                 sizeof(keepPhysics)) == 1 &&
         keepPhysics[0] == '1';
     static LONG lineModeRequested = 0;
+#endif
     DumpFrameEntryState(app);
+#ifdef MIKUDANCESTUDIO_DIAG
     if (requireLineEnabled && lineModeRequested != 0)
         DumpFrameEntryState(app, "frame_state_line.json");
+#endif
     auto& s = *app;
 
     // 0x46B118..0x46B17B: one-second render-frame counter.  The original
@@ -411,7 +419,9 @@ void FrameDriver(MMDApp* app) {
     mikudancestudio::ConsumeMiddleButtonPan(app);  // pump_navigation.cpp
     mikudancestudio::ConsumeEditKeys(app);         // pump_edit_keys.cpp
     mikudancestudio::ConsumeLetterHotkeys(app);    // key_ladder.cpp
+#ifdef MIKUDANCESTUDIO_DIAG
     TraceOperationInput(app, "before");
+#endif
 
     // ---- 2. interaction-mode dispatch --------------------------------------
     const ViewportDragMode mode = s.InteractionDragMode();
@@ -453,14 +463,16 @@ void FrameDriver(MMDApp* app) {
             break;
         }
     }
+#ifdef MIKUDANCESTUDIO_DIAG
     TraceOperationInput(app, "after");
+#endif
 
     // ---- 3. mouse position update ------------------------------------------
     MouseInteractionEnd(app);
 
     // ---- 4. selection callback (0x46DCA4..0x46DCCD) ---------------------
     unsigned char selActive = 0;
-    if (s.state.v9ed90 == 0 &&                  // 0x9ED90
+    if (s.state.frameStepPlayback == 0 &&                  // 0x9ED90
         s.state.depthDeviceEnabled != 0) {                  // 0xA03B8
         // 0xA03D4 = the OpenNI is-tracking callback slot (literal was a
         // +0x80 decimal slip that landed mid-cameraAttachmentBasis)
@@ -478,6 +490,7 @@ void FrameDriver(MMDApp* app) {
     // the transient line counter for the next frame.
     DumpRequestedFrameState(app);
 
+#ifdef MIKUDANCESTUDIO_DIAG
     // Match ida_capture_original_vb.py: its one-shot breakpoint changes
     // these fields at the first camera sprite Unlock, after transforms and
     // sprite production but before the following FrameDriver cycle.
@@ -487,7 +500,7 @@ void FrameDriver(MMDApp* app) {
             app->state.optflag[0] == 0 &&
             app->EditMode() == ViewportEditMode::Bone;
         if (!alreadyModelMode) {
-            Sub44D610(app);
+            RebuildModelModePanel(app);
             app->state.optflag[0] = 0;
             app->EditMode() = ViewportEditMode::Bone;
             PostLanguageSweep(app);
@@ -504,15 +517,16 @@ void FrameDriver(MMDApp* app) {
             app->state.framesPerSecond = 0;
         }
         if (!keepPhysicsEnabled)
-            app->state.a0665 = 1;
+            app->state.accessoryEditDialogOpen = 1;
     }
+#endif
 
     // ---- 5.5 frame-step recording readback (0x46E787..0x46EFB7) ---------
     // The original splits right after the scene render's EndScene: with
     // the frame-step byte 0x9ED90 set (AVI recording / manual stepping)
     // the readback+push pass runs before the catch-up; a failure inside
     // it runs the recording epilogue and returns from the whole driver.
-    if (s.state.v9ed90 != 0) {                   // 0x9ED90
+    if (s.state.frameStepPlayback != 0) {                   // 0x9ED90
         if (!RecordingReadbackPass(app))
             return;
     }
@@ -528,28 +542,30 @@ void FrameDriver(MMDApp* app) {
     PrepareFrameLineOverlay(app);
 
     // ---- 7. timeline flag handoff (0x479864..0x479896) -------------------
-    if (s.state.v9edd0 != 0) {
+    if (s.state.timelineAdvanceDue != 0) {
         TimelineAdvance(app);                                     // 0x460130
-        s.state.v9edd0 = 0;
-        s.state.a03B7 = 0;
+        s.state.timelineAdvanceDue = 0;
+        s.state.timelineAdvanceRequested = 0;
     }
-    if (s.state.a03B7 != 0) {
-        s.state.v9edd0 = 1;
-        s.state.a03B7 = 0;
+    if (s.state.timelineAdvanceRequested != 0) {
+        s.state.timelineAdvanceDue = 1;
+        s.state.timelineAdvanceRequested = 0;
     }
 
     // ---- 8. reload path (0x47989D..0x4798CB) ----------------------------
-    if (s.state.a04B8 != 0) {
+    if (s.state.modelReloadPending != 0) {
+#ifdef MIKUDANCESTUDIO_DIAG
         if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
             FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
             if (tf) { fputs("frame section8 reload path\n", tf); fclose(tf); }
         }
+#endif
         s.state.cameraAttachmentTransformSuppressed = 0;
         s.ViewOffsetX() = 0.0f;
         s.ViewOffsetY() = 0.0f;
         ReloadModels(app);                                        // 0x42E640
         PostModelReload(app);                                     // 0x41A650
-        s.state.a04B8 = 0;
+        s.state.modelReloadPending = 0;
     }
 
     // ---- 9. Present + device-lost recovery (0x479B23..0x479CB9) ----------
@@ -612,38 +628,40 @@ void FrameDriver(MMDApp* app) {
             }
         }
     }
+#ifdef MIKUDANCESTUDIO_DIAG
     if (presented && SUCCEEDED(hr)) {
         if (requireLineEnabled && lineModeRequested != 0)
             ActivateRefreshedVbCapture();
         HoldPresentCaptureFence();
     }
+#endif
 
     // ---- 10. animation frame section (0x479CC6..0x479D75) ----------------
     // Byte compare at 0x479CB9; 0xA0B00/0xA0B04 are INTEGER frame fields
     // (fild + 2^32 fixup on negative, i.e. unsigned load) divided by the
     // constant 30.0 (dbl_52BA68); EnableWindow pushes 0 (0x479D58).
-    if (s.state.v9edd8 != 0) {       // 0x9EDD8
+    if (s.state.recordPlaybackStartPending != 0) {       // 0x9EDD8
         s.CurrentFrame() =
-            s.state.f9eddc;        // 0x9EDDC
-        s.state.v9ed90 = 1;          // 0x9ED90
+            s.state.recordSavedFrame;        // 0x9EDDC
+        s.state.frameStepPlayback = 1;          // 0x9ED90
         // (was a raw 650128 literal = 0x9EB90, one of the +/-0x100
         // decimal slips; 0x9ED90 = 650640)
 
         const std::int32_t fa = s.state.aviRecordStartFrame;
-        s.state.f9e654 =
+        s.state.playbackStartSeconds =
             static_cast<float>((fa < 0
                                     ? static_cast<double>(fa) + g_Wrap32
                                     : static_cast<double>(fa)) /
                                g_FrameScale);
 
         const std::int32_t fb = s.state.aviRecordEndFrame;
-        s.state.f9e658 =
+        s.state.playbackEndSeconds =
             static_cast<float>((fb < 0
                                     ? static_cast<double>(fb) + g_Wrap32
                                     : static_cast<double>(fb)) /
                                g_FrameScale);
 
-        s.state.f9e648 = s.state.aviRecordStartFrame;
+        s.state.aviBackgroundSample = s.state.aviRecordStartFrame;
         s.PlaybackCursorSeconds() = s.PlaybackStartSeconds();
 
         if (s.state.aviRecordStartFrame ==
@@ -652,10 +670,10 @@ void FrameDriver(MMDApp* app) {
 
         s.state.playbackActive = 1;
         UpdateBoneFrames(app);                                    // 0x433A40
-        s.state.f9ed94 = 0;
-        EnableWindow(GetDlgItem(static_cast<HWND>(s.Hwnd()), 0x198),
+        s.state.recordedFrameCount = 0;
+        EnableWindow(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kPlayButton),
                      FALSE);
-        s.state.v9edd8 = 0;
+        s.state.recordPlaybackStartPending = 0;
     }
 
 }

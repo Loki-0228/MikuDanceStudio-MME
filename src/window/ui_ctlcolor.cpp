@@ -39,14 +39,13 @@
 #include <Windows.h>
 
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
-void TimelineCanaryDisarm();  // TEMP(debug, keyframe-drag crash)
 namespace {
 
 // Free-if-non-null then null the slot - mirrors the exact asm block
@@ -69,9 +68,6 @@ void FreeTimelineSelectionRecords(MMDApp* app, TimelineSelectionBand band) {
 void PanelPaint(MMDApp* app);       // VA 0x00414610
 void SelectionReeval(MMDApp* app);  // VA 0x00430510
 
-// TEMP(debug, keyframe-drag crash) - defined in ui_editor_click.cpp
-void TimelineCanaryDisarm();
-
 LRESULT HandleCtlColor(HWND control, HDC dc) {
     // The original does not use the device context.
     MMDApp* app = g_Block;
@@ -83,45 +79,45 @@ LRESULT HandleCtlColor(HWND control, HDC dc) {
             reinterpret_cast<std::intptr_t>(app->UiBrush(index)));
     };
 
-    if (ctrl == GetDlgItem(main, 447))  // 0x1BF -> slot 9 (0xA04F0)
+    if (ctrl == GetDlgItem(main, panel::kFovSlider))  // 0x1BF -> slot 9 (0xA04F0)
         return brushResult(9);
 
-    if (ctrl == GetDlgItem(main, 534))  // 0x216 -> slot 10 (0xA04F4)
+    if (ctrl == GetDlgItem(main, panel::kFrameVolumeSlider))  // 0x216 -> slot 10 (0xA04F4)
         return brushResult(10);
 
-    if (ctrl == GetDlgItem(main, 455))  // 0x1C7 -> slot 0 (0xA04CC)
+    if (ctrl == GetDlgItem(main, panel::kLightColorSliderR))  // 0x1C7 -> slot 0 (0xA04CC)
         return brushResult(0);
 
-    if (ctrl == GetDlgItem(main, 456))  // 0x1C8 -> slot 1 (0xA04D0)
+    if (ctrl == GetDlgItem(main, panel::kLightColorSliderG))  // 0x1C8 -> slot 1 (0xA04D0)
         return brushResult(1);
 
-    if (ctrl == GetDlgItem(main, 457))  // 0x1C9 -> slot 2 (0xA04D4)
+    if (ctrl == GetDlgItem(main, panel::kLightColorSliderB))  // 0x1C9 -> slot 2 (0xA04D4)
         return brushResult(2);
 
-    if (ctrl == GetDlgItem(main, 458))  // 0x1CA -> slot 3 (0xA04D8)
+    if (ctrl == GetDlgItem(main, panel::kLightDirSliderX))  // 0x1CA -> slot 3 (0xA04D8)
         return brushResult(3);
 
-    if (ctrl == GetDlgItem(main, 459))  // 0x1CB -> slot 4 (0xA04DC)
+    if (ctrl == GetDlgItem(main, panel::kLightDirSliderY))  // 0x1CB -> slot 4 (0xA04DC)
         return brushResult(4);
 
-    if (ctrl == GetDlgItem(main, 460))  // 0x1CC -> slot 5 (0xA04E0)
+    if (ctrl == GetDlgItem(main, panel::kLightDirSliderZ))  // 0x1CC -> slot 5 (0xA04E0)
         return brushResult(5);
 
     // Pair 515|510 (0x203/0x1FE) -> slot 6 (0xA04E4): both GetDlgItem calls
     // run unconditionally in the original (setz/or, no short-circuit).
-    const bool hit515 = ctrl == GetDlgItem(main, 515);
-    const bool hit510 = ctrl == GetDlgItem(main, 510);
+    const bool hit515 = ctrl == GetDlgItem(main, panel::kMorphSlider2);
+    const bool hit510 = ctrl == GetDlgItem(main, panel::kMorphSlider1);
     if (hit515 || hit510)
         return brushResult(6);
 
     // Pair 520|505 (0x208/0x1F9) -> slot 7 (0xA04E8): same non-short-circuit
     // pattern as the pair above.
-    const bool hit520 = ctrl == GetDlgItem(main, 520);
-    const bool hit505 = ctrl == GetDlgItem(main, 505);
+    const bool hit520 = ctrl == GetDlgItem(main, panel::kMorphSlider3);
+    const bool hit505 = ctrl == GetDlgItem(main, panel::kMorphSlider0);
     if (hit520 || hit505)
         return brushResult(7);
 
-    if (ctrl == GetDlgItem(main, 560))  // 0x230 -> slot 8 (0xA04EC)
+    if (ctrl == GetDlgItem(main, panel::kSelfShadowRangeSlider))  // 0x230 -> slot 8 (0xA04EC)
         return brushResult(8);
 
     return 0;
@@ -151,15 +147,11 @@ LRESULT HandleCtlColor(HWND control, HDC dc) {
 // Reference: ../translated/MikuMikuDance/fcn_0044a9a0.cpp
 // =========================================================================//
 void HandleLButtonUp(MMDApp* app) {
-    TimelineCanaryDisarm();  // TEMP(debug, keyframe-drag crash)
     const bool dragActive = app->SelectionBoxDragging() != 0;
     app->SidebarResizeDragging() = 0;
     app->WindowLayoutReady() = 1;
 
     if (dragActive) {
-        // TEMP(debug, keyframe-drag crash)
-        std::fprintf(stderr, "LBTNUP freeing recs\n");
-        std::fflush(stderr);
         FreeTimelineSelectionRecords(app, TimelineSelectionBand::Accessory);
         FreeTimelineSelectionRecords(app, TimelineSelectionBand::ModelIk);
         FreeTimelineSelectionRecords(app, TimelineSelectionBand::Camera);

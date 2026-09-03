@@ -4,7 +4,7 @@
 // The main pump (x86 0x46B090 / x64 sub_7FF7CB4474F0) consumes the arrow
 // keys, the right/middle mouse drags and the numpad view presets inline,
 // using the 0/1/2/3 edge cells that MouseInteractionBegin polls
-// (frame_modes.cpp kKeySlots / model_query_gaps.cpp Sub42D3A0; values:
+// (frame_modes.cpp kKeySlots / model_query_gaps.cpp PollKeyboardStates; values:
 // 0 idle, 1 pressed, 2 released, 3 held).  This file ports the four
 // segments as self-contained free functions so the frame driver can call
 // them in pump VA order next to ConsumeLetterHotkeys (key_ladder.cpp):
@@ -35,9 +35,9 @@
 //
 // Bone-edit drag path shared by RMB/MMB/numpad (x86 0x470C15/0x470D78/
 // 0x47318F): slotIdx(0x910) == cameraParentModel(0xA0430) &&
-// cameraParentModel >= 0 && !playing(0x330) && v9ed98 != 0 (the pump reads
+// cameraParentModel >= 0 && !playing(0x330) && followCameraEnabled != 0 (the pump reads
 // the BYTE 0x9ED98, unlike frame_modes.cpp ViewRefreshGate's dword read).
-// Hit: view-dirty b6568481 (0xA05D1) = 1 on hold / 0 on release, then the
+// Hit: view-dirty viewDirty (0xA05D1) = 1 on hold / 0 on release, then the
 // view-lock windowLayoutReady (0xA442C) 0 -> PostLanguageSweep2 (0x40D070)
 // -> 1.
 //
@@ -80,12 +80,13 @@ namespace mikudancestudio {
 
 // Sibling-TU bodies, declared locally the key_ladder.cpp way (kept out of
 // ported_funcs.hpp).
-void Sub430F20(MMDApp* app);          // VA 0x00430F20 (ui_frame_step.cpp) frame +1
-void Sub4312E0(MMDApp* app);          // VA 0x004312E0 (ui_frame_step.cpp) frame -1
-void Sub438D60(MMDApp* app);          // VA 0x00438D60 SelectPreviousDisplayBone
-void Sub438F50(MMDApp* app);          // VA 0x00438F50 SelectNextDisplayBone
-void Sub4391D0(MMDApp* app);          // VA 0x004391D0 SelectPrevEditTarget
-void Sub439520(MMDApp* app);          // VA 0x00439520 SelectNextEditTarget
+void StepFrame(MMDApp* app, bool forward);  // VA 0x00430F20 (frame +1) / 0x004312E0
+                                            // (frame -1), was Sub430F20/Sub4312E0
+                                            // (ui_frame_step.cpp)
+void SelectPreviousDisplayBone(MMDApp* app);  // VA 0x00438D60 (model_query_gaps.cpp), was Sub438D60
+void SelectNextDisplayBone(MMDApp* app);      // VA 0x00438F50 (model_query_gaps.cpp), was Sub438F50
+void SelectPrevEditTarget(MMDApp* app);       // VA 0x004391D0 (model_query_gaps.cpp), was Sub4391D0
+void SelectNextEditTarget(MMDApp* app);       // VA 0x00439520 (model_query_gaps.cpp), was Sub439520
 void JumpNextKeyframe(MMDApp* app);   // VA 0x00441070 (app_gap_bodies.cpp)
 void JumpPrevKeyframe(MMDApp* app);   // VA 0x004414C0 (app_gap_bodies.cpp)
 
@@ -132,13 +133,13 @@ bool BoneEditPathActive(MMDApp* app) {
     return state.slotIdx == state.cameraParentModel &&  // 0x910 == 0xA0430
            state.cameraParentModel >= 0 &&
            state.playbackActive == 0 &&                 // 0x330
-           state.v9ed98 != 0;                           // byte 0x9ED98
+           state.followCameraEnabled != 0;                           // byte 0x9ED98
 }
 
 // The view-lock sequence around PostLanguageSweep2 (0x40D070):
-// 0xA442C = windowLayoutReady, 0xA05D1 = b6568481 view-dirty.
+// 0xA442C = windowLayoutReady, 0xA05D1 = viewDirty view-dirty.
 void EnterBoneEditRefresh(MMDApp* app, bool hold) {
-    app->state.b6568481 = hold ? 1 : 0;                 // 0xA05D1
+    app->state.viewDirty = hold ? 1 : 0;                 // 0xA05D1
     app->state.windowLayoutReady = 0;                   // 0xA442C
     PostLanguageSweep2(app);                            // 0x40D070
     app->state.windowLayoutReady = 1;
@@ -162,7 +163,7 @@ void ApplyNumpadCameraPreset(MMDApp* app, float pitch, float yaw) {
 void ApplyNumpadModelPreset(MMDApp* app, float pitch, float yaw,
                             float distance, bool targetFollowsReference) {
     auto& state = app->state;
-    if (state.cameraParentModel >= 0 && state.v9ed98 != 0)
+    if (state.cameraParentModel >= 0 && state.followCameraEnabled != 0)
         app->CameraAttachmentTransformSuppressed() = 1; // 0xA0478
     app->ViewOffsetX() = 0.0f;                          // 0x308 / x64 0x340
     app->CameraDistance() = distance;
@@ -244,7 +245,7 @@ void PanSelectedCameraKey(MMDApp* app, int dx, int dy) {
 // Arrow-key navigation + hold auto-repeat (G1)
 //   x86 0x47283F..0x472A49 / x64 0x7FF7CB44F7A6..0x44F9C1
 // ---------------------------------------------------------------------------
-// One shared hold timer (x86 0x9E650 = state.v9e650) accumulates the frame
+// One shared hold timer (x86 0x9E650 = state.keyRepeatTimer) accumulates the frame
 // delta (0xA06BC = state.deltaTime) for whichever arrow is held; a press
 // re-arms it to zero and a fire does NOT re-arm it, so after the 0.4 s
 // threshold the action repeats every frame until release.  RIGHT's repeat
@@ -263,7 +264,7 @@ void ConsumeArrowKeyNavigation(MMDApp* app) {
 
     const bool ctrl = state.ctrlModifierState == 3;             // 0xC0/0xC4
     const bool cameraPanel = state.optflag[0] != 0;             // 0x2F8/0x328
-    float& repeat = state.v9e650;                               // 0x9E650
+    float& repeat = state.keyRepeatTimer;                               // 0x9E650
     constexpr float kRepeatThreshold = 0.4f;  // x64 0x7FF7CB552D0C / 0x52E908
     const auto repeatDue = [&]() {
         repeat += state.deltaTime;                              // 0xA06BC
@@ -275,14 +276,14 @@ void ConsumeArrowKeyNavigation(MMDApp* app) {
         if (ctrl) {
             JumpNextKeyframe(app);                              // 0x441070
         } else {
-            Sub430F20(app);                                     // 0x430F20
+            StepFrame(app, true);                               // 0x430F20
             repeat = 0.0f;
         }
     }
     if (state.rightKeyState == 3 && !ctrl) {                    // 0x472884
         if (repeatDue()) {
             state.windowLayoutReady = 0;                        // 0xA442C
-            Sub430F20(app);          // timer deliberately not re-armed
+            StepFrame(app, true);     // timer deliberately not re-armed
         }
     }
     if (state.rightKeyState == 2)                               // 0x4728CF
@@ -293,46 +294,46 @@ void ConsumeArrowKeyNavigation(MMDApp* app) {
         if (ctrl) {
             JumpPrevKeyframe(app);                              // 0x4414C0
         } else {
-            Sub4312E0(app);                                     // 0x4312E0
+            StepFrame(app, false);                              // 0x4312E0
             repeat = 0.0f;
         }
     }
     if (state.leftKeyState == 3 && !ctrl) {                     // 0x472917
         if (repeatDue())
-            Sub4312E0(app);         // no flag writes, no re-arm
+            StepFrame(app, false);  // no flag writes, no re-arm
     }
 
     // ---- UP (x86 0x47295B): previous edit target / display bone ---------
     if (state.upKeyState == 1) {                                // 0x14/0x18
         if (cameraPanel)
-            Sub4391D0(app);          // SelectPrevEditTarget
+            SelectPrevEditTarget(app);       // 0x4391D0
         else
-            Sub438D60(app);          // SelectPreviousDisplayBone
+            SelectPreviousDisplayBone(app);  // 0x438D60
         repeat = 0.0f;
     }
     if (state.upKeyState == 3) {                                // 0x472982
         if (repeatDue()) {
             if (cameraPanel)
-                Sub4391D0(app);
+                SelectPrevEditTarget(app);
             else
-                Sub438D60(app);
+                SelectPreviousDisplayBone(app);
         }
     }
 
     // ---- DOWN (x86 0x4729D3): next edit target / display bone -----------
     if (state.downKeyState == 1) {                              // 0x18/0x1C
         if (cameraPanel)
-            Sub439520(app);          // SelectNextEditTarget
+            SelectNextEditTarget(app);       // 0x439520
         else
-            Sub438F50(app);          // SelectNextDisplayBone
+            SelectNextDisplayBone(app);      // 0x438F50
         repeat = 0.0f;
     }
     if (state.downKeyState == 3) {                              // 0x4729FA
         if (repeatDue()) {
             if (cameraPanel)
-                Sub439520(app);
+                SelectNextEditTarget(app);
             else
-                Sub438F50(app);
+                SelectNextDisplayBone(app);
         }
     }
 }
@@ -376,7 +377,7 @@ void ConsumeRightButtonDrag(MMDApp* app) {
             app->CameraPitch() = app->CameraPitch() -           // 0x310
                 static_cast<float>(dy) * kRotateScale;
         }
-        if (!modelMode && state.v9ed9c != 2)                    // 0x470D3C
+        if (!modelMode && state.coordinateSystem != 2)                    // 0x470D3C
             RefreshRequest(-1);                                 // 0x440AC0
         PostViewRefresh(app);                                   // 0x40D130
         return;

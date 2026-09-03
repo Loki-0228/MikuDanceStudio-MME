@@ -1,8 +1,11 @@
 // ===========================================================================
 // Left frame-editor refresh and single-frame stepping helpers.
-//   0x0040D070  invalidate the two model-row status rectangles
-//   0x00430F20  advance one frame
-//   0x004312E0  move back one frame
+//   0x00430F20 / 0x004312E0  StepFrame(app, true/false) - one frame forward /
+//                             back plus the full apply/refresh chain
+//   0x00432FA0  RefreshAfterFrameApply - re-apply the current frame to every
+//                             model/accessory track and refresh the panels
+// (0x0040D070 is ported once, as PostLanguageSweep2 in ui_view_refresh.cpp;
+//  the Sub40D070 twin that used to live here was that same function.)
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -14,17 +17,18 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
-void Sub4A0080(unsigned char* model, int frame);
-void Sub4A02C0(unsigned char* model);
-void Sub411B90(MMDApp* app);
-void Sub412330(MMDApp* app);
-void Sub413120(MMDApp* app, int index);
-void Sub4134E0(MMDApp* app);
-void Sub4168D0(MMDApp* app);
-void Sub4C3530(void* subsystem, double time);
+void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame);  // VA 0x004A0080, was Sub4A0080
+void SyncModelEditControls(unsigned char* model);                     // VA 0x004A02C0, was Sub4A02C0
+void RefreshSelfShadowPanel(MMDApp* app);
+void ApplyGravityTrack(MMDApp* app);
+void ApplyAccessoryTrack(MMDApp* app, int index);
+void SyncAccessoryEditPanel(MMDApp* app);
+void AviBgOverlayRefresh(MMDApp* app);
+void WaveRestartAt(void* subsystem, double time);   // VA 0x004C3530, was Sub4C3530
 
 namespace {
 
@@ -43,7 +47,7 @@ void SnapshotAndClearBoneSelection(MMDApp* app) {
             ++index;
         if (index >= count)
             continue;
-        Sub4A0080(model, app->state.currentFrame);
+        SnapshotPoseBeforeFrameChange(model, app->state.currentFrame);
         for (index = 0; index < count; ++index)
             selected[index] = 0;
     }
@@ -51,7 +55,7 @@ void SnapshotAndClearBoneSelection(MMDApp* app) {
 
 void SetFrameEditText(MMDApp* app) {
     const HWND hwnd = static_cast<HWND>(app->Hwnd());
-    const HWND edit = GetDlgItem(hwnd, 0x1A1);
+    const HWND edit = GetDlgItem(hwnd, panel::kCurrentFrameEdit);
     const LRESULT length = GetWindowTextLengthA(edit);
     SendMessageA(edit, EM_SETSEL, 0, length);
     char text[0x100];
@@ -66,10 +70,10 @@ void ApplyFrameToModels(MMDApp* app) {
         unsigned char* model = app->ModelSlot(slot);
         if (model == nullptr)
             continue;
-        Sub4B4260(model, app->state.currentFrame,
+        SeekModelFrame(model, app->state.currentFrame,
                   app->PlaybackPhysicsMode());
         if (slot == app->SelectedModelSlot())
-            Sub4A02C0(model);
+            SyncModelEditControls(model);
     }
 }
 
@@ -77,29 +81,29 @@ void RefreshFrameContext(MMDApp* app) {
     const HWND hwnd = static_cast<HWND>(app->Hwnd());
     if (app->state.optflag[0] != 0) {
         ReloadModels(app);
-        Sub411070(app);
-        Sub411B90(app);
-        Sub412330(app);
+        RefreshLightPanel(app);
+        RefreshSelfShadowPanel(app);
+        ApplyGravityTrack(app);
         for (int slot = 0; slot < 0xFF; ++slot) {
             if (app->AccessorySlot(slot) != nullptr)
-                Sub413120(app, slot);
+                ApplyAccessoryTrack(app, slot);
         }
-        Sub4134E0(app);
+        SyncAccessoryEditPanel(app);
         return;
     }
 
-    if (app->state.v9ed98 != 0) {
+    if (app->state.followCameraEnabled != 0) {
         app->ViewOffsetX() = 0.0f;
         app->ViewOffsetY() = 0.0f;
         ReloadModels(app);
-        Sub411070(app);
-        Sub411B90(app);
-        Sub412330(app);
+        RefreshLightPanel(app);
+        RefreshSelfShadowPanel(app);
+        ApplyGravityTrack(app);
         for (int slot = 0; slot < 0xFF; ++slot) {
             if (app->AccessorySlot(slot) != nullptr)
-                Sub413120(app, slot);
+                ApplyAccessoryTrack(app, slot);
         }
-        Sub4134E0(app);
+        SyncAccessoryEditPanel(app);
         const std::int32_t selected = app->CameraParentModel();
         if (selected >= 0) {
             unsigned char* model = app->ModelSlot(selected);
@@ -113,8 +117,8 @@ void RefreshFrameContext(MMDApp* app) {
         return;
     }
 
-    EnableWindow(GetDlgItem(hwnd, 0x190), TRUE);
-    EnableWindow(GetDlgItem(hwnd, 0x191), FALSE);
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
 }
 
 void RefreshTimeline(MMDApp* app, bool forward) {
@@ -132,7 +136,7 @@ void RefreshTimeline(MMDApp* app, bool forward) {
         RECT rect{6, 95,
                   app->SidebarWidth() - 3, 146};
         InvalidateRect(static_cast<HWND>(app->Hwnd()), &rect, FALSE);
-        if (app->state.a0196 != 0) {
+        if (app->state.wavPlaysOnFrameMove != 0) {
             const bool seek =
                 app->AutomaticFrameAdvanceEnabled() == 0;
             app->AudioSeekReady() = 1;
@@ -145,7 +149,7 @@ void RefreshTimeline(MMDApp* app, bool forward) {
                     static_cast<std::uint32_t>(previous)) / 30.0;
                 if (time < 0.0)
                     time = 0.0;
-                Sub4C3530(app->Audio(), time);
+                WaveRestartAt(app->Audio(), time);
             }
         }
     }
@@ -154,15 +158,24 @@ void RefreshTimeline(MMDApp* app, bool forward) {
         app->PhysicsResetPending() =
             app->PlaybackPhysicsMode() == 3 ? 1 : 0;
         if (app->state.aviBackgroundEnabled == 1)
-            Sub4168D0(app);
+            AviBgOverlayRefresh(app);
     } else {
         if (app->state.aviBackgroundEnabled == 1)
-            Sub4168D0(app);
+            AviBgOverlayRefresh(app);
         if (app->PlaybackPhysicsMode() == 3)
             app->PhysicsResetPending() = 1;
     }
 }
 
+}  // namespace
+
+// Advance / move back one frame and run the full apply/refresh chain.  The
+// original x86 pair 0x00430F20 (frame +1, command 419) / 0x004312E0
+// (frame -1, command 418) differed only in the frame delta (and the 0-guard
+// on the way back), so both are covered by this one parameterized step.
+// was Sub430F20, VA 0x00430F20 / Sub4312E0, VA 0x004312E0 - the one-line
+// forwarding wrappers this used to be reached through were removed; callers
+// pass the direction flag directly.
 void StepFrame(MMDApp* app, bool forward) {
     app->CameraAttachmentTransformSuppressed() = 0;
     SnapshotAndClearBoneSelection(app);
@@ -177,33 +190,11 @@ void StepFrame(MMDApp* app, bool forward) {
     RefreshTimeline(app, forward);
 }
 
-}  // namespace
-
-void Sub40D070(MMDApp* app) {
-    HWND target = app->FloatingWindow();
-    int leftBase = 0;
-    RECT client{};
-    if (target != nullptr) {
-        GetClientRect(target, &client);
-    } else {
-        target = app->state.hwnd;
-        GetClientRect(target, &client);
-        leftBase = app->state.sidebarWidth + 9;
-    }
-    const int bottom = app->state.hideTop;
-    RECT rect{leftBase + 10, bottom - 22, client.right - 450, bottom - 1};
-    InvalidateRect(target, &rect, FALSE);
-    rect.left = leftBase + 68;
-    rect.top = app->state.hideBottom;
-    rect.right = leftBase + 139;
-    rect.bottom = rect.top + 30;
-    InvalidateRect(target, &rect, FALSE);
-}
-
-void Sub430F20(MMDApp* app) { StepFrame(app, true); }
-void Sub4312E0(MMDApp* app) { StepFrame(app, false); }
-
-void Sub432FA0(MMDApp* app) {
+// was Sub432FA0, VA 0x00432FA0 - re-apply the current frame to every model
+// and accessory track after a frame change / key registration and refresh
+// the timeline, panels and physics-reset flag (the "frame-apply refresh
+// chain" of the original command tails).
+void RefreshAfterFrameApply(MMDApp* app) {
     if (app == nullptr)
         return;
     app->CameraAttachmentTransformSuppressed() = 0;
@@ -227,7 +218,7 @@ void Sub432FA0(MMDApp* app) {
     ApplyFrameToModels(app);
     RefreshFrameContext(app);
     if (app->state.aviBackgroundEnabled == 1)
-        Sub4168D0(app);
+        AviBgOverlayRefresh(app);
     app->PhysicsResetPending() = 1;
 }
 

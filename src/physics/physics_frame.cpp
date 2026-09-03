@@ -400,6 +400,10 @@ void StopBodyAt(btRigidBody* body, const btTransform& transform) {
     body->setAngularVelocity(zero);
 }
 
+#ifdef MIKUDANCESTUDIO_DIAG
+// ---- rigid-body state dumps under MIKUDANCESTUDIO_STATE_DUMP_DIR ---------
+// (porting-era A/B tooling; see frame_state_dump.hpp for the gate)
+
 template <typename T>
 void WriteStateWords(std::FILE* stream, const char* name, const T& value) {
     std::fprintf(stream, "],\"%s\":[", name);
@@ -534,6 +538,8 @@ void DumpWorldSolverInfo(btDiscreteDynamicsWorld* world) {
     std::fclose(stream);
 }
 
+#endif  // MIKUDANCESTUDIO_DIAG
+
 }  // namespace
 
 // VA 0x004B22F0 - push kinematic rigid bodies to the bones.
@@ -572,6 +578,7 @@ void ModelDynamicReseat(unsigned char* m) {
         return;
     mdl::RigidRecord* rigids = mdl::Rigids(m);
     const int centerBone = mdl::Mdl(m)->centerBone;   // 0x4B3460
+#ifdef MIKUDANCESTUDIO_DIAG
     static int reseatCalls = 0;
     const bool traceReseat = getenv("MIKUDANCESTUDIO_TRACE_RESEAT") != nullptr;
     if (traceReseat && reseatCalls < 12) {
@@ -584,6 +591,7 @@ void ModelDynamicReseat(unsigned char* m) {
                      reseatCalls, count, active);
     }
     ++reseatCalls;
+#endif
     for (int i = 0; i < count; ++i) {
         const mdl::RigidRecord& rec = rigids[i];
         if (static_cast<signed char>(rec.mode) <= 0)
@@ -591,6 +599,7 @@ void ModelDynamicReseat(unsigned char* m) {
         btRigidBody* body = BodyOf(rec);
         if (body == nullptr)
             continue;                                       // port guard
+#ifdef MIKUDANCESTUDIO_DIAG
         if (traceReseat && reseatCalls <= 3) {
             const int id = body->m_debugBodyId;
             if (id == 3) {
@@ -602,6 +611,7 @@ void ModelDynamicReseat(unsigned char* m) {
                              reseatCalls, (int)rec.mode, bits);
             }
         }
+#endif
         float mat[16];
         const int link = rec.boneIndex;
         BuildFollowMatrix(mat, m, rec, link < 0 ? centerBone : -1);
@@ -745,14 +755,14 @@ void ModelPhysicsReadback(unsigned char* m) {
         const int target = bone.tailIdx;
         mdl::BoneRecord& tb = target >= 0 ? mdl::Bones(m)[target] : bone;
 
-        if (bone.type == 5) {                                // tail type
-            float conj[4] = {-tb.f376[0], -tb.f376[1],
-                             -tb.f376[2], tb.f376[3]};
+        if (bone.type == mdl::BoneType::RotateGrant) {        // tail type
+            float conj[4] = {-tb.physicsQuat[0], -tb.physicsQuat[1],
+                             -tb.physicsQuat[2], tb.physicsQuat[3]};
             float out[4];
             D3dxQuatMul(out, conj, q);
             std::memcpy(q, out, sizeof out);
         }
-        if ((bone.flags & 0x100) != 0) {
+        if ((bone.flags & mdl::kBoneFlagRotInherit) != 0) {
             float limit[4];
             D3dxQuatFromMatrix(limit, reinterpret_cast<const D3DXMATRIXF*>(
                                            tb.matLocal));
@@ -788,9 +798,9 @@ void ModelPhysicsReadback(unsigned char* m) {
                     std::memcpy(q, out, sizeof out);
             }
         }
-        if ((bone.flags & 0x200) != 0) {
+        if ((bone.flags & mdl::kBoneFlagTransInherit) != 0) {
             for (int c = 0; c < 3; ++c)
-                bone.f364[c] -= tb.f364[c] * bone.inheritRatio;
+                bone.physicsOffset[c] -= tb.physicsOffset[c] * bone.inheritRatio;
         }
         if (rigid.mode == 2) {
             // mode 2: collapse the physics pose onto the bone position and
@@ -885,14 +895,14 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // arithmetic precision differs (see the #if paths).
     // Vector element order is (0x9EDB8, 0x9EDBC, 0x9EDC0, 0).
     bool windRan = false;
-    if (count > 0 && s.state.a0CD4 != 0) {
+    if (count > 0 && s.state.gravityNoiseEnabled != 0) {
         // x64 0x7FF7CB44BEA4..0x7FF7CB44BEC9: the timer accumulates with a
         // single float add (addss, result stored back unconditionally) and
         // the compare is `comiss xmm0,[0x7FF7CB55298C=0.5f]; jbe skip` -
         // the perturbation fires only when the timer is STRICTLY greater
         // than 0.5; an exactly-0.5 timer does not fire.
-        s.state.v9edcc = s.state.v9edcc + s.DeltaTime();
-        if (s.state.v9edcc > 0.5f) {                          // flt_52960C
+        s.state.gravityNoiseTimer = s.state.gravityNoiseTimer + s.DeltaTime();
+        if (s.state.gravityNoiseTimer > 0.5f) {                          // flt_52960C
 #if defined(_MSC_VER) && defined(_M_IX86)
             // x87 transcription of 0x46F5BA..0x46F66E: every intermediate
             // stays extended; strength is stored to a FLOAT slot at
@@ -940,7 +950,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
                 fstp        e2
             }
             world->setGravity(btVector3(e0, e1, e2));
-            s.state.v9edcc = 0.0f;                     // 0x46F6AC
+            s.state.gravityNoiseTimer = 0.0f;                     // 0x46F6AC
 #else
             // portable fallback (double chains, float strength round-trip)
             const float strengthF = static_cast<float>(
@@ -966,7 +976,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             world->setGravity(btVector3(static_cast<float>(e0),
                                         static_cast<float>(e1),
                                         static_cast<float>(e2)));
-            s.state.v9edcc = 0.0f;                     // 0x46F6AC
+            s.state.gravityNoiseTimer = 0.0f;                     // 0x46F6AC
 #endif
         }
         windRan = true;  // -> 0x46F7DB: jump past the normal gravity apply
@@ -1002,6 +1012,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // AllStar physics-off A/B: orig F-pose = identity, port F-pose =
     // the physics-source quaternion).
     unsigned char** models = s.ModelSlots();
+#ifdef MIKUDANCESTUDIO_DIAG
     char stageCaptureValue[2]{};
     static LONG stagesCaptured = 0;
     // Arm on the first executable physics pass, including the synchronous
@@ -1022,6 +1033,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         ArmBoneTransformIkProbe();
     if (captureStages)
         DumpWorldSolverInfo(world);
+#endif
 
     // 0x46F7DB..0x46F808: the settle request sits inside the
     // "selection active" gate - var_14A1 (selActive, from FrameDriver
@@ -1032,7 +1044,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // port emitted two proceedToTransform writes per sync).
     if (selActive != 0 &&
         s.state.optflag[0] == 0 &&        // 0x2F8 model-mode flag
-        s.state.v9ed90 == 0) {     // 0x9ED90 frame-step flag
+        s.state.frameStepPlayback == 0) {     // 0x9ED90 frame-step flag
         // 0x46F7FF: while not playing, request the settle pass.
         if (s.state.a03E8 == 0)
             s.PhysicsResetPending() = 1;
@@ -1043,11 +1055,12 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // gate A jumps to) skips ONLY the two pose passes, the world pass, the
     // readback and the moved-flag clear below.  The gravity/wind blocks and
     // the settle request above have already run by then - the previous
-    // top-of-function early return on a0665 (which also killed gravity and
+    // top-of-function early return on accessoryEditDialogOpen (which also killed gravity and
     // the settle request) did not match x64.
-    if (s.state.a0665 != 0)
+    if (s.state.accessoryEditDialogOpen != 0)
         return;                       // 0x7FF7CB44C65B -> 0x7FF7CB44C8D6
 
+#ifdef MIKUDANCESTUDIO_DIAG
     int stepCount = 0;
     const char* stepLabels[16]{};
     const bool traceSteps = getenv("MIKUDANCESTUDIO_TRACE_STEPS") != nullptr;
@@ -1069,6 +1082,11 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         ++stepCount;
         world->stepSimulation(1.0f / 60.0f, 10, 1.0f / 60.0f);  // 0x46F206
     };
+#else
+    auto stepWorld = [world](const char*) {
+        world->stepSimulation(1.0f / 60.0f, 10, 1.0f / 60.0f);  // 0x46F206
+    };
+#endif
 
     // var_14C8 - the MAIN step's timeStep.  Initialised in PlaybackCatchup
     // (0x46EFDE = app+0xA06BC, overwritten with 1/fps in frame-step mode at
@@ -1081,6 +1099,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // The extra step (0x46FD7F) and the settle steps (0x46FE0C) push
     // flt_52EA00 for BOTH timeStep and fixedTimeStep - they stay 1/60.
     float mainTimeStep = g_CatchupDtBudget;
+#ifdef MIKUDANCESTUDIO_DIAG
     // DIAGNOSTIC ONLY: force the main step's timeStep to probe which
     // per-pass dt the original effectively runs at in real time.
     if (const char* forced = getenv("MIKUDANCESTUDIO_FORCE_MAINDT"))
@@ -1090,10 +1109,11 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // idle evolution.
     static bool zeroLocalTimeAfterLoad =
         getenv("MIKUDANCESTUDIO_ZERO_LT_AFTER_LOAD") != nullptr;
+#endif
 
     // Per-model morph application + pose source selection, ordered by the
     // PMM model-display order (the x86 field was model+0x2D7D).
-    const int a4 = s.PhysicsResetPending() != 0
+    const int posePassMode = s.PhysicsResetPending() != 0
                        ? 0
                        : count;
     // x64 pump sub_7FF7CB4474F0: both pose passes run order and slot walks
@@ -1104,21 +1124,24 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             unsigned char* mdl = models[j];
             if (mdl != nullptr && mdl::Mdl(mdl)->comboSelIndex2 == order) {
                 ModelApplyMorphs(mdl);                            // 0x46FCB1
-                SetPhysicsMode(mdl, 0, models, a4);
+                SetPhysicsMode(mdl, 0, models, posePassMode);
             }
         }
     }
+#ifdef MIKUDANCESTUDIO_DIAG
     if (captureStages)
         DumpFrameEntryState(app, "physics_pose0.json", false);
+#endif
 
     // Settle section gate (0x46FCEF; x64 0x7FF7CB44C6E5..0x7FF7CB44C73D,
     // `test eax,edx / jz 0x7FF7CB44C85F`): moved | settle | frame advanced,
     // model count 1..3, no seek pending (frameCopyDialog app+0xA1BC8 == 0).
-    const bool moved = s.state.a066C != 0;
+    const bool moved = s.state.physicsBodiesMoved != 0;
     const bool settle = s.PhysicsResetPending() != 0;
     const bool frameAdv = s.PlaybackActive() != 0;           // 0x330
     const bool runWorldPass = count == 1 || count == 2 ||
         (count == 3 && (moved || settle || frameAdv));
+#ifdef MIKUDANCESTUDIO_DIAG
     // DIAGNOSTIC ONLY (never set in production): MIKUDANCESTUDIO_IDLE_NO_STEP=1
     // skips the world pass entirely on passes with no settle/moved/frame
     // activity, freezing the post-seek state so a capture can tell whether
@@ -1126,6 +1149,9 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // idle substep evolution that follows it.
     const bool idleNoStep = getenv("MIKUDANCESTUDIO_IDLE_NO_STEP") != nullptr &&
         !(moved || settle || frameAdv);
+#else
+    constexpr bool idleNoStep = false;
+#endif
     // NOTE: the wind block's jump (0x46F6B4 -> 0x46F7DB) skips only the
     // normal setGravity (handled by the !windRan gate above).  The world
     // pass itself runs identically with or without wind - do NOT add
@@ -1136,10 +1162,12 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         for (int j = 0; j < kModelSlotCount; ++j)
             if (models[j] != nullptr)
                 ModelKinematicSync(models[j]);              // 0x46FD4D
+#ifdef MIKUDANCESTUDIO_DIAG
         if (captureStages)
             DumpRigidBodyState(app, "physics_sync.rigids.json");
         if (captureStages)
             DumpFrameEntryState(app, "physics_sync.json", false);
+#endif
 
         // 0x46FDBB..0x46FDCA: the single-step path pushes var_14C8 as
         // timeStep (fixedTimeStep stays flt_52EA00 = 1/60).  In the
@@ -1147,15 +1175,19 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         // steps push flt_52EA00 - var_14C8 is skipped entirely there.
         const float mainDt =
             (moved && count == 3) ? (1.0f / 60.0f) : mainTimeStep;
+#ifdef MIKUDANCESTUDIO_DIAG
         if (stepCount < 16) stepLabels[stepCount] = "main";
         ++stepCount;
+#endif
         world->stepSimulation(mainDt, 10, 1.0f / 60.0f);
         if (moved && count == 3)
             stepWorld("extra");                              // 0x46FD97
+#ifdef MIKUDANCESTUDIO_DIAG
         if (captureStages)
             DumpRigidBodyState(app, "physics_step.rigids.json");
         if (captureStages)
             DumpFrameEntryState(app, "physics_step.json", false);
+#endif
 
         if (settle) {
             for (int iter = 3; iter >= 1; --iter) {
@@ -1163,26 +1195,32 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
                 for (int j = 0; j < kModelSlotCount; ++j)
                     if (models[j] != nullptr)
                         ModelDynamicReseat(models[j]);      // 0x46FDF7
+#ifdef MIKUDANCESTUDIO_DIAG
                 if (captureStages) {
                     char name[64]{};
                     std::snprintf(name, sizeof(name),
                                   "physics_settle_pre%d.rigids.json", 4 - iter);
                     DumpRigidBodyState(app, name);
                 }
+#endif
                 stepWorld("settle");
+#ifdef MIKUDANCESTUDIO_DIAG
                 if (captureStages) {
                     char name[64]{};
                     std::snprintf(name, sizeof(name),
                                   "physics_settle_post%d.rigids.json", 4 - iter);
                     DumpRigidBodyState(app, name);
                 }
+#endif
             }
             s.PhysicsResetPending() = 0;
         }
+#ifdef MIKUDANCESTUDIO_DIAG
         if (captureStages)
             DumpRigidBodyState(app, "physics_settle.rigids.json");
         if (captureStages)
             DumpFrameEntryState(app, "physics_settle.json", false);
+#endif
 
         // 0x46FE34..0x46FE58: on x86 the readback loop and the 0xA066C
         // clear sit AFTER the world-pass gate (label 0x46FE34) and run
@@ -1194,13 +1232,16 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         for (int j = 0; j < kModelSlotCount; ++j)
             if (models[j] != nullptr)
                 ModelPhysicsReadback(models[j]);            // 0x46FE49
+#ifdef MIKUDANCESTUDIO_DIAG
         if (captureStages)
             DumpRigidBodyState(app, "physics_readback.rigids.json");
         if (captureStages)
             DumpFrameEntryState(app, "physics_readback.json", false);
-        s.state.a066C = 0;                       // 0x7FF7CB44C857
+#endif
+        s.state.physicsBodiesMoved = 0;                       // 0x7FF7CB44C857
     }
 
+#ifdef MIKUDANCESTUDIO_DIAG
     if (traceSteps && stepCount > 0) {
         fprintf(stderr, "PHYSFRAME steps=%d settle=%d moved=%d count=%d labels=",
                 stepCount, (int)settle, (int)moved, count);
@@ -1209,8 +1250,10 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
                     stepLabels[i] ? stepLabels[i] : "?");
         fprintf(stderr, "\n");
     }
+#endif
 
-    // Second pose pass with a2 = 1 and a4 = model count (0x46FE5F; x64
+    // Second pose pass with afterPhysics = 1 and physicsMode = model
+    // count (0x46FE5F; x64
     // 0x7FF7CB44C85F..0x7FF7CB44C8D4, morph call / SetPhysicsMode twin at
     // 0x7FF7CB44C8A8/0x7FF7CB44C8C7).  x64 keeps this pass INSIDE gate B -
     // it is skipped while the accessory-edit dialog holds physics.
@@ -1223,6 +1266,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             }
         }
     }
+#ifdef MIKUDANCESTUDIO_DIAG
     if (zeroLocalTimeAfterLoad) {
         *reinterpret_cast<float*>(
             reinterpret_cast<unsigned char*>(world) + 0xF0) = 0.0f;
@@ -1230,6 +1274,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     }
     if (captureStages)
         DumpFrameEntryState(app, "physics_pose1.json", false);
+#endif
 }
 
 }  // namespace mikudancestudio

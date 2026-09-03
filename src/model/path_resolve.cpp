@@ -96,9 +96,9 @@ const wchar_t* ResolveUserFilePath(PathResolutionWorkspace& workspace,
     }
     const size_t len = wcslen(path);
     const wchar_t* ext = &path[len - 3];
-    const wchar_t* v7 = ext;
+    const wchar_t* scan = ext;
     const wchar_t* sub = nullptr;
-    if (wcscmp(v7, L"pmd") == 0 || wcscmp(v7, L"P") == 0)
+    if (wcscmp(scan, L"pmd") == 0 || wcscmp(scan, L"P") == 0)
         sub = L"UserFile\\Model";
     else if (wcscmp(&path[len - 3], L"wav") == 0 ||
              wcscmp(&path[len - 3], L"WAV") == 0)
@@ -113,14 +113,14 @@ const wchar_t* ResolveUserFilePath(PathResolutionWorkspace& workspace,
         return out;
     }
     // walk back to the last path separator (fail if none)
-    while (*v7 != L'\\') {
-        --v7;
-        if (v7 == path) {
+    while (*scan != L'\\') {
+        --scan;
+        if (scan == path) {
             out[0] = L'\0';
             return out;
         }
     }
-    swprintf_s(tmp, 0x100, L"%s%s%s", dirBase, sub, v7);
+    swprintf_s(tmp, 0x100, L"%s%s%s", dirBase, sub, scan);
     if (WsOpenOk(tmp)) {
         wcscpy_s(out, 0x100, tmp);
         return out;

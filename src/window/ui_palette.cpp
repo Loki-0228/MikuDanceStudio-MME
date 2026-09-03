@@ -88,12 +88,13 @@ void HandlePaletteChanged(HDC hdc) {
     const std::uint32_t lerp2 = ColorLerp(colA, colB, t);   // 0x42CF5E
     FillPanelBottom(hdc, 3, 95, 6, bottom - 228, lerp, lerp2, 1);  // 0x42CF78
 
-    // Row 3 (0x42CF7D..0x42CFF6): v30 = (50.0-bottom)-161.0 is kept as a
+    // Row 3 (0x42CF7D..0x42CFF6): the span (50.0-bottom)-161.0 (original
+    // decompiler name v30) is kept as a
     // double (fst var_18 keeps it on the x87 stack); both quotients are
     // double, each truncated to float for its ColorLerp.
-    const double v30 = (50.0 - static_cast<double>(bottom)) - 161.0;
-    const std::uint32_t lerpNeg111 = ColorLerp(colA, colB, static_cast<float>(-111.0 / v30));  // 0x42CFB5
-    const std::uint32_t lerpNeg94 = ColorLerp(colA, colB, static_cast<float>(-94.0 / v30));    // 0x42CFD5
+    const double row3Span = (50.0 - static_cast<double>(bottom)) - 161.0;
+    const std::uint32_t lerpNeg111 = ColorLerp(colA, colB, static_cast<float>(-111.0 / row3Span));  // 0x42CFB5
+    const std::uint32_t lerpNeg94 = ColorLerp(colA, colB, static_cast<float>(-94.0 / row3Span));    // 0x42CFD5
     FillPanelBottom(hdc, side - 19, 144, side - 3, 161, lerpNeg94, lerpNeg111, 1);  // 0x42CFF6
 
     // Row 4 (0x42CFFB..0x42D05C): t4 = ((50.0-bottom)-248.0)/((50.0-bottom)-161.0).
@@ -354,11 +355,11 @@ void HandlePaletteChanged2(HDC hdc) {
                     const std::int32_t traceTarget =
                         app->CameraParentModel();
                     const bool traceActive =
-                        (app->state.v9ed98 != 0) &
+                        (app->state.followCameraEnabled != 0) &
                         (app->SelectedModelSlot() == traceTarget) &
                         (traceTarget >= 0);                      // 0x42C553..0x42C572
                     if (traceActive) {
-                        if (app->state.b6568481 != 0) {  // 0xA05D1
+                        if (app->state.viewDirty != 0) {  // 0xA05D1
                             DrawGlyph(app, "camera bone trace mode (release trace button)",
                                       hdc, 16, xBase + width + 30, hideTop - 22,
                                       0xFF, 0xFF, 0xFF, 1);      // 0x42C5A7
@@ -393,11 +394,11 @@ void HandlePaletteChanged2(HDC hdc) {
                                             0xFF, 0xFF, 0xFF, 1);  // 0x42C6F4
                 const std::int32_t traceTarget = app->CameraParentModel();
                 const bool traceActive =
-                    (app->state.v9ed98 != 0) &
+                    (app->state.followCameraEnabled != 0) &
                     (app->SelectedModelSlot() == traceTarget) &
                     (traceTarget >= 0);                          // 0x42C6F9..0x42C721
                 if (traceActive) {
-                    if (app->state.b6568481 != 0) {  // 0xA05D1
+                    if (app->state.viewDirty != 0) {  // 0xA05D1
                         DrawGlyph(app, kS52C808, hdc, 16, xBase + width + 30,
                                   hideTop - 20, 0xFF, 0xFF, 0xFF, 1);  // 0x42C756
                         DrawGlyph(app, kS52C808, hdc, 16, xBase + width + 29,

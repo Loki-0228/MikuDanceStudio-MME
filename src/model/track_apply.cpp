@@ -1,9 +1,9 @@
 // ===========================================================================
-// VA 0x00412330 - Sub412330  (0x7F1 bytes)  gravity-track apply + physics
+// VA 0x00412330 - ApplyGravityTrack (was Sub412330)  (0x7F1 bytes)  gravity-track apply + physics
 //                                    dialog (hwnd @ app+0xA0CCC) refresh
-// VA 0x00413120 - Sub413120  (0x3B5 bytes)  accessory key-track apply
+// VA 0x00413120 - ApplyAccessoryTrack (was Sub413120)  (0x3B5 bytes)  accessory key-track apply
 // ===========================================================================
-// Sub412330 (called after VMD load, frame seek, physics-dialog edits and
+// ApplyGravityTrack (called after VMD load, frame seek, physics-dialog edits and
 // PMM load): walks the physical-gravity track at app+0x380 (36B records
 // {+0 frame, +4 prev, +8 next, +0xC gravity magnitude, +0x10/+0x14/+0x18
 // gravity dir xyz, +0x1C iterations, +0x20 mode dword}) to the frame at
@@ -16,7 +16,7 @@
 // (int)(g * 100.0), check 731 (0x2DB) mirrors app+0xA0CD4, and control
 // 713 is enabled iff app+0xA0CD4 != 0.
 //
-// Sub413120 (per accessory slot idx): walks the 60B records of the track
+// ApplyAccessoryTrack (per accessory slot idx): walks the 60B records of the track
 // at app+0x384[idx] to app+0x980 and copies into the accessory object at
 // app+0x9DD70[idx]: visible byte +0x210 (rec+0xC), +0x49C (rec+0xD),
 // floats +0x230/+0x234 (rec+0x10/+0x14), vec +0x220 (rec+0x28),
@@ -35,6 +35,7 @@
 #include <cstring>
 
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -56,43 +57,43 @@ void ApplyGravityRecord(MMDApp* app, const mdl::GravityKey& key) {
 
 // physics-dialog mirror of the live cluster (0x4123F2..0x412820)
 void RefreshPhysicsDialog(MMDApp* app) {
-    HWND dlg = app->AccessoryFrameDialog();
+    HWND dlg = app->GravitySettingDialog();
     if (dlg == nullptr) return;
     char text[0x32];
     sprintf_s(text, 0x32, "%3.2f",
               app->state.gravityMagnitude);       // 0x52BA08
-    SetWindowTextA(GetDlgItem(dlg, 0x2C5), text);
+    SetWindowTextA(GetDlgItem(dlg, panel::kGravityAccelEdit), text);
     sprintf_s(text, 0x32, "%3.2f",
               app->state.gravityX);
-    SetWindowTextA(GetDlgItem(dlg, 0x2C6), text);
+    SetWindowTextA(GetDlgItem(dlg, panel::kGravityDirXEdit), text);
     sprintf_s(text, 0x32, "%3.2f",
               app->state.gravityY);
-    SetWindowTextA(GetDlgItem(dlg, 0x2C7), text);
+    SetWindowTextA(GetDlgItem(dlg, panel::kGravityDirYEdit), text);
     sprintf_s(text, 0x32, "%3.2f",
               app->state.gravityZ);
-    SetWindowTextA(GetDlgItem(dlg, 0x2C8), text);
-    SendMessageA(GetDlgItem(dlg, 0x27D), TBM_SETPOS, 1,       // 0x4124E0..
+    SetWindowTextA(GetDlgItem(dlg, panel::kGravityDirZEdit), text);
+    SendMessageA(GetDlgItem(dlg, panel::kGravityDirXSlider), TBM_SETPOS, 1,       // 0x4124E0..
         static_cast<LPARAM>(
             static_cast<int>(app->state.gravityX * 100.0)));
-    SendMessageA(GetDlgItem(dlg, 0x27E), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(dlg, panel::kGravityDirYSlider), TBM_SETPOS, 1,
         static_cast<LPARAM>(
             static_cast<int>(app->state.gravityY * 100.0)));
-    SendMessageA(GetDlgItem(dlg, 0x27F), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(dlg, panel::kGravityDirZSlider), TBM_SETPOS, 1,
         static_cast<LPARAM>(
             static_cast<int>(app->state.gravityZ * 100.0)));
     sprintf_s(text, 0x32, "%d",
               static_cast<int>(
                   app->state.gravityNoise));
-    SetWindowTextA(GetDlgItem(dlg, 0x2C9), text);             // 0x52B9F4
-    const BOOL mode = app->state.a0CD4 != 0;
-    SendMessageA(GetDlgItem(dlg, 0x2DB), BM_SETCHECK, mode, 0);
-    EnableWindow(GetDlgItem(dlg, 0x2C9), mode);               // 0x412B03
+    SetWindowTextA(GetDlgItem(dlg, panel::kGravityNoiseEdit), text);             // 0x52B9F4
+    const BOOL mode = app->state.gravityNoiseEnabled != 0;
+    SendMessageA(GetDlgItem(dlg, panel::kGravityNoiseCheckbox), BM_SETCHECK, mode, 0);
+    EnableWindow(GetDlgItem(dlg, panel::kGravityNoiseEdit), mode);               // 0x412B03
 }
 
 }  // namespace
 
 // ---- VA 0x00412330 --------------------------------------------------------
-void Sub412330(MMDApp* app) {
+void ApplyGravityTrack(MMDApp* app) {  // was Sub412330, VA 0x00412330
     const std::uint32_t frame = app->state.currentFrame;
     mdl::GravityKey* const track = app->GravityKeys();
     if (track == nullptr) return;   // guard: 0x466D20 allocates the track

@@ -24,7 +24,7 @@
 //        IDC_HAND   (0x7F89): while interaction mode (dword this+0x344) == 1
 //   3. 0x444E54  sidebar drag (byte this+0xC8): sidebar this+0xA06C8 =
 //      clamp(X, 250, clientRight-5), ratio float this+0xA4428, then
-//      Sub442EB0 + PanelPaint and three local InvalidateRect passes
+//      RelayoutSidebarControls + PanelPaint and three local InvalidateRect passes
 //      (right strip / timeline strip / top strip).
 //   4. 0x444F46  if byte this+0xA03EB != 0: hover row = (X - 0xA018C - 6)
 //      / 13, byte this+0xA0B0D = 1, then the drag-frame remap over the
@@ -32,10 +32,10 @@
 //      the four fixed band lists (84/40/24/36-byte records via this+0x374/
 //      0x378/0x37C/0x380) and the accessory lists (this+0x384, 60-byte
 //      records) driven by the 16-byte offset records at this+0xA03EC..
-//      0xA0410, then PanelPaint, Sub42E640, Sub411070, Sub411B90,
-//      Sub412330, Sub413120 x255 and Sub4134E0; bone-edit mode walks the
+//      0xA0410, then PanelPaint, ReloadModels, RefreshLightPanel, RefreshSelfShadowPanel,
+//      ApplyGravityTrack, ApplyAccessoryTrack x255 and SyncAccessoryEditPanel; bone-edit mode walks the
 //      model bone/morph/IK lists (28/20/60-byte records, offset records at
-//      this+0xA0414..0xA0428) then PanelPaint + Sub4B4260.
+//      this+0xA0414..0xA0428) then PanelPaint + SeekModelFrame.
 //   5. 0x44606F  else, if byte this+0xA0189 != 0: hover-highlight pass over
 //      the five fixed-band regions (window-y bands 160..174 / 174..188 /
 //      188..202 / 202..216, i.e. the four fixed bands + the accessory
@@ -74,15 +74,15 @@ namespace mikudancestudio {
 void PanelPaint(MMDApp* app);
 
 // Not-yet-ported refresh helpers (src/unported/stubs.cpp).
-void Sub4134E0(MMDApp* a);              // 0x4134E0
-void Sub411070(MMDApp* a);              // 0x411070
-void Sub412330(MMDApp* a);              // 0x412330
-void Sub411B90(MMDApp* a);              // 0x411B90
-void Sub416280(MMDApp* a);              // 0x416280
-void Sub42E640(MMDApp* a);              // 0x42E640
-void Sub442EB0(MMDApp* a);              // 0x442EB0
-int Sub4B4260(unsigned char* model, int frame, int a3);  // 0x4B4260
-void Sub413120(MMDApp* a, int idx);     // 0x413120
+void SyncAccessoryEditPanel(MMDApp* a);              // 0x4134E0
+void RefreshLightPanel(MMDApp* a);              // 0x411070
+void ApplyGravityTrack(MMDApp* a);              // 0x412330
+void RefreshSelfShadowPanel(MMDApp* a);              // 0x411B90
+void DragInterpolationControlPoint(MMDApp* a);  // 0x416280, was Sub416280
+void ReloadModels(MMDApp* a);              // 0x42E640, was Sub42E640
+void RelayoutSidebarControls(MMDApp* a);              // 0x442EB0
+int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // 0x4B4260
+void ApplyAccessoryTrack(MMDApp* a, int idx);     // 0x413120
 
 namespace {
 
@@ -125,9 +125,11 @@ void RemapList(MMDApp* app, const int* recs, int count, Key* keys,
     auto valid = [limit](int idx) {
         return limit >= 0 ? idx >= limit : idx > 0;
     };
+#ifdef MIKUDANCESTUDIO_DIAG
     // TEMP(debug, keyframe-drag crash): validate the record buffer before
     // the remap walks it - rec[0] must be a list index within capacity.
     // Logs and skips the whole remap instead of dereferencing a wild index.
+    // (Diagnostic only: the original walks the records unvalidated.)
     for (int i = 0; i < count; ++i) {
         const int idx = recs[4 * i];
         if (idx < 0 || idx >= capacity) {
@@ -145,6 +147,7 @@ void RemapList(MMDApp* app, const int* recs, int count, Key* keys,
             return;
         }
     }
+#endif
     if (row == 0) {
         for (int i = 0; i < count; ++i) {
             const int* rec = recs + 4 * i;
@@ -205,8 +208,10 @@ void RemapAccList(MMDApp* app, const int* recs, int count, int row) {
     auto listOf = [app](int slot) {
         return app->AccessoryKeys(slot);
     };
+#ifdef MIKUDANCESTUDIO_DIAG
     // TEMP(debug, keyframe-drag crash): same validation as RemapList - the
     // accessory records carry the key index at +4 and the slot at +8.
+    // (Diagnostic only: the original walks the records unvalidated.)
     for (int i = 0; i < count; ++i) {
         const int idx = recs[4 * i + 1];
         const int slot = recs[4 * i + 2];
@@ -224,6 +229,7 @@ void RemapAccList(MMDApp* app, const int* recs, int count, int row) {
             return;
         }
     }
+#endif
     if (row == 0) {
         for (int i = 0; i < count; ++i) {
             const int* rec = recs + 4 * i;
@@ -325,15 +331,15 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
             app->MouseX() = X - 0x10000;
         if (Y > 0xEA60)
             app->MouseY() = Y - 0x10000;
-        if (app->state.v9f12c != 0) {
+        if (app->state.separateWindowMouseSeen != 0) {
             const int x0 = app->MouseX();
             const int y0 = app->MouseY();
             if (std::abs(app->PreviousMouseX() - x0) > 50 ||
                 std::abs(app->PreviousMouseY() - y0) > 50)
-                app->state.b6568483 = 1;
+                app->state.mouseJumped = 1;
             app->PreviousMouseX() = x0;
             app->PreviousMouseY() = y0;
-            app->state.v9f12c = 0;
+            app->state.separateWindowMouseSeen = 0;
         }
         RECT rc;
         GetClientRect(static_cast<HWND>(app->Hwnd()), &rc);
@@ -358,7 +364,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
             app->SidebarRatio() = static_cast<float>(
                 static_cast<double>(app->SidebarWidth()) /
                 static_cast<double>(rc.right));
-            Sub442EB0(app);
+            RelayoutSidebarControls(app);
             PanelPaint(app);
             const int sidebar = app->SidebarWidth();
             HWND hwnd = static_cast<HWND>(app->Hwnd());
@@ -424,7 +430,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                 PanelPaint(app);  // 0x446044
                 // 0x446065: original __thiscall(this=model, dword0x980,
                 // dword0xA0CC4).
-                Sub4B4260(model,
+                SeekModelFrame(model,
                           app->state.currentFrame,
                           app->state.playbackPhysicsMode);
             } else {
@@ -460,16 +466,16 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                              app->TimelineSelectionCount(
                                  TimelineSelectionBand::Accessory), row);
                 PanelPaint(app);   // 0x445837
-                Sub42E640(app);    // 0x44583E
-                Sub411070(app);    // 0x445845
-                Sub411B90(app);    // 0x44584C
-                Sub412330(app);    // 0x445853
+                ReloadModels(app);    // 0x44583E
+                RefreshLightPanel(app);    // 0x445845
+                RefreshSelfShadowPanel(app);    // 0x44584C
+                ApplyGravityTrack(app);    // 0x445853
                 // per-slot refresh for every set flag (0x445858..0x445879)
                 for (int i = 0; i < 255; ++i) {
                     if (app->ObjectSlot(i) != nullptr)
-                        Sub413120(app, i);
+                        ApplyAccessoryTrack(app, i);
                 }
-                Sub4134E0(app);    // 0x44587D
+                SyncAccessoryEditPanel(app);    // 0x44587D
             }
         } else if (app->SelectionBoxDragging() != 0) {
             // ---- 5. hover highlight (0x44606F..0x446A2C) ------------------
@@ -547,26 +553,26 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                                 if (s0 >= 0)
                                     SetAccessorySelected(app, s0, a0, 0);
                             }
-                            const int a1 = accWalk[0];
-                            if (a1 >= 0 && slotWalk[0] >= 0)
-                                SetAccessorySelected(app, slotWalk[0], a1, 0);
-                            const int a2 = accWalk[1];
-                            if (a2 >= 0) {
+                            const int accSel0 = accWalk[0];
+                            if (accSel0 >= 0 && slotWalk[0] >= 0)
+                                SetAccessorySelected(app, slotWalk[0], accSel0, 0);
+                            const int accSel1 = accWalk[1];
+                            if (accSel1 >= 0) {
                                 const int s2 = slotWalk[1];
                                 if (s2 >= 0)
-                                    SetAccessorySelected(app, s2, a2, 0);
+                                    SetAccessorySelected(app, s2, accSel1, 0);
                             }
-                            const int a3 = accWalk[2];
-                            if (a3 >= 0) {
+                            const int accSel2 = accWalk[2];
+                            if (accSel2 >= 0) {
                                 const int s3 = slotWalk[2];
                                 if (s3 >= 0)
-                                    SetAccessorySelected(app, s3, a3, 0);
+                                    SetAccessorySelected(app, s3, accSel2, 0);
                             }
-                            const int a4 = accWalk[3];
-                            if (a4 >= 0) {
+                            const int accSel3 = accWalk[3];
+                            if (accSel3 >= 0) {
                                 const int s4 = slotWalk[3];
                                 if (s4 >= 0)
-                                    SetAccessorySelected(app, s4, a4, 0);
+                                    SetAccessorySelected(app, s4, accSel3, 0);
                             }
                         }
                         ++bandMaps;
@@ -758,7 +764,7 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
 
     // --- 6. physics-enabled hover helper (0x446A4C) -------------------------
     if (app->PendingTimelineSelectionRow() != TimelineSelectionRow::None)
-        Sub416280(app);
+        DragInterpolationControlPoint(app);
 }
 
 }  // namespace mikudancestudio

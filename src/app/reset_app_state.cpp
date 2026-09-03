@@ -25,9 +25,10 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/scene_ownership.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
-void Sub42E640(MMDApp* app);   // VA 0x0042E640 (timeline_advance.cpp)
+void ReloadModels(MMDApp* app);   // VA 0x0042E640 (timeline_advance.cpp), was Sub42E640
 }  // namespace mikudancestudio
 
 namespace mikudancestudio {
@@ -75,11 +76,11 @@ void ResetAppState(MMDApp* app) {
     app->GravityMagnitude() = 9.8000002f;
     PhysicsScene* scene = app->Physics();       // +650672 (kPtrSub048)
     app->PlaybackPhysicsMode() = 2;
-    app->state.v9edcc = 0.0f;
+    app->state.gravityNoiseTimer = 0.0f;
     app->GravityNoiseEnabled() = 0;
     app->GravityDirection()[0] = 0.0f;
     app->GravityNoise() = 10;
-    app->state.a0CC8OrUint32 = 0;
+    app->state.rigidBodyDisplayEnabled = 0;
     app->GravityDirection()[1] = -1.0f;
     app->GravityDirection()[2] = 0.0f;
     {
@@ -99,10 +100,10 @@ void ResetAppState(MMDApp* app) {
     std::memset(app->state.buf656632, 0, 0xC8);
 
     // ---- sub-window teardown ----------------------------------------------
-    if (app->AccessoryFrameDialog() != nullptr)
-        DestroyWindow(app->AccessoryFrameDialog());               // 0x44E719
+    if (app->GravitySettingDialog() != nullptr)
+        DestroyWindow(app->GravitySettingDialog());               // 0x44E719
     HWND w292 = app->state.frameCopyDialog;
-    app->AccessoryFrameDialog() = nullptr;
+    app->GravitySettingDialog() = nullptr;
     if (w292 != nullptr)
         DestroyWindow(w292);
     app->state.frameCopyDialog = nullptr;
@@ -110,16 +111,16 @@ void ResetAppState(MMDApp* app) {
     if (w256 != nullptr)
         DestroyWindow(w256);
     app->FrameRangeDialog() = nullptr;
-    HWND w244 = app->state.modelInfoDialog;
+    HWND w244 = app->state.edgeThicknessDialog;
     if (w244 != nullptr)
         DestroyWindow(w244);
-    app->state.modelInfoDialog = nullptr;
+    app->state.edgeThicknessDialog = nullptr;
     app->EnhancedModelDirty() = 0;
-    app->state.a042C = 0;
+    app->state.mainModelComboSelection = 0;
     HWND parent = app->FloatingWindow();
     if (parent == nullptr)
         parent = hwnd;
-    SetWindowTextA(GetDlgItem(parent, 554), "0");                // 0x44E78A
+    SetWindowTextA(GetDlgItem(parent, panel::kGotoFrameEdit), "0");                // 0x44E78A
 
     // ---- AVI background teardown ------------------------------------------
     PGETFRAME getFrame = static_cast<PGETFRAME>(app->AviFrameReader());
@@ -141,17 +142,17 @@ void ResetAppState(MMDApp* app) {
         app->AviFile() = nullptr;
     }
     app->state.aviBackgroundEnabled = 0;
-    swprintf_s(app->state.wcs9e1ec, 0x100, L"");
+    swprintf_s(app->state.aviBackgroundPath, 0x100, L"");
     if (app->AviBackgroundTexture() != nullptr) {
         app->AviBackgroundTexture()->Release();
         app->AviBackgroundTexture() = nullptr;
     }
 
     if (app->state.optflag[0] == 0) {
-        SendMessageA(GetDlgItem(hwnd, 443), CB_RESETCONTENT, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 434), CB_RESETCONTENT, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 439), BM_CLICK, 0, 0);
-        Sub44D780(app);                                          // 0x44E88F
+        SendMessageA(GetDlgItem(hwnd, panel::kIkChainCombo), CB_RESETCONTENT, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_RESETCONTENT, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kModelVisibleCheckbox), BM_CLICK, 0, 0);
+        RebuildCameraModePanel(app);                                          // 0x44E88F
         app->state.optflag[0] = 1;
         PostModelReload2(app);                                   // 0x40D940
         HandleWindowSize(app);                                   // 0x443300
@@ -170,11 +171,11 @@ void ResetAppState(MMDApp* app) {
     app->CameraRotation()[0] = 0.0f;
     app->BoneBoxSelectionActive() = 0;
     app->CameraRotation()[1] = 0.0f;
-    app->state.v9da24[0] = 0;
+    app->state.copiedBoneCount = 0;
     app->CameraRotation()[2] = 0.0f;
     app->state.timelineStartFrame = 0;
     app->LastRegisteredFrame() = 0;
-    app->state.v9da24[1] = 0;
+    app->state.clipboardCounts = mdl::ClipboardSelectionCounts{};
     app->CaptureMode() = ScreenCaptureMode::Disabled;
     app->state.projectedShadowBlendEnabled = 1;
 
@@ -184,47 +185,47 @@ void ResetAppState(MMDApp* app) {
     ReleaseAccessoriesAndTracks(*app);                            // 0x44EA10
 
     // ---- combo refills ------------------------------------------------------
-    SendMessageA(GetDlgItem(hwnd, 443), CB_RESETCONTENT, 0, 0);
-    SendMessageA(GetDlgItem(hwnd, 434), CB_RESETCONTENT, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kIkChainCombo), CB_RESETCONTENT, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_RESETCONTENT, 0, 0);
     if (app->state.englishUI != 0) {
-        SendMessageA(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("camera"));
-        SendMessageA(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("light"));
-        SendMessageA(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("s shadow"));
-        SendMessageA(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("gravity"));
     } else {
-        SendMessageW(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpCamera));
-        SendMessageW(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpLight));
-        SendMessageW(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpSelfShadow));
-        SendMessageW(GetDlgItem(hwnd, 434), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpGravity));
     }
-    SendMessageA(GetDlgItem(hwnd, 434), CB_SETCURSEL, 0, 0);
-    SendMessageA(GetDlgItem(hwnd, 436), CB_RESETCONTENT, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_SETCURSEL, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_RESETCONTENT, 0, 0);
     if (app->state.englishUI != 0)
-        SendMessageA(GetDlgItem(hwnd, 436), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("camera/light/accessory"));
     else
-        SendMessageW(GetDlgItem(hwnd, 436), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(hwnd, panel::kMainComboModel), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpCamLightAcc));
-    SendMessageA(GetDlgItem(hwnd, 436), CB_SETCURSEL, 0, 0);
-    SendMessageA(GetDlgItem(hwnd, 474), CB_RESETCONTENT, 0, 0);
-    SendMessageA(GetDlgItem(hwnd, 449), CB_RESETCONTENT, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround), CB_RESETCONTENT, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal), CB_RESETCONTENT, 0, 0);
     if (app->state.englishUI != 0) {
-        SendMessageA(GetDlgItem(hwnd, 474), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("ground"));
-        SendMessageA(GetDlgItem(hwnd, 449), CB_ADDSTRING, 0,
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("non"));
     } else {
-        SendMessageW(GetDlgItem(hwnd, 474), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(hwnd, panel::kMainComboGround), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpGround));
-        SendMessageW(GetDlgItem(hwnd, 449), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(hwnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpNone));
     }
     static const int kResetCombos[] = {475, 450, 471, 504, 509, 514, 519,
@@ -236,20 +237,20 @@ void ResetAppState(MMDApp* app) {
                                           "z axis move", "rotation",
                                           "distance", "view angle", "all"};
         for (const char* name : kChannels)
-            SendMessageA(GetDlgItem(hwnd, 433), CB_ADDSTRING, 0,
+            SendMessageA(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(name));
     } else {
         static const wchar_t* kChannels[] = {kJpMoveX, kJpMoveY, kJpMoveZ,
                                              kJpRotation, kJpDistance,
                                              kJpViewAngle, kJpAll};
         for (const wchar_t* name : kChannels)
-            SendMessageW(GetDlgItem(hwnd, 433), CB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(name));
     }
-    SendMessageA(GetDlgItem(hwnd, 433), CB_SETCURSEL, 3, 0);
-    SendMessageA(GetDlgItem(hwnd, 440), BM_CLICK, 0, 0);
-    SendMessageA(GetDlgItem(hwnd, 441), BM_CLICK, 0, 0);
-    SendMessageA(GetDlgItem(hwnd, 477), BM_CLICK, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_SETCURSEL, 3, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kShadowCheckbox), BM_CLICK, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kAddBlendCheckbox), BM_CLICK, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kAccessoryAddBlendCheckbox), BM_CLICK, 0, 0);
     ReplaceEditText(hwnd, 417, "0");                              // 0x44F01D
     static const int kDisable[] = {430, 400, 401, 497, 498, 421, 422};
     for (int id : kDisable)
@@ -262,7 +263,7 @@ void ResetAppState(MMDApp* app) {
         for (int id : kPercentEdits)
             ReplaceEditText(hwnd, id, locale);
     }
-    Sub40AE00(app);                                               // 0x44F29F
+    ClearTimelineAndCurveDCs(app);                                               // 0x44F29F
 
     // ---- menu state ---------------------------------------------------------
     static const std::uint32_t kChecks[] = {
@@ -297,12 +298,12 @@ void ResetAppState(MMDApp* app) {
     app->state.fpsOverlayEnabled = 0;
     CheckMenuItem(GetMenu(hwnd), 0xD3, 0u);
     SendMessageA(GetDlgItem(app->FloatingWindow() != nullptr
-                                ? app->FloatingWindow() : hwnd, 551),
+                                ? app->FloatingWindow() : hwnd, panel::kInfoCheckbox),
                  BM_CLICK, 0, 0);
     app->state.groundGridEnabled = 1;
     CheckMenuItem(GetMenu(hwnd), 0xD7, 8u);
     SendMessageA(GetDlgItem(app->FloatingWindow() != nullptr
-                                ? app->FloatingWindow() : hwnd, 557),
+                                ? app->FloatingWindow() : hwnd, panel::kCoordAxisCheckbox),
                  BM_CLICK, 1, 0);
     app->state.groundShadowEnabled = 1;
     CheckMenuItem(GetMenu(hwnd), 0xDD, 8u);
@@ -400,7 +401,7 @@ void ResetAppState(MMDApp* app) {
     // ---- frame/title state --------------------------------------------------
     app->state.aviBackgroundEnabled = 0;
     app->state.pictureBackgroundEnabled = 0;
-    app->state.v9eb7e = 0;
+    app->state.characterTransparentMode = 0;
     CheckMenuItem(GetMenu(hwnd), 0xD6, 0u);
     CheckMenuItem(GetMenu(hwnd), 0xD8, 0u);
     CheckMenuItem(GetMenu(hwnd), 0xE9, 0u);
@@ -417,70 +418,70 @@ void ResetAppState(MMDApp* app) {
     app->state.optflag[5] = 1;
     app->state.optflag[6] = 1;
     app->CameraPerspective() = 0;
-    SendMessageA(GetDlgItem(hwnd, 446), BM_CLICK, 1, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kPerspectiveCheckbox), BM_CLICK, 1, 0);
     app->CameraPosition()[0] = 0.0f;
     app->CameraPosition()[1] = 10.0f;
     app->CameraPosition()[2] = 0.0f;
     app->state.v32c = 0;
     app->CameraReferenceMode() = CameraAttachmentReference::None;
-    SendMessageA(GetDlgItem(hwnd, 412), BM_CLICK, 0, 0);
-    SendMessageA(GetDlgItem(hwnd, 531), BM_CLICK, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kCameraRefModelCheckbox), BM_CLICK, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kCameraRefBoneCheckbox), BM_CLICK, 0, 0);
     app->PlaybackLoopEnabled() = 0;
     SendMessageA(GetDlgItem(hwnd, 411), BM_CLICK, 0, 0);
-    app->state.v342 = 0;
+    app->state.playbackReturnsToStartFrame = 0;
     SendMessageA(GetDlgItem(hwnd, 413), BM_CLICK, 0, 0);
     app->state.viewportToolHovered = 0;
     app->CameraFov() = 45.0f;
-    SendMessageA(GetDlgItem(hwnd, 486), BM_CLICK, 0, 0);
-    SendMessageA(GetDlgItem(hwnd, 476), BM_CLICK, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kAccessoryShadowCheckbox), BM_CLICK, 0, 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kAccessoryVisibleCheckbox), BM_CLICK, 0, 0);
     app->FpsLimit() = 60.0f;
 
     // ---- light-accessory edit echoes ---------------------------------------
     char text[0x100];
     sprintf_s(text, 0x100, "%3d",
               static_cast<int>(app->LightColor()[0] * 256.0));
-    SendMessageA(GetDlgItem(hwnd, 461), WM_SETTEXT, 0,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightColorEditR), WM_SETTEXT, 0,
                  reinterpret_cast<LPARAM>(text));
     sprintf_s(text, 0x100, "%3d",
               static_cast<int>(app->LightColor()[1] * 256.0));
-    SendMessageA(GetDlgItem(hwnd, 462), WM_SETTEXT, 0,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightColorEditG), WM_SETTEXT, 0,
                  reinterpret_cast<LPARAM>(text));
     sprintf_s(text, 0x100, "%3d",
               static_cast<int>(app->LightColor()[2] * 256.0));
-    SendMessageA(GetDlgItem(hwnd, 463), WM_SETTEXT, 0,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightColorEditB), WM_SETTEXT, 0,
                  reinterpret_cast<LPARAM>(text));
     sprintf_s(text, 0x100, "%+3.1f", app->LightDirection()[0]);
-    SendMessageA(GetDlgItem(hwnd, 464), WM_SETTEXT, 0,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightDirEditX), WM_SETTEXT, 0,
                  reinterpret_cast<LPARAM>(text));
     sprintf_s(text, 0x100, "%+3.1f", app->LightDirection()[1]);
-    SendMessageA(GetDlgItem(hwnd, 465), WM_SETTEXT, 0,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightDirEditY), WM_SETTEXT, 0,
                  reinterpret_cast<LPARAM>(text));
     sprintf_s(text, 0x100, "%+3.1f", app->LightDirection()[2]);
-    SendMessageA(GetDlgItem(hwnd, 466), WM_SETTEXT, 0,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightDirEditZ), WM_SETTEXT, 0,
                  reinterpret_cast<LPARAM>(text));
     sprintf_s(text, 0x100, "%3d",
               static_cast<int>(app->CameraFov()));
-    SendMessageA(GetDlgItem(hwnd, 448), WM_SETTEXT, 0,
+    SendMessageA(GetDlgItem(hwnd, panel::kFovEdit), WM_SETTEXT, 0,
                  reinterpret_cast<LPARAM>(text));
-    SendMessageA(GetDlgItem(hwnd, 447), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(hwnd, panel::kFovSlider), TBM_SETPOS, 1,
                  static_cast<LPARAM>(
                      static_cast<int>(app->CameraFov())));
-    SendMessageA(GetDlgItem(hwnd, 455), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightColorSliderR), TBM_SETPOS, 1,
                  static_cast<LPARAM>(
                      static_cast<int>(app->LightColor()[0] * 256.0)));
-    SendMessageA(GetDlgItem(hwnd, 456), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightColorSliderG), TBM_SETPOS, 1,
                  static_cast<LPARAM>(
                      static_cast<int>(app->LightColor()[1] * 256.0)));
-    SendMessageA(GetDlgItem(hwnd, 457), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightColorSliderB), TBM_SETPOS, 1,
                  static_cast<LPARAM>(
                      static_cast<int>(app->LightColor()[2] * 256.0)));
-    SendMessageA(GetDlgItem(hwnd, 458), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightDirSliderX), TBM_SETPOS, 1,
                  static_cast<LPARAM>(
                      static_cast<int>(app->LightDirection()[0] * 100.0)));
-    SendMessageA(GetDlgItem(hwnd, 459), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightDirSliderY), TBM_SETPOS, 1,
                  static_cast<LPARAM>(
                      static_cast<int>(app->LightDirection()[1] * 100.0)));
-    SendMessageA(GetDlgItem(hwnd, 460), TBM_SETPOS, 1,
+    SendMessageA(GetDlgItem(hwnd, panel::kLightDirSliderZ), TBM_SETPOS, 1,
                  static_cast<LPARAM>(
                      static_cast<int>(app->LightDirection()[2] * 100.0)));
 
@@ -512,10 +513,10 @@ void ResetAppState(MMDApp* app) {
     PostLanguageSweep(app);                                      // 0x42F1E0
     PanelPaint(app);                                             // 0x414610
     SelectionReeval(app);                                        // 0x430510
-    Sub42E640(app);                                              // 0x42E640
-    Sub411070(app);                                              // 0x411070
-    Sub411B90(app);                                              // 0x411B90
-    Sub412330(app);                                              // 0x412330
+    ReloadModels(app);                                           // 0x42E640
+    RefreshLightPanel(app);                                              // 0x411070
+    RefreshSelfShadowPanel(app);                                              // 0x411B90
+    ApplyGravityTrack(app);                                              // 0x412330
     PostModelReload2(app);                                       // 0x40D940
     PostViewRefresh(app);                                        // 0x40D130
     InvalidateRect(hwnd, nullptr, FALSE);

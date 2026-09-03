@@ -11,21 +11,22 @@
 //
 // KNOWN DEVIATIONS (all forced by the frozen header; none observable in this
 // DLL's single-filter / single-pin reality — see the Phase-B report):
-//   * Pin slots the header leaves unnamed are reached through byte offsets:
-//       pin +0x14 m_pName(WCHAR*), +0x20 m_pLock, +0x24 byte flags,
-//       +0x2C m_pNotify, +0x34 m_mt (0x48 bytes), +0x80 m_tStart,
-//       +0x88 m_tStop, +0x90 m_dRate.
-//     The header's pin member "m_pName" is actually m_dir (+0x1C,
-//     PIN_DIRECTION) and "m_pQSinkOwner" is the owner CBaseFilter* (+0x28).
+//   * Pin slots the header leaves as padding are reached through byte offsets:
+//       pin +0x20 m_pLock, +0x24..0x26 byte flags, +0x34 m_mt (0x48 bytes),
+//       +0x80 m_tStart, +0x88 m_tStop, +0x90 m_dRate.  (The header now
+//       declares +0x14 m_pName, +0x1C m_dir, +0x28 m_pFilterOwner and +0x2C
+//       m_pQSink under their true names; the byte-offset accessors below
+//       remain because several static helpers read them from outside the class.)
 //   * Filter slots reached through byte offsets: +0x28 m_clsid (16 bytes),
 //       +0x38 m_pLock (always &m_CritSec), +0x40 m_pGraph, +0x44 m_pEventSink
 //       (IMediaEventSink*, QI'd in JoinFilterGraph).
-//   * Pin_v24 (0x10002E90) and Pin_v28 (0x100030F0) take ONE argument in the
-//     binary (the media type / the peer pin); the header declares them with
-//     ZERO parameters.  Their bodies are inlined at the call sites
-//     (AgreeMediaType / ReceiveConnection) and placeholder 0-arg definitions
-//     are provided for vtable emission.  HEADER ARBITRATION: give them
-//     (const AM_MEDIA_TYPE*) / (IPin*) parameters.
+//   * The pin-primary vtable slots +0x24..+0x58 now carry their strmbase
+//     names (SetMediaType / CheckConnect / BreakConnect / CompleteConnect /
+//     DecideAllocator / DecideBufferSize / GetDeliveryBuffer / Deliver /
+//     InitAllocator / DeliverEndOfStream / DeliverBeginFlush / DeliverEndFlush
+//     / DeliverNewSegment — was Pin_v24..Pin_v58); the slot order and every
+//     per-slot stack arity (retn N) were verified against the binary and
+//     match the strmbase declarations one-to-one.
 //   * The original CBasePin ctor receives (pUnkOuter, pFilter, pLock,
 //     pName(LPCWSTR), dir); the header's is (const char*, CBaseFilter*,
 //     HRESULT*).  m_dir is hard-coded to PINDIR_OUTPUT (the only pins in this
@@ -34,9 +35,10 @@
 //   * The original CBaseFilter ctor receives the filter CLSID by value; the
 //     header's CSource ctor has no CLSID parameter, so the +0x28 slot is
 //     filled with MMDXSHOW_CLSID_PushSourceDIBSq (the DLL's only filter).
-//   * Run() forwards tStart to the pin's primary-vtable +0x1C entry, which the
-//     header names CompleteConnect(IPin*, pmt) (its default body 0x10003040
-//     ignores the args) — the two 32-bit halves are passed via pointer casts.
+//   * CBaseFilter::Run forwards tStart to the pin's primary-vtable +0x1C
+//     entry = CBasePin::Run(REFERENCE_TIME) (default body 0x10003040 ignores
+//     it, `xor eax,eax; ret 8`).  The original passes the 64-bit value as two
+//     32-bit stack words; a C++ call Run(tStart) emits exactly those bytes.
 //   * IAMovieSetup::Register/Unregister call the IFilterMapper(v1) helper
 //     0x10003400; that body lives as a static inside dll_main.cpp, so a
 //     faithful copy is duplicated below.
@@ -45,6 +47,7 @@
 #include "mmdxshow.hpp"
 #include <new>
 #include <stdlib.h>   // _wtoi
+#include <amvideo.h>  // VIDEOINFOHEADER (DecideBufferSize format block)
 
 // =============================================================================
 // Undeclared-slot access + extern GUID re-declarations
@@ -58,49 +61,54 @@ extern const GUID MMDXSHOW_IID_IFilterMapper;    // .rdata 0x100085C0
 }
 
 // .rdata 0x10008660 {1E651CC0-B199-11D0-8212-00C04FC32C45}: the DirectShow
-// memory-allocator CLSID used by Pin_v48; and .rdata 0x100085F0 = IID_IMemAllocator.
+// memory-allocator CLSID used by InitAllocator; and .rdata 0x100085F0 = IID_IMemAllocator.
 static const GUID MMDXSHOW_CLSID_MemoryAllocator =
     {0x1e651cc0, 0xb199, 0x11d0, {0x82, 0x12, 0x0, 0xc0, 0x4f, 0xc3, 0x2c, 0x45}};
 static const GUID MMDXSHOW_IID_IMemAllocator =
     {0x56a8689c, 0xad4, 0x11ce, {0xb0, 0x3a, 0x0, 0x20, 0xaf, 0xb, 0xa7, 0x70}};
-// .rdata 0x100085E0 = IID_IMemInputPin (peer QI in Pin_v28)
+// .rdata 0x100085E0 = IID_IMemInputPin (peer QI in CheckConnect)
 static const GUID MMDXSHOW_IID_IMemInputPin =
     {0x56a8689d, 0xad4, 0x11ce, {0xb0, 0x3a, 0x0, 0x20, 0xaf, 0xb, 0xa7, 0x70}};
 // .rdata 0x10008590 {56A868A2-0AD4-11CE-B03A-0020AF0BA770} (JoinFilterGraph QI)
 static const GUID MMDXSHOW_IID_56A868A2 =
     {0x56a868a2, 0xad4, 0x11ce, {0xb0, 0x3a, 0x0, 0x20, 0xaf, 0xb, 0xa7, 0x70}};
 
-// Byte-offset slot access for the members the header leaves unnamed/misnamed
+// Byte-offset slot access for the members the header leaves as padding
 // (and for the protected cross-class reads the original performs directly).
+// Each accessor is annotated with the strmbase member it carries; the layer
+// exists so the static helpers below can reach protected pin data without
+// changing the header's pinned layout.
 static inline char* Slot(void* p, intptr_t off) { return (char*)p + off; }
 static inline char* Slot(const void* p, intptr_t off) { return (char*)p + off; }
 
 // --- CBaseFilter slots (relative to the primary subobject) ---
-static inline CLSID&          F_clsid(CBaseFilter* f)  { return *(CLSID*)Slot(f, 0x28); }
-static inline CRITICAL_SECTION*& F_pLock(CBaseFilter* f){ return *(CRITICAL_SECTION**)Slot(f, 0x38); }
-static inline FILTER_STATE&   F_state(CBaseFilter* f)  { return *(FILTER_STATE*)Slot(f, 0x14); }
-static inline IFilterGraph*&  F_pGraph(CBaseFilter* f) { return *(IFilterGraph**)Slot(f, 0x40); }
-static inline IUnknown*&      F_pEventSink(CBaseFilter* f) { return *(IUnknown**)Slot(f, 0x44); }
+static inline CLSID&          F_clsid(CBaseFilter* f)  { return *(CLSID*)Slot(f, 0x28); }   // m_clsid (16B, by value; spans the header's m_clsid)
+static inline CRITICAL_SECTION*& F_pLock(CBaseFilter* f){ return *(CRITICAL_SECTION**)Slot(f, 0x38); } // m_pLock (always &m_CritSec)
+static inline FILTER_STATE&   F_state(CBaseFilter* f)  { return *(FILTER_STATE*)Slot(f, 0x14); }        // m_State
+static inline IFilterGraph*&  F_pGraph(CBaseFilter* f) { return *(IFilterGraph**)Slot(f, 0x40); }       // m_pGraph
+static inline IUnknown*&      F_pEventSink(CBaseFilter* f) { return *(IUnknown**)Slot(f, 0x44); }      // m_pEventSink (IMediaEventSink)
 
 // --- CBasePin slots (relative to the CBasePin primary subobject) ---
-static inline WCHAR*&             P_pNameW(CBasePin* p)   { return *(WCHAR**)Slot(p, 0x14); }
-static inline PIN_DIRECTION&      P_dir(CBasePin* p)      { return *(PIN_DIRECTION*)Slot(p, 0x1C); }
-static inline CRITICAL_SECTION*&  P_pLock(CBasePin* p)    { return *(CRITICAL_SECTION**)Slot(p, 0x20); }
-static inline unsigned char&      P_flag24(CBasePin* p)   { return *(unsigned char*)Slot(p, 0x24); }
-static inline unsigned char&      P_flag25(CBasePin* p)   { return *(unsigned char*)Slot(p, 0x25); }
-static inline unsigned char&      P_flag26(CBasePin* p)   { return *(unsigned char*)Slot(p, 0x26); }
-static inline CBaseFilter*&       P_pOwner(CBasePin* p)   { return *(CBaseFilter**)Slot(p, 0x28); }
-static inline IPin*&              P_connected(CBasePin* p){ return *(IPin**)Slot(p, 0x18); }
-static inline IMemAllocator*&     P_alloc(CBasePin* p)    { return *(IMemAllocator**)Slot(p, 0x98); }
-static inline IMemInputPin*&      P_input(CBasePin* p)    { return *(IMemInputPin**)Slot(p, 0x9C); }
-static inline void*&              P_pNotify(CBasePin* p)  { return *(void**)Slot(p, 0x2C); }
-static inline AM_MEDIA_TYPE&      P_mt(CBasePin* p)       { return *(AM_MEDIA_TYPE*)Slot(p, 0x34); }
-static inline REFERENCE_TIME&     P_tStart(CBasePin* p)   { return *(REFERENCE_TIME*)Slot(p, 0x80); }
-static inline REFERENCE_TIME&     P_tStop(CBasePin* p)    { return *(REFERENCE_TIME*)Slot(p, 0x88); }
-static inline double&             P_dRate(CBasePin* p)    { return *(double*)Slot(p, 0x90); }
+static inline WCHAR*&             P_pNameW(CBasePin* p)   { return *(WCHAR**)Slot(p, 0x14); }           // m_pName (wide pin name, header member exists)
+static inline PIN_DIRECTION&      P_dir(CBasePin* p)      { return *(PIN_DIRECTION*)Slot(p, 0x1C); }    // m_dir (header member exists)
+static inline CRITICAL_SECTION*&  P_pLock(CBasePin* p)    { return *(CRITICAL_SECTION**)Slot(p, 0x20); } // m_pLock == &owner->m_CritSec
+static inline unsigned char&      P_flag24(CBasePin* p)   { return *(unsigned char*)Slot(p, 0x24); }    // run flag (cleared by the decommit path)
+static inline unsigned char&      P_flag25(CBasePin* p)   { return *(unsigned char*)Slot(p, 0x25); }    // connect-while-active flag
+static inline unsigned char&      P_flag26(CBasePin* p)   { return *(unsigned char*)Slot(p, 0x26); }    // enum-order flag (peer types first)
+static inline CBaseFilter*&       P_pOwner(CBasePin* p)   { return *(CBaseFilter**)Slot(p, 0x28); }     // m_pFilterOwner (header member exists)
+static inline IPin*&              P_connected(CBasePin* p){ return *(IPin**)Slot(p, 0x18); }            // m_Connected (header member exists)
+static inline IMemAllocator*&     P_alloc(CBasePin* p)    { return *(IMemAllocator**)Slot(p, 0x98); }   // m_pAllocator (CBaseOutputPin layer)
+static inline IMemInputPin*&      P_input(CBasePin* p)    { return *(IMemInputPin**)Slot(p, 0x9C); }    // m_pInputPin (CBaseOutputPin layer)
+static inline void*&              P_pNotify(CBasePin* p)  { return *(void**)Slot(p, 0x2C); }            // m_pQSink (IQualityControl::Notify writes it)
+static inline AM_MEDIA_TYPE&      P_mt(CBasePin* p)       { return *(AM_MEDIA_TYPE*)Slot(p, 0x34); }    // m_mt (0x48B; pbFormat at +0x78)
+static inline REFERENCE_TIME&     P_tStart(CBasePin* p)   { return *(REFERENCE_TIME*)Slot(p, 0x80); }   // m_tStart (NewSegment cache)
+static inline REFERENCE_TIME&     P_tStop(CBasePin* p)    { return *(REFERENCE_TIME*)Slot(p, 0x88); }   // m_tStop
+static inline double&             P_dRate(CBasePin* p)    { return *(double*)Slot(p, 0x90); }           // m_dRate
 
 // The CAMThread root of a CSourceStream pin, reached the way the original
 // does it (CBasePin subobject - 0x48 == object base == CAMThread subobject).
+// The negative cross-base offset is deliberate: the binary computes
+// (CBasePin*)this - 0x48 to reach the worker-thread half of the pin.
 static inline CAMThread* PinToThread(CBasePin* p)
 {
     return reinterpret_cast<CAMThread*>(Slot(p, -0x48));
@@ -376,7 +384,7 @@ static DWORD WINAPI MMDxShow_InitialThreadProc(LPVOID lpParameter)
 }
 
 // VA 0x10005DD0 - CAMThread::CreateThread (raw root pointer, exactly how
-// CheckConnect reaches it: pin primary - 0x48).  Returns 1 when the thread
+// CBasePin::Active reaches it: pin primary - 0x48).  Returns 1 when the thread
 // was created, 0 when it already existed or creation failed.
 static BOOL MMDxShow_ThreadCreate(CAMThread* pRoot)
 {
@@ -450,8 +458,8 @@ DWORD CAMThread::ThreadProc()
     while (MMDxShow_ThreadGetRequest(this) != 0)
         MMDxShow_ThreadReply(this, (DWORD)E_NOTIMPL);         // 0x8000FFFF
 
-    const int v2 = (int)CamThread_v0C();                      // slot +0x0C
-    if (v2 >= 0) {
+    const HRESULT hrInit = (HRESULT)OnThreadInit();           // slot +0x0C
+    if (hrInit >= 0) {
         MMDxShow_ThreadReply(this, 0);
         DWORD cmd;
         do {
@@ -460,7 +468,7 @@ DWORD CAMThread::ThreadProc()
             case 1:                                           // RUN
             case 2:                                           // PAUSE
                 MMDxShow_ThreadReply(this, 0);
-                CamThread_v18();                              // slot +0x18
+                DoBufferProcessingLoop();                     // slot +0x18
                 break;
             case 3:                                           // STOP
             case 4:                                           // KILL
@@ -471,10 +479,10 @@ DWORD CAMThread::ThreadProc()
                 break;
             }
         } while (cmd != 4);
-        return (DWORD)(CamThread_v10() < 0);                  // slot +0x10
+        return (DWORD)(OnThreadExit() < 0);                   // slot +0x10
     }
-    CamThread_v10();                                          // slot +0x10
-    MMDxShow_ThreadReply(this, (DWORD)v2);
+    OnThreadExit();                                           // slot +0x10
+    MMDxShow_ThreadReply(this, (DWORD)hrInit);
     return 1;
 }
 
@@ -488,33 +496,37 @@ DWORD CSourceStream::ThreadProc()
 // VA 0x100011D0 - three-byte shared stub (`xor eax,eax; ret`) used for the
 // CAMThread root-vtable +0x0C/+0x10/+0x14 entries of BOTH CSourceStream
 // (0x100084A4) and CPushPinDIBSq (0x10008244), and for CBaseFilter's primary
-// +0x20 entry (Filter_v20).  It returns plain 0 (S_OK) — NOT E_NOINTERFACE
-// (crt_ledger.cpp's label for 0x100011D0 is wrong).
+// +0x20 entry (GetSetupData).  It returns plain 0 (S_OK/NULL) — NOT
+// E_NOINTERFACE (crt_ledger.cpp's label for 0x100011D0 is wrong).
+// The three hook names below (was CamThread_v0C/v10/v14) are inferred from
+// their ThreadProc / DoBufferProcessingLoop call sites; the old-baseclasses
+// originals are not recoverable from a shared stub body.
 
-DWORD CAMThread::CamThread_v0C()   // root +0x0C
+DWORD CAMThread::OnThreadInit()     // root +0x0C (was CamThread_v0C)
 {
     return 0;
 }
 
-DWORD CAMThread::CamThread_v10()   // root +0x10
+DWORD CAMThread::OnThreadExit()     // root +0x10 (was CamThread_v10)
 {
     return 0;
 }
 
-DWORD CAMThread::CamThread_v14()   // root +0x14
+DWORD CAMThread::OnLoopEnter()      // root +0x14 (was CamThread_v14)
 {
     return 0;
 }
 
 // VA 0x10002630 - CAMThread root +0x18: the buffer-processing loop
-// (DoBufferProcessingLoop).  Calls the sibling pin (object+0x48) through its
-// primary vtable +0x40 (GetDeliveryBuffer), +0x08 of this root (FillBuffer),
-// +0x44 (Deliver), +0x4C (post-error stop) — the +0x14 slot entry runs once
+// (DoBufferProcessingLoop — was CamThread_v18).  Calls the sibling pin
+// (object+0x48) through its primary vtable +0x40 (GetDeliveryBuffer),
+// +0x08 of this root (FillBuffer), +0x44 (Deliver), +0x4C
+// (DeliverEndOfStream, the post-error stop) — the +0x14 slot entry runs once
 // on entry.  On FillBuffer failure the filter is notified (0x10002A70, EC 3).
-DWORD CAMThread::CamThread_v18()
+DWORD CAMThread::DoBufferProcessingLoop()
 {
     MMDXTrace("DoBufferProcessingLoop enter\n");
-    CamThread_v14();                                          // slot +0x14 entry call
+    OnLoopEnter();                                             // slot +0x14 entry call
     CSourceStream* pStream = static_cast<CSourceStream*>(this);
     CBasePin& pin = *static_cast<CBaseOutputPin*>(pStream);
     DWORD cmd;
@@ -532,7 +544,7 @@ DWORD CAMThread::CamThread_v18()
         }
         IMediaSample* pSample;
         for (;;) {
-            if (pin.Pin_v40(&pSample, NULL, NULL, 0) >= 0)     // slot +0x40
+            if (pin.GetDeliveryBuffer(&pSample, NULL, NULL, 0) >= 0) // slot +0x40
                 break;
             MMDXTrace("GetDeliveryBuffer retry hr pending\n");
             Sleep(1);
@@ -543,7 +555,7 @@ DWORD CAMThread::CamThread_v18()
             const HRESULT hr = FillBuffer(pSample);           // slot +0x08
             if (hr != 0) {
                 pSample->Release();
-                pin.Pin_v4C();                                // slot +0x4C
+                pin.DeliverEndOfStream();                     // slot +0x4C
                 if (hr == 1)
                     return 0;
                 // 0x10002A70 via the filter back-pointer at pin+0xA0
@@ -551,7 +563,7 @@ DWORD CAMThread::CamThread_v18()
                 MMDxShow_NotifyEvent(pFilter, 3, hr, 0);
                 return (DWORD)hr;
             }
-            const HRESULT hrDeliver = pin.Pin_v44(pSample);   // slot +0x44
+            const HRESULT hrDeliver = pin.Deliver(pSample);   // slot +0x44
             pSample->Release();
             if (hrDeliver != 0)
                 return 0;                                     // 0x100026d8
@@ -566,20 +578,20 @@ pending:
 // CBaseFilter — primary-vtable continued
 // =============================================================================
 
-// VA 0x100028B0 - StreamTime: current graph-clock time minus m_tStart.
-// VFW_E_NO_CLOCK (0x80040213) when no clock is set.
-HRESULT CBaseFilter::Filter_v10_StreamTime(void* pRefTime)
+// VA 0x100028B0 - StreamTime (was Filter_v10_StreamTime): current graph-clock
+// time minus m_tStart.  VFW_E_NO_CLOCK (0x80040213) when no clock is set.
+// strmbase spells the argument CRefTime& — same single pointer in the ABI.
+HRESULT CBaseFilter::StreamTime(REFERENCE_TIME* prtStream)
 {
     if (m_pClock == NULL)
         return (HRESULT)0x80040213;                           // VFW_E_NO_CLOCK
     // IReferenceClock::GetTime = vtable slot +0x0C
-    const HRESULT hr = m_pClock->GetTime((REFERENCE_TIME*)pRefTime);
+    const HRESULT hr = m_pClock->GetTime(prtStream);
     if (hr < 0)
         return hr;
-    REFERENCE_TIME* prt = (REFERENCE_TIME*)pRefTime;
     // 0x100028d7..0x100628df: 32-bit lo/hi subtract with borrow == plain
     // 64-bit wrap-around subtraction
-    *prt = (REFERENCE_TIME)((ULONGLONG)*prt - (ULONGLONG)m_tStart);
+    *prtStream = (REFERENCE_TIME)((ULONGLONG)*prtStream - (ULONGLONG)m_tStart);
     return S_OK;
 }
 
@@ -589,11 +601,12 @@ LONG CBaseFilter::GetPinVersion()
     return m_PinVersion;                                      // +0x48
 }
 
-// VA 0x100011D0 - Filter_v20 (returns 0; Register/Unregister treat 0 as
-// "no setup data" — see those bodies).
-int CBaseFilter::Filter_v20()
+// VA 0x100011D0 - GetSetupData (was Filter_v20): returns NULL (the shared
+// `xor eax,eax; ret` stub), so Register/Unregister treat it as "no setup
+// data" and take their S_FALSE early-out — see those bodies.
+const MMDXSHOW_FILTER_SETUP* CBaseFilter::GetSetupData()
 {
-    return 0;
+    return NULL;
 }
 
 // =============================================================================
@@ -620,7 +633,7 @@ STDMETHODIMP CBaseFilter::GetState(DWORD /*dwMillis*/, FILTER_STATE* pState)
 }
 
 // VA 0x100037A0 - Stop: when running/paused, call each CONNECTED pin's
-// primary-vtable +0x18 entry (BreakConnect — which parks the worker thread);
+// primary-vtable +0x18 entry (Inactive — which parks the worker thread);
 // keep only the first failure.  State -> State_Stopped.
 STDMETHODIMP CBaseFilter::Stop()
 {
@@ -631,7 +644,7 @@ STDMETHODIMP CBaseFilter::Stop()
         for (int i = 0; i < cPins; ++i) {
             CBasePin* pPin = GetPin(i);                       // slot +0x1C
             if (P_connected(pPin) != NULL) {
-                const HRESULT hrPin = pPin->BreakConnect();   // slot +0x18
+                const HRESULT hrPin = pPin->Inactive();       // slot +0x18
                 if (hrPin < 0 && hr >= 0)
                     hr = hrPin;
             }
@@ -644,8 +657,8 @@ STDMETHODIMP CBaseFilter::Stop()
 
 // VA 0x10003850 - Pause: if already paused, or there are no pins, just set
 // State_Paused.  Otherwise call each connected pin's primary-vtable +0x14
-// entry (CheckConnect — thread start + allocator commit) and fail out on the
-// first error.
+// entry (Active — thread start + allocator commit; the binary dispatches it
+// with NO stack argument) and fail out on the first error.
 STDMETHODIMP CBaseFilter::Pause()
 {
     EnterCriticalSection(F_pLock(this));
@@ -660,7 +673,7 @@ STDMETHODIMP CBaseFilter::Pause()
     for (int i = 0; i < cPins; ++i) {
         CBasePin* pPin = GetPin(i);
         if (P_connected(pPin) != NULL) {
-            const HRESULT hr = pPin->CheckConnect(NULL);      // slot +0x14
+            const HRESULT hr = pPin->Active();                // slot +0x14
             if (hr < 0) {
                 LeaveCriticalSection(F_pLock(this));
                 return hr;
@@ -675,8 +688,8 @@ set_paused:
 
 // VA 0x10003910 - Run(tStart): store m_tStart; when stopped, Pause() first;
 // unless already running, forward tStart to every connected pin's
-// primary-vtable +0x1C entry (the 0x10003040 stub ignores it); State ->
-// State_Running.
+// primary-vtable +0x1C entry = CBasePin::Run(REFERENCE_TIME) (the 0x10003040
+// stub ignores the value); State -> State_Running.
 STDMETHODIMP CBaseFilter::Run(REFERENCE_TIME tStart)
 {
     EnterCriticalSection(F_pLock(this));
@@ -693,11 +706,11 @@ STDMETHODIMP CBaseFilter::Run(REFERENCE_TIME tStart)
         for (int i = 0; i < cPins; ++i) {
             CBasePin* pPin = GetPin(i);
             if (P_connected(pPin) != NULL) {
-                // slot +0x1C (CompleteConnect in the header) receives the
-                // start time as its two pointer-sized arguments
-                const HRESULT hr = pPin->CompleteConnect(
-                    reinterpret_cast<IPin*>(static_cast<ULONG_PTR>((ULONG)((ULONGLONG)tStart & 0xFFFFFFFFu))),
-                    reinterpret_cast<const AM_MEDIA_TYPE*>(static_cast<ULONG_PTR>((ULONG)((ULONGLONG)tStart >> 32))));
+                // slot +0x1C receives the start time.  In the original this
+                // slot was reached by pushing tStart as two 32-bit stack
+                // words (ret 8) through pointer casts; a plain C++ call to
+                // Run(REFERENCE_TIME) emits the identical 8 argument bytes.
+                const HRESULT hr = pPin->Run(tStart);
                 if (hr < 0) {
                     LeaveCriticalSection(F_pLock(this));
                     return hr;
@@ -813,9 +826,10 @@ STDMETHODIMP CBaseFilter::QueryVendorInfo(LPWSTR* /*pVendorInfo*/)
 
 // =============================================================================
 // IAMovieSetup (sub-vtable at object +0x10) — Register/Unregister
-//   Both fetch the setup blob through the primary +0x20 entry (Filter_v20,
-//   the 0x100011D0 stub returning 0), so both take the early-out and return
-//   S_FALSE before touching the mapper — kept bit-faithful, full body ported.
+//   Both fetch the setup blob through the primary +0x20 entry (GetSetupData,
+//   was Filter_v20 — the 0x100011D0 stub returning NULL), so both take the
+//   early-out and return S_FALSE before touching the mapper — kept
+//   bit-faithful, full body ported.
 // =============================================================================
 
 // Faithful copy of 0x10003400 (RegisterFilterMapper1) — the original body
@@ -858,8 +872,7 @@ static HRESULT MMDxShow_RegisterFilterMapper1(const MMDXSHOW_FILTER_SETUP* pSetu
 // discarded, always returns S_OK when it gets that far).
 STDMETHODIMP CBaseFilter::Register()
 {
-    const MMDXSHOW_FILTER_SETUP* pSetup =
-        (const MMDXSHOW_FILTER_SETUP*)(INT_PTR)Filter_v20();  // primary +0x20
+    const MMDXSHOW_FILTER_SETUP* pSetup = GetSetupData();     // primary +0x20
     if (pSetup == NULL)
         return 1;                                             // S_FALSE (always, here)
     CoInitialize(NULL);
@@ -877,8 +890,7 @@ STDMETHODIMP CBaseFilter::Register()
 // VA 0x10003A80 - Unregister (maps ERROR_FILE_NOT_FOUND to S_OK).
 STDMETHODIMP CBaseFilter::Unregister()
 {
-    const MMDXSHOW_FILTER_SETUP* pSetup =
-        (const MMDXSHOW_FILTER_SETUP*)(INT_PTR)Filter_v20();  // primary +0x20
+    const MMDXSHOW_FILTER_SETUP* pSetup = GetSetupData();     // primary +0x20
     if (pSetup == NULL)
         return 1;                                             // S_FALSE (always, here)
     CoInitialize(NULL);
@@ -1089,10 +1101,11 @@ LONG CBasePin::GetMediaTypeVersion()
     return m_TypeVersion;
 }
 
-// VA 0x10003040 - CompleteConnect default: 5-byte stub (`xor eax,eax; ret 8`)
-// succeeding unconditionally (its Run-time invocation via slot +0x1C relies
-// on the arguments being ignored).
-HRESULT CBasePin::CompleteConnect(IPin* /*pReceivePin*/, const AM_MEDIA_TYPE* /*pmt*/)
+// VA 0x10003040 - CBasePin::Run default (was mislabeled CompleteConnect;
+// primary vtable +0x1C): 5-byte stub (`xor eax,eax; ret 8`) succeeding
+// unconditionally — CBaseFilter::Run forwards tStart here and the default
+// body ignores it, exactly like strmbase.
+HRESULT CBasePin::Run(REFERENCE_TIME /*tStart*/)
 {
     return S_OK;
 }
@@ -1116,13 +1129,14 @@ static HRESULT MMDxPin_DecommitAllocator(CBasePin* pPin)
     return (HRESULT)0x8004020A;                               // VFW_E_NO_ALLOCATOR
 }
 
-// VA 0x10002370 - CBasePin::CheckConnect (primary +0x14): the pin ACTIVATION.
-// Enters the filter critsec twice (m_pLock at +0x38 points at the same
-// recursive CS), bails with S_FALSE when the filter is already
-// paused/running, S_OK when not connected; otherwise commits the allocator,
-// creates the worker thread (0x10005DD0 on pin-0x48) and pumps commands 0
-// then 1 through it (0x10005E20).
-HRESULT CBasePin::CheckConnect(IPin* /*pPin*/)
+// VA 0x10002370 - CBasePin::Active (was mislabeled CheckConnect; primary
+// +0x14, ret 0 — CBaseFilter::Pause dispatches it with no stack argument):
+// the pin ACTIVATION.  Enters the filter critsec twice (m_pLock at +0x38
+// points at the same recursive CS), bails with S_FALSE when the filter is
+// already paused/running, S_OK when not connected; otherwise commits the
+// allocator, creates the worker thread (0x10005DD0 on pin-0x48) and pumps
+// commands 0 then 1 through it (0x10005E20).
+HRESULT CBasePin::Active()
 {
     CRITICAL_SECTION* pcsFilter = &m_pFilter->m_CritSec;      // this[40]+88
     EnterCriticalSection(pcsFilter);
@@ -1157,10 +1171,11 @@ HRESULT CBasePin::CheckConnect(IPin* /*pPin*/)
     return E_FAIL;                                            // 0x80004005 (0x10002458)
 }
 
-// VA 0x100024B0 - CBasePin::BreakConnect (primary +0x18): the pin
-// DEACTIVATION.  Decommit the allocator, park the worker (commands 3 then 4)
-// and close its handle (0x10001E60).  S_OK when not connected.
-HRESULT CBasePin::BreakConnect()
+// VA 0x100024B0 - CBasePin::Inactive (was mislabeled BreakConnect; primary
+// +0x18, ret 0 — dispatched by CBaseFilter::Stop): the pin DEACTIVATION.
+// Decommit the allocator, park the worker (commands 3 then 4) and close its
+// handle (0x10001E60).  S_OK when not connected.
+HRESULT CBasePin::Inactive()
 {
     CRITICAL_SECTION* pcsFilter = &m_pFilter->m_CritSec;      // this[40]+88
     EnterCriticalSection(pcsFilter);
@@ -1219,9 +1234,9 @@ HRESULT CBasePin::GetMediaType(int iPosition, AM_MEDIA_TYPE* pmt)
     return hr;
 }
 
-// VA 0x10002E90 (+0x10004F70 thunk -> 0x10004EC0) - Pin_v24 = SetMediaType:
-// no-op when pmt is &m_mt, otherwise replace m_mt with a deep copy.
-HRESULT CBasePin::Pin_v24(const AM_MEDIA_TYPE* pmt)
+// VA 0x10002E90 (+0x10004F70 thunk -> 0x10004EC0) - SetMediaType (was
+// Pin_v24): no-op when pmt is &m_mt, otherwise replace m_mt with a deep copy.
+HRESULT CBasePin::SetMediaType(const AM_MEDIA_TYPE* pmt)
 {
     if (pmt == &P_mt(this))
         return S_OK;
@@ -1231,11 +1246,12 @@ HRESULT CBasePin::Pin_v24(const AM_MEDIA_TYPE* pmt)
     return E_OUTOFMEMORY;
 }
 
-// VA 0x100030F0 (+0x10002EB0) - Pin_v28 = initialize the connection with the
-// peer: reject same-filter peers (the original compares PIN_INFO.pFilter
-// against the +0x1C slot — the DIRECTION member, an apparent original bug
-// kept bit-faithful), then QI the peer for IMemInputPin into +0x9C.
-HRESULT CBasePin::Pin_v28(IPin* pPeer)
+// VA 0x100030F0 (+0x10002EB0) - CheckConnect (was Pin_v28): initialize the
+// connection with the peer: reject same-filter peers (the original compares
+// PIN_INFO.pFilter against the +0x1C slot — the DIRECTION member, an apparent
+// original bug kept bit-faithful; the error 0x80040208 is
+// VFW_E_INVALID_DIRECTION), then QI the peer for IMemInputPin into +0x9C.
+HRESULT CBasePin::CheckConnect(IPin* pPeer)
 {
     // 0x10002EB0:
     PIN_INFO info;
@@ -1250,9 +1266,10 @@ HRESULT CBasePin::Pin_v28(IPin* pPeer)
     return hr >= 0 ? S_OK : hr;                               // 0x10003117/0x1000311f
 }
 
-// VA 0x10003130 - Pin_v2C: connection teardown — Decommit+Release the
-// allocator (+0x98), Release+NULL the IMemInputPin (+0x9C).
-HRESULT CBasePin::Pin_v2C()
+// VA 0x10003130 - BreakConnect (was Pin_v2C): connection teardown —
+// Decommit+Release the allocator (+0x98), Release+NULL the IMemInputPin
+// (+0x9C).
+HRESULT CBasePin::BreakConnect()
 {
     if (m_pAllocator != NULL) {
         const HRESULT hr = m_pAllocator->Decommit();          // vtable +0x18
@@ -1268,28 +1285,29 @@ HRESULT CBasePin::Pin_v2C()
     return S_OK;
 }
 
-// VA 0x100030D0 - Pin_v30 (one ignored argument in the binary, retn 4):
-// tail-call Pin_v38(m_pInputPin(+0x9C), &m_pAllocator(+0x98)) — i.e.
-// DecideAllocator on the remembered peer.
-HRESULT CBasePin::Pin_v30(void* /*a1*/)
+// VA 0x100030D0 - CompleteConnect (was Pin_v30; one ignored argument in the
+// binary, retn 4): tail-call DecideAllocator(m_pInputPin(+0x9C),
+// &m_pAllocator(+0x98)) — the allocator negotiation is finalized here, like
+// strmbase's CBaseOutputPin::CompleteConnect.
+HRESULT CBasePin::CompleteConnect(IPin* /*pReceivePin*/)
 {
-    return Pin_v38(m_pInputPin, &m_pAllocator);
+    return DecideAllocator(m_pInputPin, &m_pAllocator);
 }
 
-// VA 0x100031A0 - Pin_v38 = DecideAllocator: read the peer's buffer
+// VA 0x100031A0 - DecideAllocator (was Pin_v38): read the peer's buffer
 // requirements (IMemInputPin vtable +0x14, the old ActiveMovie
 // GetBufferRequirements), take its allocator (vtable +0x0C), size it via the
 // +0x3C slot and hand it back (NotifyAllocator, vtable +0x10); on any
 // failure create a fresh allocator through the +0x48 slot
 // (CLSID_MemoryAllocator / IID_IMemAllocator, 0x10002770) and retry.
-HRESULT CBasePin::Pin_v38(IMemInputPin* pInput, IMemAllocator** ppAlloc)
+HRESULT CBasePin::DecideAllocator(IMemInputPin* pPin, IMemAllocator** ppAlloc)
 {
     *ppAlloc = NULL;                                          // *a3 = 0
-    ALLOCATOR_PROPERTIES props = { 0, 0, 0, 0 };              // v6/v7/v8 zeroed
+    ALLOCATOR_PROPERTIES props = { 0, 0, 0, 0 };              // zeroed stack block
     // old ActiveMovie IMemInputPin::GetBufferRequirements = vtable +0x14
     // (dropped from modern SDK headers; raw dispatch kept bit-faithful)
     ((void (__stdcall *)(IMemInputPin*, ALLOCATOR_PROPERTIES*))
-        (*(void***)pInput)[5])(pInput, &props);
+        (*(void***)pPin)[5])(pPin, &props);
     // 0x100031dc: v7 (the ALLOCATOR_PROPERTIES dword at +8 == cbAlign)
     // defaults to 1 when the peer reports none.  A cbAlign of 0 handed to
     // the system CMemAllocator::SetProperties is rejected with
@@ -1297,19 +1315,19 @@ HRESULT CBasePin::Pin_v38(IMemInputPin* pInput, IMemAllocator** ppAlloc)
     // original binaries rely on the 1 default.
     if (props.cbAlign == 0)
         props.cbAlign = 1;
-    if (pInput->GetAllocator(ppAlloc) >= 0 &&                 // vtable +12 decimal (0x0C)
-        Pin_v3C(*ppAlloc, &props) >= 0 &&                     // slot +0x3C
-        pInput->NotifyAllocator(*ppAlloc, 0) >= 0)            // vtable +16 decimal (0x10)
+    if (pPin->GetAllocator(ppAlloc) >= 0 &&                   // vtable +12 decimal (0x0C)
+        DecideBufferSize(*ppAlloc, &props) >= 0 &&            // slot +0x3C
+        pPin->NotifyAllocator(*ppAlloc, 0) >= 0)              // vtable +16 decimal (0x10)
         return S_OK;
     if (*ppAlloc != NULL) {
         (*ppAlloc)->Release();
         *ppAlloc = NULL;
     }
-    HRESULT hr = Pin_v48((void**)ppAlloc);                    // slot +0x48 (fresh allocator)
+    HRESULT hr = InitAllocator(ppAlloc);                      // slot +0x48 (fresh allocator)
     if (hr >= 0) {
-        hr = Pin_v3C(*ppAlloc, &props);                       // slot +0x3C
+        hr = DecideBufferSize(*ppAlloc, &props);              // slot +0x3C
         if (hr >= 0) {
-            hr = pInput->NotifyAllocator(*ppAlloc, 0);        // vtable +0x10
+            hr = pPin->NotifyAllocator(*ppAlloc, 0);          // vtable +0x10
             if (hr >= 0)
                 return S_OK;
         }
@@ -1321,35 +1339,38 @@ HRESULT CBasePin::Pin_v38(IMemInputPin* pInput, IMemAllocator** ppAlloc)
     return hr;
 }
 
-// VA 0x100032A0 - Pin_v40 = GetDeliveryBuffer: forward to m_pAllocator
+// VA 0x100032A0 - GetDeliveryBuffer (was Pin_v40): forward to m_pAllocator
 // (+0x98) GetBuffer (IMemAllocator vtable +0x1C); E_NOINTERFACE when absent.
-HRESULT CBasePin::Pin_v40(IMediaSample** ppSample, REFERENCE_TIME* pStart,
-                          REFERENCE_TIME* pEnd, DWORD dwFlags)
+HRESULT CBasePin::GetDeliveryBuffer(IMediaSample** ppSample, REFERENCE_TIME* pStartTime,
+                                    REFERENCE_TIME* pEndTime, DWORD dwFlags)
 {
     if (m_pAllocator != NULL)
-        return m_pAllocator->GetBuffer(ppSample, pStart, pEnd, dwFlags);
+        return m_pAllocator->GetBuffer(ppSample, pStartTime, pEndTime, dwFlags);
     return E_NOINTERFACE;                                     // 0x80004002
 }
 
-// VA 0x100032E0 - Pin_v44 = Deliver: forward the sample to m_pInputPin
+// VA 0x100032E0 - Deliver (was Pin_v44): forward the sample to m_pInputPin
 // (+0x9C) Receive (IMemInputPin vtable +0x18); VFW_E_NOT_CONNECTED (0x80040209).
-HRESULT CBasePin::Pin_v44(IMediaSample* pSample)
+HRESULT CBasePin::Deliver(IMediaSample* pSample)
 {
     if (m_pInputPin != NULL)
         return m_pInputPin->Receive(pSample);
     return (HRESULT)0x80040209;                               // VFW_E_NOT_CONNECTED
 }
 
-// VA 0x10003190 (+0x10002770) - Pin_v48: CoCreateInstance(
+// VA 0x10003190 (+0x10002770) - InitAllocator (was Pin_v48): CoCreateInstance(
 // CLSID_MemoryAllocator{1E651CC0-B199-11D0-8212-00C04FC32C45}, NULL,
-// CLSCTX_INPROC_SERVER, IID_IMemAllocator, ppObj).
-HRESULT CBasePin::Pin_v48(void** ppObj)
+// CLSCTX_INPROC_SERVER, IID_IMemAllocator, ppAlloc) — the strmbase default
+// InitAllocator/CreateMemoryAllocator shape.
+HRESULT CBasePin::InitAllocator(IMemAllocator** ppAlloc)
 {
     return CoCreateInstance(MMDXSHOW_CLSID_MemoryAllocator, NULL,
-                            CLSCTX_INPROC_SERVER, MMDXSHOW_IID_IMemAllocator, ppObj);
+                            CLSCTX_INPROC_SERVER, MMDXSHOW_IID_IMemAllocator,
+                            (LPVOID*)ppAlloc);
 }
 
-// VA 0x10003310 / 0x10003380 / 0x100033A0 - Pin_v4C / Pin_v50 / Pin_v54:
+// VA 0x10003310 / 0x10003380 / 0x100033A0 - DeliverEndOfStream (was Pin_v4C) /
+// DeliverBeginFlush (was Pin_v50) / DeliverEndFlush (was Pin_v54):
 // forward to the CONNECTED pin's IPin vtable +0x38 / +0x3C / +0x40
 // (EndOfStream / BeginFlush / EndFlush in the old ActiveMovie order) or
 // fail with VFW_E_NOT_CONNECTED.
@@ -1362,51 +1383,57 @@ static HRESULT MMDxPin_ForwardToConnected(CBasePin* pPin, DWORD vtSlot)
     return (HRESULT)0x80040209;                               // VFW_E_NOT_CONNECTED
 }
 
-HRESULT CBasePin::Pin_v4C() { return MMDxPin_ForwardToConnected(this, 0x38); }
-HRESULT CBasePin::Pin_v50() { return MMDxPin_ForwardToConnected(this, 0x3C); }
-HRESULT CBasePin::Pin_v54() { return MMDxPin_ForwardToConnected(this, 0x40); }
+HRESULT CBasePin::DeliverEndOfStream() { return MMDxPin_ForwardToConnected(this, 0x38); }
+HRESULT CBasePin::DeliverBeginFlush()  { return MMDxPin_ForwardToConnected(this, 0x3C); }
+HRESULT CBasePin::DeliverEndFlush()    { return MMDxPin_ForwardToConnected(this, 0x40); }
 
-// VA 0x100033C0 - Pin_v58: forward NewSegment(tStart, tStop, dRate) to the
-// connected pin (IPin vtable +0x44).
-HRESULT CBasePin::Pin_v58(REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate)
+// VA 0x100033C0 - DeliverNewSegment (was Pin_v58): forward
+// NewSegment(tStart, tStop, dRate) to the connected pin (IPin vtable +0x44).
+HRESULT CBasePin::DeliverNewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop,
+                                    double dRate)
 {
     if (m_Connected != NULL)
         return m_Connected->NewSegment(tStart, tStop, dRate);
     return (HRESULT)0x80040209;                               // VFW_E_NOT_CONNECTED
 }
 
-// VA 0x10001310 - Pin_v3C = DecideBufferSize (primary +0x3C; BOTH the
+// VA 0x10001310 - DecideBufferSize (was Pin_v3C; primary +0x3C; BOTH the
 // CSourceStream (0x10008444) and CPushPinDIBSq (0x100081E4) vtables point
 // here).  Locks the filter critsec via the +0xA0 back-pointer; E_POINTER on
 // null args; E_FAIL when the pin object is not bitmap-ready (bytes
 // object+0x5B3 / object+0x5B0 — CPushPinDIBSq's m_bStreamEnded /
-// m_bBitmapSet); raises the wanted buffer size from the display-state
-// object at pin-primary +0x78 (its +0x44 dword), SetProperties on the
-// allocator (IMemAllocator vtable +0x0C) and E_FAIL when the granted
-// per-buffer size falls short.
-HRESULT CBasePin::Pin_v3C(void* a1, void* a2)
+// m_bBitmapSet); raises the wanted buffer size from the connected format
+// block (m_mt.pbFormat at pin-primary +0x78; its +0x44 dword is
+// VIDEOINFOHEADER.bmiHeader.biSizeImage), SetProperties on the allocator
+// (IMemAllocator vtable +0x0C) and E_FAIL when the granted per-buffer size
+// falls short.
+HRESULT CBasePin::DecideBufferSize(IMemAllocator* pAlloc, ALLOCATOR_PROPERTIES* pProps)
 {
-    IMemAllocator* pAlloc = (IMemAllocator*)a1;
-    ALLOCATOR_PROPERTIES* pProps = (ALLOCATOR_PROPERTIES*)a2;
     CRITICAL_SECTION* pcsFilter = &m_pFilter->m_CritSec;      // *(this+0xA0)+0x58
     EnterCriticalSection(pcsFilter);
-    if (a1 == NULL || a2 == NULL) {
+    if (pAlloc == NULL || pProps == NULL) {
         LeaveCriticalSection(pcsFilter);
         return E_POINTER;                                     // 0x80004003
     }
-    char* pObjectBase = Slot(this, -0x48);            // pin object base
+    // The pin object base is the CBasePin subobject - 0x48 (the same
+    // cross-base reach PinToThread performs); the binary reads the two
+    // state bytes there.  static_cast applies the same fixed -0x48.
+    CPushPinDIBSq* pPinObj = static_cast<CPushPinDIBSq*>(this);
     // 0x100013af: m_bStreamEnded(object+0x5B3) || !m_bBitmapSet(object+0x5B0)
-    if (*(unsigned char*)(pObjectBase + 0x5B3) != 0 ||
-        *(unsigned char*)(pObjectBase + 0x5B0) == 0) {
+    if (pPinObj->m_bStreamEnded != 0 ||
+        pPinObj->m_bBitmapSet == 0) {
         LeaveCriticalSection(pcsFilter);
         return E_FAIL;                                        // 0x80004005
     }
-    void* pDisplayState = *(void**)Slot(this, 120);           // 0x100013b8 (pin+0x78)
-    const DWORD cbWanted = *(DWORD*)Slot(pDisplayState, 68);  // +0x44
+    // 0x100013b8: the connected format block (m_mt.pbFormat == pin+0x78)
+    // is a VIDEOINFOHEADER; its +0x44 dword is bmiHeader.biSizeImage.
+    const VIDEOINFOHEADER* pVIH =
+        (const VIDEOINFOHEADER*)P_mt(this).pbFormat;
+    const DWORD cbWanted = (DWORD)pVIH->bmiHeader.biSizeImage; // +0x44
     pProps->cBuffers = 1;                                     // *a3 = 1
     if (cbWanted > (DWORD)pProps->cbBuffer)
         pProps->cbBuffer = (LONG)cbWanted;                    // 0x100013c7
-    ALLOCATOR_PROPERTIES actual;                              // v10/v11 stack block
+    ALLOCATOR_PROPERTIES actual;                              // granted properties out-param
     const HRESULT hr = pAlloc->SetProperties(pProps, &actual);// vtable +0x0C
     if (hr < 0) {
         LeaveCriticalSection(pcsFilter);
@@ -1426,13 +1453,13 @@ HRESULT CBasePin::Pin_v3C(void* a1, void* a2)
 
 // VA 0x10003ED0 - AgreeMediaType (helper of the connection machinery; the
 // original reaches the +0x24/+0x28/+0x30/+0x2C slots virtually — those
-// dispatches are kept, Pin_v24/Pin_v28 inlined per the header-arity note).
+// dispatches are kept: SetMediaType/CheckConnect/CompleteConnect/BreakConnect).
 static HRESULT MMDxPin_AgreeMediaType(CBasePin* pPin, IPin* pReceivePin,
                                       const AM_MEDIA_TYPE* pmt)
 {
-    HRESULT hr = pPin->Pin_v28(pReceivePin);         // slot +0x28 (0x100030F0)
+    HRESULT hr = pPin->CheckConnect(pReceivePin);  // slot +0x28 (0x100030F0)
     if (hr < 0) {
-        pPin->Pin_v2C();                                      // slot +0x2C (0x10003130)
+        pPin->BreakConnect();                                 // slot +0x2C (0x10003130)
         return hr;
     }
     hr = pPin->CheckMediaType(pmt);                           // slot +0x20
@@ -1442,19 +1469,19 @@ static HRESULT MMDxPin_AgreeMediaType(CBasePin* pPin, IPin* pReceivePin,
     } else {
         P_connected(pPin) = pReceivePin;                      // this[6]
         pReceivePin->AddRef();
-        hr = pPin->Pin_v24(pmt);                 // slot +0x24 (0x10002E90)
+        hr = pPin->SetMediaType(pmt);             // slot +0x24 (0x10002E90)
         if (hr >= 0) {
             hr = pReceivePin->ReceiveConnection(
                     static_cast<IPin*>(pPin), pmt);           // IPin vtable +0x10
             if (hr >= 0) {
-                hr = pPin->Pin_v30(pReceivePin);              // slot +0x30 (0x100030D0)
+                hr = pPin->CompleteConnect(pReceivePin);      // slot +0x30 (0x100030D0)
                 if (hr >= 0)
                     return hr;
                 pReceivePin->Disconnect();                    // IPin vtable +0x14
             }
         }
     }
-    pPin->Pin_v2C();                                          // slot +0x2C (0x10003f6f)
+    pPin->BreakConnect();                                     // slot +0x2C (0x10003f6f)
     if (P_connected(pPin) != NULL) {
         P_connected(pPin)->Release();
         P_connected(pPin) = NULL;
@@ -1471,7 +1498,7 @@ static HRESULT MMDxPin_TryMediaTypes(CBasePin* pPin, IPin* pReceivePin,
     const HRESULT hrReset = pEnum->Reset();                   // vtable +0x14
     if (hrReset < 0)
         return hrReset;
-    HRESULT hrFail = S_OK;                                    // v8 = 0
+    HRESULT hrFail = S_OK;
     for (;;) {
         AM_MEDIA_TYPE* pmtCur = NULL;
         if (pEnum->Next(1, &pmtCur, NULL) != 0)               // vtable +0x0C
@@ -1501,7 +1528,7 @@ static HRESULT MMDxPin_AgreeMediaTypeOrEnum(CBasePin* pPin, IPin* pReceivePin,
 {
     if (pmt != NULL && !MMDxShow_MediaTypeIsWildcard(pmt))    // 0x10004BA0
         return MMDxPin_AgreeMediaType(pPin, pReceivePin, pmt);
-    HRESULT hrFail = (HRESULT)0x80040207;                     // v10
+    HRESULT hrFail = (HRESULT)0x80040207;                     // VFW_E_NO_ACCEPTABLE_TYPES
     for (int i = 0; i < 2; ++i) {
         IEnumMediaTypes* pEnum = NULL;
         IPin* pEnumSrc = ((DWORD)P_flag26(pPin) == (DWORD)i)  // v4 == *(BYTE*)(this+38)
@@ -1537,7 +1564,7 @@ STDMETHODIMP CBasePin::Connect(IPin* pReceivePin, const AM_MEDIA_TYPE* pmt)
             LeaveCriticalSection(P_pLock(this));
             return S_OK;
         }
-        Pin_v2C();                                            // slot +0x2C
+        BreakConnect();                                       // slot +0x2C
         LeaveCriticalSection(P_pLock(this));
         return hr;
     }
@@ -1559,19 +1586,19 @@ STDMETHODIMP CBasePin::ReceiveConnection(IPin* pConnector, const AM_MEDIA_TYPE* 
         LeaveCriticalSection(P_pLock(this));
         return (HRESULT)0x80040224;                           // VFW_E_WRONG_STATE
     }
-    HRESULT hr = Pin_v28(pConnector);          // slot +0x28 (0x100030F0)
+    HRESULT hr = CheckConnect(pConnector);      // slot +0x28 (0x100030F0)
     if (hr >= 0) {
         hr = CheckMediaType(pmt);                             // slot +0x20
         if (hr != 0) {
-            Pin_v2C();                                        // slot +0x2C
+            BreakConnect();                                   // slot +0x2C
             if (hr >= 0 || hr == E_FAIL || hr == E_INVALIDARG)
                 hr = (HRESULT)0x8004022A;                     // VFW_E_NO_ACCEPTABLE_TYPES
         } else {
             m_Connected = pConnector;                         // +0x18
             pConnector->AddRef();
-            hr = Pin_v24(pmt);             // slot +0x24 (0x10002E90)
+            hr = SetMediaType(pmt);           // slot +0x24 (0x10002E90)
             if (hr >= 0) {
-                hr = Pin_v30(pConnector);                     // slot +0x30
+                hr = CompleteConnect(pConnector);             // slot +0x30
                 if (hr >= 0) {
                     LeaveCriticalSection(P_pLock(this));
                     return S_OK;
@@ -1579,10 +1606,10 @@ STDMETHODIMP CBasePin::ReceiveConnection(IPin* pConnector, const AM_MEDIA_TYPE* 
             }
             m_Connected->Release();
             m_Connected = NULL;
-            Pin_v2C();                                        // slot +0x2C
+            BreakConnect();                                   // slot +0x2C
         }
     } else {
-        Pin_v2C();                                            // slot +0x2C
+        BreakConnect();                                       // slot +0x2C
     }
     LeaveCriticalSection(P_pLock(this));
     return hr;
@@ -1595,7 +1622,7 @@ static HRESULT MMDxPin_DisconnectPeer(CBasePin* pPin)
 {
     if (P_connected(pPin) == NULL)
         return 1;                                             // S_FALSE
-    const HRESULT hr = pPin->Pin_v2C();                       // slot +44 decimal (0x2C)
+    const HRESULT hr = pPin->BreakConnect();                  // slot +0x2C
     if (hr >= 0) {
         P_connected(pPin)->Release();
         P_connected(pPin) = NULL;
@@ -1741,7 +1768,7 @@ STDMETHODIMP CBasePin::BeginFlush()   { return E_NOTIMPL; }
 STDMETHODIMP CBasePin::EndFlush()     { return E_NOTIMPL; }
 
 // VA 0x10003090 - IPin::NewSegment: cache the segment in the pin
-// (+0x80/+0x88/+0x90) — nothing is forwarded here (Pin_v58 forwards).
+// (+0x80/+0x88/+0x90) — nothing is forwarded here (DeliverNewSegment forwards).
 STDMETHODIMP CBasePin::NewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop,
                                   double dRate)
 {

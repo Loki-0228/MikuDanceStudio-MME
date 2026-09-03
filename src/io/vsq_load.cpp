@@ -1,5 +1,5 @@
 // ===========================================================================
-// VA 0x00435FE0..0x00438CC9 - Sub435FE0  (VSQ load / auto lipsync)
+// VA 0x00435FE0..0x00438CC9 - LoadVsqFile  (VSQ load / auto lipsync)
 // ===========================================================================
 // __thiscall(app, path); ret 4.  Menu "facial expression -> lip-sync with
 // .VSQ file" (0xE0) and the .vsq drag-drop path both land here.
@@ -8,7 +8,8 @@
 //   _wsopen_s probe (errno -> EN 0x52CDF0 / JP 0x52CDD4 box, caption "").
 //   The path buffer is edited in place: wcsstr(path, L".vsq")+1 gets
 //   L"txt" -> "<name>.txt".  _wfopen_s(txt, path, L"wt"), then a plain SMF
-//   walk with Sub41A1F0 (ReadFixedString) / Sub41A1A0 (ReadBeWord):
+//   walk with ReadFixedString (was Sub41A1F0) / ReadBeWord (was
+//   Sub41A1A0):
 //     MThd hdr(4) hdrlen(4) format(2) ntracks(2) division(2);
 //     "[number of Track:%d]" via "%s\n", "[UnitTime:%d]" via "%s\n\n".
 //   per track: "[Track%d]" via "%s\n", MTrk(4) tracklen(4), event loop with
@@ -92,12 +93,12 @@
 //     'e': a-face 0.5f @f1/f2/f3 + 0 @f4 AND i-face 0.3f @f1/f2/f3 + 0 @f4
 //          (0.5f @0x52960C, 0.3f @0x52CE04)
 //     'o': same shape with 1.0f
-//   every step = set weight then Sub49EEE0(model, idx, frame).
+//   every step = set weight then RegisterMorphKeyCurrent(model, idx, frame).
 //
 // Phase 7 - epilogue  (0x438B0D..0x438CC9)
 //   app+0x980 = (int)(last ev.end * 30.0); app+0x9E16C = max(it, model
 //   ModelRecord::maxFrame); select-all + EM_REPLACESEL(0xC2) of "%d" into
-//   control 0x1A1; Sub4B4260(model, frame, app+0xA0CC4);
+//   control 0x1A1; SeekModelFrame(model, frame, app+0xA0CC4);
 //   app+0x97C = frame > 6 ? frame-6 : 0; PanelPaint(app);
 //   if app+0xA06CC: TimelineDrawTicks(0x97C, (HGDIOBJ)app+0xA06C8) +
 //   InvalidateRect(hwnd, {6,0x5F,width-3,0x92}, 0);
@@ -128,6 +129,7 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -238,17 +240,17 @@ unsigned char* SlotModel(MMDApp* app) {
 }
 
 // One mouth-shape keyframe: park the weight into the face slot, then let
-// Sub49EEE0 (0x49EEE0) register it (exact original pairing).
+// RegisterMorphKeyCurrent (0x49EEE0) register it (exact original pairing).
 void VsqMorphKey(unsigned char* model, mdl::MorphRecord* morphs, int idx,
                  int frame, float weight) {
     morphs[idx].value = weight;
-    Sub49EEE0(model, idx, frame);
+    RegisterMorphKeyCurrent(model, idx, frame);
 }
 
 }  // namespace
 
 // VA 0x00435FE0 - VSQ load and auto lipsync.
-void Sub435FE0(MMDApp* app, const wchar_t* path) {
+void LoadVsqFile(MMDApp* app, const wchar_t* path) {  // was Sub435FE0
     auto& s = *app;
     HWND hwnd = static_cast<HWND>(s.Hwnd());                       // 0xa06b8
     char line[0x100];        // shared fgets buffer (single buffer as binary)
@@ -283,13 +285,13 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
     int v = 0;
     int ntracks = 0;
     int division = 0;
-    Sub41A1F0(fd, scratch, 4);              // "MThd"
-    Sub41A1A0(fd, &v, 4);                   // header length
-    Sub41A1A0(fd, &v, 2);                   // format
-    Sub41A1A0(fd, &ntracks, 2);
+    ReadFixedString(fd, scratch, 4);              // "MThd"
+    ReadBeWord(fd, &v, 4);                   // header length
+    ReadBeWord(fd, &v, 2);                   // format
+    ReadBeWord(fd, &ntracks, 2);
     sprintf_s(buf, 1000, "[number of Track:%d]", ntracks);         // 0x52D278
     fprintf(txt, "%s\n", buf);                                     // 0x52D274
-    Sub41A1A0(fd, &division, 2);
+    ReadBeWord(fd, &division, 2);
     sprintf_s(buf, 1000, "[UnitTime:%d]", division);               // 0x52D264
     fprintf(txt, "%s\n\n", buf);                                   // 0x52D25C
 
@@ -300,32 +302,32 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
         do {
             sprintf_s(buf, 1000, "[Track%d]", trackIdx);           // 0x52D250
             fprintf(txt, "%s\n", buf);
-            Sub41A1F0(fd, scratch, 4);      // "MTrk"
-            Sub41A1A0(fd, &v, 4);           // track length
+            ReadFixedString(fd, scratch, 4);      // "MTrk"
+            ReadBeWord(fd, &v, 4);           // track length
 
             int time = 0;                   // accumulated varlen delta
             for (;;) {                      // 0x436214 event loop
-                Sub41A1A0(fd, &v, 1);
+                ReadBeWord(fd, &v, 1);
                 int delta = v;
                 if (delta > 0x7f) {
                     do {
-                        Sub41A1A0(fd, &v, 1);
+                        ReadBeWord(fd, &v, 1);
                         delta = ((delta - 0x80) << 7) + v;          // 0x436247
                     } while (v > 0x7f);
                 }
                 time += delta;
                 int status = 0;
-                Sub41A1A0(fd, &status, 1);
+                ReadBeWord(fd, &status, 1);
                 if (status >= 0x80 && status <= 0x8f) {
-                    Sub41A1A0(fd, &v, 2);
+                    ReadBeWord(fd, &v, 2);
                     continue;
                 }
                 if (status >= 0x90 && status <= 0x9f) {
-                    Sub41A1A0(fd, &v, 2);
+                    ReadBeWord(fd, &v, 2);
                     continue;
                 }
                 if (status >= 0xb0 && status <= 0xbf) {
-                    Sub41A1A0(fd, &v, 2);
+                    ReadBeWord(fd, &v, 2);
                     continue;
                 }
                 if (status == 0xf0 || status == 0xf7) {             // 0x436BDC
@@ -340,28 +342,28 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
                 }
 
                 int type = 0;
-                Sub41A1A0(fd, &type, 1);
+                ReadBeWord(fd, &type, 1);
                 if (type == 0) {
-                    Sub41A1A0(fd, &v, 1);
+                    ReadBeWord(fd, &v, 1);
                     continue;
                 }
                 if (type == 1) {                                    // 0x436365
                     int len = 0;
-                    Sub41A1A0(fd, &len, 1);
-                    Sub41A1F0(fd, scratch, 8);
-                    Sub41A1F0(fd, scratch, len - 8);
+                    ReadBeWord(fd, &len, 1);
+                    ReadFixedString(fd, scratch, 8);
+                    ReadFixedString(fd, scratch, len - 8);
                     fprintf(txt, "%s", scratch);                    // 0x52BD14
                     continue;
                 }
                 if (type >= 2 && type <= 5) {                       // 0x4363DC
                     int len = 0;
-                    Sub41A1A0(fd, &len, 1);
-                    Sub41A1F0(fd, scratch, len);
+                    ReadBeWord(fd, &len, 1);
+                    ReadFixedString(fd, scratch, len);
                     continue;
                 }
                 if (type == 0x2f) {                                 // 0x436416
                     int len = 0;
-                    Sub41A1A0(fd, &len, 1);
+                    ReadBeWord(fd, &len, 1);
                     if (len != 0)
                         continue;
                     sprintf_s(buf, 1000, "[End of Track%d]", trackIdx);
@@ -371,8 +373,8 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
                 }
                 if (type == 0x51) {                                 // 0x436A2A
                     int tempo = 0;
-                    Sub41A1A0(fd, &v, 1);    // length
-                    Sub41A1A0(fd, &tempo, 3);
+                    ReadBeWord(fd, &v, 1);    // length
+                    ReadBeWord(fd, &tempo, 3);
                     sprintf_s(buf, 1000,
                               "[ChangeTempo time=%d,tempo=%d]",     // 0x52D1BC
                               time, tempo);
@@ -384,10 +386,10 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
                     unsigned char lenByte = 0;                      // 0x509057
                     _read(fd, &lenByte, 1);
                     int nn = 0, dd = 0, cc = 0, bb = 0;
-                    Sub41A1A0(fd, &nn, 1);
-                    Sub41A1A0(fd, &dd, 1);
-                    Sub41A1A0(fd, &cc, 1);
-                    Sub41A1A0(fd, &bb, 1);
+                    ReadBeWord(fd, &nn, 1);
+                    ReadBeWord(fd, &dd, 1);
+                    ReadBeWord(fd, &cc, 1);
+                    ReadBeWord(fd, &bb, 1);
                     int den = 1;
                     for (int t = dd; t > 0; --t) den += den;        // 0x436B03
                     sprintf_s(buf, 1000, kJpTimeSig,                // 0x52D178
@@ -396,9 +398,9 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
                 }
                 if (type == 0x59) {                                 // 0x436B42
                     int sf = 0, mi = 0;
-                    Sub41A1A0(fd, &v, 1);    // length
-                    Sub41A1A0(fd, &sf, 1);
-                    Sub41A1A0(fd, &mi, 1);
+                    ReadBeWord(fd, &v, 1);    // length
+                    ReadBeWord(fd, &sf, 1);
+                    ReadBeWord(fd, &mi, 1);
                     sprintf_s(buf, 1000,
                               mi == 0 ? kJpKeyMajor : kJpKeyMinor,  // 0x52D158/C
                               sf);
@@ -829,15 +831,15 @@ void Sub435FE0(MMDApp* app, const wchar_t* path) {
     if (s.LastRegisteredFrame() < modelMax)
         s.LastRegisteredFrame() = modelMax;
 
-    HWND frameEdit = GetDlgItem(hwnd, 0x1A1);                       // 0x5292BC
-    SendMessageA(frameEdit, 0xB1 /*EM_SETSEL*/, 0,
+    HWND frameEdit = GetDlgItem(hwnd, panel::kCurrentFrameEdit);                       // 0x5292BC
+    SendMessageA(frameEdit, EM_SETSEL, 0,
                  GetWindowTextLengthA(frameEdit));                  // 0x529260
     sprintf_s(buf, 1000, "%d", frameNow);                           // 0x52B9F4
-    frameEdit = GetDlgItem(hwnd, 0x1A1);
-    SendMessageA(frameEdit, 0xC2 /*EM_REPLACESEL*/, 0,
+    frameEdit = GetDlgItem(hwnd, panel::kCurrentFrameEdit);
+    SendMessageA(frameEdit, EM_REPLACESEL, 0,
                  reinterpret_cast<LPARAM>(buf));                    // 0x5292B4
 
-    Sub4B4260(model, frameNow, s.PlaybackPhysicsMode());             // 0x4B4260
+    SeekModelFrame(model, frameNow, s.PlaybackPhysicsMode());             // 0x4B4260
 
     s.state.timelineStartFrame =
         frameNow > 6 ? frameNow - 6 : 0;

@@ -33,6 +33,7 @@
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -108,11 +109,11 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     std::memset(renderer, 0, sizeof(D3DRenderer));
     RendererInit(renderer);                                    // 0x406D40
 
-    auto* sub025c = static_cast<WaveAudioContext*>(
+    auto* audioContext = static_cast<WaveAudioContext*>(
         operator new(sizeof(WaveAudioContext), std::nothrow));  // 0x47A648
-    s.Audio() = sub025c;
-    std::memset(sub025c, 0, sizeof(WaveAudioContext));
-    Sub025CInit(sub025c);                                      // 0x4C2450
+    s.Audio() = audioContext;
+    std::memset(audioContext, 0, sizeof(WaveAudioContext));
+    Sub025CInit(audioContext);                                      // 0x4C2450
 
     auto* recorder = static_cast<DShowRecorder*>(
         operator new(sizeof(DShowRecorder), std::nothrow));     // 0x47A698
@@ -122,7 +123,7 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
 
     void* sub04b0 = operator new(sizeof(mdl::AccessoryRecord),
                                  std::nothrow);                 // 0x47A6E1
-    s.Sub04B0() = sub04b0;
+    s.AxisMeshObject() = sub04b0;
     *static_cast<std::uint32_t*>(sub04b0) = 0;
     Sub04B0Init(sub04b0);                                      // 0x4C4760
 
@@ -205,18 +206,19 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     int screenW = GetSystemMetrics(0);                          // 0x47B59A
     int screenH = GetSystemMetrics(1);
     RECT rect = {100, 100, 870, 580};
-    int v165 = 0;        // -> sub_461E00 at the end
-    char v158 = 0;       // -> CheckMenuItem 0x119
-    AdjustWindowRect(&rect, 0x80CF0000, FALSE);
+    int runFlagSubsystem = 0;        // -> sub_461E00 at the end
+    char checkMenu119 = 0;       // -> CheckMenuItem 0x119
+    AdjustWindowRect(&rect, WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME |
+                          WS_MINIMIZEBOX | WS_MAXIMIZEBOX, FALSE);
     LONG winL = rect.left, winT = rect.top, winR = rect.right;
     s.SeparateWindowMaximized() = 0;
     s.SeparateWindowX() = winL;
     s.SeparateWindowY() = winT;
     s.SeparateWindowWidth() = winR - winL;
     s.SeparateWindowHeight() = rect.bottom - winT;
-    char v159 = 1;       // -> CheckMenuItem 0x12D
-    int v155 = 1;        // -> auto-click dlg item 530
-    int v157 = 0;        // maximized
+    char checkMenu12D = 1;       // -> CheckMenuItem 0x12D
+    int checkPhysicsFrame = 1;        // -> auto-click dlg item 530
+    int startMaximized = 0;        // maximized
 
     int X = 0, Y = 0, nWidth = 0, nHeight = 0;
     int tmp = 0;
@@ -239,7 +241,7 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
         fscanf_s(stream, "%d\n", &nWidth);
         fscanf_s(stream, "%d\n", &nHeight);
         fscanf_s(stream, "%d\n", &tmp);
-        v157 = (tmp != 0);
+        startMaximized = (tmp != 0);
         fscanf_s(stream, "%d\n", &s.RenderWidth());
         fscanf_s(stream, "%d\n", &s.RenderHeight());
         fscanf_s(stream, "%d\n", &s.SidebarWidth());
@@ -249,7 +251,7 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
         } else {
             if (tmp == 0)
                 s.EnglishUI() = 0;
-            if (fscanf_s(stream, "%d\n", &v165) != -1) {
+            if (fscanf_s(stream, "%d\n", &runFlagSubsystem) != -1) {
                 int maximized = 0;
                 fscanf_s(stream, "%d\n", &maximized);
                 s.SeparateWindowMaximized() = static_cast<std::uint8_t>(maximized);
@@ -259,7 +261,7 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
                 fscanf_s(stream, "%d\n", &s.SeparateWindowHeight());
                 if (fscanf_s(stream, "%d\n", &tmp) != -1) {
                     if (tmp == 0)
-                        v155 = 0;
+                        checkPhysicsFrame = 0;
                     if (fscanf_s(stream, "%d\n", &tmp) != -1) {
                         fgetws(app->DirModel(), 1000, stream);  // 0x47B8A3
                         StripNewline(app->DirModel());
@@ -285,11 +287,11 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
                                     if (fscanf_s(stream, "%d\n", &tmp) != -1) {
                                         fscanf_s(stream, "%d\n", &tmp);
                                         if (tmp == 1)
-                                            v158 = 1;
+                                            checkMenu119 = 1;
                                         if (fscanf_s(stream, "%d\n", &tmp) != -1) {
                                             fscanf_s(stream, "%d\n", &tmp);
                                             if (tmp == 0)
-                                                v159 = 0;
+                                                checkMenu12D = 0;
                                         }
                                     }
                                 }
@@ -427,7 +429,7 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     std::memset(&wndpl, 0, sizeof(wndpl));
     wndpl.length = 44;
     wndpl.flags = 2;                    // WPF_SETMINPOSITION? original: 2
-    wndpl.showCmd = 2 * v157 + 1;       // SW_SHOWNORMAL / SW_SHOWMAXIMIZED
+    wndpl.showCmd = 2 * startMaximized + 1;       // SW_SHOWNORMAL / SW_SHOWMAXIMIZED
     wndpl.rcNormalPosition.left = X;
     wndpl.rcNormalPosition.top = Y;
     wndpl.rcNormalPosition.right = X + nWidth;
@@ -435,19 +437,19 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     SetWindowPlacement(static_cast<HWND>(s.Hwnd()), &wndpl);
     UpdateWindow(static_cast<HWND>(s.Hwnd()));
 
-    if (v158) {                                                 // 0x47BFF5
+    if (checkMenu119) {                                                 // 0x47BFF5
         HMENU menu = GetMenu(static_cast<HWND>(s.Hwnd()));
         CheckMenuItem(menu, 0x119, MF_CHECKED);
     }
-    if (v165)
+    if (runFlagSubsystem)
         InitFlagSubsystem(app);                                 // 0x461E00
-    if (v159) {                                                 // 0x47C01C
+    if (checkMenu12D) {                                                 // 0x47C01C
         HMENU menu = GetMenu(static_cast<HWND>(s.Hwnd()));
         CheckMenuItem(menu, 0x12D, MF_CHECKED);
     }
-    if (v155 == 1) {                                            // 0x47C036
-        HWND item = GetDlgItem(static_cast<HWND>(s.Hwnd()), 530);
-        SendMessageA(item, 0xF1 /*BM_CLICK*/, 1, 0);
+    if (checkPhysicsFrame == 1) {                                            // 0x47C036
+        HWND item = GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kPhysicsFrameCheckbox);
+        SendMessageA(item, BM_SETCHECK, 1, 0);
     }
     InvalidateRect(static_cast<HWND>(s.Hwnd()), nullptr, FALSE);
     return true;

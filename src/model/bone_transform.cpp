@@ -4,14 +4,16 @@
 // The per-frame bone transform updater, __thiscall on the model block.
 // Called once per bone transform layer by SetPhysicsMode:
 //
-//   BoneFrameTransform(model, a2, a3, a4, a5)
-//     a2  channel router: 0 -> bones WITHOUT flag 0x1000 (before physics),
-//                         1 -> bones WITH flag 0x1000 (after physics)
-//     a3  frame/layer selector - compared against bone+496
-//     a4  model-slot array (app storage+1920); used for external-parent
-//         cross-model chains (model+314596 table).  Null at plain loads.
-//     a5  physics mode selector, same value as 0x4A9220's a4:
-//         1 = kinematic-all, >=2 = per-bone gate via bone+493.
+//   BoneFrameTransform(model, afterPhysics(a2), layer(a3),
+//                        modelSlots(a4), physicsMode(a5))
+//     afterPhysics  channel router: 0 -> bones WITHOUT flag 0x1000 (before
+//                    physics), 1 -> bones WITH flag 0x1000 (after physics)
+//     layer          frame/layer selector - compared against bone+496
+//     modelSlots     model-slot array (app storage+1920); used for external-
+//                    parent cross-model chains (model+314596 table).  Null
+//                    at plain loads.
+//     physicsMode    selector, same value as 0x4A9220's physicsMode:
+//                    1 = kinematic-all, >=2 = per-bone gate via bone+493.
 //
 // Five phases (original addresses):
 //   A 0x493A85  local matrix for physics-swept bones (+596 flag set):
@@ -25,7 +27,7 @@
 //     table {slot@+12, bone@+16}) chains the OTHER model's bone+244;
 //     else +52 = +116 * parent(+48)+52; +180 = parent world rotation-only
 //     mirror; root keeps +52 = +116 and +180 = identity.  +244 copy gate
-//     ((a5==1 || (a5>=2 && bone493==0)) & bone492) == 0.
+//     ((physicsMode==1 || (physicsMode>=2 && bone493==0)) & bone492) == 0.
 //   D 0x494A56  CCD IK per 24-byte chain at model+9920
 //     {+0 effector, +4 root, +8 links, +12 child*, +16 loops, +18 enabled,
 //      +20 angle}: effector/root/link world pos from +52 rows, rotation
@@ -43,6 +45,16 @@
 //
 // Fresh PMD loads run with all pose quats zeroed; the D3DX rotation
 // formulas degenerate zero quats to identity, so the model stays in bind
+//
+// Layout: the five passes live in file-local functions at the original
+// phase boundaries; BoneFrameTransform computes the shared locals and
+// calls them in order (the two gate lambdas of the original body became
+// ChannelPass/CopyGate with the captured parameters explicit):
+//   BoneTransform_PhysicsSweptLocals  A 0x493A85
+//   BoneTransform_StandardLocals      B 0x493E71
+//   BoneTransform_WorldPass           C 0x49455F
+//   BoneTransform_CcdIk               D 0x494A56
+//   BoneTransform_PostIkPass          E 0x496881
 // pose exactly like the original.
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
@@ -61,6 +73,11 @@ namespace mikudancestudio {
 namespace {
 
 using d3dx::D3DXMATRIXF;
+
+#ifdef MIKUDANCESTUDIO_DIAG
+// ---- IK CCD probe under MIKUDANCESTUDIO_STATE_DUMP_DIR --------------------
+// (porting-era A/B tooling; see ../app/frame_state_dump.hpp for the gate.
+//  Lives in the hottest IK loop, so the OFF build must carry none of it.)
 
 LONG gIkProbeArmed = 0;
 LONG gIkProbeWritten = 0;
@@ -165,6 +182,8 @@ void WriteIkPrecheck(unsigned char* model, int chainIndex, int iteration,
     std::fputs("\n}\n", stream);
     std::fclose(stream);
 }
+
+#endif  // MIKUDANCESTUDIO_DIAG
 
 // (float)pi as the original x87 constant (0x40490FDB promoted to double)
 constexpr double kPiF = 3.140000104904175;
@@ -545,50 +564,45 @@ void ClampEuler(float& a, float lo, float hi, bool twist) {
     }
 }
 
-}  // namespace
+// ---- BoneFrameTransform phase passes --------------------------------------
 
-void ArmBoneTransformIkProbe() {
-    InterlockedExchange(&gIkProbeArmed, 1);
-    InterlockedExchange(&gIkProbeWritten, 0);
+// Channel router (BoneFrameTransform a2): 0 -> bones WITHOUT flag 0x1000
+// (before physics), 1 -> bones WITH flag 0x1000 (after physics).
+bool ChannelPass(const mdl::BoneRecord& bone, unsigned char afterPhysics) {
+    const bool has = (bone.flags & mdl::kBoneFlagAfterPhysics) != 0;
+    return afterPhysics ? has : !has;
 }
 
-void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
-                        unsigned char* const* modelSlots,
-                        int a5) {                                     // 0x493A60
-    D3 d3;
-    mdl::ModelRecord& model = *mdl::Mdl(m);
-    const int boneCount = static_cast<int>(model.boneCount);
-    mdl::BoneRecord* boneRecords = model.boneTable;
-    mdl::IkChain* iks = mdl::IkChains(m);
-    const int ikCount = static_cast<int>(model.ikChainCount);
-    const bool pmx2 = model.physicsMode == 2;
-    mdl::BoneOrderEntry* extTable = mdl::BoneOrder(m);
+// +244 copy gate (LABEL_83): ((physicsMode==1 || (physicsMode>=2 &&
+// bone+493==0)) & bone+492) == 0.
+bool CopyGate(const mdl::BoneRecord& bone, int physicsMode) {
+    return ((physicsMode == 1 || (physicsMode >= 2 && bone.physicsDisabled == 0)) & bone.hasRigidBody) == 0;
+}
 
-    auto typedChannelPass = [&](const mdl::BoneRecord& bone) {
-        const bool has = (bone.flags & 0x1000) != 0;
-        return a2 ? has : !has;
-    };
-    auto typedCopyGate = [&](const mdl::BoneRecord& bone) {
-        return ((a5 == 1 || (a5 >= 2 && bone.f493 == 0)) & bone.f492) == 0;
-    };
-
-    // ---- phase A: physics-swept bones (+596) local matrix ---------------
+// phase A (0x493A85): local matrix for physics-swept bones (+596 flag
+// set): inherit 0x100 from bone+488's +116, own quat +376, 0x200
+// translation inherit -> bone+116 = T(-rest308) * R * T(off364) *
+// T(rest308).
+void BoneTransform_PhysicsSweptLocals(D3& d3, mdl::BoneRecord* boneRecords,
+                                      int boneCount,
+                                      unsigned char afterPhysics,
+                                      int layer) {
     for (int i = 0; i < boneCount; ++i) {
         mdl::BoneRecord& bone = boneRecords[i];
-        if (!typedChannelPass(bone))
+        if (!ChannelPass(bone, afterPhysics))
             continue;
-        if (bone.layer != a3 || bone.hasFlag == 0)
+        if (bone.layer != layer || bone.hasFlag == 0)
             continue;
-        float q[4] = {bone.f376[0], bone.f376[1], bone.f376[2], bone.f376[3]};
-        if (bone.flags & 0x100)
+        float q[4] = {bone.physicsQuat[0], bone.physicsQuat[1], bone.physicsQuat[2], bone.physicsQuat[3]};
+        if (bone.flags & mdl::kBoneFlagRotInherit)
             InheritRotQuat(q, boneRecords, bone.tailIdx, bone.inheritRatio);
         MatRotQuat(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), q);
-        if (bone.flags & 0x200) {
+        if (bone.flags & mdl::kBoneFlagTransInherit) {
             mdl::BoneRecord& src = boneRecords[bone.tailIdx];
             const float r = bone.inheritRatio;
             D3DXMATRIXF tmp, cur;
-            d3.translation(&tmp, src.f364[0] * r, src.f364[1] * r,
-                           src.f364[2] * r);
+            d3.translation(&tmp, src.physicsOffset[0] * r, src.physicsOffset[1] * r,
+                           src.physicsOffset[2] * r);
             std::memcpy(&cur, bone.matLocal, sizeof(cur));
             d3.mul(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), &cur, &tmp);
         }
@@ -597,29 +611,37 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                        -bone.position[2]);
         std::memcpy(&cur, bone.matLocal, sizeof(cur));
         d3.mul(&cur, &tmp, &cur);
-        d3.translation(&tmp, bone.f364[0], bone.f364[1], bone.f364[2]);
+        d3.translation(&tmp, bone.physicsOffset[0], bone.physicsOffset[1], bone.physicsOffset[2]);
         d3.mul(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), &cur, &tmp);
         std::memcpy(&cur, bone.matLocal, sizeof(cur));
         d3.translation(&tmp, bone.position[0], bone.position[1],
                        bone.position[2]);
         d3.mul(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), &cur, &tmp);
     }
+}
 
-    // ---- phase B: remaining bones local matrix --------------------------
+// phase B (0x493E71): local matrix for the rest: type 4 resets scale
+// +348..360, type 9 axis-angle from tail(+460) quat x rate(int)(+488)
+// /100, type 5 quat = parent(+488)quat * own, 0x100 inherit; after the
+// sandwich, 0x200 bones add the inherited translation to +364.
+void BoneTransform_StandardLocals(D3& d3, mdl::BoneRecord* boneRecords,
+                                  int boneCount,
+                                  unsigned char afterPhysics,
+                                  int layer) {
     for (int i = 0; i < boneCount; ++i) {
         mdl::BoneRecord& bone = boneRecords[i];
-        if (!typedChannelPass(bone))
+        if (!ChannelPass(bone, afterPhysics))
             continue;
-        if (bone.layer != a3 || bone.hasFlag != 0)
+        if (bone.layer != layer || bone.hasFlag != 0)
             continue;
-        if (bone.type == 4) {                          // 0x493EDC
+        if (bone.type == mdl::BoneType::UnderIk) {     // 0x493EDC
             bone.rotQuat2[0] = bone.rotQuat2[1] = bone.rotQuat2[2] = 0.0f;
             bone.rotQuat2[3] = 1.0f;
         }
-        if (bone.type == 9) {                          // 0x493F1F
+        if (bone.type == mdl::BoneType::CoRotate) {    // 0x493F1F
             const mdl::BoneRecord& tail = boneRecords[bone.tailBone];
-            float sq[4] = {tail.f376[0], tail.f376[1], tail.f376[2],
-                           tail.f376[3]};
+            float sq[4] = {tail.physicsQuat[0], tail.physicsQuat[1], tail.physicsQuat[2],
+                           tail.physicsQuat[3]};
             if (sq[3] <= 1.0) {
                 if (sq[3] < -1.0) sq[3] = -1.0f;
             } else {
@@ -633,22 +655,22 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                 static_cast<double>(sq[1]) * sq[1] +
                 static_cast<double>(sq[2]) * sq[2]);
             if (angle == 0.0 || len < kEps) {
-                bone.f376[0] = bone.f376[1] = bone.f376[2] = 0.0f;
-                bone.f376[3] = 1.0f;
+                bone.physicsQuat[0] = bone.physicsQuat[1] = bone.physicsQuat[2] = 0.0f;
+                bone.physicsQuat[3] = 1.0f;
             } else {
                 const double scaled = angle *
                     static_cast<double>(bone.tailIdx) / 100.0;
                 const float s = static_cast<float>(std::sin(scaled) / len);
-                bone.f376[0] = s * sq[0];
-                bone.f376[1] = s * sq[1];
-                bone.f376[2] = s * sq[2];
-                bone.f376[3] = static_cast<float>(std::cos(scaled));
+                bone.physicsQuat[0] = s * sq[0];
+                bone.physicsQuat[1] = s * sq[1];
+                bone.physicsQuat[2] = s * sq[2];
+                bone.physicsQuat[3] = static_cast<float>(std::cos(scaled));
             }
         }
-        float q[4] = {bone.f376[0], bone.f376[1], bone.f376[2], bone.f376[3]};
-        if (bone.type == 5) {                          // 0x49412F
+        float q[4] = {bone.physicsQuat[0], bone.physicsQuat[1], bone.physicsQuat[2], bone.physicsQuat[3]};
+        if (bone.type == mdl::BoneType::RotateGrant) { // 0x49412F
             const mdl::BoneRecord& src = boneRecords[bone.tailIdx];
-            float sq[4] = {src.f376[0], src.f376[1], src.f376[2], src.f376[3]};
+            float sq[4] = {src.physicsQuat[0], src.physicsQuat[1], src.physicsQuat[2], src.physicsQuat[3]};
             float out[4];
             QuatMul(out, sq, q);
             q[0] = out[0];
@@ -656,16 +678,16 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
             q[2] = out[2];
             q[3] = out[3];
         }
-        if (bone.flags & 0x100)
+        if (bone.flags & mdl::kBoneFlagRotInherit)
             InheritRotQuat(q, boneRecords, bone.tailIdx, bone.inheritRatio);
         MatRotQuat(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), q);
         float inhX = 0.0f, inhY = 0.0f, inhZ = 0.0f;
-        if (bone.flags & 0x200) {
+        if (bone.flags & mdl::kBoneFlagTransInherit) {
             const mdl::BoneRecord& src = boneRecords[bone.tailIdx];
             const float r = bone.inheritRatio;
-            inhX = src.f364[0] * r;
-            inhY = src.f364[1] * r;
-            inhZ = src.f364[2] * r;
+            inhX = src.physicsOffset[0] * r;
+            inhY = src.physicsOffset[1] * r;
+            inhZ = src.physicsOffset[2] * r;
             D3DXMATRIXF tmp, cur;
             d3.translation(&tmp, inhX, inhY, inhZ);
             std::memcpy(&cur, bone.matLocal, sizeof(cur));
@@ -676,25 +698,35 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                        -bone.position[2]);
         std::memcpy(&cur, bone.matLocal, sizeof(cur));
         d3.mul(&cur, &tmp, &cur);
-        d3.translation(&tmp, bone.f364[0], bone.f364[1], bone.f364[2]);
+        d3.translation(&tmp, bone.physicsOffset[0], bone.physicsOffset[1], bone.physicsOffset[2]);
         d3.mul(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), &cur, &tmp);
         std::memcpy(&cur, bone.matLocal, sizeof(cur));
         d3.translation(&tmp, bone.position[0], bone.position[1],
                        bone.position[2]);
         d3.mul(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), &cur, &tmp);
-        if (bone.flags & 0x200) {                      // 0x4944F0
-            bone.f364[0] += inhX;
-            bone.f364[1] += inhY;
-            bone.f364[2] += inhZ;
+        if (bone.flags & mdl::kBoneFlagTransInherit) { // 0x4944F0
+            bone.physicsOffset[0] += inhX;
+            bone.physicsOffset[1] += inhY;
+            bone.physicsOffset[2] += inhZ;
         }
     }
+}
 
-    // ---- phase C: world propagation --------------------------------------
+// phase C (0x49455F): world pass: external parent (bone+600 ->
+// model+314596 table {slot@+12, bone@+16}) chains the OTHER model's
+// bone+244; else +52 = +116 * parent(+48)+52; +180 = parent world
+// rotation-only mirror; root keeps +52 = +116 and +180 = identity.
+// +244 copy gate per CopyGate.
+void BoneTransform_WorldPass(D3& d3, mdl::BoneRecord* boneRecords,
+                             int boneCount, mdl::BoneOrderEntry* extTable,
+                             unsigned char* const* modelSlots,
+                             unsigned char afterPhysics, int layer,
+                             int physicsMode) {
     for (int i = 0; i < boneCount; ++i) {
         mdl::BoneRecord& bone = boneRecords[i];
-        if (!typedChannelPass(bone))
+        if (!ChannelPass(bone, afterPhysics))
             continue;
-        if (bone.layer != a3)
+        if (bone.layer != layer)
             continue;
         const std::int32_t parent = bone.parent;
         const std::int32_t extIdx = bone.slotIndex;
@@ -767,37 +799,46 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
             id.m[0][0] = id.m[1][1] = id.m[2][2] = id.m[3][3] = 1.0f;
             std::memcpy(bone.matWorld, &id, sizeof(id));
         }
-        if (typedCopyGate(bone))                       // LABEL_83
+        if (CopyGate(bone, physicsMode))                       // LABEL_83
             std::memcpy(bone.matExtra, bone.matInit, sizeof(bone.matExtra));
     }
+}
 
-    // ---- phase D: IK solve ------------------------------------------------
+// phase D (0x494A56): CCD IK per 24-byte chain at model+9920 {+0
+// effector, +4 root, +8 links, +12 child*, +16 loops, +18 enabled,
+// +20 angle}; PMX limit planes, PMD axis projection and the knee hinge
+// flip per the file header.  The floating-point sequence is ported
+// verbatim (x87 fidelity notes included) - do not reorder.
+void BoneTransform_CcdIk(D3& d3, unsigned char* m,
+                         mdl::BoneRecord* boneRecords, mdl::IkChain* iks,
+                         int ikCount, unsigned char afterPhysics,
+                         int layer, int physicsMode, bool pmx2) {
     for (int ci = 0; ci < ikCount; ++ci) {
         mdl::IkChain& ik = iks[ci];
         mdl::BoneRecord& target = boneRecords[ik.boneIndex];
-        if (!typedChannelPass(target))
+        if (!ChannelPass(target, afterPhysics))
             continue;
-        if (target.layer != a3 || ik.enabled == 0)
+        if (target.layer != layer || ik.enabled == 0)
             continue;
         mdl::BoneRecord& ikRoot = boneRecords[ik.targetBone];
         const mdl::BoneRecord& rootParent = boneRecords[ikRoot.parent];
-        if (((a5 == 1 || (a5 >= 2 && rootParent.f493 == 0)) &
-             rootParent.f492) != 0)
+        if (((physicsMode == 1 || (physicsMode >= 2 && rootParent.physicsDisabled == 0)) &
+             rootParent.hasRigidBody) != 0)
             continue;
         float eff[3];
         WorldPos(eff, target);                         // 0x494B7F
         // rebuild the chain root local matrix (0x494BE5)
         {
             mdl::BoneRecord& root = ikRoot;
-            float q[4] = {root.f376[0], root.f376[1], root.f376[2],
-                          root.f376[3]};
+            float q[4] = {root.physicsQuat[0], root.physicsQuat[1], root.physicsQuat[2],
+                          root.physicsQuat[3]};
             MatRotQuat(reinterpret_cast<D3DXMATRIXF*>(root.matLocal), q);
             D3DXMATRIXF tmp, cur;
             d3.translation(&tmp, -root.position[0], -root.position[1],
                            -root.position[2]);
             std::memcpy(&cur, root.matLocal, sizeof(cur));
             d3.mul(&cur, &tmp, &cur);
-            d3.translation(&tmp, root.f364[0], root.f364[1], root.f364[2]);
+            d3.translation(&tmp, root.physicsOffset[0], root.physicsOffset[1], root.physicsOffset[2]);
             d3.mul(reinterpret_cast<D3DXMATRIXF*>(root.matLocal), &cur, &tmp);
             std::memcpy(&cur, root.matLocal, sizeof(cur));
             d3.translation(&tmp, root.position[0], root.position[1],
@@ -833,8 +874,10 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                 Vec3Norm(d1, d1);
                 Vec3Norm(d2, d2);
                 const double diff2 = SquaredDiff3X87(d1, d2);
+#ifdef MIKUDANCESTUDIO_DIAG
                 WriteIkPrecheck(m, ci, iter, li, d1, d2, diff2, target,
                                 root, link);
+#endif
                 if (diff2 < static_cast<double>(1e-7f)) { // 0x494F37
                     iter = loops;                      // skip all iterations
                     exitAll = true;
@@ -888,7 +931,7 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                             axis[0] = 0.0f;
                             axis[1] = 0.0f;
                             axis[2] = dot3 < 0.0f ? -1.0f : 1.0f;
-                        } else if (link.flags & 0x400) {
+                        } else if (link.flags & mdl::kBoneFlagFixedAxis) {
                             // fixed axis +508..516 (0x4951D7)
                             ProjectAxisOnLocal(axis, link);
                             const float fx = link.axis[0];
@@ -917,7 +960,7 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                         }
                     }
                 } else {
-                    if ((link.flags & 0x400) == 0) {
+                    if ((link.flags & mdl::kBoneFlagFixedAxis) == 0) {
                         ProjectAxisOnLocal(axis, link);   // 0x495544 block
                     } else {                             // 0x4953DF
                         ProjectAxisOnLocal(axis, link);
@@ -953,9 +996,11 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                     static_cast<float>(std::cos(half))};
                 float acc[4] = {link.rotQuat2[0], link.rotQuat2[1],
                                 link.rotQuat2[2], link.rotQuat2[3]};
+#ifdef MIKUDANCESTUDIO_DIAG
                 WriteIkProbe(m, ci, iter, li, loops,
                              ik.boneIndex, ik.targetBone, child[li], d1, d2,
                              axis, dot, static_cast<float>(half), acc, rotq);
+#endif
                 float outq[4];
                 QuatMul(outq, acc, rotq);              // acc = rot * acc
                 link.rotQuat2[0] = outq[0];
@@ -963,11 +1008,11 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                 link.rotQuat2[2] = outq[2];
                 link.rotQuat2[3] = outq[3];
                 if (iter == 0) {                       // 0x49489A
-                    float q0[4] = {link.f376[0], link.f376[1], link.f376[2],
-                                   link.f376[3]};
-                    float a1[4] = {link.rotQuat2[0], link.rotQuat2[1],
+                    float q0[4] = {link.physicsQuat[0], link.physicsQuat[1], link.physicsQuat[2],
+                                   link.physicsQuat[3]};
+                    float linkQuat[4] = {link.rotQuat2[0], link.rotQuat2[1],
                                    link.rotQuat2[2], link.rotQuat2[3]};
-                    QuatMul(outq, q0, a1);             // acc = acc * q376
+                    QuatMul(outq, q0, linkQuat);             // acc = acc * q376
                     link.rotQuat2[0] = outq[0];
                     link.rotQuat2[1] = outq[1];
                     link.rotQuat2[2] = outq[2];
@@ -1076,8 +1121,8 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                                    -link.position[2]);
                     std::memcpy(&cur, link.matLocal, sizeof(cur));
                     d3.mul(&cur, &tmp, &cur);
-                    d3.translation(&tmp, link.f364[0], link.f364[1],
-                                   link.f364[2]);
+                    d3.translation(&tmp, link.physicsOffset[0], link.physicsOffset[1],
+                                   link.physicsOffset[2]);
                     d3.mul(reinterpret_cast<D3DXMATRIXF*>(link.matLocal),
                            &cur, &tmp);
                     std::memcpy(&cur, link.matLocal, sizeof(cur));
@@ -1090,13 +1135,13 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                 // uses the a5==3 form, the +244 copy the LABEL_83 form
                 for (int lj = li; lj >= 0; --lj) {
                     mdl::BoneRecord& linkedBone = boneRecords[child[lj]];
-                    const bool j3 = (a5 == 3);
-                    if ((linkedBone.f492 & (linkedBone.f493 == 0 ? 1 : 0) &
+                    const bool j3 = (physicsMode == 3);
+                    if ((linkedBone.hasRigidBody & (linkedBone.physicsDisabled == 0 ? 1 : 0) &
                          (j3 ? 1 : 0)) == 0) {
                         WorldFromParent(linkedBone,
                                         boneRecords[linkedBone.parent], &d3);
-                        if (((a5 == 1 || (a5 >= 2 && linkedBone.f493 == 0)) &
-                             linkedBone.f492) == 0)
+                        if (((physicsMode == 1 || (physicsMode >= 2 && linkedBone.physicsDisabled == 0)) &
+                             linkedBone.hasRigidBody) == 0)
                             std::memcpy(linkedBone.matExtra,
                                         linkedBone.matInit,
                                         sizeof(linkedBone.matExtra));
@@ -1106,8 +1151,8 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                 {
                     mdl::BoneRecord& root = ikRoot;
                     WorldFromParent(root, boneRecords[root.parent], &d3);
-                    if (((a5 == 1 || (a5 >= 2 && root.f493 == 0)) &
-                         root.f492) == 0)
+                    if (((physicsMode == 1 || (physicsMode >= 2 && root.physicsDisabled == 0)) &
+                         root.hasRigidBody) == 0)
                         std::memcpy(root.matExtra, root.matInit,
                                     sizeof(root.matExtra));
                 }
@@ -1117,18 +1162,26 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
             ++iter;
         }
     }
+}
 
-    // ---- phase E: post-IK physics-swept bones ----------------------------
+// phase E (0x496881): post-IK pass for +596 bones (type != 4): type 9/5
+// take the source quat from tail(+460)/parent(+488) using +348 when
+// that source bone is type 4 (IK-touched), rebuild +116 and world +52.
+void BoneTransform_PostIkPass(D3& d3, mdl::BoneRecord* boneRecords,
+                              int boneCount, unsigned char afterPhysics,
+                              int layer, int physicsMode) {
     for (int i = 0; i < boneCount; ++i) {
         mdl::BoneRecord& bone = boneRecords[i];
-        if (!typedChannelPass(bone))
+        if (!ChannelPass(bone, afterPhysics))
             continue;
-        if (bone.layer != a3 || bone.type == 4 || bone.hasFlag == 0)
+        if (bone.layer != layer || bone.type == mdl::BoneType::UnderIk ||
+            bone.hasFlag == 0)
             continue;
-        if (bone.type == 9) {                          // 0x4968F3
+        if (bone.type == mdl::BoneType::CoRotate) {    // 0x4968F3
             const mdl::BoneRecord& tail = boneRecords[bone.tailBone];
             const float* sourceQuat =
-                tail.type == 4 ? tail.rotQuat2 : tail.f376;
+                tail.type == mdl::BoneType::UnderIk ? tail.rotQuat2
+                                                    : tail.physicsQuat;
             float sq[4] = {sourceQuat[0], sourceQuat[1], sourceQuat[2],
                            sourceQuat[3]};
             if (sq[3] <= 1.0) {
@@ -1144,23 +1197,23 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                 static_cast<double>(sq[1]) * sq[1] +
                 static_cast<double>(sq[2]) * sq[2]);
             if (angle == 0.0 || len < kEps) {
-                bone.f376[0] = bone.f376[1] = bone.f376[2] = 0.0f;
-                bone.f376[3] = 1.0f;
+                bone.physicsQuat[0] = bone.physicsQuat[1] = bone.physicsQuat[2] = 0.0f;
+                bone.physicsQuat[3] = 1.0f;
             } else {
                 const double scaled = angle *
                     static_cast<double>(bone.tailIdx) / 100.0;
                 const float s = static_cast<float>(std::sin(scaled) / len);
-                bone.f376[0] = s * sq[0];
-                bone.f376[1] = s * sq[1];
-                bone.f376[2] = s * sq[2];
-                bone.f376[3] = static_cast<float>(std::cos(scaled));
+                bone.physicsQuat[0] = s * sq[0];
+                bone.physicsQuat[1] = s * sq[1];
+                bone.physicsQuat[2] = s * sq[2];
+                bone.physicsQuat[3] = static_cast<float>(std::cos(scaled));
             }
         }
-        float q[4] = {bone.f376[0], bone.f376[1], bone.f376[2], bone.f376[3]};
-        if (bone.type == 5) {                          // 0x496B53
+        float q[4] = {bone.physicsQuat[0], bone.physicsQuat[1], bone.physicsQuat[2], bone.physicsQuat[3]};
+        if (bone.type == mdl::BoneType::RotateGrant) { // 0x496B53
             const mdl::BoneRecord& src = boneRecords[bone.tailIdx];
             const float* sourceQuat =
-                src.type == 4 ? src.rotQuat2 : src.f376;
+                src.type == mdl::BoneType::UnderIk ? src.rotQuat2 : src.physicsQuat;
             float sq[4] = {sourceQuat[0], sourceQuat[1], sourceQuat[2],
                            sourceQuat[3]};
             float out[4];
@@ -1170,16 +1223,16 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
             q[2] = out[2];
             q[3] = out[3];
         }
-        if (bone.flags & 0x100)
+        if (bone.flags & mdl::kBoneFlagRotInherit)
             InheritRotQuat(q, boneRecords, bone.tailIdx, bone.inheritRatio);
         MatRotQuat(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), q);
         float inhX = 0.0f, inhY = 0.0f, inhZ = 0.0f;
-        if (bone.flags & 0x200) {
+        if (bone.flags & mdl::kBoneFlagTransInherit) {
             const mdl::BoneRecord& src = boneRecords[bone.tailIdx];
             const float r = bone.inheritRatio;
-            inhX = src.f364[0] * r;
-            inhY = src.f364[1] * r;
-            inhZ = src.f364[2] * r;
+            inhX = src.physicsOffset[0] * r;
+            inhY = src.physicsOffset[1] * r;
+            inhZ = src.physicsOffset[2] * r;
             D3DXMATRIXF tmp, cur;
             d3.translation(&tmp, inhX, inhY, inhZ);
             std::memcpy(&cur, bone.matLocal, sizeof(cur));
@@ -1190,21 +1243,60 @@ void BoneFrameTransform(unsigned char* m, unsigned char a2, int a3,
                        -bone.position[2]);
         std::memcpy(&cur, bone.matLocal, sizeof(cur));
         d3.mul(&cur, &tmp, &cur);
-        d3.translation(&tmp, bone.f364[0], bone.f364[1], bone.f364[2]);
+        d3.translation(&tmp, bone.physicsOffset[0], bone.physicsOffset[1], bone.physicsOffset[2]);
         d3.mul(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), &cur, &tmp);
         std::memcpy(&cur, bone.matLocal, sizeof(cur));
         d3.translation(&tmp, bone.position[0], bone.position[1],
                        bone.position[2]);
         d3.mul(reinterpret_cast<D3DXMATRIXF*>(bone.matLocal), &cur, &tmp);
-        if (bone.flags & 0x200) {
-            bone.f364[0] += inhX;
-            bone.f364[1] += inhY;
-            bone.f364[2] += inhZ;
+        if (bone.flags & mdl::kBoneFlagTransInherit) {
+            bone.physicsOffset[0] += inhX;
+            bone.physicsOffset[1] += inhY;
+            bone.physicsOffset[2] += inhZ;
         }
         WorldFromParent(bone, boneRecords[bone.parent], &d3);
-        if (typedCopyGate(bone))                       // 0x49706F
+        if (CopyGate(bone, physicsMode))                       // 0x49706F
             std::memcpy(bone.matExtra, bone.matInit, sizeof(bone.matExtra));
     }
+}
+
+}  // namespace
+
+void ArmBoneTransformIkProbe() {
+#ifdef MIKUDANCESTUDIO_DIAG
+    InterlockedExchange(&gIkProbeArmed, 1);
+    InterlockedExchange(&gIkProbeWritten, 0);
+#endif
+}
+
+void BoneFrameTransform(unsigned char* m, unsigned char afterPhysics,
+                        int layer, unsigned char* const* modelSlots,
+                        int physicsMode) {                             // 0x493A60
+    D3 d3;
+    mdl::ModelRecord& model = *mdl::Mdl(m);
+    const int boneCount = static_cast<int>(model.boneCount);
+    mdl::BoneRecord* boneRecords = model.boneTable;
+    mdl::IkChain* iks = mdl::IkChains(m);
+    const int ikCount = static_cast<int>(model.ikChainCount);
+    const bool pmx2 = model.physicsMode == 2;
+    mdl::BoneOrderEntry* extTable = mdl::BoneOrder(m);
+
+    // five sequential passes at the original phase boundaries (header)
+    BoneTransform_PhysicsSweptLocals(d3, boneRecords, boneCount,
+                                     afterPhysics,
+                                     layer);                         // A 0x493A85
+    BoneTransform_StandardLocals(d3, boneRecords, boneCount,
+                                 afterPhysics,
+                                 layer);                             // B 0x493E71
+    BoneTransform_WorldPass(d3, boneRecords, boneCount, extTable,
+                            modelSlots, afterPhysics, layer,
+                            physicsMode);                            // C 0x49455F
+    BoneTransform_CcdIk(d3, m, boneRecords, iks, ikCount, afterPhysics,
+                        layer, physicsMode,
+                        pmx2);                                        // D 0x494A56
+    BoneTransform_PostIkPass(d3, boneRecords, boneCount, afterPhysics,
+                              layer,
+                              physicsMode);                          // E 0x496881
 }
 
 }  // namespace mikudancestudio

@@ -6,7 +6,7 @@
 // __thiscall on the model block, called once per model per playback tick by
 // PlaybackPoseAdvance (0x4175A0, timeline_advance.cpp):
 //
-//   Sub4A31D0(model, cursor, physicsMode)
+//   AdvanceModelKeyframes(model, cursor, physicsMode)
 //     cursor       float seconds (app 0x9E64C physics cursor)
 //     physicsMode  int app 0xA0CC4 (>=2 enables the IK-off bookkeeping and
 //                  the rigid-body notifications)
@@ -60,7 +60,7 @@
 //      uses the callee's return value directly (never stored, so no extra
 //      rounding by the caller).
 //
-//      Mid-interpolation bookkeeping (physicsMode >= 2, &bone->f492): when the
+//      Mid-interpolation bookkeeping (physicsMode >= 2, &bone->hasRigidBody): when the
 //      current key's +57 byte is 1 and the previous key's is 0, the blend
 //      runs from the ARMED working copies (+424/+436) with prevFrame taken
 //      from &bone->rigidIdx instead of the previous record.  The arm is refreshed
@@ -135,7 +135,7 @@ const double kCpScale = 0.02362200058996677;
 }  // namespace
 
 // ---- VA 0x004A05A0 --------------------------------------------------------
-float Sub4A05A0(unsigned char* model, int channel, int keyIdx, float t) {
+float BoneEase(unsigned char* model, int channel, int keyIdx, float t) {  // was Sub4A05A0
     const mdl::BoneKey& rec = mdl::BoneKeys(model)[keyIdx];
     const unsigned char x1 = rec.interpolation[channel];
     const unsigned char y1 = rec.interpolation[channel + 4];
@@ -173,7 +173,7 @@ float Sub4A05A0(unsigned char* model, int channel, int keyIdx, float t) {
 }
 
 // ---- VA 0x00499B50 --------------------------------------------------------
-void Sub499B50(unsigned char* model, int boneIdx, unsigned char mode) {
+void NotifyBonePhysicsMode(unsigned char* model, int boneIdx, unsigned char mode) {  // was Sub499B50
     mikudancestudio::mdl::RigidRecord* const rigids = mikudancestudio::mdl::Rigids(model);
     const int cnt = static_cast<int>(mdl::Mdl(model)->rigidCount);
     for (int i = 0; i < cnt; ++i) {
@@ -202,8 +202,8 @@ void Sub499B50(unsigned char* model, int boneIdx, unsigned char mode) {
 
 // ---- VA 0x004A2CD0 --------------------------------------------------------
 // Initializes every per-model animation cursor at playback start.  Unlike
-// Sub4B4260 this preserves the incremental-track state consumed by 0x4A31D0.
-void Sub4A2CD0(unsigned char* model, float cursor, int physicsMode) {
+// SeekModelFrame this preserves the incremental-track state consumed by 0x4A31D0.
+void InitModelTrackCursors(unsigned char* model, float cursor, int physicsMode) {  // was Sub4A2CD0
     unsigned char* const m = model;
     const double frame = static_cast<double>(cursor) * 30.0;
 
@@ -264,7 +264,7 @@ void Sub4A2CD0(unsigned char* model, float cursor, int physicsMode) {
     for (int boneIndex = 0; boneIndex < boneCount; ++boneIndex) {
         mikudancestudio::mdl::BoneRecord* const bone = &bones[boneIndex];
         boneActive[boneIndex] = 1;
-        if (bone->type == 7) {
+        if (bone->type == mdl::BoneType::InertTip) {
             boneActive[boneIndex] = 0;
             continue;
         }
@@ -287,16 +287,16 @@ void Sub4A2CD0(unsigned char* model, float cursor, int physicsMode) {
 
         const int cur = static_cast<int>(boneCursor[boneIndex]);
         const unsigned char mode = boneKeys[cur].physicsDisabled;
-        if (bone->f492 != 0) {
+        if (bone->hasRigidBody != 0) {
             if (physicsMode >= 2)
-                Sub499B50(m, boneIndex, mode);
-            bone->f493 = mode;
+                NotifyBonePhysicsMode(m, boneIndex, mode);
+            bone->physicsDisabled = mode;
         }
     }
 }
 
 // ---- VA 0x004A31D0 --------------------------------------------------------
-void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
+void AdvanceModelKeyframes(unsigned char* model, float cursor, int physicsMode) {  // was Sub4A31D0
     unsigned char* const m = model;
     mdl::ModelRecord& state = *mdl::Mdl(m);
 
@@ -400,9 +400,12 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
 
             // advance (0x4A3ACA) - MIKUDANCESTUDIO_SPIN_CANARY guards a record-
             // link cycle (diagnostic; the original chain is acyclic)
+#ifdef MIKUDANCESTUDIO_DIAG
             int spin = 0;
+#endif
             while ((double)keys[cursors[b]].frame < frame &&
                    active[b] != 0) {
+#ifdef MIKUDANCESTUDIO_DIAG
                 if (++spin > 100000 && getenv("MIKUDANCESTUDIO_SPIN_CANARY")) {
                     FILE* sf = fopen(getenv("MIKUDANCESTUDIO_SPIN_CANARY"), "a");
                     if (sf) {
@@ -413,6 +416,7 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                     }
                     spin = 0;
                 }
+#endif
                 const mdl::BoneKey& rec = keys[cursors[b]];
                 const int next = static_cast<int>(rec.next);
                 if (next != 0) {
@@ -426,10 +430,10 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                 for (int c = 0; c < 3; ++c)
                     bone->trans[c] = rec.position[c];
                 const unsigned char mode = rec.physicsDisabled;
-                if (bone->f492 != 0 && bone->f493 != mode &&
+                if (bone->hasRigidBody != 0 && bone->physicsDisabled != mode &&
                     physicsMode >= 2) {
-                    Sub499B50(m, b, mode);  // 0x4A3BF9
-                    bone->f493 = rec.physicsDisabled;
+                    NotifyBonePhysicsMode(m, b, mode);  // 0x4A3BF9
+                    bone->physicsDisabled = rec.physicsDisabled;
                 }
                 const int selIdx = bone->slotIndex;
                 if (selIdx < 0) {
@@ -441,9 +445,17 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                     if (rec.frame < selStart &&
                         (double)selStart <= frame) {
                         // zero position + quaternion xyz (0x4A3C79) - the w
-                        // component (+344) is deliberately NOT cleared
-                        for (int off = 0; off < 6; ++off)
-                            bone->trans[off] = 0.0f;
+                        // component (+344) is deliberately NOT cleared.
+                        // was: for (int off = 0; off < 6; ++off)
+                        //           bone->trans[off] = 0.0f;
+                        // (a float[3] overrun on purpose).  The original is
+                        // fldz @0x4A3AB3 + six fst @0x4A3C79..0x4A3CB9
+                        // storing st(0)=0.0 into bone+0x140..0x154, i.e.
+                        // trans[0..2] then rotQuat[0..2]; same six stores.
+                        for (int c = 0; c < 3; ++c)
+                            bone->trans[c] = 0.0f;
+                        for (int c = 0; c < 3; ++c)
+                            bone->rotQuat[c] = 0.0f;
                     }
                     if (window.windowEnd == 0) active[b] = 0;
                 }
@@ -458,26 +470,26 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
             if (frame == (double)curFrame) {
                 // exact hit (0x4A3D32)
                 CopyBoneKeyVerbatim(bone, rec);
-                if (physicsMode >= 2 && bone->f492 != 0) {  // 0x4A3DBE
+                if (physicsMode >= 2 && bone->hasRigidBody != 0) {  // 0x4A3DBE
                     const int nextIdx = static_cast<int>(rec.next);
                     const unsigned char cmode = rec.physicsDisabled;
                     if (nextIdx <= 0) {
-                        if (bone->f493 != cmode) Sub499B50(m, b, cmode);
-                        bone->f493 = cmode;
+                        if (bone->physicsDisabled != cmode) NotifyBonePhysicsMode(m, b, cmode);
+                        bone->physicsDisabled = cmode;
                         continue;
                     }
                     const mdl::BoneKey& nrec = keys[nextIdx];
                     if (nrec.physicsDisabled != 1 || cmode != 0) {
-                        if (bone->f493 != cmode) Sub499B50(m, b, cmode);
-                        bone->f493 = cmode;
+                        if (bone->physicsDisabled != cmode) NotifyBonePhysicsMode(m, b, cmode);
+                        bone->physicsDisabled = cmode;
                         continue;
                     }
                     // arm the interpolation for the upcoming segment
                     // (0x4A3E17): notify, remember the start frame, mirror
                     // the backups into the working copies AND the current
                     // pose
-                    if (bone->f493 == 0) Sub499B50(m, b, 1);
-                    bone->f493 = 1;
+                    if (bone->physicsDisabled == 0) NotifyBonePhysicsMode(m, b, 1);
+                    bone->physicsDisabled = 1;
                     bone->rigidIdx = static_cast<std::int32_t>(curFrame);
                     for (int c = 0; c < 4; ++c)
                         bone->ikWorkingQuat[c] = bone->ikBackup[3 + c];
@@ -500,7 +512,7 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
             float pq[4] = {prevRec.rotation[0], prevRec.rotation[1],
                            prevRec.rotation[2], prevRec.rotation[3]};
 
-            if (physicsMode >= 2 && bone->f492 != 0) {  // 0x4A3FAE
+            if (physicsMode >= 2 && bone->hasRigidBody != 0) {  // 0x4A3FAE
                 if (rec.physicsDisabled == 1 &&
                     prevRec.physicsDisabled == 0) {
                     // mid-interpolation segment (0x4A3FC3)
@@ -510,16 +522,16 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                         // stale arm -> re-arm from the backups (0x4A3FF1,
                         // unsigned; disasm 0x4A3FF1's [ecx+ebp] operand is
                         // the PREVIOUS record, var_34 the CURRENT frame)
-                        if (bone->f493 == 0) Sub499B50(m, b, 1);
-                        bone->f493 = 1;
+                        if (bone->physicsDisabled == 0) NotifyBonePhysicsMode(m, b, 1);
+                        bone->physicsDisabled = 1;
                         bone->rigidIdx = static_cast<std::int32_t>(prevFrame);
                         std::memcpy(bone->ikWorkingQuat, bone->ikBackup + 3,
                                     sizeof(bone->ikWorkingQuat));
                         std::memcpy(bone->ikWorkingPos, bone->ikBackup,
                                     sizeof(bone->ikWorkingPos));
                     }
-                    if (bone->f493 == 0) Sub499B50(m, b, 1);
-                    bone->f493 = 1;
+                    if (bone->physicsDisabled == 0) NotifyBonePhysicsMode(m, b, 1);
+                    bone->physicsDisabled = 1;
                     // blend from the armed working copies (0x4A40CD)
                     pq[0] = bone->ikWorkingQuat[0];
                     pq[1] = bone->ikWorkingQuat[1];
@@ -532,8 +544,8 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                         bone->rigidIdx);
                 } else {
                     const unsigned char pmode = prevRec.physicsDisabled;
-                    if (bone->f493 != pmode) Sub499B50(m, b, pmode);
-                    bone->f493 = pmode;
+                    if (bone->physicsDisabled != pmode) NotifyBonePhysicsMode(m, b, pmode);
+                    bone->physicsDisabled = pmode;
                 }
             }
 
@@ -575,7 +587,7 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                                         (std::int32_t)prevFrame));
             // EASED rotation fraction - the slerp below uses this value
             // (see the file header's decompiler-trap note)
-            const float eRot = Sub4A05A0(m, 3, cursorIdx, tF);
+            const float eRot = BoneEase(m, 3, cursorIdx, tF);
 
             const double dotD = (double)pq[0] * cq[0] +
                                 (double)pq[1] * cq[1] +
@@ -598,15 +610,15 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                     // subtracted
                     const float th2 = (float)std::acos(-(double)dc);
                     const float s = (float)std::sin((double)th2);
-                    const float a0 =
+                    const float aStart =
                         (float)((1.0 - (double)eRot) * (double)th2);
                     const float sin0 =
-                        (float)std::sin((double)a0);
+                        (float)std::sin((double)aStart);
                     const float w0 =
                         (float)((double)sin0 / (double)s);
-                    const float a1 = (float)((double)eRot * (double)th2);
+                    const float aEnd = (float)((double)eRot * (double)th2);
                     const float sin1 =
-                        (float)std::sin((double)a1);
+                        (float)std::sin((double)aEnd);
                     const float w1 =
                         (float)((double)sin1 / (double)s);
                     for (int c = 0; c < 4; ++c)
@@ -615,15 +627,15 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
                                     (double)w1 * (double)cq[c]);
                 } else {
                     const float s = (float)std::sin((double)th);
-                    const float a0 =
+                    const float aStart =
                         (float)((1.0 - (double)eRot) * (double)th);
                     const float sin0 =
-                        (float)std::sin((double)a0);
+                        (float)std::sin((double)aStart);
                     const float w0 =
                         (float)((double)sin0 / (double)s);
-                    const float a1 = (float)((double)eRot * (double)th);
+                    const float aEnd = (float)((double)eRot * (double)th);
                     const float sin1 =
-                        (float)std::sin((double)a1);
+                        (float)std::sin((double)aEnd);
                     const float w1 =
                         (float)((double)sin1 / (double)s);
                     for (int c = 0; c < 4; ++c)
@@ -638,13 +650,14 @@ void Sub4A31D0(unsigned char* model, float cursor, int physicsMode) {
             // on the byte (setle), so negative type bytes pass too.
             const std::int8_t btype =
                 static_cast<std::int8_t>(bone->type);
-            if (btype <= 6 || bone->type == 8) {
+            if (btype <= static_cast<std::int8_t>(mdl::BoneType::Effector) ||
+                bone->type == mdl::BoneType::FixedAxis) {
                 for (int axis = 0; axis < 3; ++axis) {
                     const float delta = rec.position[axis] - ppos[axis];
                     if (delta == 0.0f) {
                         bone->trans[axis] = ppos[axis];
                     } else {
-                        const float e = Sub4A05A0(m, axis, cursorIdx, tF);
+                        const float e = BoneEase(m, axis, cursorIdx, tF);
                         bone->trans[axis] =
                             (float)((double)e * (double)delta +
                                     (double)ppos[axis]);

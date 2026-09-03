@@ -22,9 +22,11 @@
 //      size 12, at (x-3, 3)).  The selected row (scroll+idx == this+0x980)
 //      uses colour this+0xA0650, multiples of 5 this+0xA0654, others
 //      this+0xA0658 (unsigned % 5, as the original div).
-//   4. 0x414986  zeroes the three 200-int hit maps (this+0x984 / 0x27A84 /
-//      0x4EB84) and fills the four fixed-band maps (this+0x75C84..0x765E4)
-//      with -1 plus 200 accessory rows at this+0x76904 with 0xFF.
+//   4. 0x414986  zeroes the three column-major edit-mode hit maps
+//      (this+0x984 / 0x27A84 / 0x4EB84, 200 ints per visible frame
+//      column, `rows` columns) and fills the four fixed-band maps
+//      (this+0x75C84..0x765E4) with -1 plus 200 accessory rows at
+//      this+0x76904 with 0xFF.
 //   5. 0x414A1F  icon DC over this+0x2F0 (11x11 icon sheet, two rows);
 //      band rows are SRCAND mask blits from source (44, row) plus SRCPAINT
 //      from (22/0, row); negative links use source column 33.
@@ -75,6 +77,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -109,8 +112,9 @@ constexpr std::size_t kModelZeroIk = 0x3900;    // IK index allowed a zero link
 
 // (0x374/0x378/0x37C/0x380 are state.cameraKeyTrack / lightKeyTrack /
 // selfShadowKeyTrack / gravityKeyTrack, reached through the
-// CameraKeys()/LightKeys()/ShadowKeys()/GravityKeys() accessors; the panel
-// back-store bitmap and the 11x11 icon sheet are state.bmpPanel /
+// CameraKeys()/LightKeys()/ShadowKeys()/GravityKeys() accessors; the clean
+// erase template is state.bmpPanelSpare, the live drawing bitmap selected
+// into PanelDC is state.bmpPanel, and the 11x11 icon sheet is
 // state.bmpRes101.)
 
 // Current model slot for the slot-order index (this+0x910) - 0x414F6F.
@@ -165,9 +169,15 @@ void PanelPaint(MMDApp* app) {
     HDC panel = app->PanelDC();
     const std::int32_t scroll = app->state.timelineStartFrame;
 
-    // --- 1. restore list region from the panel bitmap (0x414638) ----------
+    // --- 1. restore list region from the clean template (0x414638) --------
+    // The erase source is the SPARE bitmap (x86 this+0x2DC / x64 app+752
+    // = bmpPanelSpare): the pristine template drawn at init.  bmpPanel is
+    // the live bitmap selected into PanelDC, so copying from it would be a
+    // self-copy no-op and every non-band pixel (ruler strip, flagless
+    // rows) would keep its previous frame - stacked ruler digits and icon
+    // trails.
     HDC dc = CreateCompatibleDC(nullptr);
-    SelectObject(dc, reinterpret_cast<HGDIOBJ>(app->state.bmpPanel));
+    SelectObject(dc, reinterpret_cast<HGDIOBJ>(app->state.bmpPanelSpare));
     BitBlt(panel, kListLeft, 0, sidebar, listH, dc, kListLeft, 0, SRCCOPY);
     DeleteDC(dc);
 
@@ -254,23 +264,34 @@ void PanelPaint(MMDApp* app) {
     }
 
     // --- 4. clear the hit maps (0x414986 / 0x4149CB) -----------------------
-    // Each hit map has exactly 200 entries.  The x86 routine clears the
-    // corresponding element in the three independent arrays; deriving the
-    // other arrays through a raw +/- 40000-int displacement works only for
-    // the old 32-bit state blob.  In the x64 layout that walk crosses
-    // unrelated state (including the accessory-track pointer table).
+    // The three edit-mode maps are COLUMN-MAJOR: 200 ints per visible frame
+    // column, indexed [trackRow + 200*frameColumn] by the click handler and
+    // the paint chains.  Both originals clear rows x 200 entries per map
+    // (x86 0x414986: outer `rows` iterations of a 200-int sweep over
+    // 0x984/0x27A84/0x4EB84; x64 0x7FF7CB4814C0 identical), NOT just the
+    // first column - anything less leaves stale record indices in columns
+    // 1..N after a scroll, so clicks and box-sweeps toggle keys that are
+    // no longer under the cursor.
+    // Historic naming inversion: the old local name said "kMapIk", but
+    // 0x984 is pinned as rowHitBone (the bone row map).  Likewise the
+    // old "kMapBone" 0x4EB84 is pinned as rowHitIk exactly - NOT the
+    // BoneEditRowMap() rowHitIk+64 view, which matches x86 0x4EC84.
+    // Columns beyond the first land in the reserved tail behind each
+    // 200-int head (same situation as rowHitAcc, see app_layout.hpp).
     if (rows > 0) {
-        // Historic naming inversion: the old local name said "kMapIk", but
-        // 0x984 is pinned as rowHitBone (the bone row map).  Likewise the
-        // old "kMapBone" 0x4EB84 is pinned as rowHitIk exactly - NOT the
-        // BoneEditRowMap() rowHitIk+64 view, which matches x86 0x4EC84.
         std::int32_t* const ikMap = app->state.rowHitBone;
         std::int32_t* const morphMap = app->state.rowHitMorph;
         std::int32_t* const boneMap = app->state.rowHitIk;
-        for (int index = 0; index < 200; ++index) {
-            ikMap[index] = 0;
-            morphMap[index] = 0;
-            boneMap[index] = 0;
+        for (int column = 0; column < rows; ++column) {
+            const std::size_t base =
+                static_cast<std::size_t>(column) * 200;
+            for (int index = 0; index < 200; ++index) {
+                const std::size_t slot = base +
+                    static_cast<std::size_t>(index);
+                ikMap[slot] = 0;
+                morphMap[slot] = 0;
+                boneMap[slot] = 0;
+            }
         }
     }
     {
@@ -317,7 +338,7 @@ void PanelPaint(MMDApp* app) {
         scrollInfo.nMax = static_cast<int>(nMax) - 1;
         scrollInfo.nPage = static_cast<DWORD>(rows);
         scrollInfo.nPos = static_cast<int>(pos);
-        SetScrollInfo(GetDlgItem(static_cast<HWND>(app->Hwnd()), 428), SB_CTL,
+        SetScrollInfo(GetDlgItem(static_cast<HWND>(app->Hwnd()), panel::kTimelineHScroll), SB_CTL,
                       &scrollInfo,
                       TRUE);
 
@@ -577,7 +598,7 @@ void PanelPaint(MMDApp* app) {
                         }
                         // row drawing (0x4156D1..0x415B98)
                         const bool mask =
-                            key.physicsDisabled == 0 && bones[head].f492 != 0;
+                            key.physicsDisabled == 0 && bones[head].hasRigidBody != 0;
                         const int x = kRowH * row + kIconLeft;
                         if (key.allocated != 0) {
                             if (link >= 0) {

@@ -322,22 +322,28 @@ protected:
 //     +0x0C  Register                                0x10003A10
 //     +0x10  Unregister                              0x10003A80
 //   PRIMARY (INonDelegatingUnknown) vtable continues after CUnknown's 4 slots:
-//     +0x10  Filter_v10_StreamTime                   0x100028B0  (graph-clock delta)
+//     +0x10  StreamTime                              0x100028B0  (graph-clock delta)
 //     +0x14  GetPinVersion                           0x10002AB0  (used by CEnumPins)
 //     +0x18  GetPinCount                             0x10002090  (pure)
 //     +0x1C  GetPin(int)                             0x100020B0  (pure; CSource
 //                                    returns m_ppPins[n]+0x48 == CBasePin subobj)
-//     +0x20  Filter_v20                              0x100011D0  (E_NOINTERFACE stub)
+//     +0x20  GetSetupData                            0x100011D0  (returns NULL)
 // -----------------------------------------------------------------------------
 class CBaseFilter : public CUnknown, public IBaseFilter, public IAMovieSetup
 {
 public:
     // --- primary (INonDelegatingUnknown) vtable, continued ---
-    virtual HRESULT Filter_v10_StreamTime(void* pRefTime);   // +0x10  0x100028B0
+    // StreamTime — was Filter_v10_StreamTime (primary vtable +0x10).  strmbase
+    // spells it StreamTime(CRefTime&); the binary ABI is the same single
+    // pointer argument (retn 4) to the 64-bit time cell.
+    virtual HRESULT StreamTime(REFERENCE_TIME* prtStream);   // +0x10  0x100028B0
     virtual LONG    GetPinVersion();                         // +0x14  0x10002AB0
     virtual int     GetPinCount() = 0;                       // +0x18  CSource 0x10002090
     virtual class CBasePin* GetPin(int n) = 0;               // +0x1C  CSource 0x100020B0
-    virtual int     Filter_v20();                            // +0x20  0x100011D0 (returns 0)
+    // GetSetupData — was Filter_v20 (primary vtable +0x20).  strmbase:
+    // virtual LPAMOVIESETUP_FILTER GetSetupData(); the 0x100011D0 stub is
+    // `xor eax,eax; ret` -> NULL, so Register/Unregister take the S_FALSE path.
+    virtual const MMDXSHOW_FILTER_SETUP* GetSetupData();     // +0x20  0x100011D0
 
     // --- IBaseFilter overrides (sub-vtable at object +0x0C, canonical) ---
     // Delegating IUnknown for the IBaseFilter/IAMovieSetup branches
@@ -450,11 +456,11 @@ interface IPushSource : public IUnknown
 {
     // (+0x00..+0x08 QI/AddRef/Release are per-class forwards:
     //  CPushSourceDIBSq provides 0x10001930/0x10001910/0x10001940.)
-    virtual HRESULT STDMETHODCALLTYPE PushSource_v0C_SetBitmapInfo(const void* pBitmapInfo, int n, float fps) = 0;  // 0x10001730 (retn 0x10)
-    virtual HRESULT STDMETHODCALLTYPE PushSource_v10_GetStreamingState(void* pState) = 0;                           // 0x100017D0
-    virtual HRESULT STDMETHODCALLTYPE PushSource_v14_StartStreaming(DWORD dwBits) = 0;                              // 0x10001800 (param -> pin+0x5B4)
-    virtual HRESULT STDMETHODCALLTYPE PushSource_v18_BeginStreaming(void) = 0;                                      // 0x10001840
-    virtual HRESULT STDMETHODCALLTYPE PushSource_v1C_GetRate(float* pRate) = 0;                                     // 0x10001880 (fstp dword, 1.02f)
+    virtual HRESULT STDMETHODCALLTYPE SetBitmapInfo(const void* pBitmapInfo, int n, float fps) = 0;  // 0x10001730 (retn 0x10) — was PushSource_v0C_SetBitmapInfo
+    virtual HRESULT STDMETHODCALLTYPE GetStreamingState(void* pState) = 0;                           // 0x100017D0 — was PushSource_v10_GetStreamingState
+    virtual HRESULT STDMETHODCALLTYPE StartStreaming(DWORD dwBits) = 0;                              // 0x10001800 (param -> pin+0x5B4) — was PushSource_v14_StartStreaming
+    virtual HRESULT STDMETHODCALLTYPE BeginStreaming(void) = 0;                                      // 0x10001840 — was PushSource_v18_BeginStreaming
+    virtual HRESULT STDMETHODCALLTYPE GetRate(float* pRate) = 0;                                     // 0x10001880 (fstp dword, 1.02f) — was PushSource_v1C_GetRate
 };
 
 class CPushPinDIBSq;   // forward: parked-pin member below
@@ -478,11 +484,11 @@ public:
     ULONG   STDMETHODCALLTYPE AddRef();
     ULONG   STDMETHODCALLTYPE Release();
     // IPushSource (declared above) — Phase B defines:
-    STDMETHODIMP PushSource_v0C_SetBitmapInfo(const void* pBitmapInfo, int n, float fps) override;
-    STDMETHODIMP PushSource_v10_GetStreamingState(void* pState) override;
-    STDMETHODIMP PushSource_v14_StartStreaming(DWORD dwBits) override;
-    STDMETHODIMP PushSource_v18_BeginStreaming(void) override;
-    STDMETHODIMP PushSource_v1C_GetRate(float* pRate) override;
+    STDMETHODIMP SetBitmapInfo(const void* pBitmapInfo, int n, float fps) override;
+    STDMETHODIMP GetStreamingState(void* pState) override;
+    STDMETHODIMP StartStreaming(DWORD dwBits) override;
+    STDMETHODIMP BeginStreaming(void) override;
+    STDMETHODIMP GetRate(float* pRate) override;
     // member: the parked pin (ctor 0x10001A70)
     CPushPinDIBSq* m_pPin;                                   // +0x74 => sizeof == 0x78
 };
@@ -498,10 +504,15 @@ static_assert(sizeof(CPushSourceDIBSq) == 0x78, "filter layout must match operat
 //     +0x04 scalar deleting dtor 0x100021C0 / 0x10001A50 (per-class; CSource's
 //                                   dtor deletes pins through this slot)
 //     +0x08 FillBuffer (pure)    0x1000668A (_purecall) / 0x100014E0
-//     +0x0C CamThread_v0C        0x100011D0 (stub returns 0 — NOT E_NOTIMPL)
-//     +0x10 CamThread_v10        0x100011D0
-//     +0x14 CamThread_v14        0x100011D0
-//     +0x18 CamThread_v18        0x10002630 (DoBufferProcessingLoop driver)
+//     +0x0C OnThreadInit         0x100011D0 (stub returns 0 — NOT E_NOTIMPL;
+//                  was CamThread_v0C.  ThreadProc start hook: a negative
+//                  return aborts the pump with Reply(that value))
+//     +0x10 OnThreadExit         0x100011D0 (was CamThread_v10.  ThreadProc
+//                  exit hook: ThreadProc returns (hook() < 0))
+//     +0x14 OnLoopEnter          0x100011D0 (was CamThread_v14.  Called once
+//                  at the top of DoBufferProcessingLoop)
+//     +0x18 DoBufferProcessingLoop 0x10002630 (was CamThread_v18; the
+//                  strmbase CSourceStream::DoBufferProcessingLoop body)
 //     +0x1C GetMediaType(AM_MEDIA_TYPE*) 0x10003370 stub / 0x100011F0
 //   Data layout (verified from dtor core 0x10005D50: CAMEvent dtors on
 //   +0x04/+0x08, DeleteCriticalSection on +0x18/+0x30):
@@ -514,10 +525,10 @@ public:
     virtual DWORD ThreadProc();                              // +0x00 0x10002570
     virtual ~CAMThread();                                    // +0x04 per-class
     virtual HRESULT FillBuffer(IMediaSample* pSample) = 0;   // +0x08
-    virtual DWORD  CamThread_v0C();                          // +0x0C 0x100011D0
-    virtual DWORD  CamThread_v10();                          // +0x10 0x100011D0
-    virtual DWORD  CamThread_v14();                          // +0x14 0x100011D0
-    virtual DWORD  CamThread_v18();                          // +0x18 0x10002630
+    virtual DWORD  OnThreadInit();                           // +0x0C 0x100011D0 (was CamThread_v0C; name inferred from the ThreadProc call site — no strmbase counterpart survives)
+    virtual DWORD  OnThreadExit();                           // +0x10 0x100011D0 (was CamThread_v10; name inferred from the ThreadProc call site)
+    virtual DWORD  OnLoopEnter();                            // +0x14 0x100011D0 (was CamThread_v14; name inferred from the DoBufferProcessingLoop call site)
+    virtual DWORD  DoBufferProcessingLoop();                 // +0x18 0x10002630 (was CamThread_v18; strmbase CSourceStream name)
     // (+0x1C GetMediaType(CMediaType*) is introduced by CSourceStream because
     //  CBasePin::GetMediaType dispatches it through the CAMThread-root vtable.)
     // thread API (Phase B, source_base.cpp): GetRequest 0x10005E80 /
@@ -541,23 +552,40 @@ static_assert(sizeof(CAMThread) == 0x48, "CAMThread layout must match the binary
 //   +0x54 (18 slots, canonical COM order), IQualityControl vptr at +0x58
 //   (5 slots).  NOTE: because CSourceStream's CBaseOutputPin base starts at
 //   +0x48 and CUnknown is 0x0C bytes, IPin lands at +0x54 exactly as observed.
-//   Primary (INonDelegating) vtable @0x10008444 (CSourceStream)/@0x100081E4:
+//   Primary (INonDelegating) vtable @0x10008444 (CSourceStream)/@0x100081E4.
+//   Slot order and per-slot stack arity (retn N) match the DirectShow
+//   baseclasses (strmbase amfilter.h) one-to-one: CBasePin's virtuals
+//   GetMediaTypeVersion/Active/Inactive/Run/CheckMediaType/SetMediaType/
+//   CheckConnect/BreakConnect/CompleteConnect/GetMediaType, then the
+//   CBaseOutputPin additions DecideAllocator/DecideBufferSize/
+//   GetDeliveryBuffer/Deliver/InitAllocator/DeliverEndOfStream/
+//   DeliverBeginFlush/DeliverEndFlush/DeliverNewSegment.
 //     +0x00/+0x04/+0x08  NonDelegating QI/AddRef/Release  0x10002DC0/0x10002E50/0x10002E70
 //     +0x0C  scalar deleting dtor                          0x10001E50 / 0x10001950
 //     +0x10  GetMediaTypeVersion                           0x10003030 (used by CEnumMediaTypes)
-//     +0x14  CheckConnect                                  0x10002370
-//     +0x18  BreakConnect                                  0x100024B0
-//     +0x1C  CompleteConnect                               0x10003040
+//     +0x14  Active                                        0x10002370 (ret 0; dispatched by
+//             CBaseFilter::Pause with NO stack argument)
+//     +0x18  Inactive                                      0x100024B0 (ret 0; Stop)
+//     +0x1C  Run(REFERENCE_TIME)                           0x10003040 (ret 8; CBaseFilter::Run
+//             forwards tStart as one 64-bit argument)
 //     +0x20  CheckMediaType(const AM_MEDIA_TYPE*)          0x100021E0 / 0x10001430
-//     +0x24  Pin_v24                                       0x10002E90
-//     +0x28  Pin_v28                                       0x100030F0
-//     +0x2C  Pin_v2C                                       0x10003130
-//     +0x30  Pin_v30                                       0x100030D0 (delegates to filter slot 0x38)
+//     +0x24  SetMediaType(const AM_MEDIA_TYPE*)            0x10002E90
+//     +0x28  CheckConnect(IPin*)                           0x100030F0
+//     +0x2C  BreakConnect                                  0x10003130
+//     +0x30  CompleteConnect(IPin*)                        0x100030D0 (delegates to the
+//             pin's own +0x38 slot)
 //     +0x34  GetMediaType(int, AM_MEDIA_TYPE*)             0x100022B0 (locks the
 //             filter CS; iPosition==0 dispatches to the CAMThread-root +0x1C
 //             single-arg GetMediaType; else S_FALSE)
-//     +0x38 .. +0x58: Pin_v38..Pin_v58 = 0x100031A0, 0x10001310, 0x100032A0,
-//             0x100032E0, 0x10003190, 0x10003310, 0x10003380, 0x100033A0, 0x100033C0
+//     +0x38  DecideAllocator                               0x100031A0
+//     +0x3C  DecideBufferSize                              0x10001310
+//     +0x40  GetDeliveryBuffer                             0x100032A0
+//     +0x44  Deliver                                       0x100032E0
+//     +0x48  InitAllocator                                 0x10003190
+//     +0x4C  DeliverEndOfStream                            0x10003310
+//     +0x50  DeliverBeginFlush                             0x10003380
+//     +0x54  DeliverEndFlush                               0x100033A0
+//     +0x58  DeliverNewSegment                             0x100033C0
 //   IPin vtable @0x10008194 — canonical order:
 //     QI/AddRef/Release stubs (0x10001180/0x10001710/0x100011A0), Connect
 //     0x100047B0, ReceiveConnection 0x10004160, Disconnect 0x100042D0,
@@ -574,26 +602,37 @@ class CBasePin : public CUnknown, public IPin, public IQualityControl
 public:
     // --- primary (INonDelegatingUnknown) vtable, continued ---
     virtual LONG    GetMediaTypeVersion();                                  // +0x10 0x10003030
-    virtual HRESULT CheckConnect(IPin* pPin);                               // +0x14 0x10002370
-    virtual HRESULT BreakConnect();                                         // +0x18 0x100024B0
-    virtual HRESULT CompleteConnect(IPin* pReceivePin, const AM_MEDIA_TYPE* pmt); // +0x1C 0x10003040
+    // Active — was mislabeled CheckConnect (vtable +0x14).  CBaseFilter::Pause
+    // dispatches this slot with NO stack argument (ret 0): allocator commit +
+    // worker-thread start.  strmbase: CBasePin::Active(void).
+    virtual HRESULT Active();                                               // +0x14 0x10002370
+    // Inactive — was mislabeled BreakConnect (vtable +0x18).  Dispatched by
+    // CBaseFilter::Stop (ret 0): allocator decommit + worker park.
+    virtual HRESULT Inactive();                                             // +0x18 0x100024B0
+    // Run — was mislabeled CompleteConnect (vtable +0x1C).  CBaseFilter::Run
+    // forwards tStart here; the 5-byte default body 0x10003040 ignores it
+    // (`xor eax,eax; ret 8` — one 64-bit argument, matching REFERENCE_TIME).
+    virtual HRESULT Run(REFERENCE_TIME tStart);                             // +0x1C 0x10003040
     virtual HRESULT CheckMediaType(const AM_MEDIA_TYPE* pmt) = 0;           // +0x20 (derived: 0x100021E0/0x10001430)
-    virtual HRESULT Pin_v24(const AM_MEDIA_TYPE* pmt);                      // +0x24 0x10002E90 (SetMediaType)
-    virtual HRESULT Pin_v28(IPin* pPeer);                                   // +0x28 0x100030F0 (init peer)
-    virtual HRESULT Pin_v2C();                                              // +0x2C 0x10003130
-    virtual HRESULT Pin_v30(void* a1);                                      // +0x30 0x100030D0 (delegates filter slot 0x38)
+    virtual HRESULT SetMediaType(const AM_MEDIA_TYPE* pmt);                 // +0x24 0x10002E90 (was Pin_v24)
+    // CheckConnect — was Pin_v28 (vtable +0x28, 0x100030F0): validate the peer
+    // (QueryPinInfo + same-filter check via the +0x1C slot — an original bug
+    // kept bit-faithful) and QI it for IMemInputPin into +0x9C.
+    virtual HRESULT CheckConnect(IPin* pPeer);                              // +0x28 0x100030F0
+    virtual HRESULT BreakConnect();                                         // +0x2C 0x10003130 (was Pin_v2C)
+    virtual HRESULT CompleteConnect(IPin* pReceivePin);                     // +0x30 0x100030D0 (was Pin_v30; delegates to the pin's +0x38 slot)
     virtual HRESULT GetMediaType(int iPosition, AM_MEDIA_TYPE* pmt);        // +0x34 0x100022B0
-    virtual HRESULT Pin_v38(IMemInputPin* pInput, IMemAllocator** ppAlloc); // +0x38 0x100031A0 (DecideAllocator)
-    virtual HRESULT Pin_v3C(void* a1, void* a2);                            // +0x3C 0x10001310
-    virtual HRESULT Pin_v40(IMediaSample** ppSample, REFERENCE_TIME* pStart,
-                            REFERENCE_TIME* pEnd, DWORD dwFlags);           // +0x40 0x100032A0 (GetDeliveryBuffer)
-    virtual HRESULT Pin_v44(IMediaSample* pSample);                         // +0x44 0x100032E0 (Deliver)
-    virtual HRESULT Pin_v48(void** ppObj);                                  // +0x48 0x10003190 (CoCreateInstance pull)
-    virtual HRESULT Pin_v4C();                                              // +0x4C 0x10003310
-    virtual HRESULT Pin_v50();                                              // +0x50 0x10003380
-    virtual HRESULT Pin_v54();                                              // +0x54 0x100033A0
-    virtual HRESULT Pin_v58(REFERENCE_TIME tStart, REFERENCE_TIME tEnd,
-                            double dRate);                                  // +0x58 0x100033C0 (NewSegment fwd)
+    virtual HRESULT DecideAllocator(IMemInputPin* pPin, IMemAllocator** ppAlloc); // +0x38 0x100031A0 (was Pin_v38)
+    virtual HRESULT DecideBufferSize(IMemAllocator* pAlloc, ALLOCATOR_PROPERTIES* pProps); // +0x3C 0x10001310 (was Pin_v3C; pure in CBaseOutputPin, overridden by CPushPinDIBSq)
+    virtual HRESULT GetDeliveryBuffer(IMediaSample** ppSample, REFERENCE_TIME* pStartTime,
+                                      REFERENCE_TIME* pEndTime, DWORD dwFlags); // +0x40 0x100032A0 (was Pin_v40)
+    virtual HRESULT Deliver(IMediaSample* pSample);                         // +0x44 0x100032E0 (was Pin_v44)
+    virtual HRESULT InitAllocator(IMemAllocator** ppAlloc);                 // +0x48 0x10003190 (was Pin_v48; CoCreateInstance pull of CLSID_MemoryAllocator)
+    virtual HRESULT DeliverEndOfStream();                                   // +0x4C 0x10003310 (was Pin_v4C)
+    virtual HRESULT DeliverBeginFlush();                                    // +0x50 0x10003380 (was Pin_v50)
+    virtual HRESULT DeliverEndFlush();                                      // +0x54 0x100033A0 (was Pin_v54)
+    virtual HRESULT DeliverNewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop,
+                                      double dRate);                        // +0x58 0x100033C0 (was Pin_v58)
 
     // --- IPin overrides (sub-vtable at object +0x0C, canonical order) ---
     // Delegating IUnknown for the IPin/IQualityControl branches
@@ -632,13 +671,14 @@ public:
 protected:
     CBasePin(const char* pName, CBaseFilter* pFilter, HRESULT* phr);
     // Data members (offsets relative to the CBasePin subobject; subobject
-    // ends at pin+0xF0 => size 0xA8; gaps are explicit padding):
-    void*             m_pinPad14;      // +0x14 (unidentified)
+    // ends at pin+0xF0 => size 0xA8; gaps are explicit padding; every slot
+    // below is 4 bytes so the total is pinned by sizeof(CPushPinDIBSq)==0x5B8):
+    WCHAR*            m_pName;         // +0x14 strmbase m_pName: the wide pin name (was m_pinPad14)
     IPin*             m_Connected;     // +0x18
-    WCHAR*            m_pName;         // +0x1C
-    void*             m_pinPad20[2];   // +0x20..0x28 (unidentified)
-    void*             m_pQSinkOwner;   // +0x28 (owner/QC ptr)
-    void*             m_pinPad2C;      // +0x2C (unidentified)
+    PIN_DIRECTION     m_dir;           // +0x1C (this slot was mislabeled "m_pName" before; PINDIR_OUTPUT here)
+    void*             m_pinPad20[2];   // +0x20..0x27 (m_pLock at +0x20 and the +0x24..0x26 byte flags — see the P_pLock/P_flag24..26 accessors in source_base.cpp)
+    CBaseFilter*      m_pFilterOwner;  // +0x28 owner filter: NonDelegating AddRef/Release and QueryPinInfo go through it (slot was mislabeled "m_pQSinkOwner" before)
+    void*             m_pQSink;        // +0x2C IQualityControl::Notify stores its pSender here (old-baseclasses shape; never read back — was m_pinPad2C)
     LONG              m_TypeVersion;   // +0x30
     void*             m_pinPad34[25];  // +0x34..0x98 (media type / lock state)
     IMemAllocator*    m_pAllocator;    // +0x98
@@ -688,7 +728,10 @@ public:
     virtual HRESULT FillBuffer(IMediaSample* pSample) override; // 0x100014E0
     virtual HRESULT GetMediaType1(AM_MEDIA_TYPE* pmt) override; // 0x100011F0
     virtual HRESULT CheckMediaType(const AM_MEDIA_TYPE* pmt) override; // 0x10001430
-    virtual HRESULT Pin_v3C(void* a1, void* a2) override;       // primary +0x3C 0x10001310 (DecideBufferSize)
+    // DecideBufferSize — was Pin_v3C (primary vtable +0x3C, 0x10001310);
+    // CSourceStream leaves the slot pure, exactly like strmbase's
+    // CBaseOutputPin::DecideBufferSize PURE.
+    virtual HRESULT DecideBufferSize(IMemAllocator* pAlloc, ALLOCATOR_PROPERTIES* pProps) override; // primary +0x3C 0x10001310
 
     // ---- data members (absolute pin-object offsets; 0x48 CAMThread head,
     //      0xA8 CBasePin subobject ends at 0xF0) ----

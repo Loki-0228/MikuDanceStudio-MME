@@ -1,9 +1,14 @@
 // ===========================================================================
-// Late-port functions and documented stand-ins (ledger: 418 ported / 0 stub)
+// Late-port functions (ledger: 418 ported / 0 stub)
 // ===========================================================================
 // Everything defined with a body below is a verified full port of its
 // original VA (bodies were kept here when they had no natural subsystem
 // file yet); comments still record each original VA and behaviour notes.
+// NOTE on the directory name: "src/unported/" is historical - zero stubs
+// remain.  Every no-op twin that used to live here was deleted once its
+// real body landed elsewhere, and the comments below record where each
+// port lives.  The file stays at this path (moving it would only churn
+// CMakeLists.txt and every cross-reference for no behavioral gain).
 // The porting ledger (docs/PORTING_STATUS.md) is the authoritative tracker.
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
@@ -21,12 +26,14 @@
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
 // Full-port callees defined in other TUs (local declarations).
 void TeardownDShowGraph(DShowRecorder* rec);   // VA 0x409320 (shutdown_cleanup.cpp)
-void Sub432FA0(MMDApp* app);                   // VA 0x432FA0 (ui_frame_step.cpp)
+void RefreshAfterFrameApply(MMDApp* app);      // VA 0x432FA0 (ui_frame_step.cpp),
+                                                // was Sub432FA0
 
 // ---- frame-driver tail targets (0x0046B090) -------------------------------
 // TimelineAdvance (0x460130, actually the frame-capture/screenshot tail)
@@ -40,14 +47,14 @@ void Sub432FA0(MMDApp* app);                   // VA 0x432FA0 (ui_frame_step.cpp
 // 0x4A05A0 (VMD easing) and 0x499B50 (bone physics-mode notify).
 
 // ---------------------------------------------------------------------------
-// VA 0x00464A00 - Sub464A00: recording-wait epilogue (called at 0x46F122
+// VA 0x00464A00 - FinishAviRecord: recording-wait epilogue (called at 0x46F122
 // after the frame-step wait finishes, from RecWndProc's IDYES and the AVI
 // dump flow).  Full port:
 //   timeEndPeriod(1); stop-playback restore (0x4341E0); the 0x9EDD4 flag
 //   byte poke; TeardownDShowGraph (0x409320) on the recorder at +0xA06C0;
 //   lazy GetBackBuffer refetch (vtable +0x48) and SetRenderTarget(0, bb)
 //   when the wrapper byte +0x1D4F8 == 0 (vtable +0x94); the separate-window
-//   branch (byte 0xA0B41): clear 0x9FE74, Sub4629D0 fullscreen restore,
+//   branch (byte 0xA0B41): clear 0x9FE74, ApplyFullscreenWindowState fullscreen restore,
 //   PostDeviceReset, clear 0xA0B41 - else the device-vs-window size check
 //   (adopt window size + PostDeviceReset) and DestroyWindow of the wait
 //   window 0xA0D24; enable control 408; viewport refresh (0x42C810) +
@@ -55,13 +62,13 @@ void Sub432FA0(MMDApp* app);                   // VA 0x432FA0 (ui_frame_step.cpp
 //   650120/650124; free the buffer at 652084; ShowWindow(SW_SHOW) the main
 //   and separate windows when the 0xA0B41 dialog was not up.
 // ---------------------------------------------------------------------------
-void Sub464A00(MMDApp* app) {
+void FinishAviRecord(MMDApp* app) {  // was Sub464A00
     auto& s = *app;
     timeEndPeriod(1);                                       // 0x464A07
     s.state.playbackActive = 0;             // 0x464A11
-    Sub4341E0(app);                                         // 0x464A17
+    StopPlayback(app);                                         // 0x464A17
     unsigned char* flag = s.RecordingCompletionFlag();      // 0x464A1C
-    s.state.v9ed90 = 0;           // 0x464A22
+    s.state.frameStepPlayback = 0;           // 0x464A22
     if (flag != nullptr)
         *flag = 1;                                          // 0x464A28
     TeardownDShowGraph(s.Recorder());                       // 0x464A31
@@ -77,7 +84,7 @@ void Sub464A00(MMDApp* app) {
     }
     if (s.state.aviStereoOutput != 0) {                     // 0xA0D61
         s.state.fullscreenMode = 0;                    // 0x464B0B
-        Sub4629D0(app);                                     // 0x464B11
+        ApplyFullscreenWindowState(app);                                     // 0x464B11
         PostDeviceReset(app);                               // 0x464B18
         s.state.aviStereoOutput = 0;                    // 0x464B1D
     } else {
@@ -94,19 +101,19 @@ void Sub464A00(MMDApp* app) {
         DestroyWindow(s.RecordingWindow());                 // 0x464B01
     }
     s.RecordingWindow() = nullptr;                          // 0x464B31
-    EnableWindow(GetDlgItem(static_cast<HWND>(s.Hwnd()), 408), 1);  // 0x464B3E
-    Sub42C810(app);                                         // 0x464B46
-    Sub432FA0(app);                                         // 0x464B4D
+    EnableWindow(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kPlayButton), 1);  // 0x464B3E
+    RefreshMainWindowViewport(app);                                         // 0x464B46
+    RefreshAfterFrameApply(app);                            // 0x464B4D
     PostViewRefresh(app);                                   // 0x464B54
     if (void* com = s.state.captureRenderTarget) {                 // 0x464B69
         (*reinterpret_cast<void(__stdcall**)(void*)>(
             *reinterpret_cast<void***>(com) + 8))(com);
         s.state.captureRenderTarget = nullptr;
     }
-    if (void* com = s.state.v9eb8c) {                 // 0x464B81
+    if (void* com = s.state.captureSystemSurface) {                 // 0x464B81
         (*reinterpret_cast<void(__stdcall**)(void*)>(
             *reinterpret_cast<void***>(com) + 8))(com);
-        s.state.v9eb8c = nullptr;
+        s.state.captureSystemSurface = nullptr;
     }
     if (void* buf = s.state.captureReadbackPixels) {                 // 0x464B94
         free(buf);
@@ -120,7 +127,7 @@ void Sub464A00(MMDApp* app) {
     }
 }
 
-// Sub4341E0 (0x4341E0 stop playback) and the Sub4C2760/4C34A0
+// StopPlayback (0x4341E0 stop playback) and the Sub4C2760/4C34A0
 // audio-timer helpers are defined further below (400-family). 0x463640
 // (edit commit) is ported in src/window/ui_edit_commit.cpp; 0x4C2680/
 // 0x4C2A00/0x4C2B80 live in ui_refresh.cpp / ui_timeline_gfx.cpp.
@@ -204,7 +211,7 @@ void RendererInit(D3DRenderer* r) {
 // InitFlagSubsystem (0x461E00) / SaveFlagSubsystem (0x461FA0) - the
 // separate ("Mic") window create/destroy pair - are ported in
 // src/window/mic_window.cpp.
-// Sub025CInit (0x4C2450) / Sub048Init (0x401360) / Sub4C34A0 (0x4C34A0)
+// Sub025CInit (0x4C2450) / Sub048Init (0x401360) / WaveSeekAndFeed (0x4C34A0)
 // are ported in src/app/subsystem_init.cpp; 0x4C2760 is WaveStartPlayback
 // in src/media/wave_audio.cpp.
 // 0x458F80 LoadSceneFile + 0x450000 v2 body live in src/io/pmm_load_*.cpp.
@@ -238,14 +245,15 @@ void RendererInit(D3DRenderer* r) {
 // src/model/track_apply.cpp.
 // Sub416280 (interp-curve drag handler) is ported in
 // src/window/ui_selection_reeval.cpp.
-// Sub442EB0 (0x442EB0) is ported in ui_windowsize.cpp.
+// RelayoutSidebarControls (0x442EB0) is ported in ui_windowsize.cpp.
 // VA 0x004B4260 (frame seek / pose rebuild) is ported in
 // src/model/model_frame_seek.cpp.
-// Sub4C3530 (audio-timer restart) is ported in src/app/subsystem_init.cpp.
+// WaveRestartAt (was Sub4C3530; 0x4C3530 audio-timer restart) is ported in
+// src/app/subsystem_init.cpp.
 // 0x4168D0 (AVI background frame update) is ported in
 // src/render/background_plane.cpp.
 // CompareFunction (0x40EC70) is ported in src/window/ui_editor_click.cpp.
-// Sub42C810 (0x42C810) is ported in src/window/ui_viewport_refresh.cpp.
+// RefreshMainWindowViewport (0x42C810) is ported in src/window/ui_viewport_refresh.cpp.
 // Sub40CAC0 (0x40CAC0) is ported in src/window/ui_viewport_layout.cpp -
 // viewport overlay layout for ids 536..557 (was the silent no-op that kept
 // those 22 controls stacked at their creation-time fallback coordinates).
@@ -254,8 +262,8 @@ void RendererInit(D3DRenderer* r) {
 // 0x417130 (picture background quad rebuild) is ported in
 // src/render/background_plane.cpp.
 // 0x435FE0 (VSQ load / auto lipsync) is a full port in
-// src/io/vsq_load.cpp (Sub435FE0); the old stub here was removed.
-// Sub4337A0 (0x4337A0 background picture load) is a full port in
+// src/io/vsq_load.cpp (LoadVsqFile); the old stub here was removed.
+// 0x4337A0 background picture load (was Sub4337A0) is a full port in
 // src/media/media_load.cpp (LoadBackgroundPicture).
 // 0x42AE40 CopyPathW lives in src/media/media_load.cpp; the twin stub here
 // was dead code (callers use CopyPathW) and was removed.
@@ -266,13 +274,14 @@ void RendererInit(D3DRenderer* r) {
 // 0x4C46F0: the original is the identity ctor `return this;` (verified on
 // the decompile) - callers ignore the return value, so an empty body is
 // the faithful port, not a placeholder.
-void Sub4C46F0(void* obj)            { (void)obj; }
+void IdentityCtor(void* obj)            { (void)obj; }  // was Sub4C46F0
 // 0x441070 JumpNextKeyframe / 0x4414C0 JumpPrevKeyframe (timeline
 // registration jumps) are full ports in src/app/app_gap_bodies.cpp; the old
 // no-op stubs here were removed (callers rewired in command_control_500.cpp).
-// Sub41ACD0 (0x41ACD0 physics-mode switch apply) is ported in
+// ApplyCameraReferenceModeChange (was Sub41ACD0; 0x41ACD0 camera-reference
+// switch re-anchor) is ported in
 // src/app/frame_modes.cpp.
-// Sub42D6E0 (0x42D6E0) is ported in src/model/bone_edit_undo.cpp.
+// PushBoneEditUndo (0x42D6E0) is ported in src/model/bone_edit_undo.cpp.
 // Sub401150 (0x401150 array ctor) is ported in src/window/accessory_paste.cpp.
 // 0x407910 wide->SJIS path conversion (PMM save model/WAV/AVI paths and
 // the drop-file flow).  Original: strcpy_s prefill from the .data "Locale"
@@ -303,7 +312,7 @@ void WideToSjisPath(char* dst, const wchar_t* src, std::size_t size) {
 }
 // 0x4341E0 stop-playback restore is ported in src/app/playback_state.cpp.
 // Sub40A710 (0x40A710 dispose+free wrapper) is ported in
-// src/model/model_dispose.cpp; Sub4220C0 (0x4220C0 seek+flag) in
+// src/model/model_dispose.cpp; SeekSelectedModelToCurrentFrame (0x4220C0 seek+flag) in
 // src/model/model_frame_seek.cpp.
 
 // ---- VMD loader dependencies (0x00434B60; registrars pending phases) ----
@@ -319,10 +328,10 @@ void WideToSjisPath(char* dst, const wchar_t* src, std::size_t size) {
 // overloads live in src/window/command_control_400.cpp.
 
 // ---- v2 loader dependencies (0x00450000 phase 2) --------------------------
-// Sub40AE00 (0x40AE00) is ported in src/window/ui_init.cpp; it initializes
-// the timeline and interpolation-curve GDI caches.  Sub410040 (bone-register
+// ClearTimelineAndCurveDCs (0x40AE00) is ported in src/window/ui_init.cpp; it initializes
+// the timeline and interpolation-curve GDI caches.  RefillBoneRegisterCombo (bone-register
 // combo refill) is also a full port there.
-// Sub4C4700 (accessory-track dtor) is DisposeAccessory in
+// 0x4C4700 accessory-track dtor (was Sub4C4700) is DisposeAccessory in
 // src/render/accessory.cpp.
 // ---------------------------------------------------------------------------
 // VA 0x0040FF80 - DialogFunc: generic message-box-style dialog procedure
@@ -336,7 +345,7 @@ INT_PTR CALLBACK DialogFuncStub(HWND hDlg, UINT msg, WPARAM wp, LPARAM lp) {
     (void)lp;
     if (msg == WM_INITDIALOG) {                                    // 0x410014
         MMDApp* app = g_Block;
-        SetWindowTextA(GetDlgItem(hDlg, 0x2AE),
+        SetWindowTextA(GetDlgItem(hDlg, panel::kScaleFromEdit),
                        app->state.statusText);
         return 0;
     }

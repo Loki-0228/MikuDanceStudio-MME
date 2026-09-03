@@ -66,8 +66,9 @@
 //                                                            0x47EA9A-0x47EAA1
 //   530  no target - empty
 //   531  physics checkbox 0x213: BM_GETCHECK(0x213); checked: 0x340=2,
-//        BM_SETCHECK(0x19C,0), Sub41ACD0(app, old 0x340) unless 0x2F8;
-//        unchecked: 0x340=0, Sub41ACD0(app, old)              0x47FA92-0x47FAE2
+//        BM_SETCHECK(0x19C,0), ApplyCameraReferenceModeChange(app, old
+//        0x340) unless 0x2F8; unchecked: 0x340=0,
+//        ApplyCameraReferenceModeChange(app, old)              0x47FA92-0x47FAE2
 //   532  button 0x214: Sub441070(app)                          0x48BC87-0x48BC8C
 //   533  button 0x215: sub_4414C0(app)                         0x48BC91-0x48BC96
 //   534  no target - empty
@@ -155,6 +156,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -163,13 +165,14 @@ namespace mikudancestudio {
 void PanelPaint(MMDApp* app);                                   // VA 0x00414610
 void RefreshRequest(int area);                                  // VA 0x00440AC0
 void SelectionReeval(MMDApp* app);                              // VA 0x00430510 (stubs.cpp)
-void Sub411070(MMDApp* app);                                    // VA 0x00411070 (stubs.cpp)
-void Sub411B90(MMDApp* app);                                    // VA 0x00411B90 (stubs.cpp)
-void Sub412330(MMDApp* app);                                    // VA 0x00412330 (stubs.cpp)
-void Sub413120(MMDApp* app, int idx);                           // VA 0x00413120 (stubs.cpp)
-void Sub4134E0(MMDApp* app);                                    // VA 0x004134E0 (stubs.cpp)
-void Sub42E640(MMDApp* app);                                    // VA 0x0042E640 (stubs.cpp)
-void Sub41A650(MMDApp* app);                                    // VA 0x0041A650 (stubs.cpp)
+void RefreshLightPanel(MMDApp* app);                                    // VA 0x00411070 (ui_frame_refresh.cpp)
+void RefreshSelfShadowPanel(MMDApp* app);                                    // VA 0x00411B90 (ui_frame_refresh.cpp)
+void ApplyGravityTrack(MMDApp* app);                             // VA 0x00412330 (was
+                                                                  //  Sub412330; track_apply.cpp)
+void ApplyAccessoryTrack(MMDApp* app, int slot);                  // VA 0x00413120 (was
+                                                                  //  Sub413120; accessory_paste.cpp)
+void SyncAccessoryEditPanel(MMDApp* app);                                    // VA 0x004134E0 (ui_frame_refresh.cpp)
+void ReloadModels(MMDApp* app);                    // VA 0x0042E640 (timeline_advance.cpp), was Sub42E640
 
 // ---- not-yet-ported original call targets: declarations only; the stub
 //      bodies are consolidated in src/unported/stubs.cpp (finishing phase)
@@ -177,24 +180,27 @@ void Sub41A650(MMDApp* app);                                    // VA 0x0041A650
 // VA 0x004414C0 - timeline "previous registration" jump (thiscall, app).
 void JumpPrevKeyframe(MMDApp* app);
 // VA 0x0044D940 - accessory-combo apply helper (thiscall, this = app).
-void Sub44D940(MMDApp* app);
+void ApplyModelComboSelection(MMDApp* app);
 // VA 0x00441070 - timeline "next registration" jump (thiscall, this = app;
 //                 called by case 532 at 0x48BC87 - distinct from sub_411070).
 void JumpNextKeyframe(MMDApp* app);
-// VA 0x0041ACD0 - physics-mode switch apply (thiscall(app, old mode byte)).
-void Sub41ACD0(MMDApp* app, int mode);
-// VA 0x0042D6E0 - bone-edit keyframe register (thiscall, this = app).
-void Sub42D6E0(MMDApp* app);
+// VA 0x0041ACD0 - camera-reference switch re-anchor (thiscall(app, old mode
+//                 byte); was Sub41ACD0).
+void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode);
+// VA 0x0042D6E0 - bone-edit undo snapshot push (thiscall, this = app; was
+//                 Sub42D6E0).
+void PushBoneEditUndo(MMDApp* app);
 // VA 0x004C2080 - frame keyframe-register (thiscall on the model, frame,
-//                 3rd arg = app+0xA0CC4).
-void Sub4C2080(unsigned char* model, int frame, int a3);
+//                 3rd arg = app+0xA0CC4; was Sub4C2080).
+void RegisterSelectedBoneKeys(unsigned char* model, int frame, int mode);
 // VA 0x0049EEE0 - bone-frame register (thiscall on the model: bone index,
 //                 frame).
-void Sub49EEE0(unsigned char* model, int idx, int frame);
+void RegisterMorphKeyCurrent(unsigned char* model, int idx, int frame);
 // VA 0x00432FA0 - frame-apply refresh chain (thiscall, this = app).
-void Sub432FA0(MMDApp* app);
+void RefreshAfterFrameApply(MMDApp* app);  // was Sub432FA0 (ui_frame_step.cpp)
 // VA 0x00411DF0 - frame-scroll apply (thiscall(app, frame 0x980)).
-void Sub411DF0(MMDApp* app, int frame);
+void RegisterSelfShadowState(MMDApp* app, int frame);  // was Sub411DF0
+                                                       // (ui_frame_refresh.cpp)
 
 namespace {
 
@@ -287,7 +293,7 @@ void BonePosEdit(MMDApp* app, float* vec, std::size_t axis) {
     }
     const std::int32_t sel = mdl::Mdl(ActiveModel(app))->selectedBone;
     if (sel >= 0) {
-        Sub42D6E0(app);   // 0x42D6E0 bone-edit keyframe register
+        PushBoneEditUndo(app);   // 0x42D6E0 bone-edit keyframe register
         unsigned char* m = ActiveModel(app);
         mikudancestudio::mdl::Bones(m)[sel].trans[axis] = 0.0f;
         m = ActiveModel(app);
@@ -316,7 +322,7 @@ void BoneRotEdit(MMDApp* app, float* vec, int axis) {
         PostViewRefresh(app);
         return;
     }
-    Sub42D6E0(app);   // 0x42D6E0 bone-edit keyframe register
+    PushBoneEditUndo(app);   // 0x42D6E0 bone-edit keyframe register
     // capture the pre-edit Euler values (the original keeps them on the x87
     // stack across the stores)
     const float rX = app->BoneRotationEditDegreesX();   // 0xA04C0
@@ -382,7 +388,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         // (0x48026F) dirty flag, then the frame-register helper
         // sub_4C2080(model, frame, app+0xA0CC4).
         app->SceneModified() = 1;
-        Sub4C2080(
+        RegisterSelectedBoneKeys(
             ActiveModel(app),
             app->state.currentFrame,
             app->PlaybackPhysicsMode());
@@ -401,7 +407,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         // (0x47F93D) check the 0x1EA checkbox, re-dispatch WM_COMMAND
         // 0x1EA, then copy the per-bone selection flags 0x2D98 into the
         // 0x2D94 byte array and reset the selected index 0x2D90 to -1.
-        SendMessageA(GetDlgItem(hwnd, 0x1EA), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, 1, 0);
         SendMessageA(hwnd, WM_COMMAND, 0x1EA, 0);
         mdl::Mdl(ActiveModel(app))->selectedBone = -1;
         const std::int32_t boneCount = mdl::Mdl(ActiveModel(app))->boneCount;
@@ -511,7 +517,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             iks[off + 0x14] = 0;
         }
         unsigned char* m = ActiveModel(app);
-        Sub49EEE0(
+        RegisterMorphKeyCurrent(
             m,
             mdl::Mdl(m)->selectedMorphs[lane],
             app->state.currentFrame);
@@ -540,20 +546,22 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
     // ---- 531: physics checkbox 0x213 -------------------------------------
     case 531: {  // 0x47FA92
         // Checked: mode byte 0x340 = 2, uncheck 0x19C, then
-        // Sub41ACD0(app, old mode) unless display mode (0x2F8).
-        if (SendMessageA(GetDlgItem(hwnd, 0x213), BM_GETCHECK, 0, 0) == 1) {
+        // ApplyCameraReferenceModeChange(app, old mode) unless display mode
+        // (0x2F8).
+        if (SendMessageA(GetDlgItem(hwnd, panel::kCameraRefBoneCheckbox), BM_GETCHECK, 0, 0) == 1) {
             const int oldMode = static_cast<int>(app->CameraReferenceMode());
             app->CameraReferenceMode() =
                 CameraAttachmentReference::SelectedBone;
-            SendMessageA(GetDlgItem(hwnd, 0x19C), BM_SETCHECK, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kCameraRefModelCheckbox), BM_SETCHECK, 0, 0);
             if (app->state.optflag[0] == 0)
-                Sub41ACD0(app, oldMode);
+                ApplyCameraReferenceModeChange(app, oldMode);
         } else {
-            // Unchecked: mode byte 0x340 = 0, Sub41ACD0(app, old mode).
+            // Unchecked: mode byte 0x340 = 0,
+            // ApplyCameraReferenceModeChange(app, old mode).
             const int oldMode = static_cast<int>(app->CameraReferenceMode());
             app->CameraReferenceMode() = CameraAttachmentReference::None;
             if (app->state.optflag[0] == 0)
-                Sub41ACD0(app, oldMode);
+                ApplyCameraReferenceModeChange(app, oldMode);
         }
         break;
     }
@@ -572,40 +580,40 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 535: display-mode checkbox 0x217 (byte 0x9ED98) -----------------
     case 535: {  // 0x48BE6A
-        if (SendMessageA(GetDlgItem(hwnd, 0x217), BM_GETCHECK, 0, 0) == 1) {
+        if (SendMessageA(GetDlgItem(hwnd, panel::kFollowCameraCheckbox), BM_GETCHECK, 0, 0) == 1) {
             // checked: camera cluster 0x308/0x30C = 0, menu 0xF7 checked,
             // full model/slot refresh chain (0x42E640, 0x411070, 0x411B90,
             // 0x412330, per-slot 0x413120, 0x4134E0), then the edit-mode
             // gated PostModelReload (0x41A650) and PostLanguageSweep2.
-            app->state.v9ed98 = 1;
+            app->state.followCameraEnabled = 1;
             app->ViewOffsetX() = 0.0f;
             app->ViewOffsetY() = 0.0f;
             CheckMenuItem(GetMenu(hwnd), 0xF7, MF_CHECKED);
-            Sub42E640(app);      // 0x42E640 model-list reset
-            Sub411070(app);
-            Sub411B90(app);
-            Sub412330(app);
+            ReloadModels(app);   // 0x42E640 model-list reset
+            RefreshLightPanel(app);
+            RefreshSelfShadowPanel(app);
+            ApplyGravityTrack(app);
             for (int i = 0; i < 0xFF; ++i) {
                 if (app->ObjectSlot(i) != nullptr)
-                    Sub413120(app, i);
+                    ApplyAccessoryTrack(app, i);
             }
-            Sub4134E0(app);
+            SyncAccessoryEditPanel(app);
             if (app->state.optflag[0] == 0) {
                 app->CameraAttachmentTransformSuppressed() = 0;
-                Sub41A650(app);  // 0x41A650 post-reload refresh
+                PostModelReload(app);  // 0x41A650 post-reload refresh
             }
             PostLanguageSweep2(app);
         } else {
             // unchecked: byte 0x9ED98 = 0, menu 0xF7 unchecked, reload
             // gated on the selected slot (0xA0430 == slot index).
-            app->state.v9ed98 = 0;
+            app->state.followCameraEnabled = 0;
             CheckMenuItem(GetMenu(hwnd), 0xF7, MF_UNCHECKED);
             if (app->state.optflag[0] == 0) {
                 const std::int32_t sel = app->CameraParentModel();
                 if (sel == app->SelectedModelSlot() &&
                     sel >= 0) {
                     app->CameraAttachmentTransformSuppressed() = 0;
-                    Sub41A650(app);
+                    PostModelReload(app);
                 }
             }
             PostLanguageSweep2(app);
@@ -619,16 +627,16 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             // display mode: selected accessory index 0xA042C; when zero the
             // original re-dispatches WM_COMMAND 0x1B3 on the main window.
             const std::int32_t sel =
-                app->state.a042C;
+                app->state.mainModelComboSelection;
             if (sel == 0) {
                 SendMessageA(hwnd, WM_COMMAND, 0x1B3, 0);
                 break;
             }
-            SendMessageA(GetDlgItem(hwnd, 0x1B4), CB_SETCURSEL, sel, 0);
-            Sub44D940(app);
+            SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL, sel, 0);
+            ApplyModelComboSelection(app);
         } else {
-            SendMessageA(GetDlgItem(hwnd, 0x1B4), CB_SETCURSEL, 0, 0);
-            Sub44D940(app);
+            SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL, 0, 0);
+            ApplyModelComboSelection(app);
         }
         break;
     }
@@ -680,15 +688,15 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         // atol of the 0x22A text (max 10 chars), clamped to >= 0, applied
         // as the frame 0x980; frame-apply chain + echo back into 0x1A1.
         char buf[0x100];
-        GetWindowTextA(GetDlgItem(hwnd, 0x22A), buf, 0xA);
+        GetWindowTextA(GetDlgItem(hwnd, panel::kGotoFrameEdit), buf, 0xA);
         long v = atol(buf);
         if (v < 0)
             v = 0;
         app->state.currentFrame = static_cast<std::int32_t>(v);
-        Sub432FA0(app);   // 0x432FA0 frame-apply chain
+        RefreshAfterFrameApply(app);   // 0x432FA0 frame-apply chain
         PostViewRefresh(app);
         sprintf_s(buf, 0x100u, "%d", app->state.currentFrame);
-        SetWindowTextA(GetDlgItem(hwnd, 0x1A1), buf);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kCurrentFrameEdit), buf);
         break;
     }
 
@@ -696,7 +704,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
     case 555: {  // 0x48DE84
         char buf[0x100];
         sprintf_s(buf, 0x100u, "%d", app->state.currentFrame);
-        SetWindowTextA(GetDlgItem(hwnd, 0x22A), buf);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kGotoFrameEdit), buf);
         break;
     }
 
@@ -710,7 +718,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         // 0x1D554 / 0x1D550, vtable slot +8 = IUnknown::Release).
         D3DRenderer* locale = app->Renderer();
         const std::uint32_t size =
-            (SendMessageA(GetDlgItem(hwnd, 0x22C), BM_GETCHECK, 0, 0) == 1)
+            (SendMessageA(GetDlgItem(hwnd, panel::kSelfShadowCheckbox), BM_GETCHECK, 0, 0) == 1)
                 ? 0x1000
                 : 0x800;
         locale->renderTargetWidth = size;   // 0x1D558
@@ -732,11 +740,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
     // ---- 558: frame-reset button 0x22E ----------------------------------
     case 558: {  // 0x48C679
         app->state.currentFrame = 0;
-        Sub432FA0(app);   // 0x432FA0 frame-apply chain
+        RefreshAfterFrameApply(app);   // 0x432FA0 frame-apply chain
         PostViewRefresh(app);
         char buf[0x100];
         sprintf_s(buf, 0x100u, "%d", app->state.currentFrame);
-        SetWindowTextA(GetDlgItem(hwnd, 0x1A1), buf);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kCurrentFrameEdit), buf);
         break;
     }
 
@@ -744,35 +752,35 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
     case 559: {  // 0x48C6D6
         app->state.currentFrame =
             app->state.lastRegisteredFrame;
-        Sub432FA0(app);   // 0x432FA0 frame-apply chain
+        RefreshAfterFrameApply(app);   // 0x432FA0 frame-apply chain
         PostViewRefresh(app);
         char buf[0x100];
         sprintf_s(buf, 0x100u, "%d", app->state.currentFrame);
-        SetWindowTextA(GetDlgItem(hwnd, 0x1A1), buf);
+        SetWindowTextA(GetDlgItem(hwnd, panel::kCurrentFrameEdit), buf);
         break;
     }
 
     // ---- 562..564: coordinate-system radio group 0x232..0x234 -----------
     case 562: {  // 0x48D84F (0xA0D30 = 0)
-        SendMessageA(GetDlgItem(hwnd, 0x232), BM_SETCHECK, 1, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x233), BM_SETCHECK, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x234), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditOffCheckbox), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditMode1Checkbox), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditMode2Checkbox), BM_SETCHECK, 0, 0);
         app->SelfShadowMode() = 0;
         RefreshRequest(-3);
         break;
     }
     case 563: {  // 0x48D8C1 (0xA0D30 = 1)
-        SendMessageA(GetDlgItem(hwnd, 0x232), BM_SETCHECK, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x233), BM_SETCHECK, 1, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x234), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditOffCheckbox), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditMode1Checkbox), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditMode2Checkbox), BM_SETCHECK, 0, 0);
         app->SelfShadowMode() = 1;
         RefreshRequest(-3);
         break;
     }
     case 564: {  // 0x48D933 (0xA0D30 = 2)
-        SendMessageA(GetDlgItem(hwnd, 0x232), BM_SETCHECK, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x233), BM_SETCHECK, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x234), BM_SETCHECK, 1, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditOffCheckbox), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditMode1Checkbox), BM_SETCHECK, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kEditMode2Checkbox), BM_SETCHECK, 1, 0);
         app->SelfShadowMode() = 2;
         RefreshRequest(-3);
         break;
@@ -786,11 +794,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         // frame-scroll apply sub_411DF0(app, frame), RefreshRequest(-3) and
         // PanelPaint.
         char buf[0x100];
-        GetWindowTextA(GetDlgItem(hwnd, 0x231), buf, 8);
+        GetWindowTextA(GetDlgItem(hwnd, panel::kSelfShadowRangeEdit), buf, 8);
         const float v = static_cast<float>(atof(buf));
         app->state.physicsInterval =
             static_cast<float>((10000.0 - (double)v) / 100000.0);
-        SendMessageA(GetDlgItem(hwnd, 0x230), TBM_SETPOS, 1,
+        SendMessageA(GetDlgItem(hwnd, panel::kSelfShadowRangeSlider), TBM_SETPOS, 1,
                      static_cast<LPARAM>(static_cast<std::int32_t>(v)));
         app->SceneModified() = 1;
         // rigid 0x374 (+0x48, 0x54-step), joint 0x378 (+0x24, 0x28-step),
@@ -809,7 +817,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             for (std::size_t off = 0; off < 0x927C0; off += 0x3C)
                 rec[off + 0x18] = 0;
         }
-        Sub411DF0(app, app->state.currentFrame);
+        RegisterSelfShadowState(app, app->state.currentFrame);
         RefreshRequest(-3);
         PanelPaint(app);
         break;

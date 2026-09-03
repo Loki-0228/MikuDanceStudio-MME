@@ -60,7 +60,7 @@ struct DisplayClipboardRecord {
     std::int32_t selectorCount;
     SelectorClipboardState* selectorStates;
 };
-#ifdef _M_X64
+#if defined(_M_X64)
 static_assert(sizeof(DisplayClipboardRecord) == 40,
               "display clipboard x64 ABI");
 #else

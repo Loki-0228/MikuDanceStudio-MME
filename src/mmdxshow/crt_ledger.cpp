@@ -92,12 +92,13 @@
 // 0x10001180  IBaseFilter/IQualityControl vtable QI stub (E_NOINTERFACE fwd)
 // 0x100011A0  ...AddRef/Release forwarding stub (outer-unknown delegation)
 // 0x100011C0  QueryInternalConnections stub (E_NOTIMPL)
-// 0x100011D0  returns 0/S_OK (xor eax,eax;ret) - IBaseFilter primary +0x20
+// 0x100011D0  returns 0/S_OK/NULL (xor eax,eax;ret) - CBaseFilter::GetSetupData
+//             (primary +0x20) and the CAMThread root +0x0C/+0x10/+0x14 hooks
 //             "GetSetupData" slot (always NULL => Register/Unregister are
 //             effective no-ops) and CAMThread +0x0C/0x10/0x14 stubs
 // 0x100011E0  IQualityControl::SetSink stub
 // 0x100011F0  CPushPinDIBSq root+0x1C GetMediaType(CMediaType*) entry
-// 0x10001310  CBasePin primary +0x3C (pin negotiation helper)
+// 0x10001310  CBasePin::DecideBufferSize (pin primary +0x3C)
 // 0x10001430  CPushPinDIBSq::CheckMediaType (builds default mt, compares)
 // 0x100014E0  CPushPinDIBSq::FillBuffer (root+0x08)
 // 0x10001670  CPushSourceDIBSq destructor body (0x10001B50 thunk target)
@@ -135,10 +136,10 @@
 // 0x100021E0  CSourceStream::CheckMediaType (primary +0x20)
 // 0x100022B0  CBasePin::GetMediaType(int,pmt) (primary +0x34; delegates
 //             iPosition==0 to root+0x1C single-arg GetMediaType)
-// 0x10002370  CBasePin::CheckConnect (primary +0x14)
-// 0x100024B0  CBasePin::BreakConnect (primary +0x18)
+// 0x10002370  CBasePin::Active (primary +0x14)
+// 0x100024B0  CBasePin::Inactive (primary +0x18)
 // 0x10002570  CAMThread family: scalar deleting dtor (root+0x00)
-// 0x10002630  CAMThread root+0x18 helper
+// 0x10002630  CAMThread::DoBufferProcessingLoop (root+0x18)
 // 0x10002740  IAMovieSetup vtable +0x08 Release stub
 // 0x10002750  CSource scalar deleting dtor (filter primary +0x0C)
 // 0x10002790  CSource::NonDelegatingQueryInterface (primary +0x00)
@@ -154,7 +155,7 @@
 // 0x10002DC0  CBasePin::NonDelegatingQueryInterface (pin primary +0x00)
 // 0x10002E50  CBasePin::NonDelegatingAddRef    (pin primary +0x04)
 // 0x10002E70  CBasePin::NonDelegatingRelease   (pin primary +0x08)
-// 0x10002E90  CBasePin primary +0x24 (Active)
+// 0x10002E90  CBasePin::SetMediaType (pin primary +0x24)
 // 0x10002EB0  CBasePin helper (connection negotiation)
 // 0x10002EE0  CBasePin helper
 // 0x10002F20  IPin::ConnectedTo
@@ -162,25 +163,25 @@
 // 0x10002FE0  IPin::QueryDirection
 // 0x10003000  IPin::QueryAccept
 // 0x10003030  CBasePin::GetMediaTypeVersion (pin primary +0x10)
-// 0x10003040  CBasePin::CompleteConnect (pin primary +0x1C)
+// 0x10003040  CBasePin::Run (pin primary +0x1C; ret 8 stub)
 // 0x10003050  IQualityControl::Notify
 // 0x10003080  CPushPinDIBSq/CSourceStream IAMovieSetup+0x08-adjacent helper
 // 0x10003090  IPin::NewSegment
-// 0x100030D0  CBasePin primary +0x30 (delegates to filter slot +0x38 w/ m_mt)
-// 0x100030F0  CBasePin primary +0x28 (Inactive)
-// 0x10003130  CBasePin primary +0x2C (Run)
-// 0x10003190  CBasePin primary +0x48
-// 0x100031A0  CBasePin primary +0x38
-// 0x100032A0  CBasePin primary +0x40
-// 0x100032E0  CBasePin primary +0x44
-// 0x10003310  CBasePin primary +0x4C
+// 0x100030D0  CBasePin::CompleteConnect (pin primary +0x30; tail-calls +0x38)
+// 0x100030F0  CBasePin::CheckConnect (pin primary +0x28)
+// 0x10003130  CBasePin::BreakConnect (pin primary +0x2C)
+// 0x10003190  CBasePin::InitAllocator (pin primary +0x48)
+// 0x100031A0  CBasePin::DecideAllocator (pin primary +0x38)
+// 0x100032A0  CBasePin::GetDeliveryBuffer (pin primary +0x40)
+// 0x100032E0  CBasePin::Deliver (pin primary +0x44)
+// 0x10003310  CBasePin::DeliverEndOfStream (pin primary +0x4C)
 // 0x10003330  CBaseFilter helper
 // 0x10003350  CBaseFilter helper
 // 0x10003370  S_FALSE/E_NOTIMPL stub (EndOfStream/BeginFlush/EndFlush,
 //             CSourceStream root+0x1C default GetMediaType(pmt))
-// 0x10003380  CBasePin primary +0x50
-// 0x100033A0  CBasePin primary +0x54
-// 0x100033C0  CBasePin primary +0x58
+// 0x10003380  CBasePin::DeliverBeginFlush (pin primary +0x50)
+// 0x100033A0  CBasePin::DeliverEndFlush (pin primary +0x54)
+// 0x100033C0  CBasePin::DeliverNewSegment (pin primary +0x58)
 // 0x10003600  CSource::Stop/Pause/Run state transition support
 // 0x10003680  IBaseFilter::SetSyncSource
 // 0x10003700  IBaseFilter::GetSyncSource

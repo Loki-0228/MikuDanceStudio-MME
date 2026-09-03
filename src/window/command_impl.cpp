@@ -176,7 +176,7 @@ void CmdOpenScene(MMDApp* app) {
 
 // 0xCE - File: open WAV
 void CmdOpenWave(MMDApp* app) {
-    app->state.bC = 1;   // 0x487754 [0x2F]=1
+    app->state.enterKeyState = 1;   // 0x487754 [0x2F]=1
     SetCurrentDirectoryW(app->ExeDir());
     wchar_t path[MAX_PATH] = L"";
     if (OpenDialog(app,
@@ -303,7 +303,7 @@ void CmdSaveMotion(MMDApp* app) {
 // 0xD5 - File: load AVI background
 void CmdLoadAvi(MMDApp* app) {
     app->state.dialogFlags[17] = 1;                // 0x4870B4 [0x1D]=1
-    app->state.bC = 1;   // 0x4870B7 [0x2F]=1
+    app->state.enterKeyState = 1;   // 0x4870B7 [0x2F]=1
     SetCurrentDirectoryW(app->ExeDir());
     wchar_t path[MAX_PATH] = L"";
     if (OpenDialog(app,
@@ -312,22 +312,28 @@ void CmdLoadAvi(MMDApp* app) {
                    path, MAX_PATH)) {
         wchar_t dir[1000];
         wcscpy_s(app->DirBg(), 0x3E8, ExtractDirFromPath(dir, path));
-        CopyPathW(app->state.wcs9e1ec,
+        CopyPathW(app->state.aviBackgroundPath,
                   path);                                  // 0x42AE40 -> app+0x9E1EC
         LoadAviFile(app);                                        // 0x433250
         MarkDirty(app);
     }
 }
 
-// 0xD6/0xD7/0xD8 - display toggles (menu check state in the original)
+// Legacy display-toggle stubs (historically commented 0xD6/0xD7/0xD8, but
+// the original's 0xD6 transparent-mode handler flips app+0x9EB7E - see
+// key_ladder.cpp).  What these actually flip: 0x9ED98 follow-camera
+// (checkbox 0x217 / menu 0xF7, command 535), 0x9ED99 start-at-current
+// (checkbox 414) and 0x9ED9A ground-shadow transparency (menu 0xFE,
+// command 254).  They currently have no dispatch sites - the live
+// toggles are the command handlers named above.
 void CmdToggleBoneDisplay(MMDApp* app) {
-    app->state.v9ed98 ^= 1;            // 650136
+    app->state.followCameraEnabled ^= 1;            // 0x9ED98
 }
 void CmdToggleMorphDisplay(MMDApp* app) {
-    app->state.playbackStartsAtCurrentFrame ^= 1;            // 650137
+    app->state.playbackStartsAtCurrentFrame ^= 1;   // 0x9ED99
 }
 void CmdTogglePhysicsDisplay(MMDApp* app) {
-    app->state.projectedShadowBlendEnabled ^= 1;            // 650138
+    app->state.projectedShadowBlendEnabled ^= 1;    // 0x9ED9A
 }
 
 // 0xD9/0xDA/0xDC - select-all frame groups

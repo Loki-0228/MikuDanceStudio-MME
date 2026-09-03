@@ -1,3 +1,10 @@
+// ===========================================================================
+// Porting-era diagnostics: whole-app state snapshots under
+// MIKUDANCESTUDIO_STATE_DUMP_DIR, used to diff the port against the original
+// binaries.  Compiled only with -DMIKUDANCESTUDIO_DIAG (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stubs below keep the call
+// sites valid and inline away to nothing.
+// ===========================================================================
 #pragma once
 
 #define WIN32_LEAN_AND_MEAN
@@ -12,6 +19,8 @@
 #include "mikudancestudio/model.hpp"
 
 namespace mikudancestudio {
+
+#ifdef MIKUDANCESTUDIO_DIAG
 
 inline void DumpFrameEntryState(MMDApp* app,
                                 const char* fileName = "frame_state.json",
@@ -431,8 +440,8 @@ inline void DumpFrameEntryState(MMDApp* app,
                     "\"swept\":%u,\"external_parent\":%d,"
                     "\"matrix_bits\":[",
                     bone.parent, bone.tailBone, bone.tailIdx, bone.layer,
-                    unsigned(bone.type), unsigned(bone.f492),
-                    unsigned(bone.f493), unsigned(bone.flags),
+                    unsigned(bone.type), unsigned(bone.hasRigidBody),
+                    unsigned(bone.physicsDisabled), unsigned(bone.flags),
                     unsigned(bone.hasFlag), bone.slotIndex);
                 for (int i = 0; i < 16; ++i) {
                     if (i != 0) std::fputs(",", stream);
@@ -470,8 +479,8 @@ inline void DumpFrameEntryState(MMDApp* app,
                     std::fprintf(stream, "\"%08X\"", value);
                 }
                 const float* poseFields[] = {
-                    bone.trans, bone.rotQuat, bone.rotQuat2, bone.f364,
-                    bone.f376, bone.ikBackup, bone.ikBackup + 3};
+                    bone.trans, bone.rotQuat, bone.rotQuat2, bone.physicsOffset,
+                    bone.physicsQuat, bone.ikBackup, bone.ikBackup + 3};
                 const int poseCounts[] = {3, 4, 4, 3, 4, 3, 4};
                 const char* poseNames[] = {
                     "pose_position_bits", "pose_quaternion_bits",
@@ -530,5 +539,15 @@ inline void DumpRequestedFrameState(MMDApp* app) {
         DumpFrameEntryState(app, output, false);
     }
 }
+
+#else  // !MIKUDANCESTUDIO_DIAG
+
+inline void DumpFrameEntryState(MMDApp*,
+                                const char* = "frame_state.json",
+                                bool = true) {}
+
+inline void DumpRequestedFrameState(MMDApp*) {}
+
+#endif  // MIKUDANCESTUDIO_DIAG
 
 }  // namespace mikudancestudio

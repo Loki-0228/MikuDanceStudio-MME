@@ -1,7 +1,14 @@
 // ===========================================================================
 // Timeline-driven Light / Self Shadow panel refresh.
-//   0x00411070  evaluate the light key list and synchronize controls 455..466
-//   0x00411B90  evaluate the shadow key list and synchronize controls 560..564
+//   0x00411070  RefreshLightPanel (was Sub411070): evaluate the light key
+//               list and synchronize controls 455..466
+//   0x00411B90  RefreshSelfShadowPanel (was Sub411B90): evaluate the shadow
+//               key list and synchronize controls 560..564
+//   0x004134E0  SyncAccessoryEditPanel (was Sub4134E0): reload the accessory
+//               edit controls 474..486 from the selected accessory
+//   0x00411DF0  RegisterSelfShadowState (was Sub411DF0): insert/overwrite the
+//               self-shadow key at a frame with the current mode + interval
+//               (the SelfShadow sibling of RegisterCameraState/RegisterLightState)
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -18,10 +25,16 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
 
+// Porting-era trace under MIKUDANCESTUDIO_LIGHT_TRACE_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call sites
+// (including the cross-TU TraceSceneLightState) valid and inlines away to
+// nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void WriteLightTrace(MMDApp* app, const char* stage) {
     const char* directory = std::getenv("MIKUDANCESTUDIO_LIGHT_TRACE_DIR");
     if (directory == nullptr || directory[0] == '\0')
@@ -41,6 +54,9 @@ void WriteLightTrace(MMDApp* app, const char* stage) {
         light.Ambient.g, light.Ambient.b);
     fclose(stream);
 }
+#else
+inline void WriteLightTrace(MMDApp*, const char*) {}
+#endif
 
 void ReplaceEditText(HWND main, int id, const char* text) {
     HWND edit = GetDlgItem(main, id);
@@ -81,7 +97,8 @@ void TraceSceneLightState(MMDApp* app, const char* stage) {
         WriteLightTrace(app, stage);
 }
 
-void Sub411070(MMDApp* app) {
+// was Sub411070, VA 0x00411070
+void RefreshLightPanel(MMDApp* app) {
     if (app == nullptr)
         return;
     std::uint32_t* keys = reinterpret_cast<std::uint32_t*>(app->LightKeys());
@@ -151,7 +168,8 @@ void Sub411070(MMDApp* app) {
     }
 }
 
-void Sub411B90(MMDApp* app) {
+// was Sub411B90, VA 0x00411B90
+void RefreshSelfShadowPanel(MMDApp* app) {
     if (app == nullptr)
         return;
     std::uint32_t* keys = reinterpret_cast<std::uint32_t*>(app->ShadowKeys());
@@ -176,34 +194,37 @@ void Sub411B90(MMDApp* app) {
         ++range;
 
     const HWND main = app->state.hwnd;
-    SendMessageA(GetDlgItem(main, 560), TBM_SETPOS, TRUE, range);
+    SendMessageA(GetDlgItem(main, panel::kSelfShadowRangeSlider), TBM_SETPOS, TRUE, range);
     char text[0x34];
     sprintf_s(text, sizeof(text), "%d", range);
-    SetWindowTextA(GetDlgItem(main, 561), text);
+    SetWindowTextA(GetDlgItem(main, panel::kSelfShadowRangeEdit), text);
 
     const int mode = app->SelfShadowMode();
-    SendMessageA(GetDlgItem(main, 562), BM_SETCHECK,
+    SendMessageA(GetDlgItem(main, panel::kEditOffCheckbox), BM_SETCHECK,
                  mode == 0 ? BST_CHECKED : BST_UNCHECKED, 0);
-    SendMessageA(GetDlgItem(main, 563), BM_SETCHECK,
+    SendMessageA(GetDlgItem(main, panel::kEditMode1Checkbox), BM_SETCHECK,
                  mode == 1 ? BST_CHECKED : BST_UNCHECKED, 0);
-    SendMessageA(GetDlgItem(main, 564), BM_SETCHECK,
+    SendMessageA(GetDlgItem(main, panel::kEditMode2Checkbox), BM_SETCHECK,
                  mode != 0 && mode != 1 ? BST_CHECKED : BST_UNCHECKED, 0);
 }
 
-void Sub4134E0(MMDApp* app) {
+// was Sub4134E0, VA 0x004134E0 - reload the accessory edit panel
+// (combos 474/475 + checkboxes 476/477/486 + pos/rot/scale/opacity edits)
+// from the selected accessory slot.
+void SyncAccessoryEditPanel(MMDApp* app) {
     if (app == nullptr)
         return;
-    const std::uint8_t selected = app->state.selLightAccSlotOrUint32;
+    const std::uint8_t selected = app->state.selectedObjectSlot;
     mdl::AccessoryRecord* accessory = app->AccessorySlot(selected);
     if (accessory == nullptr)
         return;
 
     const HWND main = app->state.hwnd;
-    HWND modelCombo = GetDlgItem(main, 474);
+    HWND modelCombo = GetDlgItem(main, panel::kMainComboGround);
     const LRESULT oldModel = SendMessageA(modelCombo, CB_GETCURSEL, 0, 0);
     const std::int32_t parentSlot = accessory->parentModel;
     if (oldModel != parentSlot) {
-        HWND boneCombo = GetDlgItem(main, 475);
+        HWND boneCombo = GetDlgItem(main, panel::kAttachBoneCombo);
         SendMessageA(boneCombo, CB_RESETCONTENT, 0, 0);
         if (parentSlot >= 0) {
             unsigned char* model = app->ModelSlot(parentSlot);
@@ -213,8 +234,9 @@ void Sub4134E0(MMDApp* app) {
                 mdl::BoneRecord* bones = record.boneTable;
                 for (std::int32_t i = 0; i < boneCount; ++i) {
                     mdl::BoneRecord* bone = &bones[i];
-                    const std::uint8_t type = bone->type;
-                    if (type < 7 || type == 8)
+                    const mdl::BoneType type = bone->type;
+                    if (type < mdl::BoneType::InertTip ||
+                        type == mdl::BoneType::FixedAxis)
                         SendMessageA(boneCombo, CB_ADDSTRING, 0,
                                      reinterpret_cast<LPARAM>(bone->name));
                 }
@@ -234,7 +256,7 @@ void Sub4134E0(MMDApp* app) {
                 accessory->parentBone;
             if (bones != nullptr && boneIndex >= 0) {
                 const char* wanted = bones[boneIndex].name;
-                HWND boneCombo = GetDlgItem(main, 475);
+                HWND boneCombo = GetDlgItem(main, panel::kAttachBoneCombo);
                 char actual[108]{};
                 const LRESULT current =
                     SendMessageA(boneCombo, CB_GETCURSEL, 0, 0);
@@ -257,11 +279,11 @@ void Sub4134E0(MMDApp* app) {
         }
     }
 
-    SendMessageA(GetDlgItem(main, 476), BM_SETCHECK,
+    SendMessageA(GetDlgItem(main, panel::kAccessoryVisibleCheckbox), BM_SETCHECK,
                  accessory->visible != 0 ? BST_CHECKED : BST_UNCHECKED, 0);
-    SendMessageA(GetDlgItem(main, 477), BM_SETCHECK,
+    SendMessageA(GetDlgItem(main, panel::kAccessoryAddBlendCheckbox), BM_SETCHECK,
                  accessory->additiveBlend != 0 ? BST_CHECKED : BST_UNCHECKED, 0);
-    SendMessageA(GetDlgItem(main, 486), BM_SETCHECK,
+    SendMessageA(GetDlgItem(main, panel::kAccessoryShadowCheckbox), BM_SETCHECK,
                  accessory->shadowEnabled != 0 ? BST_CHECKED : BST_UNCHECKED, 0);
 
     char text[104];
@@ -282,7 +304,10 @@ void Sub4134E0(MMDApp* app) {
     ReplaceEditText(main, 485, text);
 }
 
-void Sub411DF0(MMDApp* app, int frameValue) {
+// was Sub411DF0, VA 0x00411DF0 - self-shadow track's "register" backend:
+// exact-hit overwrite or free-slot splice of the 24-byte shadow key carrying
+// the current shadow mode (this+0xA0B10) and interval (this+0xA0B0C).
+void RegisterSelfShadowState(MMDApp* app, int frameValue) {
     if (app == nullptr || frameValue < 0)
         return;
     std::uint32_t* keys = reinterpret_cast<std::uint32_t*>(app->ShadowKeys());

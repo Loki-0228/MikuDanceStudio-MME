@@ -121,9 +121,15 @@
 #include <io.h>
 
 #include "mikudancestudio/accessory_layout.hpp"
+#include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
+
+// Shared PMM IO constants (window-title format; the loader record readers
+// live there too).
+#include "pmm_io_common.hpp"
 
 namespace mikudancestudio {
 
@@ -212,6 +218,113 @@ void WritePmmAccessoryKey(int fd, const mdl::AccessoryKey& key) {
     W(fd, &selected, 1);
 }
 
+// ---- typed writers for the four global tracks -----------------------------
+// Field order and widths are frozen against the original's raw-offset
+// writes; each write below carries the old track+offset form it replaces,
+// and the offsets are pinned by static_assert in global_key_layout.hpp.
+// The byte streams match the loader readers in pmm_io_common.hpp exactly.
+
+void WritePmmCameraKey(int fd, const mdl::CameraKey& key) {
+    W(fd, &key.frame, 4);            // was W(fd, cam + 0x00, 4)
+    W(fd, &key.previous, 4);         // was W(fd, cam + 0x04, 4)
+    W(fd, &key.next, 4);             // was W(fd, cam + 0x08, 4)
+    W(fd, &key.distance, 4);         // was W(fd, cam + 0x0C, 4)
+    W(fd, &key.eye[0], 4);           // was W(fd, cam + 0x10, 4)
+    W(fd, &key.eye[1], 4);           // was W(fd, cam + 0x14, 4)
+    W(fd, &key.eye[2], 4);           // was W(fd, cam + 0x18, 4)
+    W(fd, &key.target[0], 4);        // was W(fd, cam + 0x1C, 4)
+    W(fd, &key.target[1], 4);        // was W(fd, cam + 0x20, 4)
+    W(fd, &key.target[2], 4);        // was W(fd, cam + 0x24, 4)
+    W(fd, &key.parentModel, 4);      // was W(fd, cam + 0x4C, 4)
+    W(fd, &key.parentBone, 4);       // was W(fd, cam + 0x50, 4)
+    for (int j = 0; j < 6; ++j) {    // was W(fd, cam + 0x28/0x2E/0x34/0x3A + j, 1)
+        W(fd, &key.interpolation[0][j], 1);
+        W(fd, &key.interpolation[1][j], 1);
+        W(fd, &key.interpolation[2][j], 1);
+        W(fd, &key.interpolation[3][j], 1);
+    }
+    {
+        const unsigned char b = key.perspective != 0;    // was cam[0x40] != 0
+        W(fd, &b, 1);
+    }
+    W(fd, &key.fov, 4);              // was W(fd, cam + 0x44, 4)
+    {
+        const unsigned char b = key.selected != 0;       // was cam[0x48] != 0
+        W(fd, &b, 1);
+    }
+}
+
+void WritePmmLightKey(int fd, const mdl::LightKey& key) {
+    // File order: links, then color (+0x18..+0x20), then direction
+    // (+0x0C..+0x14) - the memory order of the two float triplets differs.
+    W(fd, &key.frame, 4);            // was W(fd, light + 0x00, 4)
+    W(fd, &key.previous, 4);         // was W(fd, light + 0x04, 4)
+    W(fd, &key.next, 4);             // was W(fd, light + 0x08, 4)
+    W(fd, &key.color[0], 4);         // was W(fd, light + 0x18, 4)
+    W(fd, &key.color[1], 4);         // was W(fd, light + 0x1C, 4)
+    W(fd, &key.color[2], 4);         // was W(fd, light + 0x20, 4)
+    W(fd, &key.direction[0], 4);     // was W(fd, light + 0x0C, 4)
+    W(fd, &key.direction[1], 4);     // was W(fd, light + 0x10, 4)
+    W(fd, &key.direction[2], 4);     // was W(fd, light + 0x14, 4)
+    {
+        const unsigned char b = key.selected != 0;       // was light[0x24] != 0
+        W(fd, &b, 1);
+    }
+}
+
+void WritePmmGravityKey(int fd, const mdl::GravityKey& key) {
+    // Selection/gravity track (app+0x380, 36-byte records).  File order:
+    // links, noiseEnabled (+0x20), then noise/acceleration/direction.
+    W(fd, &key.frame, 4);            // was W(fd, sel + 0x00, 4)
+    W(fd, &key.previous, 4);         // was W(fd, sel + 0x04, 4)
+    W(fd, &key.next, 4);             // was W(fd, sel + 0x08, 4)
+    {
+        const unsigned char b = key.noiseEnabled != 0;   // was sel[0x20] != 0
+        W(fd, &b, 1);
+    }
+    W(fd, &key.noise, 4);            // was W(fd, sel + 0x1C, 4)
+    W(fd, &key.acceleration, 4);     // was W(fd, sel + 0x0C, 4)
+    W(fd, &key.direction[0], 4);     // was W(fd, sel + 0x10, 4)
+    W(fd, &key.direction[1], 4);     // was W(fd, sel + 0x14, 4)
+    W(fd, &key.direction[2], 4);     // was W(fd, sel + 0x18, 4)
+    {
+        const unsigned char b = key.selected != 0;       // was sel[0x21] != 0
+        W(fd, &b, 1);
+    }
+}
+
+void WritePmmSelfShadowKey(int fd, const mdl::SelfShadowKey& key) {
+    // Self-shadow track (app+0x37C, 24-byte records).  mode is written RAW
+    // (the original copies the byte; it is not bool-ified).
+    W(fd, &key.frame, 4);            // was W(fd, shadow + 0x00, 4)
+    W(fd, &key.previous, 4);         // was W(fd, shadow + 0x04, 4)
+    W(fd, &key.next, 4);             // was W(fd, shadow + 0x08, 4)
+    W(fd, &key.mode, 1);             // was W(fd, shadow + 0x0C, 1) raw byte
+    W(fd, &key.distance, 4);         // was W(fd, shadow + 0x10, 4)
+    {
+        const unsigned char b = key.selected != 0;       // was shadow[0x14] != 0
+        W(fd, &b, 1);
+    }
+}
+
+// Sparse-occupancy count over frames 1..9999 (record 0 is written densely
+// above; the frame dword at record offset +0 is the occupancy test).  The
+// original walks a dword pointer three records per iteration - camera
+// p += 0x3F / light p += 0x1E / selection p += 0x1B / shadow p += 0x12
+// dwords, i.e. 3 * sizeof(record) bytes each - reading the frame dword of
+// records 3k+1/3k+2/3k+3.  Typed as a record walk of the same 9999 records.
+template <typename TKey>
+std::int32_t CountSparseTrackFrames(const TKey* track) {
+    std::int32_t cnt = 0;
+    const TKey* rec = track + 1;
+    for (int k = 0; k < 3333; ++k, rec += 3) {
+        if (rec[0].frame != 0) ++cnt;
+        if (rec[1].frame != 0) ++cnt;
+        if (rec[2].frame != 0) ++cnt;
+    }
+    return cnt;
+}
+
 // Shift-JIS texts from the original .rdata (embedded byte-exact).
 const char kJpSaveFailFmt[] =         // 0x52BCE4
     "\x83\x74\x83\x40\x83\x43\x83\x8b\x82\xaa\x95\xdb\x91\xb6\x82\xc5"
@@ -222,52 +335,17 @@ const char kJpCannotOpenText[] =      // 0x52BD80
     "\x82\xbb\x82\xcc\x83\x74\x83\x48\x83\x8b\x83\x5f\x82\xc9\x82\xcd"
     "\x83\x5a\x81\x5b\x83\x75\x82\xc5\x82\xab\x82\xdc\x82\xb9\x82\xf1";
 
-}  // namespace
 
-void SaveSceneFile(MMDApp* app) {
-    auto* s = app;
+// ---- SaveSceneFile segment functions -------------------------------------
+// Split along the original VA map in the file header: each function below is
+// the verbatim statement run of one numbered section (the section banner
+// comments travel with the code).  The shared scratch buffer stays in
+// SaveSceneFile's frame and is passed down, mirroring the original's single
+// stack frame.
 
-    // The scratch CHAR buffer (stack "Text").  The original leaves this
-    // uninitialized, so every 0x100 fixed-width path field it feeds carries
-    // whatever stack history preceded the save - deterministic in the
-    // original's codegen, run-to-run garbage in ours.  Zero-initialize the
-    // buffer once: first conversion gets zero tails (a documented deviation
-    // - the original's garbage is unreproducible by design), later
-    // conversions still carry the previous path's bytes exactly like the
-    // original's buffer reuse.  This makes our own back-to-back saves
-    // byte-identical, matching the original's determinism property.
-    char text[0x100] = {};
-    char hdr[0x100];    // sprintf buffer at stack -0x34
-    wchar_t title[0x100];
-
-    unsigned char** const slots = s->ModelSlots();
-    mdl::AccessoryRecord** const accessories = s->AccessorySlots();
-    mdl::AccessoryKey** const accTracks = s->AccessoryKeyTracks();
-    HWND const main = reinterpret_cast<HWND>(s->Hwnd());
-
-    if (s->EnvFileName()[0] == L'\\') {                        // 0x41B097
-        MessageBoxA(main,
-                    s->EnglishUI() != 0 ? "Cannot open save file"
-                                        : kJpCannotOpenText,
-                    "save", 0);
-        return;
-    }
-
-    s->SceneModified() = 0;                                    // 0x41B0C6
-    int fd = -1;
-    const errno_t err =
-        _wsopen_s(&fd, s->EnvFileName(), 0x8301, 0x40, 0x80);  // 0x41B125
-    if (err != 0) {
-        if (s->EnglishUI() == 0)
-            sprintf_s(hdr, 0x100, kJpSaveFailFmt, err);
-        else
-            sprintf_s(hdr, 0x100, "Cannot save file:%d", err);
-        MessageBoxA(main, hdr,
-                    s->EnglishUI() == 0 ? kJpSaveFailCaption : "save file",
-                    0);
-        return;
-    }
-
+// 1. file header and global block (0x41B1B3..0x41B355); hdr is the caller's
+// error-path sprintf buffer (stack -0x34 in the original), shared down.
+void WritePmmFileHeader(int fd, MMDApp* s, HWND main, char* hdr) {
     // ---- 1. file header and global block (0x41B1B3..0x41B355) -----------
     s->state.windowLayoutReady = 0;
     sprintf_s(hdr, 0x100, "Polygon Movie maker 0002");
@@ -299,10 +377,15 @@ void SaveSceneFile(MMDApp* app) {
 
     {                                                          // 0x41B33F
         const unsigned char b = static_cast<unsigned char>(
-            SendMessageA(GetDlgItem(main, 0x1B4), 0x146, 0, 0) - 1);
+            SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_GETCOUNT, 0, 0) - 1);
         W(fd, &b, 1);
     }
+}
 
+
+// 2. per-model block (0x41B355..0x41C981)
+void WritePmmModelBlocks(int fd, unsigned char** const slots,
+                         char* text) {
     // ---- 2. per-model block (0x41B355..0x41C981) ------------------------
     // Not a file-format cap: the x64 save twin sub_7FF7CB4950A0 writes the
     // slot id byte for every occupied slot of the full array (inc dl /
@@ -482,7 +565,7 @@ void SaveSceneFile(MMDApp* app) {
                 W(fd, &bones[i].rotQuat[2], 4);                 // 0x41C6A9
                 W(fd, &bones[i].rotQuat[3], 4);                 // 0x41C6D2
                 {
-                    const unsigned char b = bones[i].f493 != 0;
+                    const unsigned char b = bones[i].physicsDisabled != 0;
                     W(fd, &b, 1);                              // 0x41C703
                 }
                 {
@@ -527,78 +610,22 @@ void SaveSceneFile(MMDApp* app) {
         const unsigned char displayOrder = mdl::Mdl(model)->comboSelIndex2;
         W(fd, &displayOrder, sizeof(displayOrder));             // 0x41C981
     }
+}
 
+
+// 3. camera track + camera misc (0x41C9AE..0x41CF3E)
+void WritePmmCameraSection(int fd, MMDApp* s) {
     // ---- 3. camera track (0x41C9AE..0x41CE85) ---------------------------
-    unsigned char* const cam =
-        *reinterpret_cast<unsigned char**>(&reinterpret_cast<mdl::CameraKey*&>(s->state.cameraKeyTrack));
-    W(fd, cam + 0x00, 4);                                      // 0x41C9AE
-    W(fd, cam + 0x04, 4);                                      // 0x41C9C4
-    W(fd, cam + 0x08, 4);                                      // 0x41C9DA
-    W(fd, cam + 0x0C, 4);                                      // 0x41C9F0
-    W(fd, cam + 0x10, 4);                                      // 0x41CA06
-    W(fd, cam + 0x14, 4);                                      // 0x41CA1C
-    W(fd, cam + 0x18, 4);                                      // 0x41CA35
-    W(fd, cam + 0x1C, 4);                                      // 0x41CA4B
-    W(fd, cam + 0x20, 4);                                      // 0x41CA61
-    W(fd, cam + 0x24, 4);                                      // 0x41CA77
-    W(fd, cam + 0x4C, 4);                                      // 0x41CA8D
-    W(fd, cam + 0x50, 4);                                      // 0x41CAA3
-    for (int j = 0; j < 6; ++j) {                              // 0x41CAC6..
-        W(fd, cam + 0x28 + j, 1);
-        W(fd, cam + 0x2E + j, 1);
-        W(fd, cam + 0x34 + j, 1);
-        W(fd, cam + 0x3A + j, 1);
-    }
-    {
-        const unsigned char b = cam[0x40] != 0;                // 0x41CB33
-        W(fd, &b, 1);
-    }
-    W(fd, cam + 0x44, 4);                                      // 0x41CB49
-    {
-        const unsigned char b = cam[0x48] != 0;                // 0x41CB6A
-        W(fd, &b, 1);
-    }
-    {  // sparse scan over camera keys 1..9999 (0x54 stride)
-        std::int32_t cnt = 0;
-        const std::int32_t* p = reinterpret_cast<const std::int32_t*>(cam);
-        for (int k = 0; k < 3333; ++k, p += 0x3F) {
-            if (p[0x15] != 0) ++cnt;                           // 0x41CBB8..
-            if (p[0x2A] != 0) ++cnt;
-            if (p[0x3F] != 0) ++cnt;
-        }
+    const mdl::CameraKey* const cam = s->CameraKeys();  // app+0x374
+    WritePmmCameraKey(fd, cam[0]);                              // 0x41C9AE
+    {  // sparse scan over camera keys 1..9999 (sizeof(mdl::CameraKey) stride)
+        const std::int32_t cnt = CountSparseTrackFrames(cam);   // 0x41CBB8..
         W(fd, &cnt, 4);
         for (std::int32_t i = 1; i < 10000; ++i) {             // 0x41CBE6
-            const std::size_t o = static_cast<std::size_t>(i) * 0x54;
-            if (*reinterpret_cast<const std::int32_t*>(cam + o) == 0)
+            if (cam[i].frame == 0)
                 continue;
             W(fd, &i, 4);
-            W(fd, cam + o + 0x00, 4);                          // 0x41CC00
-            W(fd, cam + o + 0x04, 4);                          // 0x41CC1E
-            W(fd, cam + o + 0x08, 4);                          // 0x41CC3C
-            W(fd, cam + o + 0x0C, 4);                          // 0x41CC5A
-            W(fd, cam + o + 0x10, 4);                          // 0x41CC78
-            W(fd, cam + o + 0x14, 4);                          // 0x41CC99
-            W(fd, cam + o + 0x18, 4);                          // 0x41CCB7
-            W(fd, cam + o + 0x1C, 4);                          // 0x41CCD5
-            W(fd, cam + o + 0x20, 4);                          // 0x41CCF3
-            W(fd, cam + o + 0x24, 4);                          // 0x41CD11
-            W(fd, cam + o + 0x4C, 4);                          // 0x41CD2F
-            W(fd, cam + o + 0x50, 4);                          // 0x41CD50
-            for (int j = 0; j < 6; ++j) {                      // 0x41CD7F..
-                W(fd, cam + o + 0x28 + j, 1);
-                W(fd, cam + o + 0x2E + j, 1);
-                W(fd, cam + o + 0x34 + j, 1);
-                W(fd, cam + o + 0x3A + j, 1);
-            }
-            {
-                const unsigned char b = cam[o + 0x40] != 0;    // 0x41CE13
-                W(fd, &b, 1);
-            }
-            W(fd, cam + o + 0x44, 4);                          // 0x41CE31
-            {
-                const unsigned char b = cam[o + 0x48] != 0;    // 0x41CE5A
-                W(fd, &b, 1);
-            }
+            WritePmmCameraKey(fd, cam[i]);                      // 0x41CC00..
         }
     }
 
@@ -617,50 +644,22 @@ void SaveSceneFile(MMDApp* app) {
             s->state.cameraPerspective != 0;
         W(fd, &b, 1);
     }
+}
 
+
+// 4. light track + light misc (0x41CF51..0x41D28F)
+void WritePmmLightSection(int fd, MMDApp* s) {
     // ---- 4. light track (0x41CF51..0x41D207) ----------------------------
-    unsigned char* const light =
-        *reinterpret_cast<unsigned char**>(&reinterpret_cast<mdl::LightKey*&>(s->state.lightKeyTrack));
-    W(fd, light + 0x00, 4);                                    // 0x41CF51
-    W(fd, light + 0x04, 4);                                    // 0x41CF67
-    W(fd, light + 0x08, 4);                                    // 0x41CF80
-    W(fd, light + 0x18, 4);                                    // 0x41CF96
-    W(fd, light + 0x1C, 4);                                    // 0x41CFAC
-    W(fd, light + 0x20, 4);                                    // 0x41CFC2
-    W(fd, light + 0x0C, 4);                                    // 0x41CFD8
-    W(fd, light + 0x10, 4);                                    // 0x41CFEE
-    W(fd, light + 0x14, 4);                                    // 0x41D007
-    {
-        const unsigned char b = light[0x24] != 0;              // 0x41D028
-        W(fd, &b, 1);
-    }
-    {  // sparse scan over light keys 1..9999 (0x28 stride)
-        std::int32_t cnt = 0;
-        const std::int32_t* p = reinterpret_cast<const std::int32_t*>(light);
-        for (int k = 0; k < 3333; ++k, p += 0x1E) {
-            if (p[10] != 0) ++cnt;                             // 0x41D072..
-            if (p[0x14] != 0) ++cnt;
-            if (p[0x1E] != 0) ++cnt;
-        }
+    const mdl::LightKey* const light = s->LightKeys();  // app+0x378
+    WritePmmLightKey(fd, light[0]);                             // 0x41CF51
+    {  // sparse scan over light keys 1..9999 (sizeof(mdl::LightKey) stride)
+        const std::int32_t cnt = CountSparseTrackFrames(light); // 0x41D072..
         W(fd, &cnt, 4);
         for (std::int32_t i = 1; i < 10000; ++i) {             // 0x41D0A3
-            const std::size_t o = static_cast<std::size_t>(i) * 0x28;
-            if (*reinterpret_cast<const std::int32_t*>(light + o) == 0)
+            if (light[i].frame == 0)
                 continue;
             W(fd, &i, 4);
-            W(fd, light + o + 0x00, 4);                        // 0x41D0C0
-            W(fd, light + o + 0x04, 4);                        // 0x41D0DE
-            W(fd, light + o + 0x08, 4);                        // 0x41D0FC
-            W(fd, light + o + 0x18, 4);                        // 0x41D11A
-            W(fd, light + o + 0x1C, 4);                        // 0x41D138
-            W(fd, light + o + 0x20, 4);                        // 0x41D159
-            W(fd, light + o + 0x0C, 4);                        // 0x41D177
-            W(fd, light + o + 0x10, 4);                        // 0x41D195
-            W(fd, light + o + 0x14, 4);                        // 0x41D1B3
-            {
-                const unsigned char b = light[o + 0x24] != 0;  // 0x41D1DC
-                W(fd, &b, 1);
-            }
+            WritePmmLightKey(fd, light[i]);                     // 0x41D0C0..
         }
     }
 
@@ -673,19 +672,29 @@ void SaveSceneFile(MMDApp* app) {
     W(fd, s->LightDirection() + 2, sizeof(float));
     W(fd, &s->SelectedAccessorySlot(), 1);                      // 0x41D26D 1 byte
     W(fd, &s->DisplayObjectListScrollPosition(), 4);
+}
 
+
+// 5. accessory-shadow list (0x41D2AF..0x41D310)
+void WritePmmAccessoryShadowList(int fd, HWND main, char* text) {
     // ---- 5. accessory-shadow list (0x41D2AF..0x41D310) ------------------
     {
         const unsigned char cnt = static_cast<unsigned char>(
-            SendMessageA(GetDlgItem(main, 0x1D7), 0x146, 0, 0));
+            SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0));
         W(fd, &cnt, 1);                                        // 0x41D2CD
         for (unsigned int i = 0; i < cnt; ++i) {               // 0x41D2FC
-            SendMessageA(GetDlgItem(main, 0x1D7), 0x148, i,
+            SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT, i,
                          reinterpret_cast<LPARAM>(text));
             W(fd, text, 100);                                  // 0x41D310
         }
     }
+}
 
+
+// 6. accessory block (0x41D310..0x41DB42)
+void WritePmmAccessoryBlocks(
+    int fd, mdl::AccessoryRecord** const accessories,
+    mdl::AccessoryKey** const accTracks, char* text) {
     // ---- 6. accessory block (0x41D310..0x41DB42) ------------------------
     for (unsigned char slot = 0; slot != 0xFF; ++slot) {       // 0x41D351
         if (accessories[slot] == 0) continue;
@@ -737,7 +746,11 @@ void SaveSceneFile(MMDApp* app) {
             W(fd, &b, 1);
         }
     }
+}
 
+
+// 7. config block (0x41DB42..0x41DF7C)
+void WritePmmConfigBlock(int fd, MMDApp* s, HWND main, char* text) {
     // ---- 7. config block (0x41DB42..0x41DF7C) ---------------------------
     W(fd, &s->state.currentFrame, 4);
     W(fd, &s->state.timelineStartFrame, 4);
@@ -750,7 +763,7 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &b, 1);
     }
     {
-        const unsigned char b = s->state.v342 != 0;
+        const unsigned char b = s->state.playbackReturnsToStartFrame != 0;
         W(fd, &b, 1);
     }
     {
@@ -758,12 +771,12 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &b, 1);
     }
     {  // frame edit readbacks 0x199 then 0x19A (asm 0x41DBEA..0x41DC5F)
-        GetWindowTextA(GetDlgItem(main, 0x199), text, 8);
-        const std::int32_t v1 = atol(text);
-        GetWindowTextA(GetDlgItem(main, 0x19A), text, 8);
-        const std::int32_t v2 = atol(text);
-        W(fd, &v1, 4);
-        W(fd, &v2, 4);
+        GetWindowTextA(GetDlgItem(main, panel::kPlayStartFrameEdit), text, 8);
+        const std::int32_t playStartFrame = atol(text);
+        GetWindowTextA(GetDlgItem(main, panel::kPlayStopFrameEdit), text, 8);
+        const std::int32_t playStopFrame = atol(text);
+        W(fd, &playStartFrame, 4);
+        W(fd, &playStopFrame, 4);
     }
     {
         const unsigned char b = s->state.waveEnabled != 0;
@@ -825,103 +838,52 @@ void SaveSceneFile(MMDApp* app) {
     W(fd, &s->state.gravityY, 4);        // 0x9EDBC
     W(fd, &s->state.gravityZ, 4);        // 0x9EDC0
     {
-        const unsigned char b = s->state.a0CD4 != 0;
+        const unsigned char b = s->state.gravityNoiseEnabled != 0;
         W(fd, &b, 1);
     }
+}
 
+
+// 8. selection track + shadow-mode byte (0x41DF7C..0x41E284)
+void WritePmmSelectionSection(int fd, MMDApp* s) {
     // ---- 8. selection/self-shadow track (0x41DF7C..0x41E25E) ------------
-    unsigned char* const sel =
-        *reinterpret_cast<unsigned char**>(&reinterpret_cast<mdl::GravityKey*&>(s->state.gravityKeyTrack));
-    W(fd, sel + 0x00, 4);                                      // 0x41DF7C
-    W(fd, sel + 0x04, 4);                                      // 0x41DF95
-    W(fd, sel + 0x08, 4);                                      // 0x41DFAB
-    {
-        const unsigned char b = sel[0x20] != 0;                // 0x41DFCC
-        W(fd, &b, 1);
-    }
-    W(fd, sel + 0x1C, 4);                                      // 0x41DFE2
-    W(fd, sel + 0x0C, 4);                                      // 0x41DFF8
-    W(fd, sel + 0x10, 4);                                      // 0x41E00E
-    W(fd, sel + 0x14, 4);                                      // 0x41E027
-    W(fd, sel + 0x18, 4);                                      // 0x41E03D
-    {
-        const unsigned char b = sel[0x21] != 0;                // 0x41E05E
-        W(fd, &b, 1);
-    }
-    {  // sparse scan over selection keys 1..9999 (0x24 stride)
-        std::int32_t cnt = 0;
-        const std::int32_t* p = reinterpret_cast<const std::int32_t*>(sel);
-        for (int k = 0; k < 3333; ++k, p += 0x1B) {
-            if (p[9] != 0) ++cnt;                              // 0x41E0AC..
-            if (p[0x12] != 0) ++cnt;
-            if (p[0x1B] != 0) ++cnt;
-        }
+    const mdl::GravityKey* const sel = s->GravityKeys();  // app+0x380
+    WritePmmGravityKey(fd, sel[0]);                             // 0x41DF7C
+    {  // sparse scan over selection keys 1..9999
+       // (sizeof(mdl::GravityKey) stride)
+        const std::int32_t cnt = CountSparseTrackFrames(sel);   // 0x41E0AC..
         W(fd, &cnt, 4);
         for (std::int32_t i = 1; i < 10000; ++i) {             // 0x41E0E4
-            const std::size_t o = static_cast<std::size_t>(i) * 0x24;
-            if (*reinterpret_cast<const std::int32_t*>(sel + o) == 0)
+            if (sel[i].frame == 0)
                 continue;
             W(fd, &i, 4);
-            W(fd, sel + o + 0x00, 4);                          // 0x41E101
-            W(fd, sel + o + 0x04, 4);                          // 0x41E11F
-            W(fd, sel + o + 0x08, 4);                          // 0x41E13D
-            {
-                const unsigned char b = sel[o + 0x20] != 0;    // 0x41E166
-                W(fd, &b, 1);
-            }
-            W(fd, sel + o + 0x1C, 4);                          // 0x41E184
-            W(fd, sel + o + 0x0C, 4);                          // 0x41E1A5
-            W(fd, sel + o + 0x10, 4);                          // 0x41E1C3
-            W(fd, sel + o + 0x14, 4);                          // 0x41E1E1
-            W(fd, sel + o + 0x18, 4);                          // 0x41E1FF
-            {
-                const unsigned char b = sel[o + 0x21] != 0;    // 0x41E228
-                W(fd, &b, 1);
-            }
+            WritePmmGravityKey(fd, sel[i]);                     // 0x41E101..
         }
     }
 
     {
-        const unsigned char b = s->state.selfShadowCfgOrUint32 != 0;
+        const unsigned char b = s->state.selfShadowEnabled != 0;
         W(fd, &b, 1);                                          // 0x41E25E
     }
     W(fd, &s->state.physicsInterval, 4);        // 0xA0D2C
+}
 
+
+// 9. self-shadow track + 10. config2 (0x41E284..0x41E6E5); kept as one
+// function - the config2 run continues the same write sequence.
+void WritePmmShadowAndConfig2(int fd, MMDApp* s, HWND main, char* text) {
     // ---- 9. self-shadow track (0x41E284..0x41E46F) ----------------------
-    unsigned char* const shadow =
-        *reinterpret_cast<unsigned char**>(&reinterpret_cast<mdl::SelfShadowKey*&>(s->state.selfShadowKeyTrack));
-    W(fd, shadow + 0x00, 4);                                   // 0x41E284
-    W(fd, shadow + 0x04, 4);                                   // 0x41E29A
-    W(fd, shadow + 0x08, 4);                                   // 0x41E2B0
-    W(fd, shadow + 0x0C, 1);                                   // raw byte
-    W(fd, shadow + 0x10, 4);                                   // 0x41E2DE
-    {
-        const unsigned char b = shadow[0x14] != 0;             // 0x41E2FF
-        W(fd, &b, 1);
-    }
-    {  // sparse scan over self-shadow keys 1..9999 (0x18 stride)
-        std::int32_t cnt = 0;
-        const std::int32_t* p = reinterpret_cast<const std::int32_t*>(shadow);
-        for (int k = 0; k < 3333; ++k, p += 0x12) {
-            if (p[6] != 0) ++cnt;                              // 0x41E34D..
-            if (p[0xC] != 0) ++cnt;
-            if (p[0x12] != 0) ++cnt;
-        }
+    const mdl::SelfShadowKey* const shadow = s->ShadowKeys();  // app+0x37C
+    WritePmmSelfShadowKey(fd, shadow[0]);                       // 0x41E284
+    {  // sparse scan over self-shadow keys 1..9999
+       // (sizeof(mdl::SelfShadowKey) stride)
+        const std::int32_t cnt = CountSparseTrackFrames(shadow);// 0x41E34D..
         W(fd, &cnt, 4);
         for (std::int32_t i = 1; i < 10000; ++i) {             // 0x41E384
-            const std::size_t o = static_cast<std::size_t>(i) * 0x18;
-            if (*reinterpret_cast<const std::int32_t*>(shadow + o) == 0)
+            if (shadow[i].frame == 0)
                 continue;
             W(fd, &i, 4);
-            W(fd, shadow + o + 0x00, 4);                       // 0x41E3A1
-            W(fd, shadow + o + 0x04, 4);                       // 0x41E3BF
-            W(fd, shadow + o + 0x08, 4);                       // 0x41E3DD
-            W(fd, shadow + o + 0x0C, 1);                       // raw byte
-            W(fd, shadow + o + 0x10, 4);                       // 0x41E418
-            {
-                const unsigned char b = shadow[o + 0x14] != 0; // 0x41E444
-                W(fd, &b, 1);
-            }
+            WritePmmSelfShadowKey(fd, shadow[i]);               // 0x41E3A1..
         }
     }
 
@@ -930,7 +892,7 @@ void SaveSceneFile(MMDApp* app) {
     W(fd, &s->state.modelOutlineColorGreen, 4);
     W(fd, &s->state.modelOutlineColorBlue, 4);
     {
-        const unsigned char b = s->state.a0194 != 0;
+        const unsigned char b = s->state.blackBackgroundEnabled != 0;
         W(fd, &b, 1);
     }
     W(fd, &s->state.cameraParentModel, 4);
@@ -939,7 +901,7 @@ void SaveSceneFile(MMDApp* app) {
     for (int i = 0; i < 15; ++i)                               // 0xA043C..A0474
         W(fd, &s->state.cameraAttachmentBasis[1 + i], 4);
     {
-        const unsigned char b = s->state.v9ed98 != 0;
+        const unsigned char b = s->state.followCameraEnabled != 0;
         W(fd, &b, 1);                                          // 0x9ED98
     }
     {
@@ -947,12 +909,12 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &b, 1);                                          // 0xA0478
     }
     {
-        const unsigned char b = s->state.a0197 != 0;
+        const unsigned char b = s->state.floorVisible != 0;
         W(fd, &b, 1);
     }
     {  // 0x22A edit readback on the alt dialog when present (0x41E69E)
         const HWND alt = s->state.floatingWindow;
-        GetWindowTextA(GetDlgItem(alt != nullptr ? alt : main, 0x22A), text, 10);
+        GetWindowTextA(GetDlgItem(alt != nullptr ? alt : main, panel::kGotoFrameEdit), text, 10);
         std::int32_t v = atol(text);
         if (v < 0) v = 0;
         W(fd, &v, 4);                                          // 0x41E6D1
@@ -961,7 +923,11 @@ void SaveSceneFile(MMDApp* app) {
         const unsigned char one = 1;                           // 0x41E6E5
         W(fd, &one, 1);
     }
+}
 
+
+// 11. per-model tail (0x41E70D)
+void WritePmmModelTail(int fd, unsigned char** const slots) {
     // ---- 11. per-model tail (0x41E70D) -----------------------------------
     // x64 twin walks slots 0..254 (cmp dl, 0FFh / jb at 0x7FF7CB498DC2).
     for (unsigned char slot = 0; slot < kModelSlotCount; ++slot) {  // loc_41E6F0
@@ -969,10 +935,70 @@ void SaveSceneFile(MMDApp* app) {
         W(fd, &slot, 1);
         W(fd, slots[slot] + 0x4CCF0, 4);                       // 0x41E72C
     }
+}
+
+
+}  // namespace
+
+void SaveSceneFile(MMDApp* app) {
+    auto* s = app;
+
+    // The scratch CHAR buffer (stack "Text").  The original leaves this
+    // uninitialized, so every 0x100 fixed-width path field it feeds carries
+    // whatever stack history preceded the save - deterministic in the
+    // original's codegen, run-to-run garbage in ours.  Zero-initialize the
+    // buffer once: first conversion gets zero tails (a documented deviation
+    // - the original's garbage is unreproducible by design), later
+    // conversions still carry the previous path's bytes exactly like the
+    // original's buffer reuse.  This makes our own back-to-back saves
+    // byte-identical, matching the original's determinism property.
+    char text[0x100] = {};
+    char hdr[0x100];    // sprintf buffer at stack -0x34
+    wchar_t title[0x100];
+
+    unsigned char** const slots = s->ModelSlots();
+    mdl::AccessoryRecord** const accessories = s->AccessorySlots();
+    mdl::AccessoryKey** const accTracks = s->AccessoryKeyTracks();
+    HWND const main = reinterpret_cast<HWND>(s->Hwnd());
+
+    if (s->EnvFileName()[0] == L'\\') {                        // 0x41B097
+        MessageBoxA(main,
+                    s->EnglishUI() != 0 ? "Cannot open save file"
+                                        : kJpCannotOpenText,
+                    "save", 0);
+        return;
+    }
+
+    s->SceneModified() = 0;                                    // 0x41B0C6
+    int fd = -1;
+    const errno_t err =
+        _wsopen_s(&fd, s->EnvFileName(), 0x8301, 0x40, 0x80);  // 0x41B125
+    if (err != 0) {
+        if (s->EnglishUI() == 0)
+            sprintf_s(hdr, 0x100, kJpSaveFailFmt, err);
+        else
+            sprintf_s(hdr, 0x100, "Cannot save file:%d", err);
+        MessageBoxA(main, hdr,
+                    s->EnglishUI() == 0 ? kJpSaveFailCaption : "save file",
+                    0);
+        return;
+    }
+
+    WritePmmFileHeader(fd, s, main, hdr);                   // 1. 0x41B1B3..0x41B355
+    WritePmmModelBlocks(fd, slots, text);                   // 2. 0x41B355..0x41C981
+    WritePmmCameraSection(fd, s);                           // 3. 0x41C9AE..0x41CF3E
+    WritePmmLightSection(fd, s);                            // 4. 0x41CF51..0x41D28F
+    WritePmmAccessoryShadowList(fd, main, text);            // 5. 0x41D2AF..0x41D310
+    WritePmmAccessoryBlocks(fd, accessories, accTracks, text);  // 6. 0x41D310..0x41DB42
+    WritePmmConfigBlock(fd, s, main, text);                 // 7. 0x41DB42..0x41DF7C
+    WritePmmSelectionSection(fd, s);                        // 8. 0x41DF7C..0x41E25E
+    WritePmmShadowAndConfig2(fd, s, main, text);            // 9+10. 0x41E284..0x41E6E5
+    WritePmmModelTail(fd, slots);                           // 11. 0x41E70D
+
 
     // ---- 12. success tail (0x41E747) --------------------------------------
     _close(fd);
-    swprintf_s(title, 0x100, L"MikuDanceStudio [%s]", s->EnvFileName());
+    swprintf_s(title, 0x100, pmm_io::kAppTitleFormat, s->EnvFileName());
     SetWindowTextW(main, title);
     MessageBeep(0x40);
     s->state.windowLayoutReady = 1;

@@ -13,7 +13,7 @@
 //   "%d;\t\t\t\t// <SJIS 総ポーズボーン数>" arg = count of selected bones
 //   per selected bone i (ModelRecord selection bitmap/count/BoneRecord table):
 //     "Bone%d{%s\n"      running selected index, bone name at record +0
-//     pose source pick (0x418860): bone->f492 != 0 && bone->f493 == 0 &&
+//     pose source pick (0x418860): bone->hasRigidBody != 0 && bone->physicsDisabled == 0 &&
 //         physMode(app+0xA0CC4) >= 2  ->  physics pose
 //         (+0x188 trans / +0x194 quat), else raw pose
 //         (+0x140 trans / +0x14C quat)
@@ -50,6 +50,7 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -114,7 +115,7 @@ void SaveVpdFile(const wchar_t* path) {
         // physics mode >= 2; raw kinematic pose otherwise.
         const float* trans;
         const float* quat;
-        if (bone->f492 != 0 && bone->f493 == 0 && physMode >= 2) {
+        if (bone->hasRigidBody != 0 && bone->physicsDisabled == 0 && physMode >= 2) {
             trans = bone->ikBackup;
             quat = bone->ikBackup + 3;
         } else {
@@ -148,8 +149,8 @@ void LoadVpdFile(const wchar_t* path) {
     std::fgets(tail, 0x100, fp);   // blank
 
     const HWND hwnd = static_cast<HWND>(app->Hwnd());
-    EnableWindow(GetDlgItem(hwnd, 400), TRUE);
-    EnableWindow(GetDlgItem(hwnd, 401), FALSE);
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
 
     // ---- undo ring (model+0x31B4 wraps at 30; slots at model+0x26EC) ---
     mdl::ModelRecord& modelRecord = *mdl::Mdl(model);
@@ -211,10 +212,11 @@ void LoadVpdFile(const wchar_t* path) {
 
             // twist correction - same algorithm as registrar 0x49D880
             // (0x418F5C): ((u16@&bone->flags & 0x400) && type==4) || type==8
-            const unsigned char btype = bone->type;
-            if (btype == 8 ||
-                (btype == 4 &&
-                 (bone->flags & 0x400) == 0x400)) {
+            const mdl::BoneType btype = bone->type;
+            if (btype == mdl::BoneType::FixedAxis ||
+                (btype == mdl::BoneType::UnderIk &&
+                 (bone->flags & mdl::kBoneFlagFixedAxis) ==
+                     mdl::kBoneFlagFixedAxis)) {
                 float boneAxis[3];
                 if (pmx) {
                     std::memcpy(boneAxis, bone->axis, 12);

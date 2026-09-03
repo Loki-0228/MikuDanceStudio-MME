@@ -21,6 +21,10 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "mikudancestudio/clipboard_layout.hpp"
+#include "mikudancestudio/path_workspace.hpp"
+#include "mikudancestudio/raw_pad.hpp"
+
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
@@ -37,10 +41,6 @@ constexpr std::size_t kAppObjectSize =
 // models loaded past slot 99 in the x64 build, and hardcoded 255s overrun
 // into neighbouring state in the x86 build.
 constexpr int kModelSlotCount = sizeof(void*) == 8 ? 255 : 100;
-
-template <std::size_t N>
-struct RawPad { unsigned char b[N]; };
-struct EmptyPad {};
 
 struct MMDAppState {
 #if defined(_M_X64)
@@ -76,7 +76,7 @@ struct MMDAppState {
     std::int32_t middleMouseButtonState;    // +0x8C
     std::int32_t numpadKeyState[10];        // +0x90..0xB8 (VK_NUMPAD0..9)
     std::int32_t deleteKeyState;            // +0xB8 (VK_DELETE)
-    std::int32_t bC;                        // +0xBC (VK_RETURN state)
+    std::int32_t enterKeyState;            // +0xBC (VK_RETURN; was bC)
     std::int32_t ctrlModifierState;         // +0xC0 (VK_CONTROL)
     std::int32_t menuKeyState;              // +0xC4 (VK_MENU)
     unsigned char sidebarResizeDragging;
@@ -85,7 +85,7 @@ struct MMDAppState {
 #else
     RawPad<3> pad2;
 #endif
-    void* sub025c;  // x64 pin 208
+    void* audioContext;  // x64 pin 208
     wchar_t wavPath[256];
 #if defined(_M_X64)
     RawPad<3> pad4;
@@ -124,6 +124,9 @@ struct MMDAppState {
 #endif
     std::uint32_t fpsOverlayFrameCount;
     std::uint32_t framesPerSecond;
+    // +0x32C: gizmo row filter (0 = both axis rows active, 1 = upper
+    // only, 2 = lower only; frame_modes/sprite_overlay).  No writer
+    // exists in either original - read-only zero; semantics unrecovered.
     std::uint32_t v32c;
 #if defined(_M_X64)
     RawPad<1> pad35;
@@ -142,19 +145,19 @@ struct MMDAppState {
     float cameraPosZ;
     unsigned char cameraReferenceMode;
     unsigned char playbackLoopEnabled;
-    unsigned char v342;
+    unsigned char playbackReturnsToStartFrame;
     RawPad<1> pad42;
-    std::uint32_t viewportToolHovered;  // aka kDwordToolhover
+    std::uint32_t viewportToolHovered;   // +0x344
 #if defined(_M_X64)
     RawPad<4> pad43;
 #endif
-    std::uint32_t viewToolDragOperation;  // aka kDwordViewdragmode
-    std::uint32_t interactionDragMode;  // aka kDwordBoneDragMode, kDwordInteractionmode
+    std::uint32_t viewToolDragOperation;   // +0x348
+    std::uint32_t interactionDragMode;   // +0x34C
     // Clipboard pointer family.  x86 carries all eight slots in the blob
     // (4-byte pointers); the x64 blob only reserved displayClipboard, so
     // x64 keeps the seven siblings in MMDApp mirrors (raw accessors used
     // to hit unmapped identity offsets there - x64 latent corruption).
-    void* v350Clipboard;    // +0x350 bone-copy records (aka v350)
+    void* boneCopyRecords;    // +0x350 (was v350Clipboard)
 #if defined(_M_X64)
     RawPad<8> pad46;
 #else
@@ -179,7 +182,8 @@ struct MMDAppState {
 #if defined(_M_X64)
     void* modelSlots[255];  // x64 pin 3048
 #else
-    void* modelSlots[100];  // x64 pin 3048
+    void* modelSlots[100];  // x86 pin 1920  // was "x64 pin 3048" - that pin
+                             // belongs to the _M_X64 branch above
 #endif
     unsigned char slotIdx;  // x64 pin 5088
     RawPad<3> pad54;
@@ -216,13 +220,13 @@ struct MMDAppState {
     RawPad<5388> pad70;
 #endif
     unsigned char pmxEncoding;
-#ifndef _M_X64
+#if !defined(_M_X64)
     RawPad<1> pad71;
 #endif
     unsigned char pmxIdxVert;
     RawPad<1> pad72;
     unsigned char pmxIdxBone;
-#ifndef _M_X64
+#if !defined(_M_X64)
     RawPad<2> pad73;
 #endif
     unsigned char pmxIdxRigid;
@@ -320,43 +324,56 @@ struct MMDAppState {
     unsigned char lightC[6];
     unsigned char lightD[6];
     RawPad<2> pad100;
-    std::int32_t v9da24[9];
+    // 0x9DA24: bone-copy count shared by copy/paste (496 gates and updates
+    // it per emitted record; 497/498 gate on it), then the clipboard
+    // selection counts overlay at +0x9DA28 (was one v9da24[9] array).
+    std::int32_t copiedBoneCount;               // +0x9DA24
+    mdl::ClipboardSelectionCounts clipboardCounts;  // +0x9DA28
     std::int32_t displayObjectListScrollPosition;
     std::int32_t displayObjectListMatchCount;
     std::int32_t jointLineMap[200];  // x64 pin 648480
-    void* buf9ddx[255];  // x64 pin 649280
+    // 255-entry display-object list (was buf9ddx): AccessoryRecord slots
+    // plus model-timeline-selected objects (x64 pin 649280)
+    void* objectSlots[255];
     std::uint32_t lastRegisteredFrame;  // x64 pin 651320
-    unsigned char selLightAccSlotOrUint32;
+    // shared accessory/model-display list selection byte (was
+    // selLightAccSlotOrUint32)
+    unsigned char selectedObjectSlot;
     RawPad<3> pad115;
-    float lightDirection;
-    float v9e178;
-    float v9e17c;
+    // PMM light direction triple (+0x9E174, was lightDirection + v9e178 +
+    // v9e17c); LightDirection() hands out the array as float*.
+    float lightDirection[3];
 #if defined(_M_X64)
     RawPad<32> pad118;
 #else
+    // x86: the device D3DLIGHT9 overlay starts one float past this triple
+    // (+0x9E180) and spans 104 bytes up to cameraFov - Type/Diffuse/
+    // Specular live in this pad, Ambient covers lightColor below, and
+    // Position/Direction/Falloff/Attenuation/Theta/Phi fill pad121 (see
+    // MMDApp::SceneLight).
     RawPad<36> pad118;
 #endif
-    float lightColor;
-    float v9e1a8;
-    float v9e1ac;
+    // PMM light colour RGB (+0x9E1A4, was lightColor + v9e1a8 + v9e1ac);
+    // doubles as the D3DLIGHT9 Ambient.rgb on x86.
+    float lightColor[3];
 #if defined(_M_X64)
     RawPad<24> pad121;
 #else
     RawPad<28> pad121;
 #endif
-    std::uint32_t v9e1cc;
+    std::uint32_t sceneLightRange;  // D3DLIGHT9::Range overlay word (+0x9E1CC)
     RawPad<24> pad122;
     float cameraFov;
-    wchar_t wcs9e1ec[256];
+    wchar_t aviBackgroundPath[256];
     void* drawDib;
     void* aviBackgroundTexture;
     void* aviBackgroundSurface;
-    std::uint32_t v9e3f8OrPtr;
+    std::uint32_t aviOverlayVertices;
 #if defined(_M_X64)
     RawPad<4> pad128;
 #endif
     void* aviFile;
-    void* v9e400OrUint32;
+    void* aviStream;  // PAVISTREAM (was v9e400OrUint32)
     void* aviFrameReader;
     std::int32_t aviStreamStart;
     std::int32_t aviStreamEnd;
@@ -374,18 +391,18 @@ struct MMDAppState {
     RawPad<3> pad140;
 #endif
     void* pictureBackgroundTexture;
-    std::uint32_t v9e430OrPtr;
+    std::uint32_t pictureOverlayVertices;
     std::int32_t pictureOffsetX;
     std::int32_t pictureOffsetY;
     float pictureScale;
     std::int32_t pictureWidth;
     std::int32_t pictureHeight;
     wchar_t pictureBackgroundPath[256];
-    std::int32_t f9e648;
-    float f9e64c;
-    float v9e650;
-    float f9e654;
-    float f9e658;
+    std::int32_t aviBackgroundSample;
+    float playbackCursorSeconds;
+    float keyRepeatTimer;
+    float playbackStartSeconds;
+    float playbackEndSeconds;
     // Track-key cursors (0x9E65C..): the camera/light/self-shadow/gravity
     // play-cursor dwords with their active bytes, then the 55 accessory
     // track cursors.  In-blob on both arches; only the accessory active
@@ -414,7 +431,7 @@ struct MMDAppState {
     // IsWindowEnabled snapshots of the 7 main-window playback controls
     // (0x1F1/0x1F2/0x1AF/0x1A5/0x1A6/0x190/0x191), restored after playback
     unsigned char playbackEnabledSnapshot[7];
-    unsigned char v9eb7e;
+    unsigned char characterTransparentMode;
     unsigned char blinkPhase;
 #if defined(_M_X64)
     RawPad<2> pad155;
@@ -425,7 +442,7 @@ struct MMDAppState {
     RawPad<4> pad157;
 #endif
     void* captureRenderTarget;
-    void* v9eb8c;
+    void* captureSystemSurface;
 #if defined(_M_X64)
     // x64 blob keeps this region opaque; the path buffer itself lives
     // outside the compat blob (see MMDApp::m_aviOutputPath)
@@ -433,47 +450,48 @@ struct MMDAppState {
 #else
     wchar_t aviOutputPath[256];
 #endif
-    unsigned char v9ed90;
+    unsigned char frameStepPlayback;
 #if defined(_M_X64)
     RawPad<5> pad160;
 #else
     RawPad<3> pad160;
 #endif
-    std::int32_t f9ed94;
-    unsigned char v9ed98;
-    unsigned char playbackStartsAtCurrentFrame;  // aka kByteB9ed99
-    unsigned char projectedShadowBlendEnabled;  // aka kByteB9ed9a
+    std::int32_t recordedFrameCount;
+    unsigned char followCameraEnabled;
+    unsigned char playbackStartsAtCurrentFrame;   // +0x9ED99
+    unsigned char projectedShadowBlendEnabled;   // +0x9ED9A
     RawPad<1> pad164;
-    std::int32_t v9ed9c;
+    std::int32_t coordinateSystem;
 #if defined(_M_X64)
     RawPad<4> pad165;
 #endif
-    void* sub04b0OrUint32;
-#ifndef _M_X64
+    void* axisMeshObject;  // AccessoryRecord slot holding the axis gizmo
+                          // X-file mesh (was sub04b0OrUint32)
+#if !defined(_M_X64)
     RawPad<4> pad166;
 #endif
-    std::uint32_t playbackClockAnchorLow;  // aka kDword9eda8
-    std::uint32_t playbackClockAnchorHigh;  // aka kDword9edac
+    std::uint32_t playbackClockAnchorLow;   // +0x9EDA8
+    std::uint32_t playbackClockAnchorHigh;   // +0x9EDAC
     void* physicsScene;
-    unsigned char a9edb4;
+    unsigned char physicsEditorJointPage;
     unsigned char physicsResetPending;
-    unsigned char playbackFrameChanged;  // aka kByteB9edb6
+    unsigned char playbackFrameChanged;   // +0x9EDB6
     RawPad<1> pad172;
     float gravityX;
     float gravityY;
     float gravityZ;
     float gravityMagnitude;
     std::uint32_t gravityNoise;
-    float v9edcc;
-    unsigned char v9edd0;  // aka kByteF9edd0
-    unsigned char viewportInputActive;  // aka kByteB9edd1
+    float gravityNoiseTimer;
+    unsigned char timelineAdvanceDue;   // +0x9EDD0
+    unsigned char viewportInputActive;   // +0x9EDD1
     RawPad<2> pad180;
     void* recordingCompletionFlag;
-    unsigned char v9edd8;  // aka kByteF9edd8
+    unsigned char recordPlaybackStartPending;   // +0x9EDD8
     RawPad<3> pad182;
-    std::int32_t f9eddc;
+    std::int32_t recordSavedFrame;
     void* toonTextures[11];
-    void* v9ee0cOrUint32;
+    void* spriteOverlayVertices;
     std::uint32_t spriteOverlayPrimitiveCount;
 #if defined(_M_X64)
     RawPad<4> pad186;
@@ -484,7 +502,7 @@ struct MMDAppState {
 #if defined(_M_X64)
     RawPad<4> pad189;
 #endif
-    void* sceneFontTexture;  // aka kPtrFonttex
+    void* sceneFontTexture; 
     unsigned char recentFile0[256];
     unsigned char recentFile1[256];
     unsigned char recentFile2[256];
@@ -493,7 +511,7 @@ struct MMDAppState {
     RawPad<4> pad194;
 #endif
     void* groundPlaneVertices;
-    unsigned char v9f12c;
+    unsigned char separateWindowMouseSeen;
 #if defined(_M_X64)
     RawPad<7> pad196;
 #else
@@ -510,33 +528,38 @@ struct MMDAppState {
     wchar_t captureSavePath[256];
 #endif
     void* captureReadbackPixels;
-    unsigned char fontSubOrPtr;
 #if defined(_M_X64)
-    RawPad<3239> pad199;
+    // x64: the 3536-byte path-resolution workspace lives outside the blob
+    // (MMDApp::m_pathWorkspace); the blob reserves only 3240 bytes here.
+    RawPad<3240> pad199;  // was fontSubOrPtr + pad199
 #else
-    RawPad<3535> pad199;
+    // +0x9F338: inline path-resolution scratch (project/exec dirs +
+    // resolved path), overlaid as one blob region in the original.
+    PathResolutionWorkspace pathWorkspace;
 #endif
     void* leftViewportVertices;
     void* rightViewportVertices;
     float toonEdgeTable[30];
-    unsigned char selfShadowCfgOrUint32;
+    unsigned char selfShadowEnabled;
     unsigned char selectionBoxDragging;
-#ifndef _M_X64
+#if !defined(_M_X64)
     RawPad<2> pad204;
     std::int32_t selectionBoxAnchorX;   // +0xA018C
     std::int32_t selectionBoxAnchorY;   // +0xA0190
 #endif
-    unsigned char a0194;
-    unsigned char modelOutlineRenderingSuppressed;
-    unsigned char a0196;
-    unsigned char a0197;
+    unsigned char blackBackgroundEnabled;
+    unsigned char modelNonDisplayMode;
+    unsigned char wavPlaysOnFrameMove;
+    unsigned char floorVisible;
 #if defined(_M_X64)
     RawPad<2> pad208;
 #endif
     std::int32_t modelOutlineColorRed;
     std::int32_t modelOutlineColorGreen;
     std::int32_t modelOutlineColorBlue;
-    unsigned char buf655780[48];
+    // ChooseColor custom-colours table (64 bytes; the trailing
+    // RawPad<16> pad209 completes the 16 COLORREFs) - was buf655780
+    unsigned char customColorTable[48];
     RawPad<16> pad209;  // +0xA01D4: unreferenced in both originals
     // +0xA01E4 (x64 twin +0xA1154, written/read 6+6 sites): the "wire frame"
     // menu toggle (command 287).  Both render frames gate D3DRS_FILLMODE on
@@ -557,8 +580,8 @@ struct MMDAppState {
 #endif
     void* activeRenderObject;
     std::int32_t activeRenderPass;
-    std::int32_t a0270;
-    unsigned char fullscreenMode;  // aka kDwordFa0274
+    std::int32_t renderPassCount;
+    unsigned char fullscreenMode;   // +0xA0274
 #if defined(_M_X64)
     RawPad<7> pad217;
 #else
@@ -574,7 +597,7 @@ struct MMDAppState {
     // (GetWindowPlacement/SetWindowPlacement; .length is init 44)
     WINDOWPLACEMENT savedPlacement;
 #endif
-    unsigned char a02A8;
+    unsigned char fullscreenFlagsSaved;
 #if defined(_M_X64)
     RawPad<5> pad220;
 #else
@@ -582,22 +605,22 @@ struct MMDAppState {
 #endif
     std::int32_t recRTW;
     std::int32_t recRTH;
-    unsigned char a02B4;
-    unsigned char a02B5;
+    unsigned char recordFullscreenActive;
+    unsigned char stereoActivated;
     unsigned char a02B6;
     unsigned char sjisOut[256];
-    unsigned char a03B7;  // aka kByteFa03b7
+    unsigned char timelineAdvanceRequested;   // +0xA03B7
     unsigned char depthDeviceEnabled;
     RawPad<3> pad228;
-    HMODULE a03BC;
-    void* a03C0;
-    void* a03C4;
-    std::uint32_t a03C8;
+    HMODULE oniModule;
+    void* oniExportSlot0;
+    void* oniExportSlot1;
+    std::uint32_t oniExportSlot2;
 #if defined(_M_X64)
     RawPad<4> pad232;
 #endif
     void* depthTextureCallback;
-    std::uint32_t a03D0;
+    std::uint32_t oniExportSlot4;
 #if defined(_M_X64)
     std::uint32_t a03D4;  // blob slot unused; x64 uses the MMDApp mirror
                           // m_openniTrackingCallback (needs 8 bytes)
@@ -606,16 +629,19 @@ struct MMDAppState {
                                    // by the OpenNI plugin; read by the frame
                                    // driver's selection-callback branch)
 #endif
-    void* a03D8;
-    unsigned char a03DC;
-    unsigned char a03DD;
+    void* oniExportSlot6;
+    unsigned char kinectMirrorEnabled;
+    unsigned char kinectInitLostBone;
     unsigned char depthTextureCompositionEnabled;
-    unsigned char a03DF;
+    unsigned char kinectCaptureActive;
     float fpsLimitSaved;
-    unsigned char a03E4;
-    unsigned char a03E5;
-    unsigned char a03E6;
-    unsigned char a03E7;
+    // +0xA03E4: the four global-track (camera/light/self-shadow/gravity)
+    // timeline row-selected flags (was a03E4..a03E7); the original walks
+    // them as four consecutive bytes (0x441097 / 0x472C5F).
+    unsigned char globalTrackSelected[4];
+    // +0xA03E8: settle-request gate (0x46F7FF requests the idle physics
+    // settle pass while zero) - never written in either original, i.e.
+    // read-only zero; semantics unrecovered.
     unsigned char a03E8;
     unsigned char automaticFrameAdvanceEnabled;
     unsigned char openniVersion;
@@ -629,18 +655,18 @@ struct MMDAppState {
     // The canary watches all 64 bytes.
     std::int32_t timelineSelectionSlots[16];
 #endif
-    std::uint32_t a042C;
+    std::uint32_t mainModelComboSelection;
     std::int32_t cameraParentModel;
     std::int32_t cameraParentBone;
     // 16-float basis/colour matrix (0xA0438..0xA0478); rows 0/2/4/6 of the
     // original camera-attachment basis default to identity diag 1.0
     float cameraAttachmentBasis[16];
-    unsigned char cameraAttachmentTransformSuppressed;  // aka kByteFa0478
-#ifndef _M_X64
+    unsigned char cameraAttachmentTransformSuppressed;   // +0xA0478
+#if !defined(_M_X64)
     RawPad<3> pad269;
 #endif
     unsigned char logFont[60];
-    unsigned char a04B8;  // aka kByteFa04b8
+    unsigned char modelReloadPending;   // +0xA04B8
 #if defined(_M_X64)
     RawPad<6> pad271;
 #else
@@ -655,7 +681,7 @@ struct MMDAppState {
     // header flags at [0..3], tree-row flags over [0..199], joint-row
     // flags at [4..203] (the last four overlap the timeline-range anchors
     // below, as in the original).  x64 reserves only 175 bytes here before
-    // b6568480, so x64 keeps 64 + pad and routes PanelRowFlags() to a
+    // timelineRangeApplyEnabled, so x64 keeps 64 + pad and routes PanelRowFlags() to a
     // mirror; x86 carries the full region as one array.
 #if defined(_M_X64)
     unsigned char buf656632[64];
@@ -669,10 +695,17 @@ struct MMDAppState {
     std::int32_t timelineRangeLastOffset;    // +0xA05C8
     std::int32_t timelineRangeLastBase;      // +0xA05CC
 #endif
-    unsigned char b6568480;
-    unsigned char b6568481;
+    unsigned char timelineRangeApplyEnabled;
+    // +0xA05D1: view-dirty flag - panel repaint picks the busy palette
+    // while set (original 0x42C574); armed by the camera-follow refresh.
+    unsigned char viewDirty;
+    // +0xA05D2: written by the morph-follow refresh path, read by the
+    // pump's camera-follow gate (original 0x473D07); the port has no
+    // reader ported yet - exact semantics unrecovered.
     unsigned char b6568482;
-    unsigned char b6568483;
+    // +0xA05D3: pointer jumped >50px (separate window / warped cursor) -
+    // the pump's re-center step is skipped while set (original 0x47527C).
+    unsigned char mouseJumped;
     unsigned char uiTextRed;
     unsigned char uiTextGreen;
     unsigned char uiTextBlue;
@@ -683,20 +716,21 @@ struct MMDAppState {
 #endif
     // 35-entry UI theme colour table (0xA0C98..0xA0CDC)
     std::uint32_t themeColors[35];
-#ifndef _M_X64
+#if !defined(_M_X64)
     // accessory-edit dialog close gate: the post-close refresh runs
     // only while nonzero (x64: mirror member MMDApp::m_accessoryApplyGate)
     unsigned char accessoryApplyGate;
 #endif
-    unsigned char a0665;
+    unsigned char accessoryEditDialogOpen;  // was a0665 (menu 442)
 #if defined(_M_X64)
     RawPad<3> pad320;
 #else
     RawPad<2> pad320;
 #endif
-    void* a0668OrUint32;
-    unsigned char a066C;
-    unsigned char a066D;
+    void* selectNavRecords;  // dialog 442 SelectAttachRecord array
+                          // (was a0668OrUint32)
+    unsigned char physicsBodiesMoved;
+    unsigned char playbackAlwaysOnOffMode;
     RawPad<2> pad323;
     std::int32_t savedPlaybackPhysicsMode;
 #if defined(_M_X64)
@@ -706,6 +740,11 @@ struct MMDAppState {
     // only 40 bytes here, so x64 keeps an MMDApp mirror instead.
     float viewRotationTransform[16];
 #endif
+    // +0xA06B4..0xA06B6: separate-window hide-margin mouse latches -
+    // armed while the pointer sits outside the auto-hide margins (and by
+    // viewport-tool drags), cleared once it crosses back in (mic_window /
+    // ui_mousemove).  The three bytes' margin mapping differs between the
+    // main and separate windows, so no per-byte rename is made.
     unsigned char a06B4;
     unsigned char a06B5;
     unsigned char a06B6;
@@ -719,8 +758,10 @@ struct MMDAppState {
 #if defined(_M_X64)
     RawPad<4> pad329;
 #endif
-    void* sub06c;
-    void* rendererOrLocaleTable;
+    void* recorder;  // DShowRecorder (was sub06c)
+    void* renderer;  // D3DRenderer "0x1D574 object"; ConvertAnsiToWide
+                   // also reads it as a locale table (was
+                   // rendererOrLocaleTable)
     std::int32_t sidebarWidth;
     unsigned char waveEnabled;
     RawPad<1> pad333;
@@ -736,7 +777,7 @@ struct MMDAppState {
     float modelOffsetX;
     float modelOffsetY;
     float modelOffsetZ;
-#ifndef _M_X64
+#if !defined(_M_X64)
     std::int32_t frameRangeStartFrame;  // +0xA08F0 frame-range dialog start
     std::int32_t morphFrameShift;  // menu 225 morph-frame cleanup shift
     std::int32_t blinkStartFrame;  // menu 227 blink register range start
@@ -749,6 +790,9 @@ struct MMDAppState {
     unsigned char aviIncludeWave;
     unsigned char sceneModified;
     RawPad<2> pad348;
+    // +0xA0B10: sample bias added to the wall-clock AVI sample pick
+    // during playback - read-only zero in both originals (no writer
+    // ported); semantics unrecovered.
     std::uint32_t a0B10;
 #if defined(_M_X64)
     // x64: the ground-shadow-color dialog handle lives outside the blob
@@ -757,12 +801,12 @@ struct MMDAppState {
 #else
     HWND groundShadowColorDialog;  // menu 248, modeless
 #endif
-#ifndef _M_X64
+#if !defined(_M_X64)
     WNDPROC groundShadowColorEditProc;  // saved wndproc of its value edit
     void* accessoryOrderArray;          // menu 249 reorder scratch array
 #endif
     std::int32_t accessoryRenderSplitOrder;
-#ifndef _M_X64
+#if !defined(_M_X64)
     // accessory-edit dialog scratch buffer 2 (menu 442; freed on close;
     // x64: mirror member MMDApp::m_accessoryEditArray)
     void* accessoryEditArray;
@@ -770,9 +814,11 @@ struct MMDAppState {
     // sub_40FBC0 / sub_40F860 (cases 300/302)
     float rotationDialogTemp[7];
 #endif
-    HWND modelInfoDialog;  // menu 253, modal
-#ifndef _M_X64
-    WNDPROC modelInfoEditProc;  // saved wndproc of its edit 646
+    HWND edgeThicknessDialog;  // menu 253 edge-thickness dlg, modal
+                               // (was modelInfoDialog)
+#if !defined(_M_X64)
+    WNDPROC edgeThicknessEditProc;  // saved wndproc of its edit 646
+                                    // (was modelInfoEditProc)
 #endif
     unsigned char englishUI;
     RawPad<3> pad353;
@@ -782,20 +828,22 @@ struct MMDAppState {
 #else
     HWND frameRangeDialog;
 #endif
-#ifndef _M_X64
+#if !defined(_M_X64)
     WNDPROC modelEdgeEditProc;      // saved wndproc of edit 667
     std::int32_t modelEdgeComboCursor[3];  // combos 669/673/677 edit pos
 #endif
-    unsigned char a0B64;
+    unsigned char enhancedModelDirty;
     RawPad<3> pad355;
     std::uint32_t timeNowLow;
     std::uint32_t timeNowHigh;
     float milliToSec;
     HWND frameCopyDialog;  // menu 262, modal
-#ifndef _M_X64
+#if !defined(_M_X64)
     WNDPROC frameCopyEditProc;  // saved wndproc of edit 705
 #endif
-    void* cameraRecordArray;  // 172-byte records, index selAcc
+    // physics editor (dialog 684) rigid-body scratch, RigidRecord x
+    // 100000 (was cameraRecordArray); index selectedRigidIndex (was selAcc)
+    void* rigidScratchArray;
 #if defined(_M_X64)
     // x64: the 172-byte camera-frame staging buffer lives outside the
     // blob (MMDApp::m_cameraFrameScratch)
@@ -806,8 +854,10 @@ struct MMDAppState {
     // are never open together, mirroring the original blob reuse)
     unsigned char cameraFrameScratch[172];
 #endif
-    std::int32_t selAcc;
-    void* boneRecordArray;  // 140-byte records, index sel8c
+    std::int32_t selectedRigidIndex;  // was selAcc
+    // physics editor joint scratch, JointRecord x 100000 (was
+    // boneRecordArray); index selectedJointIndex (was sel8c)
+    void* jointScratchArray;
 #if defined(_M_X64)
     // x64: the 140-byte bone-frame staging buffer lives outside the
     // blob (MMDApp::m_boneFrameScratch)
@@ -817,18 +867,20 @@ struct MMDAppState {
     // accessory-frame dialog reuses byte +28 as its saved wndproc
     unsigned char boneFrameScratch[140];
 #endif
-    std::int32_t sel8c;
+    std::int32_t selectedJointIndex;  // was sel8c
     std::int32_t playbackPhysicsMode;
-    unsigned char a0CC8OrUint32;
+    unsigned char rigidBodyDisplayEnabled;
 #if defined(_M_X64)
-    // x64: HWND slot kept outside the compat blob (MMDApp::m_accessoryFrameDialog)
+    // x64: HWND slot kept outside the compat blob
+    // (MMDApp::m_gravitySettingDialog)
     RawPad<9> pad367;
 #else
     RawPad<3> pad367;
-    HWND accessoryFrameDialog;  // 0xA0CCC
+    HWND gravitySettingDialog;  // 0xA0CCC, gravity-setting dlg 266
+                                // (was accessoryFrameDialog)
     WNDPROC accessoryFrameEditProc;  // saved wndproc of edit 709
 #endif
-    unsigned char a0CD4;
+    unsigned char gravityNoiseEnabled;
 #if defined(_M_X64)
     // x64: option kept outside the compat blob (MMDApp::m_aviCodecSelection)
     RawPad<9> pad368;
@@ -844,7 +896,7 @@ struct MMDAppState {
     RawPad<11> pad370;
 #endif
     float projectedShadowDiffuseAlpha;
-    float projectedShadowAmbientIntensity;  // aka kFloatA0cf0
+    float projectedShadowAmbientIntensity;   // +0xA0CF0
     float projectedShadowAmbientG;
     float projectedShadowAmbientB;
     float projectedShadowAmbientA;
@@ -858,10 +910,10 @@ struct MMDAppState {
     HWND recordingWindow;
     unsigned char selfShadowCompositionEnabled;
     RawPad<3> pad378;
-    float physicsInterval;  // aka kFloatPhysicsint
+    float physicsInterval; 
     std::int32_t selfShadowMode;
     RawPad<4> pad380;
-    HWND floatingWindow;  // aka kDwordA0d38
+    HWND floatingWindow;   // +0xA0D38
     std::int32_t separateWindowSidebarWidth;
     std::int32_t hideRight;
     std::int32_t hideTop;
@@ -872,12 +924,12 @@ struct MMDAppState {
     std::int32_t separateWindowWidth;
     std::int32_t separateWindowHeight;
     unsigned char separateWindowMaximized;
-    unsigned char aviStereoOutput;  // aka kByteBa0d61
+    unsigned char aviStereoOutput;   // +0xA0D61
     RawPad<2> pad392;
     std::int32_t aviStereoWidthMultiplier;
     unsigned char autoRepeat;
     RawPad<3> pad394;
-    std::uint32_t messageSeen;  // aka kDwordFa0d6c, kDwordMsgseen
+    std::uint32_t messageSeen;   // +0xA0D6C
     wchar_t dirModel[1000];
     wchar_t dirUser[1000];
     wchar_t dirAccs[1000];
@@ -885,9 +937,9 @@ struct MMDAppState {
     wchar_t dirPose[1000];
     wchar_t dirWave[1000];
     wchar_t dirBg[1000];
-    unsigned char flag672800;
+    unsigned char frameVolumeControlEnabled;
     RawPad<3> pad403;
-    std::int32_t val672804;
+    std::int32_t frameNormalization;
     float sidebarRatio;
     unsigned char windowLayoutReady;
     // 0x100-byte load-status text buffer (sprintf_s target of the PMM
@@ -900,7 +952,7 @@ struct MMDAppState {
 #endif
 };
 
-#ifndef _M_X64
+#if !defined(_M_X64)
 static_assert(sizeof(MMDAppState) == kAppObjectSize,
               "x86 app state size must match the original");
 #else

@@ -29,6 +29,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 #include <commdlg.h>
 
 #include <cstdio>
@@ -39,6 +40,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -72,16 +74,17 @@ void RepopulateBoneCombo(MMDApp* app, HWND combo, std::int32_t modelSlot) {
     const mdl::BoneRecord* bones = record->boneTable;
     for (std::int32_t i = 0;
          i < static_cast<std::int32_t>(record->boneCount); ++i) {
-        const std::uint8_t type = bones[i].type;
-        if (type == 8 || type < 7) {
+        const mdl::BoneType type = bones[i].type;
+        if (type == mdl::BoneType::FixedAxis ||
+            type < mdl::BoneType::InertTip) {
             const char* name = app->state.englishUI != 0
                                    ? bones[i].nameEn
                                    : bones[i].name;
-            SendMessageA(combo, 0x143 /*CB_ADDSTRING*/, 0,
+            SendMessageA(combo, CB_ADDSTRING, 0,
                          reinterpret_cast<LPARAM>(name));
         }
     }
-    SendMessageA(combo, 0x14E /*CB_SETCURSEL*/, 0, 0);
+    SendMessageA(combo, CB_SETCURSEL, 0, 0);
 }
 
 // Shared body of the 0x1C2/0x1DB bone combos (0x48e6b3..0x48e745 /
@@ -113,8 +116,8 @@ void MorphRowSelect(MMDApp* app, HWND hwnd, HWND combo, std::size_t lane,
                     int spinId, int textId) {
     char text[0x100];
     const LRESULT sel =
-        SendMessageA(combo, 0x147 /*CB_GETCURSEL*/, 0, 0);
-    SendMessageA(combo, 0x148 /*CB_GETLBTEXT*/, sel,
+        SendMessageA(combo, CB_GETCURSEL, 0, 0);
+    SendMessageA(combo, CB_GETLBTEXT, sel,
                  reinterpret_cast<LPARAM>(text));
     const mdl::ModelRecord* record = mdl::Mdl(app->SelectedModel());
     if (static_cast<std::int32_t>(record->morphCount) <= 0) {
@@ -134,7 +137,7 @@ void MorphRowSelect(MMDApp* app, HWND hwnd, HWND combo, std::size_t lane,
     }
     mdl::Mdl(app->SelectedModel())->selectedMorphs[lane] = index;
     const float v = record->morphs[index].value;
-    SendMessageA(GetDlgItem(hwnd, spinId), 0x405 /*TBM_SETPOS*/, 1,
+    SendMessageA(GetDlgItem(hwnd, spinId), TBM_SETPOS, 1,
                  static_cast<LPARAM>(
                      static_cast<std::int32_t>(v * 100.0)));  // dbl_52B8E0
     sprintf_s(text, 0x100u, "%5.4f", static_cast<double>(v));
@@ -157,9 +160,9 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     // ---- 0x1BB (0x48e214): IK list combo -> on/off radio pair sync.  The
     // flag byte of the 24-byte-stride IK table model+0x26C0 (the same entry
     // cases 444/445 write) picks between radios 0x1BC (on) / 0x1BD (off).
-    if (ctrl == GetDlgItem(hwnd, 0x1BB)) {
-        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, 0x1BB),
-                                         0x147 /*CB_GETCURSEL*/, 0, 0);
+    if (ctrl == GetDlgItem(hwnd, panel::kIkChainCombo)) {
+        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kIkChainCombo),
+                                         CB_GETCURSEL, 0, 0);
         mdl::IkChain* chains = mdl::Mdl(app->SelectedModel())->ikChains;
         if (chains != nullptr) {
             CheckRadioButton(hwnd, 0x1BC, 0x1BD,
@@ -174,9 +177,9 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     // global-row selection bytes 0xA03E4..0xA03E7 and every accessory row
     // flag, marks the new accessory, and re-syncs its edit panel
     // (0x4134E0).  Both paths end with the two language sweeps.
-    if (ctrl == GetDlgItem(hwnd, 0x1D7)) {
-        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, 0x1D7),
-                                         0x147 /*CB_GETCURSEL*/, 0, 0);
+    if (ctrl == GetDlgItem(hwnd, panel::kAccessoryCombo)) {
+        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo),
+                                         CB_GETCURSEL, 0, 0);
         std::int32_t slot = 0;
         bool found = false;
         for (; slot < 0xFF; ++slot) {
@@ -201,7 +204,7 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
             app->SelectedAccessorySlot() =
                 static_cast<std::uint8_t>(slot);
             app->AccessorySlot(slot)->rowSelected = 1;
-            Sub4134E0(app);  // 0x4134E0 accessory edit panel sync
+            SyncAccessoryEditPanel(app);  // 0x4134E0 accessory edit panel sync
         }
         PostLanguageSweep(app);
         PostLanguageSweep2(app);
@@ -216,11 +219,11 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     // (matInit * position, x87 double intermediates), zeroing the rotation
     // and setting the distance to -20.0f (0x52F0B4).  Tail:
     // RefreshRequest(-1) + PostViewRefresh.
-    if (ctrl == GetDlgItem(hwnd, 0x1C1)) {
-        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, 0x1C1),
-                                         0x147 /*CB_GETCURSEL*/, 0, 0);
-        HWND boneCombo = GetDlgItem(hwnd, 0x1C2);
-        SendMessageA(boneCombo, 0x14B /*CB_RESETCONTENT*/, 0, 0);
+    if (ctrl == GetDlgItem(hwnd, panel::kMainComboNormal)) {
+        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal),
+                                         CB_GETCURSEL, 0, 0);
+        HWND boneCombo = GetDlgItem(hwnd, panel::kBoneRegisterCombo);
+        SendMessageA(boneCombo, CB_RESETCONTENT, 0, 0);
         if (sel > 0) {
             std::int32_t slot = 0;
             bool found = false;
@@ -271,8 +274,8 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
                 app->CameraRotation()[1] = 0.0f;
                 app->CameraRotation()[2] = 0.0f;
             }
-            SendMessageA(GetDlgItem(hwnd, 0x1C2),
-                         0x14B /*CB_RESETCONTENT*/, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kBoneRegisterCombo),
+                         CB_RESETCONTENT, 0, 0);
             app->CameraParentModel() = -1;
         }
         RefreshRequest(-1);    // 0x440AC0 (x64 sub_7FF7CB4BF4F0)
@@ -285,11 +288,11 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     // combo text is matched against the parent model's bone names; a hit
     // stores the bone index into the parent-bone field (0xA0434) and
     // refreshes the timeline row selection.
-    if (ctrl == GetDlgItem(hwnd, 0x1C2)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kBoneRegisterCombo)) {
         char text[0x100];
-        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, 0x1C2),
-                                         0x147 /*CB_GETCURSEL*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1C2), 0x148 /*CB_GETLBTEXT*/, sel,
+        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kBoneRegisterCombo),
+                                         CB_GETCURSEL, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRegisterCombo), CB_GETLBTEXT, sel,
                      reinterpret_cast<LPARAM>(text));
         const std::int32_t parent = app->CameraParentModel();
         if (parent >= 0) {
@@ -309,16 +312,16 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     // its 0x2D7C order byte, rebuilding the 0x1DB bone list; cursor <= 0
     // detaches (parentModel = -1).  With no selected accessory the whole
     // handler bails without touching the focus (0x48f2e0).
-    if (ctrl == GetDlgItem(hwnd, 0x1DA)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kMainComboGround)) {
         mdl::AccessoryRecord* acc =
             app->AccessorySlot(app->SelectedAccessorySlot());
         if (acc == nullptr) {
             return true;
         }
-        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, 0x1DA),
-                                         0x147 /*CB_GETCURSEL*/, 0, 0);
-        HWND boneCombo = GetDlgItem(hwnd, 0x1DB);
-        SendMessageA(boneCombo, 0x14B /*CB_RESETCONTENT*/, 0, 0);
+        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround),
+                                         CB_GETCURSEL, 0, 0);
+        HWND boneCombo = GetDlgItem(hwnd, panel::kAttachBoneCombo);
+        SendMessageA(boneCombo, CB_RESETCONTENT, 0, 0);
         if (sel > 0) {
             std::int32_t slot = 0;
             bool found = false;
@@ -348,11 +351,11 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     // ---- 0x1DB (0x48e8fd): accessory parent BONE combo.  The combo text
     // is matched against the accessory's parent model bones; a hit stores
     // the bone index into acc+0x234 and refreshes the timeline row.
-    if (ctrl == GetDlgItem(hwnd, 0x1DB)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kAttachBoneCombo)) {
         char text[0x100];
-        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, 0x1DB),
-                                         0x147 /*CB_GETCURSEL*/, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1DB), 0x148 /*CB_GETLBTEXT*/, sel,
+        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kAttachBoneCombo),
+                                         CB_GETCURSEL, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kAttachBoneCombo), CB_GETLBTEXT, sel,
                      reinterpret_cast<LPARAM>(text));
         mdl::AccessoryRecord* acc =
             app->AccessorySlot(app->SelectedAccessorySlot());
@@ -371,22 +374,22 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
 
     // ---- 0x1F8 / 0x1FD / 0x202 / 0x207: facial morph row combos (the
     // slider/edit partners 0x1F9/0x1FA etc. never emit WM_COMMAND).
-    if (ctrl == GetDlgItem(hwnd, 0x1F8)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kMorphCombo0)) {
         MorphRowSelect(app, hwnd, ctrl, 0, 0x1F9, 0x1FA);
         SetFocus(hwnd);
         return true;
     }
-    if (ctrl == GetDlgItem(hwnd, 0x1FD)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kMorphCombo1)) {
         MorphRowSelect(app, hwnd, ctrl, 1, 0x1FE, 0x1FF);
         SetFocus(hwnd);
         return true;
     }
-    if (ctrl == GetDlgItem(hwnd, 0x202)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kMorphCombo2)) {
         MorphRowSelect(app, hwnd, ctrl, 2, 0x203, 0x204);
         SetFocus(hwnd);
         return true;
     }
-    if (ctrl == GetDlgItem(hwnd, 0x207)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kMorphCombo3)) {
         MorphRowSelect(app, hwnd, ctrl, 3, 0x208, 0x209);
         SetFocus(hwnd);
         return true;
@@ -395,7 +398,7 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     // ---- 0x1B1 (0x48f263): light-colour interpolation row combo ->
     // SelectionReeval (the x64 chain jumps straight into case 431's tail
     // at 0x7ff7cb463665 for the same effect).
-    if (ctrl == GetDlgItem(hwnd, 0x1B1)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kInterpCurveCombo)) {
         SelectionReeval(app);
         SetFocus(hwnd);
         return true;
@@ -404,11 +407,11 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     // ---- 0x1B2 (0x48f27e): selection-target combo.  The cursor is stored
     // on the active model (0x4CCF0, restored when the model is re-selected;
     // cleared to 3 on scene load).
-    if (ctrl == GetDlgItem(hwnd, 0x1B2)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kRegisterScopeCombo)) {
         unsigned char* model = app->SelectedModel();
         if (model != nullptr) {
-            const LRESULT sel = SendMessageA(GetDlgItem(hwnd, 0x1B2),
-                                             0x147 /*CB_GETCURSEL*/, 0, 0);
+            const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo),
+                                             CB_GETCURSEL, 0, 0);
             mdl::Mdl(model)->frameRegistrationSelection =
                 static_cast<std::int32_t>(sel);
         }
@@ -436,12 +439,12 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
 
     case 0xC9: {     // Help: About (x64 0x7FF7CB472BAD)
         // Raise the dialog-in-flight flags (x64 app+0x58/+0xC0 =
-        // dialogFlags[9]/bC), compose the banner into a 256-byte ANSI
+        // dialogFlags[9]/enterKeyState), compose the banner into a 256-byte ANSI
         // buffer - the Japanese branch carries the Shift-JIS bytes of the
         // author's name (樋口優, 0x7FF7CB54F980) - and pop it over the
         // floating viewport window when one exists (x64 app+0xA1DE0).
         s.state.dialogFlags[9] = 1;
-        s.state.bC = 1;
+        s.state.enterKeyState = 1;
         char text[256];
         sprintf_s(text, 256,
                   s.EnglishUI() != 0
@@ -504,7 +507,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         // floating window (0xA0D38) when open, else the main window.
         HWND owner3 = static_cast<HWND>(s.FloatingWindow());
         if (owner3 == nullptr) owner3 = hwnd;
-        SendMessageA(GetDlgItem(owner3, 0x227), 0xF1 /*BM_SETCHECK*/,
+        SendMessageA(GetDlgItem(owner3, panel::kInfoCheckbox), BM_SETCHECK,
                      s.state.fpsOverlayEnabled, 0);
         break;
     }
@@ -512,7 +515,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         CmdLoadAvi(app);
         break;
     case 0xD6: {    // View: character transparent mode (0x487FA0)
-        auto& flag = s.state.v9eb7e;
+        auto& flag = s.state.characterTransparentMode;
         flag = flag ? 0 : 1;
         CheckMenuItem(GetMenu(hwnd), 0xD6, flag ? MF_CHECKED : MF_UNCHECKED);
         // 0x487FF5..0x48803C: push the new flag into every loaded model's
@@ -532,7 +535,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         // floating window (0xA0D38) when open, else the main window.
         HWND owner7 = static_cast<HWND>(s.FloatingWindow());
         if (owner7 == nullptr) owner7 = hwnd;
-        SendMessageA(GetDlgItem(owner7, 0x22D), 0xF1 /*BM_SETCHECK*/,
+        SendMessageA(GetDlgItem(owner7, panel::kCoordAxisCheckbox), BM_SETCHECK,
                      flag, 0);
         break;
     }
@@ -543,7 +546,7 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         if (flag == 1) {
             flag = 0;
             CheckMenuItem(GetMenu(hwnd), 0xD8, MF_UNCHECKED);
-        } else if (s.state.v9e400OrUint32 != 0) {
+        } else if (s.state.aviStream != 0) {
             flag = 1;
             CheckMenuItem(GetMenu(hwnd), 0xD8, MF_CHECKED);
         }

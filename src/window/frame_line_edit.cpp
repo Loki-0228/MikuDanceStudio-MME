@@ -43,6 +43,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -176,8 +177,8 @@ void ClearCameraKeyRecord(mdl::CameraKey& key) {
 
 }  // namespace
 
-// ---- VA 0x00439E40: insert frame line (bone / camera) ---------------------
-void Sub439E40(MMDApp* app) {
+// ---- VA 0x00439E40 (was Sub439E40): insert frame line (bone / camera) ----
+void InsertBoneCameraFrameLine(MMDApp* app) {
     const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
     if (app->state.optflag[0] == 0) {
@@ -193,9 +194,9 @@ void Sub439E40(MMDApp* app) {
         }
         if (affected == 0) return;
 
-        EnableWindow(GetDlgItem(app->state.hwnd, 0x190),
+        EnableWindow(GetDlgItem(app->state.hwnd, panel::kUndoButton),
                      TRUE);
-        EnableWindow(GetDlgItem(app->state.hwnd, 0x191),
+        EnableWindow(GetDlgItem(app->state.hwnd, panel::kRedoButton),
                      FALSE);
 
         BeginUndoEdit(model, cur);                     // 0x43A02F..
@@ -209,7 +210,7 @@ void Sub439E40(MMDApp* app) {
             mdl::BoneKey& key = keys[i];
             const std::uint32_t f = key.frame;
             if (f != 0 && i >= boneCount && f >= cur) {
-                Sub49D410(model, i);                   // snapshot record
+                AppendBoneKeyToUndo(model, i);                   // snapshot record
                 key.frame = f + 1;
                 if (static_cast<std::int32_t>(mdl::Mdl(model)->maxFrame) <
                     static_cast<std::int32_t>(f) + 1)
@@ -218,7 +219,7 @@ void Sub439E40(MMDApp* app) {
             }
         }
 
-        Sub4B4260(model, static_cast<int>(cur),
+        SeekModelFrame(model, static_cast<int>(cur),
                   app->PlaybackPhysicsMode());
         PanelPaint(app);
         SelectionReeval(app);
@@ -243,8 +244,8 @@ void Sub439E40(MMDApp* app) {
     app->SceneModified() = 1;
 }
 
-// ---- VA 0x0043A650: delete frame line (bone / camera) ---------------------
-void Sub43A650(MMDApp* app) {
+// ---- VA 0x0043A650 (was Sub43A650): delete frame line (bone / camera) ----
+void DeleteBoneCameraFrameLine(MMDApp* app) {
     const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
     if (app->state.optflag[0] == 0) {
@@ -266,9 +267,9 @@ void Sub43A650(MMDApp* app) {
         }
         if (affected == 0) return;
 
-        EnableWindow(GetDlgItem(app->state.hwnd, 0x190),
+        EnableWindow(GetDlgItem(app->state.hwnd, panel::kUndoButton),
                      TRUE);
-        EnableWindow(GetDlgItem(app->state.hwnd, 0x191),
+        EnableWindow(GetDlgItem(app->state.hwnd, panel::kRedoButton),
                      FALSE);
 
         BeginUndoEdit(model, cur);                     // 0x43AB9C..
@@ -281,7 +282,7 @@ void Sub43A650(MMDApp* app) {
         // Auto-interpolation rebuild gate: checkbox 0x212 (0x43AFF4).
         const bool autoInterp =
             SendMessageA(GetDlgItem(app->state.hwnd,
-                                    0x212),
+                                    panel::kPhysicsFrameCheckbox),
                          BM_GETCHECK, 0, 0) == 1;
 
         for (int i = 0; i < static_cast<int>(mdl::kBoneKeyCapacity); ++i) {             // 0x43B018..
@@ -292,9 +293,9 @@ void Sub43A650(MMDApp* app) {
                 // Key exactly at the current frame: unlink and clear.
                 const std::int32_t prev = static_cast<std::int32_t>(key.previous);
                 const std::int32_t next = static_cast<std::int32_t>(key.next);
-                Sub49D410(model, prev);                // 0x43B06B
-                Sub49D410(model, i);                   // 0x43B07F
-                Sub49D410(model, next);                // 0x43B09D
+                AppendBoneKeyToUndo(model, prev);                // 0x43B06B
+                AppendBoneKeyToUndo(model, i);                   // 0x43B07F
+                AppendBoneKeyToUndo(model, next);                // 0x43B09D
                 keys[prev].next = next;
                 keys[next].previous = prev;
                 ClearBoneKeyRecord(key);               // 0x43B1F9..
@@ -302,7 +303,7 @@ void Sub43A650(MMDApp* app) {
                     for (int lane = 0; lane < 4; ++lane) {
                         const std::int32_t n =
                             static_cast<std::int32_t>(key.next);
-                        Sub49D4D0(model, n == 0
+                        RebuildBoneKeyInterpolation(model, n == 0
                                           ? static_cast<std::int32_t>(
                                                 key.previous) : n,
                                   lane);
@@ -315,7 +316,7 @@ void Sub43A650(MMDApp* app) {
 
             if (f != 0 && i >= boneCount && cur < f) {
                 // Key above the current frame: shift down by one.
-                Sub49D410(model, i);                   // 0x43B28B
+                AppendBoneKeyToUndo(model, i);                   // 0x43B28B
                 const std::uint32_t nf = f - 1;
                 key.frame = nf;
                 if (nf == 0) {
@@ -334,7 +335,7 @@ void Sub43A650(MMDApp* app) {
                         for (int lane = 0; lane < 4; ++lane) {
                             const std::int32_t n =
                                 static_cast<std::int32_t>(key.next);
-                            Sub49D4D0(model,
+                            RebuildBoneKeyInterpolation(model,
                                       n == 0
                                           ? static_cast<std::int32_t>(
                                                 key.previous) : n,
@@ -346,7 +347,7 @@ void Sub43A650(MMDApp* app) {
             }
         }
 
-        Sub4B4260(model, static_cast<int>(cur),
+        SeekModelFrame(model, static_cast<int>(cur),
                   app->PlaybackPhysicsMode());
         PanelPaint(app);
         SelectionReeval(app);
@@ -392,8 +393,8 @@ void Sub43A650(MMDApp* app) {
     app->SceneModified() = 1;
 }
 
-// ---- VA 0x0043B720: insert frame line (facial / light) --------------------
-void Sub43B720(MMDApp* app) {
+// ---- VA 0x0043B720 (was Sub43B720): insert frame line (facial / light) ---
+void InsertFacialLightFrameLine(MMDApp* app) {
     const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
     if (app->state.optflag[0] != 0) {
@@ -409,7 +410,7 @@ void Sub43B720(MMDApp* app) {
                     app->LastRegisteredFrame() = static_cast<std::int32_t>(f + 1);
             }
         }
-        Sub411070(app);
+        RefreshLightPanel(app);
         PanelPaint(app);
         app->SceneModified() = 1;
         return;
@@ -430,15 +431,15 @@ void Sub43B720(MMDApp* app) {
                     static_cast<std::int32_t>(f) + 1;
         }
     }
-    Sub4B4260(model, static_cast<int>(cur),
+    SeekModelFrame(model, static_cast<int>(cur),
               app->PlaybackPhysicsMode());
     PanelPaint(app);
     SelectionReeval(app);
     app->SceneModified() = 1;
 }
 
-// ---- VA 0x0043BB30: delete frame line (facial / light) --------------------
-void Sub43BB30(MMDApp* app) {
+// ---- VA 0x0043BB30 (was Sub43BB30): delete frame line (facial / light) ---
+void DeleteFacialLightFrameLine(MMDApp* app) {
     const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
     if (app->state.optflag[0] == 0) {
@@ -484,7 +485,7 @@ void Sub43BB30(MMDApp* app) {
                 }
             }
         }
-        Sub4B4260(model, static_cast<int>(cur),
+        SeekModelFrame(model, static_cast<int>(cur),
                   app->PlaybackPhysicsMode());
         PanelPaint(app);
         SelectionReeval(app);
@@ -528,7 +529,7 @@ void Sub43BB30(MMDApp* app) {
             }
         }
     }
-    Sub411070(app);
+    RefreshLightPanel(app);
     PanelPaint(app);
     app->SceneModified() = 1;
 }

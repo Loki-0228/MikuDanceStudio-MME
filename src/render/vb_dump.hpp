@@ -1,3 +1,10 @@
+// ===========================================================================
+// Porting-era diagnostics: vertex-batch capture under
+// MIKUDANCESTUDIO_VB_DUMP_DIR for A/B comparison against the original
+// renderers.  Compiled only with -DMIKUDANCESTUDIO_DIAG (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub below keeps the call
+// sites valid and inlines away to nothing.
+// ===========================================================================
 #pragma once
 
 #define WIN32_LEAN_AND_MEAN
@@ -10,6 +17,8 @@
 #include <cstring>
 
 namespace mikudancestudio {
+
+#ifdef MIKUDANCESTUDIO_DIAG
 
 inline void DumpVertexBatch(const char* name, const void* bytes,
                             std::uint32_t primitiveCount,
@@ -83,5 +92,12 @@ inline void DumpVertexBatch(const char* name, const void* bytes,
         CloseHandle(file);
     }
 }
+
+#else  // !MIKUDANCESTUDIO_DIAG
+
+inline void DumpVertexBatch(const char*, const void*, std::uint32_t,
+                            std::size_t) {}
+
+#endif  // MIKUDANCESTUDIO_DIAG
 
 }  // namespace mikudancestudio

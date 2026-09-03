@@ -24,14 +24,14 @@
 // Case map (id -> behaviour -> original VA):
 //   id  hex  VA            behaviour
 //   --- ---  ------------  ---------------------------------------------------
-//   400 190  0x00482766    undo: gate 0x2F8, dirty 0xA0B0D, Sub4A1870(model,
+//   400 190  0x00482766    undo: gate 0x2F8, dirty 0xA0B0D, UndoModelEdit(model,
 //                          &0x980), undo-table 0x26EC[28*cnt] gate -> disable
 //                          0x190, cnt==cur gate, enable 0x191, paste-mode
 //                          bytes 0x31BC/0x31BD, PanelPaint, SelectionReeval,
 //                          SetFocus, undo-flag 0x9EDB5 (falls into default,
 //                          no-op for this id)
-//   401 191  0x004828DF    redo: mirror of 400 with Sub4A2490, 0x191/0x190
-//                          swapped, Sub4B4260(model, frame, 0xA0CC4) when
+//   401 191  0x004828DF    redo: mirror of 400 with RedoModelEdit, 0x191/0x190
+//                          swapped, SeekModelFrame(model, frame, 0xA0CC4) when
 //                          undo-table entry != 1
 //   402 192  0x0047EEDF    view reset (camera cluster): 0x2F8 gate; fast path
 //                          0x310/0x314/0x318 = 0 + angle -45; full path
@@ -44,17 +44,17 @@
 //   406 196  0x0047F0B5    view reset variant: 0x314 = -PI/2
 //   407 197  0x0047F29C    view reset + model reload: fast 0x310 = PI/2; full
 //                          path flag 0xA0478 = 0, 0x308/0x30C = 0,
-//                          Sub42E640 (ReloadModels) + PostModelReload
+//                          ReloadModels (0x42E640) + PostModelReload
 //   408 198  0x00487446    frame-range edits 0x199/0x19A: atol -> frameA/30
 //                          (0x9E654, from frame 0x980 or 0x199 by byte
 //                          0x9ED99), frameB/30 (0x9E658, 0x19A or 0x9E16C),
 //                          0x9E64C copy, IsWindowEnabled snapshot
 //                          0x9EB77..0x9EB7D, UpdateBoneFrames, timer/subsystem
 //                          calls, timeGetTime copies 0x9EDA8/0x9EDAC; the
-//                          byte-0x330-set branch clears 0x330 + Sub4341E0
+//                          byte-0x330-set branch clears 0x330 + StopPlayback
 //   411 19B  0x0047FAE5    toggle byte 0x341
 //   412 19C  0x0047F9FE    checkbox 0x19C -> byte 0x340 = 1/0 (view mode),
-//                          BM_SETCHECK 0x213, Sub41ACD0(prev) when 0x2F8==0
+//                          BM_SETCHECK 0x213, ApplyCameraReferenceModeChange(prev) when 0x2F8==0
 //   413 19D  0x0047FAFA    toggle byte 0x342
 //   414 19E  0x0047FB0F    toggle byte 0x9ED99
 //   415 1A9  0x004829E4    frame-range editor: atol of edits 0x1A9/0x1AA ->
@@ -85,11 +85,11 @@
 //                          paste loops (model: 0x49D880/0x49F190/0x49F8C0;
 //                          camera: 0x410AA0..0x414110), light-record slot
 //                          fixup; tail PanelPaint/SelectionReeval/
-//                          Sub4B4260 + reload chain when 0x2F8
+//                          SeekModelFrame + reload chain when 0x2F8
 //   422 1A6  0x00485CF2    reverse paste: same undo setup as 421 (bones only),
-//                          then Sub49E310 mirrored insert over the 0x354
-//                          records; PanelPaint/SelectionReeval/Sub4B4260
-//   423 1A7  0x004810F8    Sub4316B0(app) + dirty 0xA0B0D
+//                          then RegisterMirroredBoneKey mirrored insert over the 0x354
+//                          records; PanelPaint/SelectionReeval/SeekModelFrame
+//   423 1A7  0x004810F8    DeleteMarkedKeyframes(app) + dirty 0xA0B0D
 //   424 1A8  0x00488300    frame-edit dialog: dirty 0xBC, locale-gated
 //                          DialogBoxParamA (template 0x25E EN / 0x28C JP,
 //                          proc sub_44C5D0)
@@ -112,22 +112,22 @@
 //                          (*.pmd,*.pmx)", menu-0x12D gate, LoadModelFile,
 //                          RefreshRequest(-1)
 //   436 1B4  0x004828AA    default chain: CBN_SELCHANGE on the model combo
-//                          -> Sub44D940 when the 0xA0B50 gate is clear;
+//                          -> ApplyModelComboSelection when the 0xA0B50 gate is clear;
 //                          kept as the local case below (equivalent)
 //   437 1B5  0x0047FCF5    delete model from combo 0x1B4: confirm box (EN/JP),
 //                          dispose model + sub-window, slot fixup (ids
 //                          0x2D7C/0x2D7D, bone tables 0x4CCE4, camera tables
 //                          0x26E8), combo rebuild, menu 0x120/0x121,
-//                          Sub44D940
+//                          ApplyModelComboSelection
 //   438 1B6  0x00480651    clear keyframe selection marks (0x26E0/0x26E4/
-//                          0x26E8), Sub49F480, 0x9E16C fixup, PanelPaint
+//                          0x26E8), RegisterDisplayKeyCurrent, 0x9E16C fixup, PanelPaint
 //   439 1B7  0x0047F3AF    checkbox 0x1B7 -> model byte 0x2D8D
 //   440 1B8  0x0048A166    toggle model byte 0x37C0
 //   441 1B9  0x0048A133    toggle model byte 0x31BE
 //   442 1BA  0x0048D759    accessory edit dialog: DialogBoxParamA (template
 //                          0x329 EN / 0x328 JP, proc sub_47A3F0), free the
 //                          0xA0B1C/0xA0B24/0xA0668 buffers, then
-//                          Sub4B4260 + PostLanguageSweep + SelectionReeval
+//                          SeekModelFrame + PostLanguageSweep + SelectionReeval
 //                          when byte 0xA0664 != 0
 //   443 1BB  0x0048E214    default chain: CB_GETCURSEL(0x1BB) -> IK table
 //                          model+0x26C0[24*sel+0x12] flag -> CheckRadioButton
@@ -187,6 +187,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -234,6 +235,10 @@ static void ReplaceClipboardBuffer(Record*& buffer, std::uint32_t count) {
     memset(buffer, 0, count * sizeof(Record));
 }
 
+// Porting-era trace under MIKUDANCESTUDIO_STATE_DUMP_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call sites
+// valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 static void TraceModelPaste(const char* format, ...) {
     char directory[MAX_PATH]{};
     const DWORD length = GetEnvironmentVariableA(
@@ -252,6 +257,9 @@ static void TraceModelPaste(const char* format, ...) {
     std::fputc('\n', stream);
     std::fclose(stream);
 }
+#else
+static inline void TraceModelPaste(const char*, ...) {}
+#endif
 
 // Additional model fields (model = slot array app+0x780 [byte app+0x910]).
 // Bone frame record sub-fields used by the copy code (0x3C-stride 0x26E0):
@@ -265,59 +273,62 @@ static void TraceModelPaste(const char* format, ...) {
 void RefreshRequest(int area);                     // VA 0x00440AC0 (ui_refresh)
 void PanelPaint(MMDApp* app);                      // VA 0x00414610 (ui_panel)
 void SelectionReeval(MMDApp* app);                 // VA 0x00430510 (stubs.cpp)
-void Sub42AE20(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 path copy
-void Sub42E640(MMDApp* app);                       // VA 0x0042E640 (stubs.cpp)
-int Sub4B4260(unsigned char* model, int frame, int a3);  // VA 0x004B4260 (stubs.cpp)
-void Sub4A1510(unsigned char* model, int frame);         // VA 0x004A1510 (stubs.cpp)
+void CopyDirPathW(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 path copy
+void ReloadModels(MMDApp* app);                    // VA 0x0042E640 (timeline_advance.cpp), was Sub42E640
+int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // VA 0x004B4260
+void SnapshotSelectedKeysForUndo(unsigned char* model, int frame);  // VA 0x004A1510, was Sub4A1510
 
 // ---------------------------------------------------------------------------
 // Cross-translation-unit dependencies.
 // ---------------------------------------------------------------------------
-void Sub4A1870(unsigned char* model, std::int32_t* frame);  // VA 0x004A1870
+void UndoModelEdit(unsigned char* model, std::int32_t* frame);  // VA 0x004A1870
                                                             // model undo step
-void Sub4A2490(unsigned char* model, std::int32_t* frame);  // VA 0x004A2490
+void RedoModelEdit(unsigned char* model, std::int32_t* frame);  // VA 0x004A2490
                                                             // model redo step
-void Sub41ACD0(MMDApp* app, int mode);          // VA 0x0041ACD0 view-mode apply
-void Sub430F20(MMDApp* app);                    // VA 0x00430F20
-void Sub4312E0(MMDApp* app);                    // VA 0x004312E0
-void Sub4316B0(MMDApp* app);                    // VA 0x004316B0
-void Sub4341E0(MMDApp* app);                    // VA 0x004341E0 frame ops
-void Sub49F480(unsigned char* model, int frame);// VA 0x0049F480
-void Sub40A710(unsigned char* model, int flag); // VA 0x0040A710 model dispose
-void Sub4220C0(MMDApp* app);                    // VA 0x004220C0
-void Sub44D940(MMDApp* app);                    // VA 0x0044D940
-INT_PTR CALLBACK Sub47A3F0(HWND, UINT, WPARAM, LPARAM);  // VA 0x0047A3F0
+void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode);  // VA 0x0041ACD0, was Sub41ACD0
+void StepFrame(MMDApp* app, bool forward);      // VA 0x00430F20 (fwd) / 0x004312E0
+                                                // (back), was Sub430F20/Sub4312E0
+                                                // (ui_frame_step.cpp)
+void DeleteMarkedKeyframes(MMDApp* app);                    // VA 0x004316B0
+void StopPlayback(MMDApp* app);             // VA 0x004341E0 stop playback
+void RegisterDisplayKeyCurrent(unsigned char* model, int frame);// VA 0x0049F480
+void DeleteModel(unsigned char* model, int flag);  // VA 0x0040A710 model dispose, was Sub40A710
+void SeekSelectedModelToCurrentFrame(MMDApp* app);                    // VA 0x004220C0
+void ApplyModelComboSelection(MMDApp* app);                    // VA 0x0044D940
+INT_PTR CALLBACK SelectNavDlgProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0047A3F0
                                                         // accessory dialog
 // Real bodies: ui_refresh.cpp (0x4C2680) and ui_timeline_gfx.cpp
 // (0x4C2A00/0x4C2B80); declared centrally in ported_funcs.hpp.
 bool WaveStartPlayback(void* obj);               // VA 0x004C2760 (media/wave_audio.cpp)
-void Sub4C34A0(void* obj, double v);            // VA 0x004C34A0 (stub)
+void WaveSeekAndFeed(void* obj, double seconds);  // VA 0x004C34A0
 
 // Additional stubs defined in src/unported/stubs.cpp (signatures fixed
 // there; stubs.cpp must not be touched).
-void Sub411070(MMDApp* app);                    // VA 0x00411070
-void Sub411B90(MMDApp* app);                    // VA 0x00411B90
-void Sub412330(MMDApp* app);                    // VA 0x00412330
-void Sub413120(MMDApp* app, int idx);           // VA 0x00413120
-void Sub4134E0(MMDApp* app);                    // VA 0x004134E0
-bool Sub49D880(unsigned char* model, unsigned char* rec, int a2, unsigned char a3);  // VA 0x0049D880
-void Sub4A4940(unsigned char* model);           // VA 0x004A4940
-int  Sub414110(MMDApp* app, void* rec, int flag);  // VA 0x00414110
-void Sub4C46F0(void* obj);                      // VA 0x004C46F0
-void* Sub401150(void* block, std::uint32_t size, std::uint32_t count,
-                void* ctor);                    // VA 0x00401150
+void RefreshLightPanel(MMDApp* app);                    // VA 0x00411070
+void RefreshSelfShadowPanel(MMDApp* app);                    // VA 0x00411B90
+void ApplyGravityTrack(MMDApp* app);                    // VA 0x00412330
+void ApplyAccessoryTrack(MMDApp* app, int idx);           // VA 0x00413120
+void SyncAccessoryEditPanel(MMDApp* app);                    // VA 0x004134E0
+bool RegisterBoneKey(unsigned char* model, unsigned char* rec, int frameOffset, unsigned char useSelected);  // VA 0x0049D880
+void ResetBoneKeyCursor(unsigned char* model);           // VA 0x004A4940
+int  PasteAccessoryKeyRecord(MMDApp* app, void* rec, int useSelectedSlot);  // VA 0x00414110, was Sub414110
+void IdentityCtor(void* obj);                      // VA 0x004C46F0
+void* ConstructArrayElements(void* block, std::uint32_t elementSize,
+                             std::uint32_t count,
+                             void* ctor);       // VA 0x00401150, was Sub401150
 
 // Newly-required unported dependencies - file-local stub bodies so the
 // call sites below link (stubs.cpp must not be modified).  TODO(port):
 // move each body to src/unported/stubs.cpp when the function is ported.
 // Real body: src/model/key_registrars.cpp (name-based frame mark).
-int Sub4A27F0(unsigned char* model, std::uint32_t from, std::uint32_t to,
-              const char* name);                 // VA 0x004A27F0
-int Sub410AA0(MMDApp* app, const void* rec);      // VA 0x00410AA0 0x374 paste
-int Sub411900(MMDApp* app, const void* rec);      // VA 0x00411900 0x378 paste
-int Sub4120B0(MMDApp* app, const void* rec);      // VA 0x004120B0 0x37C paste
-int Sub412DF0(MMDApp* app, const void* rec);      // VA 0x00412DF0 0x380 paste
-// Sub44C5D0 real body: dialog_procs.cpp (0x0044C5D0).
+int MarkKeyTrackRangeByName(unsigned char* model, std::uint32_t from,
+                            std::uint32_t to,
+                            const char* name);   // VA 0x004A27F0, was Sub4A27F0
+int RegisterCameraKey(MMDApp* app, const void* rec);      // VA 0x00410AA0 0x374 paste, was Sub410AA0
+int RegisterLightKey(MMDApp* app, const void* rec);      // VA 0x00411900 0x378 paste, was Sub411900
+int RegisterSelfShadowKey(MMDApp* app, const void* rec);      // VA 0x004120B0 0x37C paste, was Sub4120B0
+int RegisterGravityKey(MMDApp* app, const void* rec);      // VA 0x00412DF0 0x380 paste, was Sub412DF0
+// FrameRangeDlgProc real body: dialog_procs.cpp (0x0044C5D0).
 
 // ---------------------------------------------------------------------------
 // Helpers shared by the family.
@@ -453,25 +464,25 @@ static void FillGravityFrame(mdl::GravityKey& key,
     key.selected = 1;
 }
 
-int Sub410AA0(MMDApp* app, const void* rec) {
+int RegisterCameraKey(MMDApp* app, const void* rec) {  // was Sub410AA0, VA 0x00410AA0
     const auto& source = *static_cast<const CameraClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->CameraKeys(), source.frame, source,
                              FillCameraFrame);
 }
 
-int Sub411900(MMDApp* app, const void* rec) {
+int RegisterLightKey(MMDApp* app, const void* rec) {  // was Sub411900, VA 0x00411900
     const auto& source = *static_cast<const LightClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->LightKeys(), source.frame, source,
                              FillLightFrame);
 }
 
-int Sub4120B0(MMDApp* app, const void* rec) {
+int RegisterSelfShadowKey(MMDApp* app, const void* rec) {  // was Sub4120B0, VA 0x004120B0
     const auto& source = *static_cast<const ShadowClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->ShadowKeys(), source.frame, source,
                              FillShadowFrame);
 }
 
-int Sub412DF0(MMDApp* app, const void* rec) {
+int RegisterGravityKey(MMDApp* app, const void* rec) {  // was Sub412DF0, VA 0x00412DF0
     const auto& source = *static_cast<const GravityClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->GravityKeys(), source.frame, source,
                              FillGravityFrame);
@@ -493,8 +504,9 @@ static Key* FindGlobalFrame(Key* table, std::uint32_t frame) {
     }
 }
 
-// VA 0x00410560: Camera manipulation "register" button backend.
-void Sub410560(MMDApp* app, int frame) {
+// VA 0x00410560: Camera manipulation "register" button backend
+// (was Sub410560).
+void RegisterCameraState(MMDApp* app, int frame) {
     CameraClipboardRecord source{};
     const std::uint32_t absolute = static_cast<std::uint32_t>(frame);
     source.frame =
@@ -512,7 +524,7 @@ void Sub410560(MMDApp* app, int frame) {
     std::memset(defaultInterpolation[0], 20, 12);
     std::memset(defaultInterpolation[2], 107, 12);
     const bool resetInterpolation =
-        SendMessageA(GetDlgItem(app->MainWindow(), 530),
+        SendMessageA(GetDlgItem(app->MainWindow(), panel::kPhysicsFrameCheckbox),
                      BM_GETCHECK, 0, 0) == BST_CHECKED;
     const std::uint8_t (*interpolation)[6] = defaultInterpolation;
     mdl::CameraKey* existing = FindGlobalFrame(app->CameraKeys(), absolute);
@@ -521,11 +533,12 @@ void Sub410560(MMDApp* app, int frame) {
     }
     std::memcpy(source.interpolation, interpolation,
                 sizeof(source.interpolation));
-    Sub410AA0(app, &source);
+    RegisterCameraKey(app, &source);
 }
 
-// VA 0x00411630: Light manipulation "register" button backend.
-void Sub411630(MMDApp* app, int frame) {
+// VA 0x00411630: Light manipulation "register" button backend
+// (was Sub411630).
+void RegisterLightState(MMDApp* app, int frame) {
     LightClipboardRecord source{};
     source.frame =
         static_cast<std::uint32_t>(frame) -
@@ -533,7 +546,7 @@ void Sub411630(MMDApp* app, int frame) {
     std::memcpy(source.direction, app->LightDirection(),
                 sizeof(source.direction));
     std::memcpy(source.color, app->LightColor(), sizeof(source.color));
-    Sub411900(app, &source);
+    RegisterLightKey(app, &source);
 }
 
 static void UnlinkAccessoryKey(mdl::AccessoryKey* keys,
@@ -625,7 +638,7 @@ static void ResetAccessoryRecord(mdl::AccessoryKey& key) {
 
 // VA 0x004316B0. Camera mode purges the five global track families; model
 // mode delegates to the exact 0x4A09E0 model-key deletion backend.
-void Sub4316B0(MMDApp* app) {
+void DeleteMarkedKeyframes(MMDApp* app) {
     if (app == nullptr) {
         return;
     }
@@ -695,27 +708,27 @@ void Sub4316B0(MMDApp* app) {
     } else {
         unsigned char* model = ActiveModel(app);
         if (model != nullptr)
-            Sub4A09E0(model,
+            DeleteMarkedModelKeys(model,
                       app->state.currentFrame);
     }
 
     PanelPaint(app);
     SelectionReeval(app);
     if (app->state.optflag[0] != 0) {
-        Sub42E640(app);
-        Sub411070(app);
-        Sub411B90(app);
-        Sub412330(app);
+        ReloadModels(app);
+        RefreshLightPanel(app);
+        RefreshSelfShadowPanel(app);
+        ApplyGravityTrack(app);
         for (int slot = 0; slot < 255; ++slot) {
             if (app->AccessoryKeys(slot) != nullptr) {
-                Sub413120(app, slot);
+                ApplyAccessoryTrack(app, slot);
             }
         }
-        Sub4134E0(app);
+        SyncAccessoryEditPanel(app);
     } else {
         unsigned char* model = ActiveModel(app);
         if (model != nullptr) {
-            Sub4B4260(model,
+            SeekModelFrame(model,
                       app->state.currentFrame,
                       app->PlaybackPhysicsMode());
         }
@@ -757,7 +770,7 @@ void ResetViewVariant(MMDApp* app, float rot, bool gate30C, bool rotIn310) {
     }
     const std::int32_t a0430 = app->CameraParentModel();
     const std::uint8_t slot = app->SelectedModelSlot();
-    const std::uint8_t esi = app->state.v9ed98;
+    const std::uint8_t esi = app->state.followCameraEnabled;
     const bool c = a0430 >= 0;  // setnl cl
     const bool b = (slot == a0430) &&
                    app->PlaybackActive() == 0 &&
@@ -1042,83 +1055,1769 @@ static const wchar_t kTitleLoadModel[] = L"load model";
 static const wchar_t kTitleOpenFileJp[] =
     L"\x30D5\x30A1\x30A4\x30EB\x3092\x958B\x304F";
 
+// ---------------------------------------------------------------------------
+// Case handlers (extraction only, no rewrite).  Each handler body is the
+// verbatim statement sequence of its original case; the single control-flow
+// edit is that a case-level `break` (an exit of the dispatch switch below)
+// is expressed as `return` here - the call site's `break` restores the same
+// switch-exit effect, so the control-flow graph is unchanged.  `break`s that
+// belong to loops inside a case body are untouched.  The per-case provenance
+// notes (original VAs) moved here together with the code.
+// ---------------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// 400 (0x00482766): undo button 0x190.  Gated on byte 0x2F8; the
+// paste-undo table model+0x26EC[28*cnt] and the cnt==cur equality both
+// disable 0x190 / clear paste-mode byte 0x31BC; 0x191 enabled and mode
+// byte 0x31BD = 1, then PanelPaint + SelectionReeval + SetFocus and
+// undo-available flag 0x9EDB5.  The original falls through into
+// def_47E903, a no-op for this id (control 0x190 != 0x1B4).
+// ------------------------------------------------------------------
+static void Cmd400_Undo(MMDApp* app, HWND hwnd) {
+    if (app->state.optflag[0] != 0) {
+        return;  // was: break (switch exit)
+    }
+    app->SceneModified() = 1;
+    unsigned char* model = ActiveModel(app);
+    mdl::ModelRecord& record = *mdl::Mdl(model);
+    UndoModelEdit(model, reinterpret_cast<std::int32_t*>(
+                         app->state.currentFrame));
+    const std::int32_t cnt = record.undoState[0];
+    if (record.undoRings[0].slots[cnt].operation == 0) {
+        EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), FALSE);
+        record.undoDirty = 0;
+        SetFocus(hwnd);
+    }
+    if (record.undoState[0] == record.undoState[1]) {
+        EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), FALSE);
+        record.undoDirty = 0;
+        SetFocus(hwnd);
+    }
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), TRUE);
+    record.redoDirty = 1;
+    PanelPaint(app);
+    SelectionReeval(app);
+    SetFocus(hwnd);
+    app->PhysicsResetPending() = 1;
+}
+// ------------------------------------------------------------------
+// 401 (0x004828DF): redo button 0x191 - mirror of 400 with
+// RedoModelEdit, 0x191/0x190 swapped and mode bytes inverted; when the
+// undo-table entry model+0x26EC[28*cnt] != 1, SeekModelFrame is invoked
+// (original: thiscall(ecx = model, frame = dword app+0x980,
+// app+0xA0CC4) - the stub only takes this + pos).
+// ------------------------------------------------------------------
+static void Cmd400_Redo(MMDApp* app, HWND hwnd) {
+    if (app->state.optflag[0] != 0) {
+        return;  // was: break (switch exit)
+    }
+    app->SceneModified() = 1;
+    unsigned char* model = ActiveModel(app);
+    mdl::ModelRecord& record = *mdl::Mdl(model);
+    RedoModelEdit(model, reinterpret_cast<std::int32_t*>(
+                         app->state.currentFrame));
+    if (record.undoState[0] == record.undoState[1]) {
+        EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
+        record.redoDirty = 0;
+        SetFocus(hwnd);
+    }
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    record.undoDirty = 1;
+    PanelPaint(app);
+    SelectionReeval(app);
+    const std::int32_t cnt = record.undoState[0];
+    if (record.undoRings[0].slots[cnt].operation != 1) {
+        // original: sub_4B4260(ecx = model, frame = app+0x980,
+        // app+0xA0CC4)
+        SeekModelFrame(model,
+                  app->state.currentFrame,
+                  app->PlaybackPhysicsMode());
+    }
+    SetFocus(hwnd);
+    app->PhysicsResetPending() = 1;
+}
+// ------------------------------------------------------------------
+// 407 (0x0047F29C): view reset + model reload.  Fast path (0x2F8!=0):
+// 0x310 = +PI/2, 0x314/0x318 = 0, angle -45, refresh.  Full path:
+// gate (slot==0xA0430 && 0x330==0 && 0x9ED98!=0 && 0xA0430>=0 -> skip
+// the reset, only refresh), else flag 0xA0478 = 0, 0x308/0x30C = 0,
+// ReloadModels (0x42E640) + PostModelReload, refresh.
+// ------------------------------------------------------------------
+static void Cmd400_ViewResetReload(MMDApp* app) {
+    if (app->state.optflag[0] != 0) {
+        app->CameraRotation()[0] = 1.5707964f;
+        app->CameraRotation()[1] = 0.0f;
+        app->CameraRotation()[2] = 0.0f;
+        app->CameraDistance() = -45.0f;
+        ViewResetRefresh(app);
+        return;  // was: break (switch exit)
+    }
+    const std::int32_t a0430 = app->CameraParentModel();
+    const std::uint8_t slot = app->SelectedModelSlot();
+    const bool hit = (slot == a0430) &&
+                     app->PlaybackActive() == 0 &&
+                     app->state.followCameraEnabled != 0 &&
+                     a0430 >= 0;
+    if (!hit) {
+        app->CameraAttachmentTransformSuppressed() = 0;
+        app->ViewOffsetX() = 0.0f;
+        app->ViewOffsetY() = 0.0f;
+        ReloadModels(app);  // 0x42E640
+        PostModelReload(app);
+    }
+    ViewResetRefresh(app);
+}
+// ------------------------------------------------------------------
+// 408 (0x00487446): play-range edits.  When byte 0x330 != 0: clear it,
+// StopPlayback, and (byte 0xA06CC != 0) Sub4C2680/Sub4C2760 on the 0xCC
+// subsystem.  Otherwise read the 0x199 (start) / 0x19A (end) edits via
+// atol; frameA/30 (0x9E654) comes from dword 0x980 when byte 0x9ED99
+// != 0 (0x9EDB6 = 1) or from the 0x199 edit (0x9EDB6 = 1 only when the
+// edit differs from 0x980); frameB/30 (0x9E658) from the 0x19A edit
+// (fallback dword 0x9E16C when 0); 0x9E64C = frameA/30; snapshot
+// IsWindowEnabled of 0x1F1/0x1F2/0x1AF/0x1A5/0x1A6/0x190/0x191 into
+// 0x9EB77..0x9EB7D; byte 0x330 = 1; UpdateBoneFrames; then
+// KillTimer(0x64) + Sub4C2680/Sub4C2760 when 0xA02B6, and Sub4C2B80 +
+// WaveSeekAndFeed((double)0x9E654) when 0xA03E9 == 0 (both gated on 0xA06CC);
+// finally timeGetTime copies 0x9EDA8/0x9EDAC.
+// ------------------------------------------------------------------
+static void Cmd400_PlayRangeEdits(MMDApp* app, HWND hwnd) {
+    if (app->PlaybackActive() != 0) {
+        app->PlaybackActive() = 0;
+        StopPlayback(app);
+        if (app->WaveEnabled() != 0) {
+            CloseDataFile(app->Audio());
+            WaveStartPlayback(app->Audio());
+        }
+        return;  // was: break (switch exit)
+    }
+    char text[0x100];
+    GetWindowTextA(GetDlgItem(hwnd, panel::kPlayStartFrameEdit), text, 8);
+    const std::int32_t start = atol(text);  // ebx
+    GetWindowTextA(GetDlgItem(hwnd, panel::kPlayStopFrameEdit), text, 8);
+    std::int32_t end = atol(text);  // eax
+    if (app->PlaybackStartsAtCurrentFrame() != 0) {
+        app->PlaybackStartSeconds() = FrameToSeconds(
+            app->state.currentFrame);
+        app->PlaybackFrameChanged() = 1;
+    } else {
+        app->PlaybackStartSeconds() = FrameToSeconds(start);
+        if (start != app->state.currentFrame) {
+            app->PlaybackFrameChanged() = 1;
+        }
+    }
+    if (end == 0) {
+        end = app->state.lastRegisteredFrame;
+    }
+    app->PlaybackEndSeconds() = FrameToSeconds(end);
+    app->PlaybackCursorSeconds() = app->PlaybackStartSeconds();
+    app->state.playbackEnabledSnapshot[0] =
+        IsWindowEnabled(GetDlgItem(hwnd, panel::kBonePasteButton)) ? 1 : 0;
+    app->state.playbackEnabledSnapshot[1] =
+        IsWindowEnabled(GetDlgItem(hwnd, panel::kBoneReversePasteButton)) ? 1 : 0;
+    app->state.playbackEnabledSnapshot[4] =
+        IsWindowEnabled(GetDlgItem(hwnd, panel::kCurvePasteButton)) ? 1 : 0;
+    app->state.playbackEnabledSnapshot[2] =
+        IsWindowEnabled(GetDlgItem(hwnd, panel::kPasteButton)) ? 1 : 0;
+    app->state.playbackEnabledSnapshot[3] =
+        IsWindowEnabled(GetDlgItem(hwnd, panel::kReversePasteButton)) ? 1 : 0;
+    app->state.playbackEnabledSnapshot[5] =
+        IsWindowEnabled(GetDlgItem(hwnd, panel::kUndoButton)) ? 1 : 0;
+    app->state.playbackEnabledSnapshot[6] =
+        IsWindowEnabled(GetDlgItem(hwnd, panel::kRedoButton)) ? 1 : 0;
+    app->PlaybackActive() = 1;
+    UpdateBoneFrames(app);  // 0x433A40
+    if (app->WaveEnabled() != 0) {
+        if (app->AudioSeekReady() != 0) {
+            app->AudioSeekReady() = 0;
+            KillTimer(hwnd, 0x64);
+            CloseDataFile(app->Audio());
+            WaveStartPlayback(app->Audio());
+        }
+        if (app->AutomaticFrameAdvanceEnabled() == 0) {
+            SetFrameNormalized(
+                app->FrameNormalization());
+            WaveSeekAndFeed(app->Audio(),
+                      static_cast<double>(app->PlaybackStartSeconds()));
+        }
+    }
+    app->PlaybackClockAnchorLow() = app->TimeNowLow();
+    app->PlaybackClockAnchorHigh() = app->TimeNowHigh();
+}
+// ------------------------------------------------------------------
+// 415 (0x004829E4): frame-range editor.  Edits 0x1A9/0x1AA hold the
+// from/to frames (atol); 0x1B2 holds the target text/combo.  With
+// byte 0x2F8 == 0 the 0x1B2 text is compared byte-exact (repe cmpsb
+// over N bytes incl. the NUL) against "全ﾌﾚｰﾑ"/"All frame" (bone+morph+
+// camera sweep), "全表情ﾌﾚｰﾑ"/"All facial" (morph), "全ボーンフﾚｰﾑ"/
+// "All bone" (bone), "選択ボーン"/"Sel Bone" and "選択表情"/"Sel facial"
+// (Sub4A27F0 per selected item), else Sub4A27F0 with the raw text.
+// With 0x2F8 != 0 the 0x1B2 combo cursor selects the app-level table
+// (0x374/0x378/0x37C/0x380 or the accessory slot whose byte +0x49D
+// equals cursor-4, scanning its 0x384 blob).  Every sweep clears the
+// mark byte first, then sets it when from <= frame <= to (unsigned)
+// and (first entry or frame != 0); the model-mode bone/morph sweeps
+// additionally require (counter < count || frame != 0).  Tail:
+// PanelPaint + SelectionReeval + SetFocus.
+// ------------------------------------------------------------------
+static void Cmd400_FrameRangeSelect(MMDApp* app, HWND hwnd) {
+    char text[0x100];
+    GetWindowTextA(GetDlgItem(hwnd, panel::kRangeStartEdit), text, 8);
+    const std::int32_t from = atol(text);   // ebx
+    GetWindowTextA(GetDlgItem(hwnd, panel::kRangeStopEdit), text, 8);
+    const std::int32_t to = atol(text);     // var_A40
+    GetWindowTextA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), text, 20);
+    if (app->state.optflag[0] == 0) {
+        // ---- name-compare chain (loc_482CF2..loc_4831CB) ----
+        if (TextEqN(text, kJpAllFrame, 7) || TextEqN(text, "All frame", 10)) {
+            // bone sweep (loc_482D40..482DB2)
+            {
+                unsigned char* model = ActiveModel(app);
+                SelectModelFrameRange(
+                    mdl::BoneKeys(model), mdl::kBoneKeyCapacity,
+                    mdl::Mdl(model)->boneCount,
+                    static_cast<std::uint32_t>(from),
+                    static_cast<std::uint32_t>(to));
+            }
+            // morph sweep (loc_482DE0..482E52, gated on 0x2D80 > 0)
+            {
+                unsigned char* model = ActiveModel(app);
+                const std::uint32_t morphCount =
+                    mdl::Mdl(model)->morphCount;
+                if (morphCount > 0) {
+                    SelectModelFrameRange(
+                        mdl::MorphKeys(model), 20000, morphCount,
+                        static_cast<std::uint32_t>(from),
+                        static_cast<std::uint32_t>(to));
+                }
+            }
+            // camera sweep (loc_482E60..482ED8)
+            {
+                unsigned char* model = ActiveModel(app);
+                SelectModelFrameRange(
+                    mdl::DisplayKeys(model), 1000, 1,
+                    static_cast<std::uint32_t>(from),
+                    static_cast<std::uint32_t>(to));
+            }
+        } else if (TextEqN(text, kJpAllFacial, 11) ||
+                   TextEqN(text, "All facial", 11)) {
+            // morph sweep only (loc_482F30..482FA2)
+            unsigned char* model = ActiveModel(app);
+            const std::uint32_t morphCount = mdl::Mdl(model)->morphCount;
+            if (morphCount > 0) {
+                SelectModelFrameRange(
+                    mdl::MorphKeys(model), 20000, morphCount,
+                    static_cast<std::uint32_t>(from),
+                    static_cast<std::uint32_t>(to));
+            }
+        } else if (TextEqN(text, kJpAllBone, 13) ||
+                   TextEqN(text, "All bone", 9)) {
+            // bone sweep only (loc_482FF2..483064)
+            unsigned char* model = ActiveModel(app);
+            SelectModelFrameRange(
+                mdl::BoneKeys(model), mdl::kBoneKeyCapacity,
+                mdl::Mdl(model)->boneCount,
+                static_cast<std::uint32_t>(from),
+                static_cast<std::uint32_t>(to));
+        } else if (TextEqN(text, kJpSelBone, 9) ||
+                   TextEqN(text, "Sel Bone", 9)) {
+            // selected-bone sweep (loc_4830D0..48310F): Sub4A27F0 per
+            // selected bone (0x2D94 byte array), name at 0x26BC +
+            // i*0x25C
+            unsigned char* model = ActiveModel(app);
+            const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
+            if (boneCount > 0) {
+                const mdl::ModelRecord& record = *mdl::Mdl(model);
+                unsigned char* sel = record.boneSelection;
+                const mdl::BoneRecord* bones = record.boneTable;
+                for (std::int32_t i = 0; i < boneCount; ++i) {
+                    if (sel[i] != 0) {
+                        MarkKeyTrackRangeByName(
+                            model, static_cast<std::uint32_t>(from),
+                            static_cast<std::uint32_t>(to),
+                            bones[i].name);
+                    }
+                }
+            }
+        } else if (TextEqN(text, kJpSelFacial, 9) ||
+                   TextEqN(text, "Sel facial", 11)) {
+            // selected-morph sweep (loc_483173..4831B2): morph table
+            // 0x26DC, 0x2E stride, selected byte +0x2C, count byte
+            // 0x2DAC
+            unsigned char* model = ActiveModel(app);
+            const mdl::ModelRecord& record = *mdl::Mdl(model);
+            const std::uint8_t morphCount = record.facialFrameCount;
+            if (morphCount != 0) {
+                mdl::FrameGroup* groups = record.displayFrames;
+                for (std::uint8_t i = 0; i < morphCount; ++i) {
+                    mdl::FrameGroup& group = groups[i];
+                    if (group.selected != 0) {
+                        MarkKeyTrackRangeByName(
+                            model, static_cast<std::uint32_t>(from),
+                            static_cast<std::uint32_t>(to), group.name);
+                    }
+                }
+            }
+        } else {
+            // fallback (loc_4831B6..4831CB): treat the text as a name
+            unsigned char* model = ActiveModel(app);
+            MarkKeyTrackRangeByName(model, static_cast<std::uint32_t>(from),
+                                    static_cast<std::uint32_t>(to), text);
+        }
+        PanelPaint(app);
+        SelectionReeval(app);
+        SetFocus(hwnd);
+    } else {
+        // ---- 0x2F8 != 0: CB_GETCURSEL(0x1B2) dispatch ----
+        // (loc_482A92..loc_482CED)
+        const LRESULT sel =
+            SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_GETCURSEL,
+                         0, 0);
+        if (sel == 0) {
+            SelectGlobalFrameRange(
+                app->CameraKeys(),
+                static_cast<std::uint32_t>(from),
+                static_cast<std::uint32_t>(to));
+        } else if (sel == 1) {
+            SelectGlobalFrameRange(
+                app->LightKeys(),
+                static_cast<std::uint32_t>(from),
+                static_cast<std::uint32_t>(to));
+        } else if (sel == 2) {
+            SelectGlobalFrameRange(
+                app->ShadowKeys(),
+                static_cast<std::uint32_t>(from),
+                static_cast<std::uint32_t>(to));
+        } else if (sel == 3) {
+            SelectGlobalFrameRange(
+                app->GravityKeys(),
+                static_cast<std::uint32_t>(from),
+                static_cast<std::uint32_t>(to));
+        } else {
+            // accessory slot scan (loc_482C54..loc_482CED): the slot
+            // whose byte +0x49D equals cursor-4; its AccessoryKey
+            // timeline is swept.
+            for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
+                mdl::AccessoryRecord* acc = app->AccessorySlot(slot);
+                if (acc != nullptr &&
+                    static_cast<unsigned int>(acc->order) ==
+                        static_cast<unsigned int>(sel - 4)) {
+                    auto* keys = app->AccessoryKeys(slot);
+                    SelectGlobalFrameRange(
+                        keys, static_cast<std::uint32_t>(from),
+                        static_cast<std::uint32_t>(to));
+                    break;
+                }
+            }
+        }
+        PanelPaint(app);
+        SelectionReeval(app);
+        SetFocus(hwnd);
+    }
+}
+// ------------------------------------------------------------------
+// 416 (0x0048073E): selection-mark synchronisation.  For every entry
+// of each frame table whose selection mark is set, the equal-frame
+// entry of the *other* tables is marked via their frame-sorted linked
+// lists (frame dword +0, next index +8; walks start at the current
+// index for the model-mode bone/morph searches and at the head
+// otherwise).  0x2F8 == 0: tables 0x26E0 (+0x38) / 0x26E4 (+0x10) /
+// 0x26E8 (+0x14), camera entries only propagate into bone+morph.
+// 0x2F8 != 0: app tables 0x374 (+0x48) / 0x378 (+0x24) / 0x37C
+// (+0x14) / 0x380 (+0x21) plus the 0x384 accessory blobs (+0x18),
+// then every marked blob entry re-marks the four app tables and the
+// other blobs.  Tail: PanelPaint + SelectionReeval (no SetFocus).
+// ------------------------------------------------------------------
+static void Cmd400_SelectionMarkSync(MMDApp* app) {
+    if (app->state.optflag[0] == 0) {
+        // ---- model mode (loc_480D1D..loc_4810F3) ----
+        unsigned char* model = ActiveModel(app);
+        mdl::ModelRecord* modelRecord = mdl::Mdl(model);
+        mdl::BoneKey* boneKeys = mdl::BoneKeys(model);
+        mdl::MorphKey* morphKeys = mdl::MorphKeys(model);
+        mdl::DisplayKey* displayKeys = mdl::DisplayKeys(model);
+
+        // loop A: bone marks -> bone/morph/camera
+        for (std::uint32_t keyIndex = 0; keyIndex < static_cast<std::uint32_t>(mdl::kBoneKeyCapacity); ++keyIndex) {
+            if (boneKeys[keyIndex].allocated != 0) {
+                const std::uint32_t frame = boneKeys[keyIndex].frame;
+                if (modelRecord->boneCount > 0) {
+                    for (std::uint32_t i = 0; i < modelRecord->boneCount;
+                         ++i) {
+                        MarkModelFrameAllocated(boneKeys, i, frame);
+                    }
+                }
+                if (modelRecord->morphCount > 0) {
+                    for (std::uint32_t i = 0; i < modelRecord->morphCount;
+                         ++i) {
+                        MarkModelFrameAllocated(morphKeys, i, frame);
+                    }
+                }
+                MarkModelFrameAllocated(displayKeys, 0, frame);
+            }
+        }
+        // loop B: morph marks -> bone/morph/camera
+        for (std::uint32_t keyIndex = 0; keyIndex < 20000; ++keyIndex) {
+            if (morphKeys[keyIndex].allocated != 0) {
+                const std::uint32_t frame = morphKeys[keyIndex].frame;
+                if (modelRecord->boneCount > 0) {
+                    for (std::uint32_t i = 0; i < modelRecord->boneCount;
+                         ++i) {
+                        MarkModelFrameAllocated(boneKeys, i, frame);
+                    }
+                }
+                if (modelRecord->morphCount > 0) {
+                    for (std::uint32_t i = 0; i < modelRecord->morphCount;
+                         ++i) {
+                        MarkModelFrameAllocated(morphKeys, i, frame);
+                    }
+                }
+                MarkModelFrameAllocated(displayKeys, 0, frame);
+            }
+        }
+        // loop C: camera marks -> bone/morph only
+        for (std::uint32_t keyIndex = 0; keyIndex < 1000; ++keyIndex) {
+            if (displayKeys[keyIndex].allocated != 0) {
+                const std::uint32_t frame = displayKeys[keyIndex].frame;
+                if (modelRecord->boneCount > 0) {
+                    for (std::uint32_t i = 0; i < modelRecord->boneCount;
+                         ++i) {
+                        MarkModelFrameAllocated(boneKeys, i, frame);
+                    }
+                }
+                if (modelRecord->morphCount > 0) {
+                    for (std::uint32_t i = 0; i < modelRecord->morphCount;
+                         ++i) {
+                        MarkModelFrameAllocated(morphKeys, i, frame);
+                    }
+                }
+            }
+        }
+        PanelPaint(app);
+        SelectionReeval(app);
+    } else {
+        // ---- camera mode (loc_480750..loc_480D18) ----
+        auto* cameraKeys = app->CameraKeys();
+        auto* lightKeys = app->LightKeys();
+        auto* shadowKeys = app->ShadowKeys();
+        auto* gravityKeys = app->GravityKeys();
+
+        const auto markAccessories =
+            [app](std::uint32_t frame, std::int32_t excludedSlot) {
+                for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
+                    if (slot == excludedSlot ||
+                        app->AccessorySlot(slot) == nullptr) {
+                        continue;
+                    }
+                    auto* keys = app->AccessoryKeys(slot);
+                    MarkFrameSelected(keys, 0, frame);
+                }
+            };
+
+        for (std::int32_t i = 0; i < 0x2710; ++i) {
+            if (cameraKeys[i].selected != 0) {
+                const std::uint32_t frame = cameraKeys[i].frame;
+                MarkFrameSelected(lightKeys, 0, frame);
+                MarkFrameSelected(shadowKeys, 0, frame);
+                MarkFrameSelected(gravityKeys, 0, frame);
+                markAccessories(frame, -1);
+            }
+            if (lightKeys[i].selected != 0) {
+                const std::uint32_t frame = lightKeys[i].frame;
+                MarkFrameSelected(cameraKeys, 0, frame);
+                MarkFrameSelected(shadowKeys, 0, frame);
+                MarkFrameSelected(gravityKeys, 0, frame);
+                markAccessories(frame, -1);
+            }
+            if (shadowKeys[i].selected != 0) {
+                const std::uint32_t frame = shadowKeys[i].frame;
+                MarkFrameSelected(cameraKeys, 0, frame);
+                MarkFrameSelected(lightKeys, 0, frame);
+                MarkFrameSelected(gravityKeys, 0, frame);
+                markAccessories(frame, -1);
+            }
+            if (gravityKeys[i].selected != 0) {
+                const std::uint32_t frame = gravityKeys[i].frame;
+                MarkFrameSelected(cameraKeys, 0, frame);
+                MarkFrameSelected(lightKeys, 0, frame);
+                MarkFrameSelected(shadowKeys, 0, frame);
+                markAccessories(frame, -1);
+            }
+        }
+        // accessory-blob marks (loc_480B7C..480D04): each marked blob
+        // entry re-marks the four app tables and every *other* blob
+        for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
+            if (app->AccessorySlot(slot) == nullptr) {
+                continue;
+            }
+            auto* keys = app->AccessoryKeys(slot);
+            for (std::int32_t i = 0; i < 0x2710; ++i) {
+                if (keys[i].selected == 0) {
+                    continue;
+                }
+                const std::uint32_t frame = keys[i].frame;
+                MarkFrameSelected(cameraKeys, 0, frame);
+                MarkFrameSelected(lightKeys, 0, frame);
+                MarkFrameSelected(shadowKeys, 0, frame);
+                MarkFrameSelected(gravityKeys, 0, frame);
+                markAccessories(frame, slot);
+            }
+        }
+        PanelPaint(app);
+        SelectionReeval(app);
+    }
+}
+// ------------------------------------------------------------------
+// 420 (0x004834D2): frame copy.  Counts the marked entries and the
+// minimum frame, then (re)allocates the copy buffers and copies every
+// marked record.  0x2F8 == 0: counts 0x9DA28/0x9DA2C/0x9DA30, buffers
+// 0x354 (bone, 0x54-stride) / 0x358 (morph, 0x28) / 0x35C (camera,
+// 0x18; per-record bone-name/light arrays at +0x0C/+0x14).  0x2F8 !=
+// 0: counts 0x9DA34..0x9DA44, buffers 0x360..0x370.  Controls 0x1A5
+// (paste), 0x1A6 (delete) and menu 0xFA are gated on the totals; the
+// record index for the name lookups walks the +4 rank pointers while
+// idx >= count.  Tail: nothing (jmp loc_48F2E0).
+// ------------------------------------------------------------------
+static void Cmd400_FrameCopy(MMDApp* app, HWND hwnd) {
+    std::uint32_t minFrame = 0xFFFFFFFFu;  // ebx
+    if (app->state.optflag[0] == 0) {
+        // ---- model mode (loc_483E7C..) ----
+        // free the previous camera records' sub-buffers (loc_483E7C)
+        if (app->DisplayClipboard() != nullptr &&
+            app->ClipboardCounts().displays != 0) {
+            auto* records = app->DisplayClipboard();
+            const std::uint32_t camCount =
+                app->ClipboardCounts().displays;
+            for (std::uint32_t i = 0; i < camCount; ++i) {
+                if (records[i].ikStates != nullptr) {
+                    free(records[i].ikStates);
+                    records[i].ikStates = nullptr;
+                }
+                if (records[i].selectorStates != nullptr) {
+                    free(records[i].selectorStates);
+                    records[i].selectorStates = nullptr;
+                }
+            }
+        }
+        auto& clipboardCounts = app->ClipboardCounts();
+        clipboardCounts.bones = 0;
+        clipboardCounts.morphs = 0;
+        clipboardCounts.displays = 0;
+        // selected-entry counts + min frame
+        {
+            unsigned char* model = ActiveModel(app);
+            clipboardCounts.bones = CountMarkedModelKeys(
+                mdl::BoneKeys(model), mdl::kBoneKeyCapacity, minFrame);
+            clipboardCounts.morphs = CountMarkedModelKeys(
+                mdl::MorphKeys(model), 20000, minFrame);
+            clipboardCounts.displays = CountMarkedModelKeys(
+                mdl::DisplayKeys(model), 1000, minFrame);
+        }
+        const std::uint32_t boneSel = clipboardCounts.bones;
+        const std::uint32_t morphSel = clipboardCounts.morphs;
+        const std::uint32_t camSel = clipboardCounts.displays;
+        if (boneSel == 0 && morphSel == 0 && camSel == 0) {
+            // loc_48402C..48406D: nothing selected
+            EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), FALSE);
+            EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton), FALSE);
+            EnableMenuItem(GetMenu(hwnd), 0xFA, TRUE);
+            return;  // was: break (switch exit)
+        }
+        EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), TRUE);
+        EnableMenuItem(GetMenu(hwnd), 0xFA, FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton),
+                     boneSel != 0 ? TRUE : FALSE);
+        // bone buffer 0x354 (0x54-stride records)
+        if (app->BoneClipboard() != nullptr) {
+            free(app->BoneClipboard());
+            app->BoneClipboard() = nullptr;
+        }
+        if (boneSel != 0) {
+            void* p = malloc(boneSel * sizeof(BoneClipboardRecord));
+            if (p != nullptr) {
+                ConstructArrayElements(p, sizeof(BoneClipboardRecord), boneSel,
+                                       reinterpret_cast<void*>(&IdentityCtor));
+            }
+            app->BoneClipboard() = static_cast<BoneClipboardRecord*>(p);
+            memset(p, 0, boneSel * sizeof(BoneClipboardRecord));
+        }
+        // morph buffer 0x358 (0x28-stride records)
+        if (app->MorphClipboard() != nullptr) {
+            free(app->MorphClipboard());
+            app->MorphClipboard() = nullptr;
+        }
+        if (morphSel != 0) {
+            void* p = malloc(morphSel * sizeof(MorphClipboardRecord));
+            app->MorphClipboard() = static_cast<MorphClipboardRecord*>(p);
+            memset(p, 0, morphSel * sizeof(MorphClipboardRecord));
+        }
+        // camera buffer 0x35C (0x18-stride records) + per-record
+        // bone-name (0x2D88 * 0x15) and light (0x4CCE8 * 0x1C) arrays
+        if (app->DisplayClipboard() != nullptr) {
+            free(app->DisplayClipboard());
+            app->DisplayClipboard() = nullptr;
+        }
+        if (camSel != 0) {
+            unsigned char* model = ActiveModel(app);
+            void* p = malloc(camSel * sizeof(DisplayClipboardRecord));
+            app->DisplayClipboard() =
+                static_cast<DisplayClipboardRecord*>(p);
+            memset(p, 0, camSel * sizeof(DisplayClipboardRecord));
+            if (mdl::Mdl(model)->ikChainCount > 0 &&
+                camSel != 0) {
+                auto* records = app->DisplayClipboard();
+                const std::uint32_t cnt = mdl::Mdl(model)->ikChainCount;
+                for (std::uint32_t i = 0; i < camSel; ++i) {
+                    records[i].ikStates = static_cast<IkClipboardState*>(
+                        malloc(cnt * sizeof(IkClipboardState)));
+                }
+            }
+            if (mdl::Mdl(model)->boneOrderCount > 0 &&
+                camSel != 0) {
+                auto* records = app->DisplayClipboard();
+                const std::uint32_t cnt =
+                    mdl::Mdl(model)->boneOrderCount;
+                for (std::uint32_t i = 0; i < camSel; ++i) {
+                    records[i].selectorStates =
+                        static_cast<SelectorClipboardState*>(
+                            malloc(cnt * sizeof(SelectorClipboardState)));
+                }
+            }
+        }
+        // bone record copy (loc_484321..484551)
+        {
+            unsigned char* model = ActiveModel(app);
+            mdl::BoneKey* boneKeys = mdl::BoneKeys(model);
+            const mdl::BoneRecord* bones = mdl::Mdl(model)->boneTable;
+            const std::uint32_t boneCount = mdl::Mdl(model)->boneCount;
+            auto* dst = app->BoneClipboard();
+            std::uint32_t cnt = 0;
+            for (std::uint32_t recordIndex = 0; recordIndex < static_cast<std::uint32_t>(mdl::kBoneKeyCapacity);
+                 ++recordIndex) {
+                const mdl::BoneKey& key = boneKeys[recordIndex];
+                if (key.allocated == 0) {
+                    continue;
+                }
+                // rank walk: while idx >= boneCount follow the +4
+                // pointer (loc_484350)
+                std::uint32_t idx = recordIndex;
+                while (idx >= boneCount) {
+                    idx = boneKeys[idx].previous;
+                }
+                BoneClipboardRecord& rec = dst[cnt];
+                strcpy_s(rec.name, sizeof(rec.name), bones[idx].name);
+                rec.frame = key.frame - minFrame;
+                std::memcpy(rec.rotation, key.rotation,
+                            sizeof(rec.rotation));
+                std::memcpy(rec.position, key.position,
+                            sizeof(rec.position));
+                rec.physicsDisabled = key.physicsDisabled;
+                for (std::int32_t i = 0; i < 4; ++i) {
+                    rec.interpolation[i] = key.interpolation[i];
+                    rec.interpolation[4 + i] = key.interpolation[4 + i];
+                    rec.interpolation[8 + i] = key.interpolation[8 + i];
+                    rec.interpolation[12 + i] = key.interpolation[12 + i];
+                }
+                ++cnt;
+            }
+        }
+        // morph record copy (loc_484590..484667, gated 0x2D80 > 0)
+        if (mdl::Mdl(ActiveModel(app))->morphCount > 0) {
+            unsigned char* model = ActiveModel(app);
+            mdl::MorphKey* morphKeys = mdl::MorphKeys(model);
+            const mdl::MorphRecord* morphs = mdl::Mdl(model)->morphs;
+            const std::uint32_t morphCount = mdl::Mdl(model)->morphCount;
+            auto* dst = app->MorphClipboard();
+            std::uint32_t cnt = 0;
+            for (std::uint32_t recordIndex = 0; recordIndex < 20000;
+                 ++recordIndex) {
+                const mdl::MorphKey& key = morphKeys[recordIndex];
+                if (key.allocated == 0) {
+                    continue;
+                }
+                std::uint32_t idx = recordIndex;
+                while (idx >= morphCount) {
+                    idx = morphKeys[idx].previous;
+                }
+                MorphClipboardRecord& rec = dst[cnt];
+                strcpy_s(rec.name, sizeof(rec.name), morphs[idx].name);
+                rec.frame = key.frame - minFrame;
+                rec.value = key.value;
+                ++cnt;
+            }
+        }
+        // display record copy (loc_484675..)
+        {
+            unsigned char* model = ActiveModel(app);
+            mdl::DisplayKey* displayKeys = mdl::DisplayKeys(model);
+            const mdl::BoneRecord* bones = mdl::Mdl(model)->boneTable;
+            auto* records = app->DisplayClipboard();
+            const std::int32_t boneIdxCount =
+                mdl::Mdl(model)->ikChainCount;
+            const std::int32_t lightCount =
+                mdl::Mdl(model)->boneOrderCount;
+            std::uint32_t cnt = 0;
+            for (std::uint32_t keyIndex = 0; keyIndex < 1000;
+                 ++keyIndex) {
+                const mdl::DisplayKey& key = displayKeys[keyIndex];
+                if (key.allocated == 0) {
+                    continue;
+                }
+                DisplayClipboardRecord& rec = records[cnt];
+                rec.frame = key.frame - minFrame;
+                rec.visible = key.visible;
+                rec.ikCount = boneIdxCount;
+                // per-bone records at +0x0C (0x15 stride: 0x14-byte
+                // name + value byte)
+                if (boneIdxCount > 0) {
+                    const mdl::IkChain* chains =
+                        mdl::Mdl(model)->ikChains;
+                    const auto* pose = mdl::IkStates(key);
+                    for (std::int32_t i = 0; i < boneIdxCount; ++i) {
+                        const std::uint32_t boneIdx =
+                            chains[i].boneIndex;
+                        strcpy_s(rec.ikStates[i].boneName,
+                                 sizeof(rec.ikStates[i].boneName),
+                                 bones[boneIdx].name);
+                        rec.ikStates[i].enabled = pose[i];
+                    }
+                }
+                // light records at +0x14 (0x1C stride)
+                rec.selectorCount = lightCount;
+                const auto* lightData = mdl::SelectorStates(key);
+                strcpy_s(rec.selectorStates[0].boneName,
+                         sizeof(rec.selectorStates[0].boneName),
+                         kLightNameRoot);
+                rec.selectorStates[0].modelIndex = lightData[0].modelIndex;
+                rec.selectorStates[0].boneIndex = lightData[0].boneIndex;
+                if (lightCount > 1) {
+                    const auto* order = static_cast<const mdl::BoneOrderEntry*>(
+                        mdl::Mdl(model)->boneOrderTable);
+                    for (std::int32_t i = 1; i < lightCount; ++i) {
+                        const std::uint32_t boneIdx = order[i].boneIndex;
+                        strcpy_s(rec.selectorStates[i].boneName,
+                                 sizeof(rec.selectorStates[i].boneName),
+                                 bones[boneIdx].name);
+                        rec.selectorStates[i].modelIndex =
+                            lightData[i].modelIndex;
+                        rec.selectorStates[i].boneIndex =
+                            lightData[i].boneIndex;
+                    }
+                }
+                ++cnt;
+            }
+        }
+    } else {
+        // ---- camera mode (loc_4834E2..) ----
+        auto& clipboardCounts = app->ClipboardCounts();
+        clipboardCounts.cameras = 0;
+        clipboardCounts.lights = 0;
+        clipboardCounts.shadows = 0;
+        clipboardCounts.gravity = 0;
+        clipboardCounts.accessories = 0;
+        clipboardCounts.cameras =
+            CountSelectedKeys(app->CameraKeys(), 10000, minFrame);
+        clipboardCounts.lights =
+            CountSelectedKeys(app->LightKeys(), 10000, minFrame);
+        clipboardCounts.shadows =
+            CountSelectedKeys(app->ShadowKeys(), 10000, minFrame);
+        clipboardCounts.gravity =
+            CountSelectedKeys(app->GravityKeys(), 10000, minFrame);
+        {
+            std::uint32_t accessoryCount = 0;
+            for (std::size_t keyIndex = 0; keyIndex < 10000;
+                 ++keyIndex) {
+                for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
+                    auto* keys = app->AccessoryKeys(slot);
+                    const mdl::AccessoryKey& key = keys[keyIndex];
+                    if (key.selected != 0) {
+                        ++accessoryCount;
+                        if (key.frame < minFrame) {
+                            minFrame = key.frame;
+                        }
+                    }
+                }
+            }
+            clipboardCounts.accessories = accessoryCount;
+        }
+        const std::uint32_t cameraCount = clipboardCounts.cameras;
+        const std::uint32_t lightCount = clipboardCounts.lights;
+        const std::uint32_t shadowCount = clipboardCounts.shadows;
+        const std::uint32_t gravityCount = clipboardCounts.gravity;
+        const std::uint32_t accessoryCount = clipboardCounts.accessories;
+        if (cameraCount == 0 && lightCount == 0 && shadowCount == 0 &&
+            gravityCount == 0 && accessoryCount == 0) {
+            // loc_483657..48369C
+            EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), FALSE);
+            EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton), FALSE);
+            EnableMenuItem(GetMenu(hwnd), 0xFA, TRUE);
+            return;  // was: break (switch exit)
+        }
+        EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), TRUE);
+        EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton), FALSE);
+        EnableMenuItem(GetMenu(hwnd), 0xFA, FALSE);
+        // buffers 0x360..0x370 (0x48/0x1C/0x0C/0x1C/0x34 strides)
+        ReplaceClipboardBuffer(app->CameraClipboard(), cameraCount);
+        ReplaceClipboardBuffer(app->LightClipboard(), lightCount);
+        ReplaceClipboardBuffer(app->ShadowClipboard(), shadowCount);
+        ReplaceClipboardBuffer(app->GravityClipboard(), gravityCount);
+        ReplaceClipboardBuffer(app->AccessoryClipboard(), accessoryCount);
+        // copy loop 1: 0x374 marked -> 0x360 records (0x48 stride)
+        {
+            auto* keys = app->CameraKeys();
+            auto* dst = app->CameraClipboard();
+            std::uint32_t cnt = 0;
+            for (std::size_t i = 0; i < 10000; ++i) {
+                const mdl::CameraKey& key = keys[i];
+                if (key.selected == 0) {
+                    continue;
+                }
+                CameraClipboardRecord& rec = dst[cnt];
+                rec.frame = key.frame - minFrame;
+                std::memcpy(rec.eye, key.eye, sizeof(rec.eye));
+                std::memcpy(rec.target, key.target, sizeof(rec.target));
+                rec.fov = key.fov;
+                rec.perspective = key.perspective;
+                std::memcpy(rec.interpolation, key.interpolation,
+                            sizeof(rec.interpolation));
+                rec.distance = key.distance;
+                rec.parentModel = key.parentModel;
+                rec.parentBone = key.parentBone;
+                ++cnt;
+            }
+        }
+        // copy loop 2: 0x378 marked -> 0x364 records (0x1C stride)
+        {
+            auto* keys = app->LightKeys();
+            auto* dst = app->LightClipboard();
+            std::uint32_t cnt = 0;
+            for (std::size_t i = 0; i < 10000; ++i) {
+                const mdl::LightKey& key = keys[i];
+                if (key.selected == 0) {
+                    continue;
+                }
+                LightClipboardRecord& rec = dst[cnt];
+                rec.frame = key.frame - minFrame;
+                std::memcpy(rec.direction, key.direction,
+                            sizeof(rec.direction));
+                std::memcpy(rec.color, key.color, sizeof(rec.color));
+                ++cnt;
+            }
+        }
+        // copy loop 3: 0x37C marked -> 0x368 records (0x0C stride)
+        {
+            auto* keys = app->ShadowKeys();
+            auto* dst = app->ShadowClipboard();
+            std::uint32_t cnt = 0;
+            for (std::size_t i = 0; i < 10000; ++i) {
+                const mdl::SelfShadowKey& key = keys[i];
+                if (key.selected == 0) {
+                    continue;
+                }
+                ShadowClipboardRecord& rec = dst[cnt];
+                rec.frame = key.frame - minFrame;
+                rec.mode = key.mode;
+                rec.distance = key.distance;
+                ++cnt;
+            }
+        }
+        // copy loop 4: 0x380 marked -> 0x36C records (0x1C stride)
+        {
+            auto* keys = app->GravityKeys();
+            auto* dst = app->GravityClipboard();
+            std::uint32_t cnt = 0;
+            for (std::size_t i = 0; i < 10000; ++i) {
+                const mdl::GravityKey& key = keys[i];
+                if (key.selected == 0) {
+                    continue;
+                }
+                GravityClipboardRecord& rec = dst[cnt];
+                rec.frame = key.frame - minFrame;
+                rec.acceleration = key.acceleration;
+                std::memcpy(rec.direction, key.direction,
+                            sizeof(rec.direction));
+                rec.noise = key.noise;
+                rec.noiseEnabled = key.noiseEnabled;
+                ++cnt;
+            }
+        }
+        // copy loop 5: accessory blobs -> 0x370 records (0x34 stride,
+        // slot index at +4)
+        {
+            auto* dst = app->AccessoryClipboard();
+            std::uint32_t cnt = 0;
+            for (std::size_t keyIndex = 0; keyIndex < 10000;
+                 ++keyIndex) {
+                for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
+                    auto* keys = app->AccessoryKeys(slot);
+                    const mdl::AccessoryKey& key = keys[keyIndex];
+                    if (key.selected == 0) {
+                        continue;
+                    }
+                    mdl::AccessoryClipboardKey& rec = dst[cnt];
+                    rec.frameOffset = key.frame - minFrame;
+                    rec.slot = static_cast<std::uint8_t>(slot);
+                    rec.visible = key.visible;
+                    rec.shadowEnabled = key.shadowEnabled;
+                    rec.parentModel = key.parentModel;
+                    rec.parentBone = key.parentBone;
+                    std::memcpy(rec.position, key.position,
+                                sizeof(rec.position));
+                    std::memcpy(rec.rotation, key.rotation,
+                                sizeof(rec.rotation));
+                    rec.scale = key.scale;
+                    rec.opacity = key.opacity;
+                    ++cnt;
+                }
+            }
+        }
+    }
+}
+// ------------------------------------------------------------------
+// 421 (0x00484973): frame paste.  0x2F8 == 0: when any model-mode
+// count is non-zero, clear all marks, open an undo-table entry
+// (0x26EC, 0x1C stride: type 2 at +0, frame at +0x0C, bone-name
+// snapshot at +0x10, light snapshot at +0x14; second 0x1C-stride
+// history at 0x23F0 zeroed), snapshot the bone records, then paste
+// the copy buffers: RegisterBoneKey per 0x354 bone record, RegisterMorphKeyFromRecord per
+// 0x358 morph record (0x28), RegisterDisplayKeyFromRecord per 0x35C camera record (0x18)
+// with the light-record slot fixup (stale model slots severed).
+// 0x2F8 != 0: same over the 0x360..0x370 camera-mode buffers with
+// RegisterCameraKey/RegisterLightKey/RegisterSelfShadowKey/RegisterGravityKey/Sub414110.  Common tail:
+// byte 0x9EDB5 = 1, PanelPaint, SelectionReeval, SeekModelFrame(model,
+// frame, 0xA0CC4), and for camera mode the reload chain (ReloadModels,
+// RefreshLightPanel, RefreshSelfShadowPanel, ApplyGravityTrack, ApplyAccessoryTrack per slot, SyncAccessoryEditPanel).
+// ------------------------------------------------------------------
+static void Cmd400_FramePaste(MMDApp* app, HWND hwnd) {
+    if (app->state.optflag[0] == 0) {
+        const auto& clipboardCounts = app->ClipboardCounts();
+        const std::uint32_t boneSel = clipboardCounts.bones;
+        const std::uint32_t morphSel = clipboardCounts.morphs;
+        const std::uint32_t camSel = clipboardCounts.displays;
+        TraceModelPaste("enter bone=%u morph=%u display=%u", boneSel,
+                        morphSel, camSel);
+        if (boneSel == 0 && morphSel == 0 && camSel == 0) {
+            return;  // was: break (switch exit)
+        }
+        app->SceneModified() = 1;
+        const std::int32_t frame =
+            app->state.currentFrame;
+        unsigned char* model = ActiveModel(app);
+        TraceModelPaste("active model=%p frame=%d", model, frame);
+        // clear all model-mode marks (loc_4849C0..)
+        ClearModelKeyMarks(mdl::BoneKeys(model), mdl::kBoneKeyCapacity);
+        ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
+        ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
+        if (boneSel != 0) {
+            // undo/redo buttons + undo-table entry (loc_484C84..)
+            EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+            EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
+            mdl::Mdl(model)->undoDirty = 1;
+            mdl::Mdl(model)->redoDirty = 0;
+            mdl::ModelRecord& record = *mdl::Mdl(model);
+            const std::int32_t next = record.undoState[0] + 1;
+            record.undoState[0] = next >= 0x1E ? 0 : next;
+            const std::int32_t cur = record.undoState[0];
+            record.undoState[1] = cur;
+            auto& undo = mikudancestudio::mdl::Mdl(model)->undoRings[0].slots[cur];
+            undo.operation = 2;
+            undo.frame = frame;
+            // bone-name snapshot buffer (+0x10 of the entry, 0x24-
+            // stride records)
+            void* p = undo.bonePose;
+            if (p != nullptr) {
+                free(p);
+                undo.bonePose = nullptr;
+            }
+            const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
+            auto* undoBone = static_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
+                malloc(static_cast<std::uint32_t>(boneCount) *
+                       sizeof(mikudancestudio::mdl::BonePoseSnapshot)));
+            if (undoBone != nullptr) {
+                ConstructArrayElements(undoBone,
+                                       sizeof(mikudancestudio::mdl::BonePoseSnapshot),
+                                       static_cast<std::uint32_t>(boneCount),
+                                       reinterpret_cast<void*>(&IdentityCtor));
+            }
+            undo.bonePose = undoBone;
+            memset(undoBone, 0,
+                   static_cast<std::uint32_t>(boneCount) *
+                       sizeof(mikudancestudio::mdl::BonePoseSnapshot));
+            if (boneCount > 0) {
+                const mdl::ModelRecord& record = *mdl::Mdl(model);
+                const mdl::BoneRecord* bones = record.boneTable;
+                unsigned char* boneState = record.bonePhysicsState;
+                for (std::int32_t i = 0; i < boneCount; ++i) {
+                    auto& rec = undoBone[i];
+                    const auto& src = bones[i];
+                    rec.boneIndex = i;
+                    memcpy(rec.position, src.trans, sizeof rec.position);
+                    memcpy(rec.rotation, src.rotQuat, sizeof rec.rotation);
+                    rec.physicsDisabled = boneState[i];
+                }
+            }
+            // second undo-history table (0x23F0 base, 0x1C stride):
+            // entry cnt+0x164 cleared
+            undo.dirty = 0;
+            // light snapshot buffer (+0x14 of the entry, 3*0x40 *
+            // boneSel bytes)
+            p = undo.auxiliaryPose;
+            if (p != nullptr) {
+                free(p);
+                undo.auxiliaryPose = nullptr;
+            }
+            unsigned char* undoLight = static_cast<unsigned char*>(
+                malloc(boneSel * 3 * 0x40));
+            if (undoLight != nullptr) {
+                ConstructArrayElements(undoLight, 0x40, boneSel * 3,
+                                       reinterpret_cast<void*>(&IdentityCtor));
+            }
+            undo.auxiliaryPose = undoLight;
+            memset(undoLight, 0, boneSel * 3 * 0x40);
+        }
+        std::memset(mdl::Mdl(model)->keyVisitMap, 0,
+                    sizeof(mdl::Mdl(model)->keyVisitMap));
+        ResetBoneKeyCursor(model);
+        TraceModelPaste("undo-ready free=%d",
+                        mdl::Mdl(model)->searchCursor);
+        // bone paste loop (loc_485130..485174): 0x54-byte record +
+        // frame + 0 flag; original is __userpurge(ecx = model,
+        // ebx = i) - the stub drops the index
+        if (boneSel != 0) {
+            const auto* src = app->BoneClipboard();
+            std::uint32_t i = 0;
+            do {
+                BoneClipboardRecord rec = src[i];
+                if (RegisterBoneKey(model,
+                              reinterpret_cast<unsigned char*>(&rec),
+                              frame, 0) == 0) {
+                    break;
+                }
+                ++i;
+            } while (i < boneSel);
+        }
+        ResetMorphKeyCursor(model);
+        TraceModelPaste("bone-done free=%d",
+                        mdl::Mdl(model)->searchCursor);
+        // morph paste loop (loc_48519B..4851DD)
+        if (morphSel != 0) {
+            const auto* src = app->MorphClipboard();
+            std::uint32_t i = 0;
+            do {
+                const MorphClipboardRecord rec = src[i];
+                if (RegisterMorphKeyFromRecord(model,
+                              reinterpret_cast<const unsigned char*>(&rec),
+                              frame) == 0) {
+                    break;
+                }
+                ++i;
+            } while (i < morphSel);
+        }
+        ResetDisplayKeyCursor(model);
+        TraceModelPaste("morph-done display-free=%d",
+                        mdl::Mdl(model)->searchCursor);
+        // camera paste loop (loc_485210..4852E4): light-record slot
+        // fixup + RegisterDisplayKeyFromRecord with the 6 record dwords + frame
+        if (camSel != 0) {
+            auto* records = app->DisplayClipboard();
+            std::uint32_t i = 0;
+            do {
+                DisplayClipboardRecord& rec = records[i];
+                const std::int32_t lightCount = rec.selectorCount;
+                TraceModelPaste(
+                    "display[%u] rec=%p rel=%d relptr=%p ik=%d ikptr=%p",
+                    i, &rec, lightCount, rec.selectorStates,
+                    rec.ikCount, rec.ikStates);
+                if (lightCount > 0) {
+                    for (std::int32_t j = 0; j < lightCount; ++j) {
+                        SelectorClipboardState& state =
+                            rec.selectorStates[j];
+                        const std::int32_t slotIdx = state.modelIndex;
+                        TraceModelPaste(
+                            "display[%u] relation[%d] slot=%d bone=%d",
+                            i, j, slotIdx, state.boneIndex);
+                        if (slotIdx < 0) {
+                            continue;
+                        }
+                        unsigned char* slotModel =
+                            app->ModelSlot(slotIdx);
+                        if (slotModel == nullptr) {
+                            state.modelIndex = -1;
+                            state.boneIndex = 0;
+                        } else if (static_cast<std::int32_t>(
+                                       mdl::Mdl(slotModel)->boneCount) <
+                                   state.boneIndex) {
+                            state.boneIndex = 0;
+                        }
+                    }
+                }
+                TraceModelPaste("display[%u] fixup-done", i);
+                if (RegisterDisplayKeyFromRecord(model,
+                              rec.frame, rec.visible, rec.ikCount,
+                              reinterpret_cast<unsigned char*>(rec.ikStates),
+                              rec.selectorCount,
+                              reinterpret_cast<unsigned char*>(
+                                  rec.selectorStates),
+                              frame) == 0) {
+                    break;
+                }
+                TraceModelPaste("display[%u] registrar-done", i);
+                ++i;
+            } while (i < camSel);
+        }
+        app->PhysicsResetPending() = 1;
+        TraceModelPaste("model-paste loops done");
+    } else {
+        // ---- camera mode (loc_4849A0..) ----
+        const auto& clipboardCounts = app->ClipboardCounts();
+        const std::uint32_t cameraCount = clipboardCounts.cameras;
+        const std::uint32_t lightCount = clipboardCounts.lights;
+        const std::uint32_t shadowCount = clipboardCounts.shadows;
+        const std::uint32_t gravityCount = clipboardCounts.gravity;
+        const std::uint32_t accessoryCount = clipboardCounts.accessories;
+        if (cameraCount == 0 && lightCount == 0 && shadowCount == 0 &&
+            gravityCount == 0 && accessoryCount == 0) {
+            return;  // was: break (switch exit)
+        }
+        app->SceneModified() = 1;
+        // clear all camera-mode marks (single sweep over the four
+        // tables + the blobs)
+        ClearSelectedKeys(app->CameraKeys(), 10000);
+        ClearSelectedKeys(app->LightKeys(), 10000);
+        ClearSelectedKeys(app->ShadowKeys(), 10000);
+        ClearSelectedKeys(app->GravityKeys(), 10000);
+        // (the original dereferences every blob pointer here - the
+        // 0x384 table is expected to be fully populated)
+        for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
+            auto* keys = app->AccessoryKeys(slot);
+            ClearSelectedKeys(keys, 10000);
+        }
+        const std::int32_t frame =
+            app->state.currentFrame;
+        // paste loops (loc_484A54..484Bxx): record-by-value + bool
+        if (cameraCount != 0) {
+            const auto* src = app->CameraClipboard();
+            std::uint32_t i = 0;
+            do {
+                const CameraClipboardRecord rec = src[i];
+                if (RegisterCameraKey(app, &rec) == 0) {
+                    break;
+                }
+                ++i;
+            } while (i < cameraCount);
+        }
+        if (lightCount != 0) {
+            const auto* src = app->LightClipboard();
+            std::uint32_t i = 0;
+            do {
+                const LightClipboardRecord rec = src[i];
+                if (RegisterLightKey(app, &rec) == 0) {
+                    break;
+                }
+                ++i;
+            } while (i < lightCount);
+        }
+        if (shadowCount != 0) {
+            const auto* src = app->ShadowClipboard();
+            std::uint32_t i = 0;
+            do {
+                const ShadowClipboardRecord rec = src[i];
+                if (RegisterSelfShadowKey(app, &rec) == 0) {
+                    break;
+                }
+                ++i;
+            } while (i < shadowCount);
+        }
+        if (gravityCount != 0) {
+            const auto* src = app->GravityClipboard();
+            std::uint32_t i = 0;
+            do {
+                const GravityClipboardRecord rec = src[i];
+                if (RegisterGravityKey(app, &rec) == 0) {
+                    break;
+                }
+                ++i;
+            } while (i < gravityCount);
+        }
+        if (accessoryCount != 0) {
+            auto* src = app->AccessoryClipboard();
+            std::uint32_t i = 0;
+            do {
+                mdl::AccessoryClipboardKey rec = src[i];
+                if (PasteAccessoryKeyRecord(app, &rec, 0) == 0) {
+                    break;
+                }
+                ++i;
+            } while (i < accessoryCount);
+        }
+        app->PhysicsResetPending() = 1;
+    }
+    // common tail (loc_4852F1..485382)
+    PanelPaint(app);
+    SelectionReeval(app);
+    unsigned char* model = ActiveModel(app);
+    if (model != nullptr) {
+        SeekModelFrame(model, app->state.currentFrame,
+                  app->PlaybackPhysicsMode());
+    }
+    if (app->state.optflag[0] != 0) {
+        ReloadModels(app);
+        RefreshLightPanel(app);
+        RefreshSelfShadowPanel(app);
+        ApplyGravityTrack(app);
+        for (std::int32_t i = 0; i < 0xFF; ++i) {
+            if (app->AccessorySlot(i) != nullptr) {
+                ApplyAccessoryTrack(app, i);
+            }
+        }
+        SyncAccessoryEditPanel(app);
+    }
+}
+// ------------------------------------------------------------------
+// 422 (0x00485CF2): reverse paste.  0x2F8 == 0 with a non-zero bone
+// count: identical undo-table setup as 421 (bone snapshot), then the
+// RegisterMirroredBoneKey mirrored insert loop over 0x354 bone records; morph/camera
+// buffers are left untouched.  Tail: PanelPaint, SelectionReeval,
+// SeekModelFrame(model, frame, 0xA0CC4) and byte 0x9EDB5 = 1 (no camera-
+// mode branch at all).
+// ------------------------------------------------------------------
+static void Cmd400_FrameReversePaste(MMDApp* app, HWND hwnd) {
+    if (app->state.optflag[0] != 0) {
+        return;  // was: break (switch exit)
+    }
+    const std::uint32_t boneSel = app->ClipboardCounts().bones;
+    if (boneSel == 0) {
+        return;  // was: break (switch exit)
+    }
+    app->SceneModified() = 1;
+    const std::int32_t frame =
+        app->state.currentFrame;
+    unsigned char* model = ActiveModel(app);
+    // clear all model-mode marks (loc_485D60..)
+    ClearModelKeyMarks(mdl::BoneKeys(model), mdl::kBoneKeyCapacity);
+    ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
+    ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
+    // undo-table entry (loc_485D88..) - identical shape to 421
+    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);
+    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
+    mdl::Mdl(model)->undoDirty = 1;
+    mdl::Mdl(model)->redoDirty = 0;
+    mdl::ModelRecord& record = *mdl::Mdl(model);
+    const std::int32_t next = record.undoState[0] + 1;
+    record.undoState[0] = next >= 0x1E ? 0 : next;
+    const std::int32_t cur = record.undoState[0];
+    record.undoState[1] = cur;
+    auto& undo = mikudancestudio::mdl::Mdl(model)->undoRings[0].slots[cur];
+    undo.operation = 2;
+    undo.frame = frame;
+    void* p = undo.bonePose;
+    if (p != nullptr) {
+        free(p);
+        undo.bonePose = nullptr;
+    }
+    const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
+    auto* undoBone = static_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
+        malloc(static_cast<std::uint32_t>(boneCount) *
+               sizeof(mikudancestudio::mdl::BonePoseSnapshot)));
+    if (undoBone != nullptr) {
+        ConstructArrayElements(undoBone,
+                               sizeof(mikudancestudio::mdl::BonePoseSnapshot),
+                               static_cast<std::uint32_t>(boneCount),
+                               reinterpret_cast<void*>(&IdentityCtor));
+    }
+    undo.bonePose = undoBone;
+    memset(undoBone, 0, static_cast<std::uint32_t>(boneCount) *
+                            sizeof(mikudancestudio::mdl::BonePoseSnapshot));
+    if (boneCount > 0) {
+        const mdl::BoneRecord* bones = record.boneTable;
+        unsigned char* boneState = record.bonePhysicsState;
+        for (std::int32_t i = 0; i < boneCount; ++i) {
+            auto& rec = undoBone[i];
+            const auto& src = bones[i];
+            rec.boneIndex = i;
+            memcpy(rec.position, src.trans, sizeof rec.position);
+            memcpy(rec.rotation, src.rotQuat, sizeof rec.rotation);
+            rec.physicsDisabled = boneState[i];
+        }
+    }
+    undo.dirty = 0;
+    p = undo.auxiliaryPose;
+    if (p != nullptr) {
+        free(p);
+        undo.auxiliaryPose = nullptr;
+    }
+    unsigned char* undoLight =
+        static_cast<unsigned char*>(malloc(boneSel * 3 * 0x40));
+    if (undoLight != nullptr) {
+        ConstructArrayElements(undoLight, 0x40, boneSel * 3,
+                               reinterpret_cast<void*>(&IdentityCtor));
+    }
+    undo.auxiliaryPose = undoLight;
+    memset(undoLight, 0, boneSel * 3 * 0x40);
+    std::memset(record.keyVisitMap, 0, sizeof(record.keyVisitMap));
+    ResetBoneKeyCursor(model);
+    // mirrored bone paste loop (loc_486255..486291)
+    if (boneSel != 0) {
+        const auto* src = app->BoneClipboard();
+        std::uint32_t i = 0;
+        do {
+            BoneClipboardRecord rec = src[i];
+            if (RegisterMirroredBoneKey(model,
+                          reinterpret_cast<unsigned char*>(&rec),
+                          frame) == 0) {
+                break;
+            }
+            ++i;
+        } while (i < boneSel);
+    }
+    // tail (loc_4862A5..4862DB)
+    PanelPaint(app);
+    SelectionReeval(app);
+    SeekModelFrame(model, frame,
+              app->PlaybackPhysicsMode());
+    app->PhysicsResetPending() = 1;
+}
+// ------------------------------------------------------------------
+// 430 (0x00481109): light colour <- selected frame.  Combo 0x1B1
+// cursor selects the source row; the source frame is the first frame
+// whose selection mark is set (0x2F8 != 0: app+0x374 table, 0x54
+// stride, mark +0x48, 0x2710 limit; 0x2F8 == 0: model+0x26E0, 0x3C
+// stride, mark +0x38, kBoneKeyCapacity limit).  With cursor < 6 (or < 4) a
+// single frame is copied into all rows, otherwise the first 6 (4)
+// frames are copied row by row.  Colour bytes: R/G/B/aux at +0x28/
+// +0x2E/+0x34/+0x3A (0x54-stride) or +0x0C/+0x10/+0x14/+0x18
+// (0x3C-stride) -> 0x9DA0A/0x9DA10/0x9DA16/0x9DA1C rows.  Ends with
+// EnableWindow(0x1AF) + SetFocus.
+// ------------------------------------------------------------------
+static void Cmd400_CurveCopyFromFrame(MMDApp* app, HWND hwnd) {
+    const LRESULT sel =
+        SendMessageA(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_GETCURSEL, 0, 0);
+    if (app->state.optflag[0] != 0) {
+        const std::int32_t idx = FirstSelectedFrame374(app);
+        if (idx < 0) {
+            SetFocus(hwnd);
+            return;  // was: break (switch exit)
+        }
+        EnableWindow(GetDlgItem(hwnd, panel::kCurvePasteButton), TRUE);
+        auto* keys = app->CameraKeys();
+        for (std::int32_t i = 0; i < 6; ++i) {
+            const std::int32_t row = (sel < 6) ? sel : i;
+            ReadCameraCurveChannel(app, keys[idx], row, i);
+        }
+        SetFocus(hwnd);
+    } else {
+        unsigned char* model = ActiveModel(app);
+        const std::int32_t idx = FirstSelectedBoneKey(model);
+        if (idx < 0) {
+            SetFocus(hwnd);
+            return;  // was: break (switch exit)
+        }
+        EnableWindow(GetDlgItem(hwnd, panel::kCurvePasteButton), TRUE);
+        mdl::BoneKey* keys = mdl::BoneKeys(model);
+        if (sel < 4) {
+            // 6 rows duplicated from the single frame at idx+sel
+            for (std::int32_t i = 0; i < 6; ++i) {
+                ReadBoneCurveChannel(app, keys[idx],
+                                     static_cast<std::size_t>(sel), i);
+            }
+        } else {
+            // All four interpolation channels into the first four rows.
+            for (std::int32_t i = 0; i < 4; ++i) {
+                ReadBoneCurveChannel(app, keys[idx], i, i);
+            }
+        }
+        SetFocus(hwnd);
+    }
+}
+// ------------------------------------------------------------------
+// 431 (0x00481430): light colour -> selected frames (inverse of 430).
+// Every frame with its selection mark set receives the colour of the
+// combo-0x1B1 row (single frame at cursor offset) or all 6/4 rows;
+// byte 0xA0B0D dirty; 0x2F8==0 branch runs SnapshotSelectedKeysForUndo first and uses
+// the model+0x26E0 table; ends SelectionReeval + SetFocus.
+// ------------------------------------------------------------------
+static void Cmd400_CurvePasteToFrames(MMDApp* app, HWND hwnd) {
+    app->SceneModified() = 1;
+    const LRESULT sel =
+        SendMessageA(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_GETCURSEL, 0, 0);
+    if (app->state.optflag[0] != 0) {
+        auto* keys = app->CameraKeys();
+        for (std::int32_t i = 0; i < 10000; ++i) {
+            mdl::CameraKey& key = keys[i];
+            if (key.selected == 0) {
+                continue;
+            }
+            if (sel < 6) {
+                WriteCameraCurveChannel(
+                    app, key, static_cast<std::size_t>(sel), sel);
+            } else {
+                for (std::int32_t channel = 0; channel < 6; ++channel) {
+                    WriteCameraCurveChannel(app, key, channel, channel);
+                }
+            }
+        }
+        SelectionReeval(app);
+        SetFocus(hwnd);
+    } else {
+        unsigned char* model = ActiveModel(app);
+        // original: Sub4A1510(ecx = model, frame = dword app+0x980)
+        SnapshotSelectedKeysForUndo(model, app->state.currentFrame);
+        mdl::BoneKey* keys = mdl::BoneKeys(model);
+        for (std::int32_t i = 0; i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
+            mdl::BoneKey& key = keys[i];
+            if (key.allocated == 0) {
+                continue;
+            }
+            if (sel < 4) {
+                WriteBoneCurveChannel(app, key,
+                                      static_cast<std::size_t>(sel), sel);
+            } else {
+                for (std::int32_t channel = 0; channel < 4; ++channel) {
+                    WriteBoneCurveChannel(app, key, channel, channel);
+                }
+            }
+        }
+        SelectionReeval(app);
+        SetFocus(hwnd);
+    }
+}
+// ------------------------------------------------------------------
+// 432 (0x004816E6): light colour reset - same sweep as 431 but the
+// colour bytes are fixed to 0x14/0x14/0x6B/0x6B instead of the row
+// values (0x2F8==0 branch uses model+0x26E0 with +0x0C/+0x10/+0x14/
+// +0x18; 0x2F8!=0 uses app+0x374 with +0x28/+0x2E/+0x34/+0x3A).
+// ------------------------------------------------------------------
+static void Cmd400_CurveResetRows(MMDApp* app, HWND hwnd) {
+    app->SceneModified() = 1;
+    const LRESULT sel =
+        SendMessageA(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_GETCURSEL, 0, 0);
+    if (app->state.optflag[0] != 0) {
+        auto* keys = app->CameraKeys();
+        for (std::int32_t i = 0; i < 10000; ++i) {
+            mdl::CameraKey& key = keys[i];
+            if (key.selected == 0) {
+                continue;
+            }
+            if (sel < 6) {
+                ResetCameraCurveChannel(key,
+                                        static_cast<std::size_t>(sel));
+            } else {
+                for (std::int32_t channel = 0; channel < 6; ++channel) {
+                    ResetCameraCurveChannel(key, channel);
+                }
+            }
+        }
+        SelectionReeval(app);
+        SetFocus(hwnd);
+    } else {
+        unsigned char* model = ActiveModel(app);
+        // original: Sub4A1510(ecx = model, frame = dword app+0x980)
+        SnapshotSelectedKeysForUndo(model, app->state.currentFrame);
+        mdl::BoneKey* keys = mdl::BoneKeys(model);
+        for (std::int32_t i = 0; i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
+            mdl::BoneKey& key = keys[i];
+            if (key.allocated == 0) {
+                continue;
+            }
+            if (sel < 4) {
+                ResetBoneCurveChannel(key, static_cast<std::size_t>(sel));
+            } else {
+                for (std::int32_t channel = 0; channel < 4; ++channel) {
+                    ResetBoneCurveChannel(key, channel);
+                }
+            }
+        }
+        SelectionReeval(app);
+        SetFocus(hwnd);
+    }
+}
+// ------------------------------------------------------------------
+// 435 (0x0047EB7B): load model.  SetCurrentDirectoryW(ExeDir), dirty
+// 0xBC, zeroed 0x200-wide file buffer + OPENFILENAMEW (0x4C),
+// owner = dword 0xA0D38 ?: hwnd, filter "All Model files(*.pmd,*.pmx)"
+// (both locales), initial dir = DirModel() when menu 0x12D checked
+// else "UserFile\\Model", def-ext "pmd;pmx", title "load model" (JP:
+// "ファイルを開く"); on OK and menu gate: ExtractDirFromPath(app+0x9F338,
+// path) -> CopyDirPathW(DirModel(), dir); LoadModelFile(app, path);
+// always RefreshRequest(-1) (also when cancelled).
+// ------------------------------------------------------------------
+static void Cmd400_LoadModel(MMDApp* app, HWND hwnd) {
+    SetCurrentDirectoryW(app->ExeDir());
+    app->state.enterKeyState = 1;
+    wchar_t fileBuf[0x100];
+    memset(fileBuf, 0, sizeof(fileBuf));
+    OPENFILENAMEW ofn;
+    memset(&ofn, 0, sizeof(ofn));
+    ofn.lStructSize = 0x4C;
+    ofn.hwndOwner = app->state.floatingWindow != 0
+                        ? reinterpret_cast<HWND>(
+                              app->state.floatingWindow)
+                        : hwnd;
+    ofn.lpstrFilter = kFilterModel;
+    ofn.lpstrFile = fileBuf;
+    ofn.nMaxFile = 0x100;
+    ofn.Flags = OFN_FILEMUSTEXIST;
+    ofn.lpstrInitialDir =
+        (GetMenuState(GetMenu(hwnd), 0x12D, 0) & 8) != 0
+            ? app->DirModel()
+            : kInitDirModel;
+    ofn.lpstrDefExt = kDefExtPmd;
+    ofn.nMaxFileTitle = 0x100;
+    ofn.lpstrFileTitle = nullptr;
+    ofn.lpstrTitle = app->state.englishUI != 0
+                         ? kTitleLoadModel
+                         : kTitleOpenFileJp;
+    if (GetOpenFileNameW(&ofn) != 0) {
+        if ((GetMenuState(GetMenu(hwnd), 0x12D, 0) & 8) != 0) {
+            wchar_t* dir = ExtractDirFromPath(
+                app->PathWorkspace().projectDirectory,
+                fileBuf);
+            CopyDirPathW(app->DirModel(), dir);
+        }
+        LoadModelFile(app, fileBuf);
+    }
+    RefreshRequest(-1);
+}
+// ------------------------------------------------------------------
+// 437 (0x0047FCF5): delete model selected in combo 0x1B4.  Gate
+// dword[0xA0B50]; CB_GETCURSEL(0x1B4) -> slot lookup by model byte
+// +0x2D7C (0x64 slots); confirm MessageBox (JP caption "モデル削除"
+// unconditionally; EN text "Trying to delete Model(%s)...", JP
+// "モデル：%sを削除します..."; name at model+0x227A EN / +0x2248 JP;
+// flags 0x40001 when 0xA0D38 else 1); teardown of the model-edit
+// sub-window (SeekSelectedModelToCurrentFrame, free 0xA0B7C/0xA0C30, DestroyWindow 0xA0B74,
+// enable 0x1B4/0x198); dispose model (Sub40A710(model, 1)), clear the
+// slot, 0xA042C = any-model flag; combo rebuild (CB_RESETCONTENT
+// 0x1B4/0x1DA/0x1C1 with old id, CB_SETCURSEL 0x1B4, CB_GETLBTEXT +
+// CB_ADDSTRING 0x1D7 -> 0x1B2); menu 0x120/0x121 enable, then per
+// remaining model: menu disable + id fixups (2D7C/2D7D decrement, bone
+// table 0x4CCE4, camera frame pointers model+0x26E8); when the deleted
+// slot was the edited one (0xA0430) reset it and re-sync combos 0x1C1/
+// 0x1C2; clear bone-frame references (0x374 +0x4C/+0x50) and
+// accessory-frame references (0x9DD70 +0x230/+0x234 and the 0x384
+// blob +0x10/+0x0C); ApplyModelComboSelection.
+// ------------------------------------------------------------------
+static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
+    if (app->FrameRangeDialog() != nullptr) {
+        return;  // was: break (switch exit)
+    }
+    const LRESULT sel =
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_GETCURSEL, 0, 0);
+    app->state.enterKeyState = 1;
+    std::int32_t found = -1;
+    for (std::int32_t i = 0; i < 0x64; ++i) {
+        unsigned char* m = app->ModelSlot(i);
+        if (m != nullptr && static_cast<int>(m[kModelSelId2D7C]) == sel) {
+            found = i;
+            break;
+        }
+    }
+    if (found < 0) {
+        return;  // was: break (switch exit)
+    }
+    app->state.enterKeyState = 1;
+    unsigned char* model = app->ModelSlot(found);
+    const mdl::ModelRecord& record = *mdl::Mdl(model);
+    char text[0x100];
+    if (app->state.englishUI != 0) {
+        sprintf_s(text, 0x100, kMsgDelModelEn, record.nameEn);
+    } else {
+        sprintf_s(text, 0x100, kMsgDelModelJp, record.name);
+    }
+    const std::uint32_t flags =
+        app->state.floatingWindow != 0 ? (MB_OKCANCEL | MB_TOPMOST) : MB_OKCANCEL;
+    if (MessageBoxA(hwnd, text, kCaptionDelModelJp, flags) != 1) {
+        return;  // was: break (switch exit)
+    }
+    if (app->state.frameCopyDialog != 0) {
+        SeekSelectedModelToCurrentFrame(app);
+        if (app->state.rigidScratchArray != nullptr) {
+            free(app->state.rigidScratchArray);
+            app->state.rigidScratchArray = nullptr;
+        }
+        if (app->state.jointScratchArray != nullptr) {
+            free(app->state.jointScratchArray);
+            app->state.jointScratchArray = nullptr;
+        }
+        DestroyWindow(reinterpret_cast<HWND>(
+            app->state.frameCopyDialog));
+        app->state.frameCopyDialog = nullptr;
+        EnableWindow(GetDlgItem(hwnd, panel::kMainComboModel), TRUE);
+        EnableWindow(GetDlgItem(hwnd, panel::kPlayButton), TRUE);
+    }
+    const std::int32_t oldSel = model[kModelSelId2D7C];
+    const std::int32_t oldIdx = model[kModelSelId2D7D];
+    if (model != nullptr) {
+        DeleteModel(model, 1);  // model dispose (thiscall)
+    }
+    app->ModelSlot(found) = nullptr;
+    app->SceneModified() = 1;
+    app->state.mainModelComboSelection = 0;
+    for (std::int32_t i = 0; i < 0x64; ++i) {
+        if (app->ModelSlot(i) != nullptr) {
+            app->state.mainModelComboSelection = 1;
+        }
+    }
+    // combo rebuild: 0x1B4 / 0x1DA / 0x1C1 reset with the old id as
+    // wParam, 0x1B4 cursor 0, accessory names 0x1D7 -> 0x1B2
+    SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_DELETESTRING,
+                 static_cast<WPARAM>(sel), 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround), CB_DELETESTRING,
+                 static_cast<WPARAM>(sel), 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal), CB_DELETESTRING,
+                 static_cast<WPARAM>(sel), 0);
+    SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL, 0, 0);
+    const LRESULT accCount =
+        SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0);
+    for (std::int32_t i = 0; i < accCount; ++i) {
+        char buf[0x100];
+        SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_GETLBTEXT,
+                     static_cast<WPARAM>(i),
+                     reinterpret_cast<LPARAM>(buf));
+        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+                     reinterpret_cast<LPARAM>(buf));
+    }
+    EnableMenuItem(GetMenu(hwnd), 0x120, 1);
+    EnableMenuItem(GetMenu(hwnd), 0x121, 1);
+    // per-slot fixup
+    for (std::int32_t j = 0; j < 0x64; ++j) {
+        unsigned char* m = app->ModelSlot(j);
+        if (m == nullptr) {
+            continue;
+        }
+        EnableMenuItem(GetMenu(hwnd), 0x120, 0);
+        EnableMenuItem(GetMenu(hwnd), 0x121, 0);
+        if (static_cast<int>(m[kModelSelId2D7C]) > oldSel) {
+            --m[kModelSelId2D7C];
+        }
+        if (static_cast<int>(m[kModelSelId2D7D]) > oldIdx) {
+            --m[kModelSelId2D7D];
+        }
+        // bone parent table 0x4CCE4 (0x14 stride) - entries pointing at
+        // the deleted slot index are severed
+        mdl::ModelRecord& record = *mdl::Mdl(m);
+        const std::int32_t boneCnt = record.boneOrderCount;
+        unsigned char* boneTbl =
+            static_cast<unsigned char*>(record.boneOrderTable);
+        for (std::int32_t k = 0; k < boneCnt; ++k) {
+            std::int32_t* rec =
+                reinterpret_cast<std::int32_t*>(boneTbl + 0x14 * k);
+            if (rec[3] == found) {
+                rec[3] = -1;
+                rec[4] = 0;
+            }
+        }
+        mdl::DisplayKey* displayKeys = mdl::DisplayKeys(m);
+        for (std::int32_t keyIndex = 0; keyIndex < 1000; ++keyIndex) {
+            auto* states = mdl::SelectorStates(displayKeys[keyIndex]);
+            const std::int32_t cnt = record.boneOrderCount;
+            for (std::int32_t k = 0; k < cnt; ++k) {
+                if (states[k].modelIndex == found) {
+                    states[k].modelIndex = -1;
+                    states[k].boneIndex = 0;
+                }
+            }
+        }
+    }
+    if (app->CameraParentModel() == found) {
+        app->CameraParentModel() = -1;
+        app->CameraParentBone() = 0;
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal), CB_SETCURSEL, 0, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRegisterCombo), CB_RESETCONTENT, 0,
+                     0);
+    }
+    // Clear camera key attachment references to the deleted model.
+    {
+        auto* keys = app->CameraKeys();
+        for (std::int32_t i = 0; i < 10000; ++i) {
+            if (keys[i].parentModel == found) {
+                keys[i].parentModel = -1;
+                keys[i].parentBone = 0;
+            }
+        }
+    }
+    // clear accessory references (0x9DD70 slots + 0x384 frame blobs)
+    for (std::int32_t i = 0; i < 0xFF; ++i) {
+        mdl::AccessoryRecord* acc = app->AccessorySlot(i);
+        if (acc == nullptr) {
+            continue;
+        }
+        if (acc->parentModel == found) {
+            acc->parentModel = -1;
+            acc->parentBone = 0;
+        }
+        auto* keys = app->AccessoryKeys(i);
+        if (keys != nullptr) {
+            for (std::int32_t keyIndex = 0; keyIndex < 10000;
+                 ++keyIndex) {
+                mdl::AccessoryKey& key = keys[keyIndex];
+                if (key.parentModel == found) {
+                    key.parentModel = -1;
+                    key.visible = 0;
+                }
+            }
+        }
+    }
+    ApplyModelComboSelection(app);
+}
+// ------------------------------------------------------------------
+// 442 (0x0048D759): accessory edit dialog.  Dirty 0xBC, dialog flag
+// byte 0xA0665 = 1, DialogBoxParamA(instance, template 0x329 EN /
+// 0x328 JP, hwnd, sub_47A3F0, 0); on result != 2 (cancelled): dirty
+// 0xA0B0D, flag 0xA0665 = 0, free the dialog buffers 0xA0B1C /
+// 0xA0B24 / 0xA0668; when byte 0xA0664 != 0:
+// SeekModelFrame(model, frame 0x980, 0xA0CC4) + PostLanguageSweep +
+// SelectionReeval.
+// ------------------------------------------------------------------
+static void Cmd400_AccessoryEditDialog(MMDApp* app, HWND hwnd) {
+    app->state.enterKeyState = 1;
+    app->state.accessoryEditDialogOpen = 1;
+    const std::intptr_t result =
+        DialogBoxParamA(static_cast<HINSTANCE>(app->HInstance()),
+                        app->state.englishUI != 0
+                            ? reinterpret_cast<LPCSTR>(0x329)
+                            : reinterpret_cast<LPCSTR>(0x328),
+                        hwnd, &SelectNavDlgProc, 0);
+    if (result == 2) {
+        return;  // was: break (switch exit)
+    }
+    app->SceneModified() = 1;
+    app->state.accessoryEditDialogOpen = 0;
+    if (app->AccessoryOrderArray() != nullptr) {
+        free(app->AccessoryOrderArray());
+        app->AccessoryOrderArray() = nullptr;
+    }
+    if (app->AccessoryEditArray() != nullptr) {
+        free(app->AccessoryEditArray());
+        app->AccessoryEditArray() = nullptr;
+    }
+    if (app->state.selectNavRecords != nullptr) {
+        free(app->state.selectNavRecords);
+        app->state.selectNavRecords = nullptr;
+    }
+    if (app->AccessoryApplyGate() == 0) {
+        return;  // was: break (switch exit)
+    }
+    unsigned char* model = ActiveModel(app);
+    // original: sub_4B4260(ecx = model, frame = app+0x980,
+    // app+0xA0CC4)
+    SeekModelFrame(model,
+              app->state.currentFrame,
+              app->PlaybackPhysicsMode());
+    PostLanguageSweep(app);
+    SelectionReeval(app);
+}
+
 void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
                    std::uint16_t notify) {
     switch (id) {
-    // ------------------------------------------------------------------
-    // 400 (0x00482766): undo button 0x190.  Gated on byte 0x2F8; the
-    // paste-undo table model+0x26EC[28*cnt] and the cnt==cur equality both
-    // disable 0x190 / clear paste-mode byte 0x31BC; 0x191 enabled and mode
-    // byte 0x31BD = 1, then PanelPaint + SelectionReeval + SetFocus and
-    // undo-available flag 0x9EDB5.  The original falls through into
-    // def_47E903, a no-op for this id (control 0x190 != 0x1B4).
-    // ------------------------------------------------------------------
-    case 400: {
-        if (app->state.optflag[0] != 0) {
-            break;
-        }
-        app->SceneModified() = 1;
-        unsigned char* model = ActiveModel(app);
-        mdl::ModelRecord& record = *mdl::Mdl(model);
-        Sub4A1870(model, reinterpret_cast<std::int32_t*>(
-                             app->state.currentFrame));
-        const std::int32_t cnt = record.undoState[0];
-        if (record.undoRings[0].slots[cnt].operation == 0) {
-            EnableWindow(GetDlgItem(hwnd, 0x190), FALSE);
-            record.undoDirty = 0;
-            SetFocus(hwnd);
-        }
-        if (record.undoState[0] == record.undoState[1]) {
-            EnableWindow(GetDlgItem(hwnd, 0x190), FALSE);
-            record.undoDirty = 0;
-            SetFocus(hwnd);
-        }
-        EnableWindow(GetDlgItem(hwnd, 0x191), TRUE);
-        record.redoDirty = 1;
-        PanelPaint(app);
-        SelectionReeval(app);
-        SetFocus(hwnd);
-        app->PhysicsResetPending() = 1;
+    case 400:  // undo (0x00482766) -> Cmd400_Undo
+        Cmd400_Undo(app, hwnd);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 401 (0x004828DF): redo button 0x191 - mirror of 400 with
-    // Sub4A2490, 0x191/0x190 swapped and mode bytes inverted; when the
-    // undo-table entry model+0x26EC[28*cnt] != 1, Sub4B4260 is invoked
-    // (original: thiscall(ecx = model, frame = dword app+0x980,
-    // app+0xA0CC4) - the stub only takes this + pos).
-    // ------------------------------------------------------------------
-    case 401: {
-        if (app->state.optflag[0] != 0) {
-            break;
-        }
-        app->SceneModified() = 1;
-        unsigned char* model = ActiveModel(app);
-        mdl::ModelRecord& record = *mdl::Mdl(model);
-        Sub4A2490(model, reinterpret_cast<std::int32_t*>(
-                             app->state.currentFrame));
-        if (record.undoState[0] == record.undoState[1]) {
-            EnableWindow(GetDlgItem(hwnd, 0x191), FALSE);
-            record.redoDirty = 0;
-            SetFocus(hwnd);
-        }
-        EnableWindow(GetDlgItem(hwnd, 0x190), TRUE);
-        record.undoDirty = 1;
-        PanelPaint(app);
-        SelectionReeval(app);
-        const std::int32_t cnt = record.undoState[0];
-        if (record.undoRings[0].slots[cnt].operation != 1) {
-            // original: sub_4B4260(ecx = model, frame = app+0x980,
-            // app+0xA0CC4)
-            Sub4B4260(model,
-                      app->state.currentFrame,
-                      app->PlaybackPhysicsMode());
-        }
-        SetFocus(hwnd);
-        app->PhysicsResetPending() = 1;
+    case 401:  // redo (0x004828DF) -> Cmd400_Redo
+        Cmd400_Redo(app, hwnd);
         break;
-    }
 
     // ------------------------------------------------------------------
     // 402 (0x0047EEDF): camera/view reset - 0x308..0x318 cleared, angle
@@ -1149,117 +2848,13 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         ResetViewVariant(app, -1.5707964f, true, false);  // flt_52E8FC
         break;
 
-    // ------------------------------------------------------------------
-    // 407 (0x0047F29C): view reset + model reload.  Fast path (0x2F8!=0):
-    // 0x310 = +PI/2, 0x314/0x318 = 0, angle -45, refresh.  Full path:
-    // gate (slot==0xA0430 && 0x330==0 && 0x9ED98!=0 && 0xA0430>=0 -> skip
-    // the reset, only refresh), else flag 0xA0478 = 0, 0x308/0x30C = 0,
-    // Sub42E640 (ReloadModels) + PostModelReload, refresh.
-    // ------------------------------------------------------------------
-    case 407: {
-        if (app->state.optflag[0] != 0) {
-            app->CameraRotation()[0] = 1.5707964f;
-            app->CameraRotation()[1] = 0.0f;
-            app->CameraRotation()[2] = 0.0f;
-            app->CameraDistance() = -45.0f;
-            ViewResetRefresh(app);
-            break;
-        }
-        const std::int32_t a0430 = app->CameraParentModel();
-        const std::uint8_t slot = app->SelectedModelSlot();
-        const bool hit = (slot == a0430) &&
-                         app->PlaybackActive() == 0 &&
-                         app->state.v9ed98 != 0 &&
-                         a0430 >= 0;
-        if (!hit) {
-            app->CameraAttachmentTransformSuppressed() = 0;
-            app->ViewOffsetX() = 0.0f;
-            app->ViewOffsetY() = 0.0f;
-            Sub42E640(app);  // ReloadModels (stubs.cpp)
-            PostModelReload(app);
-        }
-        ViewResetRefresh(app);
+    case 407:  // view reset + reload (0x0047F29C) -> Cmd400_ViewResetReload
+        Cmd400_ViewResetReload(app);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 408 (0x00487446): play-range edits.  When byte 0x330 != 0: clear it,
-    // Sub4341E0, and (byte 0xA06CC != 0) Sub4C2680/Sub4C2760 on the 0xCC
-    // subsystem.  Otherwise read the 0x199 (start) / 0x19A (end) edits via
-    // atol; frameA/30 (0x9E654) comes from dword 0x980 when byte 0x9ED99
-    // != 0 (0x9EDB6 = 1) or from the 0x199 edit (0x9EDB6 = 1 only when the
-    // edit differs from 0x980); frameB/30 (0x9E658) from the 0x19A edit
-    // (fallback dword 0x9E16C when 0); 0x9E64C = frameA/30; snapshot
-    // IsWindowEnabled of 0x1F1/0x1F2/0x1AF/0x1A5/0x1A6/0x190/0x191 into
-    // 0x9EB77..0x9EB7D; byte 0x330 = 1; UpdateBoneFrames; then
-    // KillTimer(0x64) + Sub4C2680/Sub4C2760 when 0xA02B6, and Sub4C2B80 +
-    // Sub4C34A0((double)0x9E654) when 0xA03E9 == 0 (both gated on 0xA06CC);
-    // finally timeGetTime copies 0x9EDA8/0x9EDAC.
-    // ------------------------------------------------------------------
-    case 408: {
-        if (app->PlaybackActive() != 0) {
-            app->PlaybackActive() = 0;
-            Sub4341E0(app);
-            if (app->WaveEnabled() != 0) {
-                CloseDataFile(app->Audio());
-                WaveStartPlayback(app->Audio());
-            }
-            break;
-        }
-        char text[0x100];
-        GetWindowTextA(GetDlgItem(hwnd, 0x199), text, 8);
-        const std::int32_t start = atol(text);  // ebx
-        GetWindowTextA(GetDlgItem(hwnd, 0x19A), text, 8);
-        std::int32_t end = atol(text);  // eax
-        if (app->PlaybackStartsAtCurrentFrame() != 0) {
-            app->PlaybackStartSeconds() = FrameToSeconds(
-                app->state.currentFrame);
-            app->PlaybackFrameChanged() = 1;
-        } else {
-            app->PlaybackStartSeconds() = FrameToSeconds(start);
-            if (start != app->state.currentFrame) {
-                app->PlaybackFrameChanged() = 1;
-            }
-        }
-        if (end == 0) {
-            end = app->state.lastRegisteredFrame;
-        }
-        app->PlaybackEndSeconds() = FrameToSeconds(end);
-        app->PlaybackCursorSeconds() = app->PlaybackStartSeconds();
-        app->state.playbackEnabledSnapshot[0] =
-            IsWindowEnabled(GetDlgItem(hwnd, 0x1F1)) ? 1 : 0;
-        app->state.playbackEnabledSnapshot[1] =
-            IsWindowEnabled(GetDlgItem(hwnd, 0x1F2)) ? 1 : 0;
-        app->state.playbackEnabledSnapshot[4] =
-            IsWindowEnabled(GetDlgItem(hwnd, 0x1AF)) ? 1 : 0;
-        app->state.playbackEnabledSnapshot[2] =
-            IsWindowEnabled(GetDlgItem(hwnd, 0x1A5)) ? 1 : 0;
-        app->state.playbackEnabledSnapshot[3] =
-            IsWindowEnabled(GetDlgItem(hwnd, 0x1A6)) ? 1 : 0;
-        app->state.playbackEnabledSnapshot[5] =
-            IsWindowEnabled(GetDlgItem(hwnd, 0x190)) ? 1 : 0;
-        app->state.playbackEnabledSnapshot[6] =
-            IsWindowEnabled(GetDlgItem(hwnd, 0x191)) ? 1 : 0;
-        app->PlaybackActive() = 1;
-        UpdateBoneFrames(app);  // 0x433A40
-        if (app->WaveEnabled() != 0) {
-            if (app->AudioSeekReady() != 0) {
-                app->AudioSeekReady() = 0;
-                KillTimer(hwnd, 0x64);
-                CloseDataFile(app->Audio());
-                WaveStartPlayback(app->Audio());
-            }
-            if (app->AutomaticFrameAdvanceEnabled() == 0) {
-                SetFrameNormalized(
-                    app->FrameNormalization());
-                Sub4C34A0(app->Audio(),
-                          static_cast<double>(app->PlaybackStartSeconds()));
-            }
-        }
-        app->PlaybackClockAnchorLow() = app->TimeNowLow();
-        app->PlaybackClockAnchorHigh() = app->TimeNowHigh();
+    case 408:  // play-range edits (0x00487446) -> Cmd400_PlayRangeEdits
+        Cmd400_PlayRangeEdits(app, hwnd);
         break;
-    }
 
     // ------------------------------------------------------------------
     // 411/413/414 (0x0047FAE5 / 0x0047FAFA / 0x0047FB0F): toggle bytes
@@ -1270,8 +2865,8 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
             app->PlaybackLoopEnabled() == 0 ? 1 : 0;
         break;
     case 413:
-        app->state.v342 =
-            app->state.v342 == 0 ? 1 : 0;
+        app->state.playbackReturnsToStartFrame =
+            app->state.playbackReturnsToStartFrame == 0 ? 1 : 0;
         break;
     case 414:
         app->PlaybackStartsAtCurrentFrame() =
@@ -1281,27 +2876,27 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     // 412 (0x0047F9FE): checkbox 0x19C - view-mode byte 0x340 := 1 when
     // checked (BM_GETCHECK) / 0 when not; 0x213 is unchecked (BM_SETCHECK
-    // 0) in the checked branch; Sub41ACD0(app, old value) runs only when
+    // 0) in the checked branch; ApplyCameraReferenceModeChange(app, old value) runs only when
     // byte 0x2F8 == 0.
     // ------------------------------------------------------------------
     case 412: {
         const LRESULT checked =
-            SendMessageA(GetDlgItem(hwnd, 0x19C), 0xF0 /*BM_GETCHECK*/, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kCameraRefModelCheckbox), BM_GETCHECK, 0, 0);
         const int prev = static_cast<int>(app->CameraReferenceMode());
         if (checked == 1) {
             app->CameraReferenceMode() =
                 CameraAttachmentReference::ModelRoot;
-            SendMessageA(GetDlgItem(hwnd, 0x213), 0xF1 /*BM_SETCHECK*/, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kCameraRefBoneCheckbox), BM_SETCHECK, 0, 0);
             if (app->state.optflag[0] != 0) {
                 break;
             }
-            Sub41ACD0(app, prev);
+            ApplyCameraReferenceModeChange(app, prev);
         } else {
             app->CameraReferenceMode() = CameraAttachmentReference::None;
             if (app->state.optflag[0] != 0) {
                 break;
             }
-            Sub41ACD0(app, prev);
+            ApplyCameraReferenceModeChange(app, prev);
         }
         break;
     }
@@ -1310,10 +2905,10 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 418/419 (0x00480734 / 0x0048072A): single refresh helpers.
     // ------------------------------------------------------------------
     case 418:
-        Sub4312E0(app);
+        StepFrame(app, false);
         break;
     case 419:
-        Sub430F20(app);
+        StepFrame(app, true);
         break;
 
     // ------------------------------------------------------------------
@@ -1348,415 +2943,42 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         break;
     }
 
-    // ------------------------------------------------------------------
-    // 430 (0x00481109): light colour <- selected frame.  Combo 0x1B1
-    // cursor selects the source row; the source frame is the first frame
-    // whose selection mark is set (0x2F8 != 0: app+0x374 table, 0x54
-    // stride, mark +0x48, 0x2710 limit; 0x2F8 == 0: model+0x26E0, 0x3C
-    // stride, mark +0x38, kBoneKeyCapacity limit).  With cursor < 6 (or < 4) a
-    // single frame is copied into all rows, otherwise the first 6 (4)
-    // frames are copied row by row.  Colour bytes: R/G/B/aux at +0x28/
-    // +0x2E/+0x34/+0x3A (0x54-stride) or +0x0C/+0x10/+0x14/+0x18
-    // (0x3C-stride) -> 0x9DA0A/0x9DA10/0x9DA16/0x9DA1C rows.  Ends with
-    // EnableWindow(0x1AF) + SetFocus.
-    // ------------------------------------------------------------------
-    case 430: {
-        const LRESULT sel =
-            SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->state.optflag[0] != 0) {
-            const std::int32_t idx = FirstSelectedFrame374(app);
-            if (idx < 0) {
-                SetFocus(hwnd);
-                break;
-            }
-            EnableWindow(GetDlgItem(hwnd, 0x1AF), TRUE);
-            auto* keys = app->CameraKeys();
-            for (std::int32_t i = 0; i < 6; ++i) {
-                const std::int32_t row = (sel < 6) ? sel : i;
-                ReadCameraCurveChannel(app, keys[idx], row, i);
-            }
-            SetFocus(hwnd);
-        } else {
-            unsigned char* model = ActiveModel(app);
-            const std::int32_t idx = FirstSelectedBoneKey(model);
-            if (idx < 0) {
-                SetFocus(hwnd);
-                break;
-            }
-            EnableWindow(GetDlgItem(hwnd, 0x1AF), TRUE);
-            mdl::BoneKey* keys = mdl::BoneKeys(model);
-            if (sel < 4) {
-                // 6 rows duplicated from the single frame at idx+sel
-                for (std::int32_t i = 0; i < 6; ++i) {
-                    ReadBoneCurveChannel(app, keys[idx],
-                                         static_cast<std::size_t>(sel), i);
-                }
-            } else {
-                // All four interpolation channels into the first four rows.
-                for (std::int32_t i = 0; i < 4; ++i) {
-                    ReadBoneCurveChannel(app, keys[idx], i, i);
-                }
-            }
-            SetFocus(hwnd);
-        }
+    case 430:  // curve <- frame (0x00481109) -> Cmd400_CurveCopyFromFrame
+        Cmd400_CurveCopyFromFrame(app, hwnd);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 431 (0x00481430): light colour -> selected frames (inverse of 430).
-    // Every frame with its selection mark set receives the colour of the
-    // combo-0x1B1 row (single frame at cursor offset) or all 6/4 rows;
-    // byte 0xA0B0D dirty; 0x2F8==0 branch runs Sub4A1510 first and uses
-    // the model+0x26E0 table; ends SelectionReeval + SetFocus.
-    // ------------------------------------------------------------------
-    case 431: {
-        app->SceneModified() = 1;
-        const LRESULT sel =
-            SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->state.optflag[0] != 0) {
-            auto* keys = app->CameraKeys();
-            for (std::int32_t i = 0; i < 10000; ++i) {
-                mdl::CameraKey& key = keys[i];
-                if (key.selected == 0) {
-                    continue;
-                }
-                if (sel < 6) {
-                    WriteCameraCurveChannel(
-                        app, key, static_cast<std::size_t>(sel), sel);
-                } else {
-                    for (std::int32_t channel = 0; channel < 6; ++channel) {
-                        WriteCameraCurveChannel(app, key, channel, channel);
-                    }
-                }
-            }
-            SelectionReeval(app);
-            SetFocus(hwnd);
-        } else {
-            unsigned char* model = ActiveModel(app);
-            // original: Sub4A1510(ecx = model, frame = dword app+0x980)
-            Sub4A1510(model, app->state.currentFrame);
-            mdl::BoneKey* keys = mdl::BoneKeys(model);
-            for (std::int32_t i = 0; i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
-                mdl::BoneKey& key = keys[i];
-                if (key.allocated == 0) {
-                    continue;
-                }
-                if (sel < 4) {
-                    WriteBoneCurveChannel(app, key,
-                                          static_cast<std::size_t>(sel), sel);
-                } else {
-                    for (std::int32_t channel = 0; channel < 4; ++channel) {
-                        WriteBoneCurveChannel(app, key, channel, channel);
-                    }
-                }
-            }
-            SelectionReeval(app);
-            SetFocus(hwnd);
-        }
+    case 431:  // curve -> frames (0x00481430) -> Cmd400_CurvePasteToFrames
+        Cmd400_CurvePasteToFrames(app, hwnd);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 432 (0x004816E6): light colour reset - same sweep as 431 but the
-    // colour bytes are fixed to 0x14/0x14/0x6B/0x6B instead of the row
-    // values (0x2F8==0 branch uses model+0x26E0 with +0x0C/+0x10/+0x14/
-    // +0x18; 0x2F8!=0 uses app+0x374 with +0x28/+0x2E/+0x34/+0x3A).
-    // ------------------------------------------------------------------
-    case 432: {
-        app->SceneModified() = 1;
-        const LRESULT sel =
-            SendMessageA(GetDlgItem(hwnd, 0x1B1), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        if (app->state.optflag[0] != 0) {
-            auto* keys = app->CameraKeys();
-            for (std::int32_t i = 0; i < 10000; ++i) {
-                mdl::CameraKey& key = keys[i];
-                if (key.selected == 0) {
-                    continue;
-                }
-                if (sel < 6) {
-                    ResetCameraCurveChannel(key,
-                                            static_cast<std::size_t>(sel));
-                } else {
-                    for (std::int32_t channel = 0; channel < 6; ++channel) {
-                        ResetCameraCurveChannel(key, channel);
-                    }
-                }
-            }
-            SelectionReeval(app);
-            SetFocus(hwnd);
-        } else {
-            unsigned char* model = ActiveModel(app);
-            // original: Sub4A1510(ecx = model, frame = dword app+0x980)
-            Sub4A1510(model, app->state.currentFrame);
-            mdl::BoneKey* keys = mdl::BoneKeys(model);
-            for (std::int32_t i = 0; i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
-                mdl::BoneKey& key = keys[i];
-                if (key.allocated == 0) {
-                    continue;
-                }
-                if (sel < 4) {
-                    ResetBoneCurveChannel(key, static_cast<std::size_t>(sel));
-                } else {
-                    for (std::int32_t channel = 0; channel < 4; ++channel) {
-                        ResetBoneCurveChannel(key, channel);
-                    }
-                }
-            }
-            SelectionReeval(app);
-            SetFocus(hwnd);
-        }
+    case 432:  // curve reset (0x004816E6) -> Cmd400_CurveResetRows
+        Cmd400_CurveResetRows(app, hwnd);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 435 (0x0047EB7B): load model.  SetCurrentDirectoryW(ExeDir), dirty
-    // 0xBC, zeroed 0x200-wide file buffer + OPENFILENAMEW (0x4C),
-    // owner = dword 0xA0D38 ?: hwnd, filter "All Model files(*.pmd,*.pmx)"
-    // (both locales), initial dir = DirModel() when menu 0x12D checked
-    // else "UserFile\\Model", def-ext "pmd;pmx", title "load model" (JP:
-    // "ファイルを開く"); on OK and menu gate: ExtractDirFromPath(app+0x9F338,
-    // path) -> Sub42AE20(DirModel(), dir); LoadModelFile(app, path);
-    // always RefreshRequest(-1) (also when cancelled).
-    // ------------------------------------------------------------------
-    case 435: {
-        SetCurrentDirectoryW(app->ExeDir());
-        app->state.bC = 1;
-        wchar_t fileBuf[0x100];
-        memset(fileBuf, 0, sizeof(fileBuf));
-        OPENFILENAMEW ofn;
-        memset(&ofn, 0, sizeof(ofn));
-        ofn.lStructSize = 0x4C;
-        ofn.hwndOwner = app->state.floatingWindow != 0
-                            ? reinterpret_cast<HWND>(
-                                  app->state.floatingWindow)
-                            : hwnd;
-        ofn.lpstrFilter = kFilterModel;
-        ofn.lpstrFile = fileBuf;
-        ofn.nMaxFile = 0x100;
-        ofn.Flags = 0x1000;
-        ofn.lpstrInitialDir =
-            (GetMenuState(GetMenu(hwnd), 0x12D, 0) & 8) != 0
-                ? app->DirModel()
-                : kInitDirModel;
-        ofn.lpstrDefExt = kDefExtPmd;
-        ofn.nMaxFileTitle = 0x100;
-        ofn.lpstrFileTitle = nullptr;
-        ofn.lpstrTitle = app->state.englishUI != 0
-                             ? kTitleLoadModel
-                             : kTitleOpenFileJp;
-        if (GetOpenFileNameW(&ofn) != 0) {
-            if ((GetMenuState(GetMenu(hwnd), 0x12D, 0) & 8) != 0) {
-                wchar_t* dir = ExtractDirFromPath(
-                    app->PathWorkspace().projectDirectory,
-                    fileBuf);
-                Sub42AE20(app->DirModel(), dir);
-            }
-            LoadModelFile(app, fileBuf);
-        }
-        RefreshRequest(-1);
+    case 435:  // load model (0x0047EB7B) -> Cmd400_LoadModel
+        Cmd400_LoadModel(app, hwnd);
         break;
-    }
 
     // ------------------------------------------------------------------
     // 436 is handled by the original dispatcher's default chain rather
     // than its command-ID jump table: CBN_SELCHANGE from the model combo
-    // enters Sub44D940 when the modal/model-load gate at 0xA0B50 is clear.
+    // enters ApplyModelComboSelection when the modal/model-load gate at 0xA0B50 is clear.
     // ------------------------------------------------------------------
     case 436:
         if (notify == CBN_SELCHANGE &&
             app->FrameRangeDialog() == nullptr) {
-            Sub44D940(app);
+            ApplyModelComboSelection(app);
         }
         break;
 
-    // ------------------------------------------------------------------
-    // 437 (0x0047FCF5): delete model selected in combo 0x1B4.  Gate
-    // dword[0xA0B50]; CB_GETCURSEL(0x1B4) -> slot lookup by model byte
-    // +0x2D7C (0x64 slots); confirm MessageBox (JP caption "モデル削除"
-    // unconditionally; EN text "Trying to delete Model(%s)...", JP
-    // "モデル：%sを削除します..."; name at model+0x227A EN / +0x2248 JP;
-    // flags 0x40001 when 0xA0D38 else 1); teardown of the model-edit
-    // sub-window (Sub4220C0, free 0xA0B7C/0xA0C30, DestroyWindow 0xA0B74,
-    // enable 0x1B4/0x198); dispose model (Sub40A710(model, 1)), clear the
-    // slot, 0xA042C = any-model flag; combo rebuild (CB_RESETCONTENT
-    // 0x1B4/0x1DA/0x1C1 with old id, CB_SETCURSEL 0x1B4, CB_GETLBTEXT +
-    // CB_ADDSTRING 0x1D7 -> 0x1B2); menu 0x120/0x121 enable, then per
-    // remaining model: menu disable + id fixups (2D7C/2D7D decrement, bone
-    // table 0x4CCE4, camera frame pointers model+0x26E8); when the deleted
-    // slot was the edited one (0xA0430) reset it and re-sync combos 0x1C1/
-    // 0x1C2; clear bone-frame references (0x374 +0x4C/+0x50) and
-    // accessory-frame references (0x9DD70 +0x230/+0x234 and the 0x384
-    // blob +0x10/+0x0C); Sub44D940.
-    // ------------------------------------------------------------------
-    case 437: {
-        if (app->FrameRangeDialog() != nullptr) {
-            break;
-        }
-        const LRESULT sel =
-            SendMessageA(GetDlgItem(hwnd, 0x1B4), 0x147 /*CB_GETCURSEL*/, 0, 0);
-        app->state.bC = 1;
-        std::int32_t found = -1;
-        for (std::int32_t i = 0; i < 0x64; ++i) {
-            unsigned char* m = app->ModelSlot(i);
-            if (m != nullptr && static_cast<int>(m[kModelSelId2D7C]) == sel) {
-                found = i;
-                break;
-            }
-        }
-        if (found < 0) {
-            break;
-        }
-        app->state.bC = 1;
-        unsigned char* model = app->ModelSlot(found);
-        const mdl::ModelRecord& record = *mdl::Mdl(model);
-        char text[0x100];
-        if (app->state.englishUI != 0) {
-            sprintf_s(text, 0x100, kMsgDelModelEn, record.nameEn);
-        } else {
-            sprintf_s(text, 0x100, kMsgDelModelJp, record.name);
-        }
-        const std::uint32_t flags =
-            app->state.floatingWindow != 0 ? 0x40001u : 1u;
-        if (MessageBoxA(hwnd, text, kCaptionDelModelJp, flags) != 1) {
-            break;
-        }
-        if (app->state.frameCopyDialog != 0) {
-            Sub4220C0(app);
-            if (app->state.cameraRecordArray != nullptr) {
-                free(app->state.cameraRecordArray);
-                app->state.cameraRecordArray = nullptr;
-            }
-            if (app->state.boneRecordArray != nullptr) {
-                free(app->state.boneRecordArray);
-                app->state.boneRecordArray = nullptr;
-            }
-            DestroyWindow(reinterpret_cast<HWND>(
-                app->state.frameCopyDialog));
-            app->state.frameCopyDialog = nullptr;
-            EnableWindow(GetDlgItem(hwnd, 0x1B4), TRUE);
-            EnableWindow(GetDlgItem(hwnd, 0x198), TRUE);
-        }
-        const std::int32_t oldSel = model[kModelSelId2D7C];
-        const std::int32_t oldIdx = model[kModelSelId2D7D];
-        if (model != nullptr) {
-            Sub40A710(model, 1);  // model dispose (thiscall)
-        }
-        app->ModelSlot(found) = nullptr;
-        app->SceneModified() = 1;
-        app->state.a042C = 0;
-        for (std::int32_t i = 0; i < 0x64; ++i) {
-            if (app->ModelSlot(i) != nullptr) {
-                app->state.a042C = 1;
-            }
-        }
-        // combo rebuild: 0x1B4 / 0x1DA / 0x1C1 reset with the old id as
-        // wParam, 0x1B4 cursor 0, accessory names 0x1D7 -> 0x1B2
-        SendMessageA(GetDlgItem(hwnd, 0x1B4), 0x144 /*CB_RESETCONTENT*/,
-                     static_cast<WPARAM>(sel), 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1DA), 0x144 /*CB_RESETCONTENT*/,
-                     static_cast<WPARAM>(sel), 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1C1), 0x144 /*CB_RESETCONTENT*/,
-                     static_cast<WPARAM>(sel), 0);
-        SendMessageA(GetDlgItem(hwnd, 0x1B4), 0x14E /*CB_SETCURSEL*/, 0, 0);
-        const LRESULT accCount =
-            SendMessageA(GetDlgItem(hwnd, 0x1D7), 0x146 /*CB_GETCOUNT*/, 0, 0);
-        for (std::int32_t i = 0; i < accCount; ++i) {
-            char buf[0x100];
-            SendMessageA(GetDlgItem(hwnd, 0x1D7), 0x148 /*CB_GETLBTEXT*/,
-                         static_cast<WPARAM>(i),
-                         reinterpret_cast<LPARAM>(buf));
-            SendMessageA(GetDlgItem(hwnd, 0x1B2), 0x143 /*CB_ADDSTRING*/, 0,
-                         reinterpret_cast<LPARAM>(buf));
-        }
-        EnableMenuItem(GetMenu(hwnd), 0x120, 1);
-        EnableMenuItem(GetMenu(hwnd), 0x121, 1);
-        // per-slot fixup
-        for (std::int32_t j = 0; j < 0x64; ++j) {
-            unsigned char* m = app->ModelSlot(j);
-            if (m == nullptr) {
-                continue;
-            }
-            EnableMenuItem(GetMenu(hwnd), 0x120, 0);
-            EnableMenuItem(GetMenu(hwnd), 0x121, 0);
-            if (static_cast<int>(m[kModelSelId2D7C]) > oldSel) {
-                --m[kModelSelId2D7C];
-            }
-            if (static_cast<int>(m[kModelSelId2D7D]) > oldIdx) {
-                --m[kModelSelId2D7D];
-            }
-            // bone parent table 0x4CCE4 (0x14 stride) - entries pointing at
-            // the deleted slot index are severed
-            mdl::ModelRecord& record = *mdl::Mdl(m);
-            const std::int32_t boneCnt = record.boneOrderCount;
-            unsigned char* boneTbl =
-                static_cast<unsigned char*>(record.boneOrderTable);
-            for (std::int32_t k = 0; k < boneCnt; ++k) {
-                std::int32_t* rec =
-                    reinterpret_cast<std::int32_t*>(boneTbl + 0x14 * k);
-                if (rec[3] == found) {
-                    rec[3] = -1;
-                    rec[4] = 0;
-                }
-            }
-            mdl::DisplayKey* displayKeys = mdl::DisplayKeys(m);
-            for (std::int32_t keyIndex = 0; keyIndex < 1000; ++keyIndex) {
-                auto* states = mdl::SelectorStates(displayKeys[keyIndex]);
-                const std::int32_t cnt = record.boneOrderCount;
-                for (std::int32_t k = 0; k < cnt; ++k) {
-                    if (states[k].modelIndex == found) {
-                        states[k].modelIndex = -1;
-                        states[k].boneIndex = 0;
-                    }
-                }
-            }
-        }
-        if (app->CameraParentModel() == found) {
-            app->CameraParentModel() = -1;
-            app->CameraParentBone() = 0;
-            SendMessageA(GetDlgItem(hwnd, 0x1C1), 0x14E /*CB_SETCURSEL*/, 0, 0);
-            SendMessageA(GetDlgItem(hwnd, 0x1C2), 0x14B /*CB_SHOWDROPDOWN*/, 0,
-                         0);
-        }
-        // Clear camera key attachment references to the deleted model.
-        {
-            auto* keys = app->CameraKeys();
-            for (std::int32_t i = 0; i < 10000; ++i) {
-                if (keys[i].parentModel == found) {
-                    keys[i].parentModel = -1;
-                    keys[i].parentBone = 0;
-                }
-            }
-        }
-        // clear accessory references (0x9DD70 slots + 0x384 frame blobs)
-        for (std::int32_t i = 0; i < 0xFF; ++i) {
-            mdl::AccessoryRecord* acc = app->AccessorySlot(i);
-            if (acc == nullptr) {
-                continue;
-            }
-            if (acc->parentModel == found) {
-                acc->parentModel = -1;
-                acc->parentBone = 0;
-            }
-            auto* keys = app->AccessoryKeys(i);
-            if (keys != nullptr) {
-                for (std::int32_t keyIndex = 0; keyIndex < 10000;
-                     ++keyIndex) {
-                    mdl::AccessoryKey& key = keys[keyIndex];
-                    if (key.parentModel == found) {
-                        key.parentModel = -1;
-                        key.visible = 0;
-                    }
-                }
-            }
-        }
-        Sub44D940(app);
+    case 437:  // delete model (0x0047FCF5) -> Cmd400_DeleteModel
+        Cmd400_DeleteModel(app, hwnd);
         break;
-    }
 
     // ------------------------------------------------------------------
     // 438 (0x00480651): clear keyframe selection marks: 0x26E0 (0x3C
     // stride, +0x38), 0x26E4 (0x14 stride, +0x10), 0x26E8 (0x1C stride,
-    // +0x14) of the active model; Sub49F480(model, dword 0x980);
+    // +0x14) of the active model; RegisterDisplayKeyCurrent(model, dword 0x980);
     // 0x9E16C = max(0x9E16C, model+0x31B0); PanelPaint.  Dirty 0xA0B0D.
     // ------------------------------------------------------------------
     case 438: {
@@ -1765,7 +2987,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         ClearModelKeyMarks(mdl::BoneKeys(model), mdl::kBoneKeyCapacity);
         ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
         ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
-        Sub49F480(model, app->state.currentFrame);
+        RegisterDisplayKeyCurrent(model, app->state.currentFrame);
         const std::int32_t v =
             static_cast<std::int32_t>(mdl::Mdl(model)->maxFrame);
         if (app->state.lastRegisteredFrame < v) {
@@ -1780,7 +3002,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 439: {
         ActiveModel(app)[kModelBoneFlag2D8D] =
-            IsDlgButtonChecked(hwnd, 0x1B7) == 1 ? 1 : 0;
+            IsDlgButtonChecked(hwnd, panel::kModelVisibleCheckbox) == 1 ? 1 : 0;
         break;
     }
 
@@ -1812,7 +3034,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // ------------------------------------------------------------------
     case 444: {
         const LRESULT sel =
-            SendMessageA(GetDlgItem(hwnd, 0x1BB), 0x147 /*CB_GETCURSEL*/, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kIkChainCombo), CB_GETCURSEL, 0, 0);
         unsigned char* model = ActiveModel(app);
         mdl::IkChain* chains = mdl::Mdl(model)->ikChains;
         if (chains != nullptr) {
@@ -1822,7 +3044,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     }
     case 445: {
         const LRESULT sel =
-            SendMessageA(GetDlgItem(hwnd, 0x1BB), 0x147 /*CB_GETCURSEL*/, 0, 0);
+            SendMessageA(GetDlgItem(hwnd, panel::kIkChainCombo), CB_GETCURSEL, 0, 0);
         unsigned char* model = ActiveModel(app);
         mdl::IkChain* chains = mdl::Mdl(model)->ikChains;
         if (chains != nullptr) {
@@ -1865,1202 +3087,36 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     }
 
     // ------------------------------------------------------------------
-    // 423 (0x004810F8): Sub4316B0(app) then dirty 0xA0B0D.
+    // 423 (0x004810F8): DeleteMarkedKeyframes(app) then dirty 0xA0B0D.
     // ------------------------------------------------------------------
     case 423:
-        Sub4316B0(app);
+        DeleteMarkedKeyframes(app);
         app->SceneModified() = 1;
         break;
 
-    // ------------------------------------------------------------------
-    // 442 (0x0048D759): accessory edit dialog.  Dirty 0xBC, dialog flag
-    // byte 0xA0665 = 1, DialogBoxParamA(instance, template 0x329 EN /
-    // 0x328 JP, hwnd, sub_47A3F0, 0); on result != 2 (cancelled): dirty
-    // 0xA0B0D, flag 0xA0665 = 0, free the dialog buffers 0xA0B1C /
-    // 0xA0B24 / 0xA0668; when byte 0xA0664 != 0:
-    // Sub4B4260(model, frame 0x980, 0xA0CC4) + PostLanguageSweep +
-    // SelectionReeval.
-    // ------------------------------------------------------------------
-    case 442: {
-        app->state.bC = 1;
-        app->state.a0665 = 1;
-        const std::intptr_t result =
-            DialogBoxParamA(static_cast<HINSTANCE>(app->HInstance()),
-                            app->state.englishUI != 0
-                                ? reinterpret_cast<LPCSTR>(0x329)
-                                : reinterpret_cast<LPCSTR>(0x328),
-                            hwnd, &Sub47A3F0, 0);
-        if (result == 2) {
-            break;
-        }
-        app->SceneModified() = 1;
-        app->state.a0665 = 0;
-        if (app->AccessoryOrderArray() != nullptr) {
-            free(app->AccessoryOrderArray());
-            app->AccessoryOrderArray() = nullptr;
-        }
-        if (app->AccessoryEditArray() != nullptr) {
-            free(app->AccessoryEditArray());
-            app->AccessoryEditArray() = nullptr;
-        }
-        if (app->state.a0668OrUint32 != nullptr) {
-            free(app->state.a0668OrUint32);
-            app->state.a0668OrUint32 = nullptr;
-        }
-        if (app->AccessoryApplyGate() == 0) {
-            break;
-        }
-        unsigned char* model = ActiveModel(app);
-        // original: sub_4B4260(ecx = model, frame = app+0x980,
-        // app+0xA0CC4)
-        Sub4B4260(model,
-                  app->state.currentFrame,
-                  app->PlaybackPhysicsMode());
-        PostLanguageSweep(app);
-        SelectionReeval(app);
+    case 442:  // accessory edit dialog (0x0048D759) -> Cmd400_AccessoryEditDialog
+        Cmd400_AccessoryEditDialog(app, hwnd);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 415 (0x004829E4): frame-range editor.  Edits 0x1A9/0x1AA hold the
-    // from/to frames (atol); 0x1B2 holds the target text/combo.  With
-    // byte 0x2F8 == 0 the 0x1B2 text is compared byte-exact (repe cmpsb
-    // over N bytes incl. the NUL) against "全ﾌﾚｰﾑ"/"All frame" (bone+morph+
-    // camera sweep), "全表情ﾌﾚｰﾑ"/"All facial" (morph), "全ボーンフﾚｰﾑ"/
-    // "All bone" (bone), "選択ボーン"/"Sel Bone" and "選択表情"/"Sel facial"
-    // (Sub4A27F0 per selected item), else Sub4A27F0 with the raw text.
-    // With 0x2F8 != 0 the 0x1B2 combo cursor selects the app-level table
-    // (0x374/0x378/0x37C/0x380 or the accessory slot whose byte +0x49D
-    // equals cursor-4, scanning its 0x384 blob).  Every sweep clears the
-    // mark byte first, then sets it when from <= frame <= to (unsigned)
-    // and (first entry or frame != 0); the model-mode bone/morph sweeps
-    // additionally require (counter < count || frame != 0).  Tail:
-    // PanelPaint + SelectionReeval + SetFocus.
-    // ------------------------------------------------------------------
-    case 415: {
-        char text[0x100];
-        GetWindowTextA(GetDlgItem(hwnd, 0x1A9), text, 8);
-        const std::int32_t from = atol(text);   // ebx
-        GetWindowTextA(GetDlgItem(hwnd, 0x1AA), text, 8);
-        const std::int32_t to = atol(text);     // var_A40
-        GetWindowTextA(GetDlgItem(hwnd, 0x1B2), text, 20);
-        if (app->state.optflag[0] == 0) {
-            // ---- name-compare chain (loc_482CF2..loc_4831CB) ----
-            if (TextEqN(text, kJpAllFrame, 7) || TextEqN(text, "All frame", 10)) {
-                // bone sweep (loc_482D40..482DB2)
-                {
-                    unsigned char* model = ActiveModel(app);
-                    SelectModelFrameRange(
-                        mdl::BoneKeys(model), mdl::kBoneKeyCapacity,
-                        mdl::Mdl(model)->boneCount,
-                        static_cast<std::uint32_t>(from),
-                        static_cast<std::uint32_t>(to));
-                }
-                // morph sweep (loc_482DE0..482E52, gated on 0x2D80 > 0)
-                {
-                    unsigned char* model = ActiveModel(app);
-                    const std::uint32_t morphCount =
-                        mdl::Mdl(model)->morphCount;
-                    if (morphCount > 0) {
-                        SelectModelFrameRange(
-                            mdl::MorphKeys(model), 20000, morphCount,
-                            static_cast<std::uint32_t>(from),
-                            static_cast<std::uint32_t>(to));
-                    }
-                }
-                // camera sweep (loc_482E60..482ED8)
-                {
-                    unsigned char* model = ActiveModel(app);
-                    SelectModelFrameRange(
-                        mdl::DisplayKeys(model), 1000, 1,
-                        static_cast<std::uint32_t>(from),
-                        static_cast<std::uint32_t>(to));
-                }
-            } else if (TextEqN(text, kJpAllFacial, 11) ||
-                       TextEqN(text, "All facial", 11)) {
-                // morph sweep only (loc_482F30..482FA2)
-                unsigned char* model = ActiveModel(app);
-                const std::uint32_t morphCount = mdl::Mdl(model)->morphCount;
-                if (morphCount > 0) {
-                    SelectModelFrameRange(
-                        mdl::MorphKeys(model), 20000, morphCount,
-                        static_cast<std::uint32_t>(from),
-                        static_cast<std::uint32_t>(to));
-                }
-            } else if (TextEqN(text, kJpAllBone, 13) ||
-                       TextEqN(text, "All bone", 9)) {
-                // bone sweep only (loc_482FF2..483064)
-                unsigned char* model = ActiveModel(app);
-                SelectModelFrameRange(
-                    mdl::BoneKeys(model), mdl::kBoneKeyCapacity,
-                    mdl::Mdl(model)->boneCount,
-                    static_cast<std::uint32_t>(from),
-                    static_cast<std::uint32_t>(to));
-            } else if (TextEqN(text, kJpSelBone, 9) ||
-                       TextEqN(text, "Sel Bone", 9)) {
-                // selected-bone sweep (loc_4830D0..48310F): Sub4A27F0 per
-                // selected bone (0x2D94 byte array), name at 0x26BC +
-                // i*0x25C
-                unsigned char* model = ActiveModel(app);
-                const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
-                if (boneCount > 0) {
-                    const mdl::ModelRecord& record = *mdl::Mdl(model);
-                    unsigned char* sel = record.boneSelection;
-                    const mdl::BoneRecord* bones = record.boneTable;
-                    for (std::int32_t i = 0; i < boneCount; ++i) {
-                        if (sel[i] != 0) {
-                            Sub4A27F0(model, static_cast<std::uint32_t>(from),
-                                      static_cast<std::uint32_t>(to),
-                                       bones[i].name);
-                        }
-                    }
-                }
-            } else if (TextEqN(text, kJpSelFacial, 9) ||
-                       TextEqN(text, "Sel facial", 11)) {
-                // selected-morph sweep (loc_483173..4831B2): morph table
-                // 0x26DC, 0x2E stride, selected byte +0x2C, count byte
-                // 0x2DAC
-                unsigned char* model = ActiveModel(app);
-                const mdl::ModelRecord& record = *mdl::Mdl(model);
-                const std::uint8_t morphCount = record.facialFrameCount;
-                if (morphCount != 0) {
-                    mdl::FrameGroup* groups = record.displayFrames;
-                    for (std::uint8_t i = 0; i < morphCount; ++i) {
-                        mdl::FrameGroup& group = groups[i];
-                        if (group.selected != 0) {
-                            Sub4A27F0(model, static_cast<std::uint32_t>(from),
-                                      static_cast<std::uint32_t>(to),
-                                      group.name);
-                        }
-                    }
-                }
-            } else {
-                // fallback (loc_4831B6..4831CB): treat the text as a name
-                unsigned char* model = ActiveModel(app);
-                Sub4A27F0(model, static_cast<std::uint32_t>(from),
-                          static_cast<std::uint32_t>(to), text);
-            }
-            PanelPaint(app);
-            SelectionReeval(app);
-            SetFocus(hwnd);
-        } else {
-            // ---- 0x2F8 != 0: CB_GETCURSEL(0x1B2) dispatch ----
-            // (loc_482A92..loc_482CED)
-            const LRESULT sel =
-                SendMessageA(GetDlgItem(hwnd, 0x1B2), 0x147 /*CB_GETCURSEL*/,
-                             0, 0);
-            if (sel == 0) {
-                SelectGlobalFrameRange(
-                    app->CameraKeys(),
-                    static_cast<std::uint32_t>(from),
-                    static_cast<std::uint32_t>(to));
-            } else if (sel == 1) {
-                SelectGlobalFrameRange(
-                    app->LightKeys(),
-                    static_cast<std::uint32_t>(from),
-                    static_cast<std::uint32_t>(to));
-            } else if (sel == 2) {
-                SelectGlobalFrameRange(
-                    app->ShadowKeys(),
-                    static_cast<std::uint32_t>(from),
-                    static_cast<std::uint32_t>(to));
-            } else if (sel == 3) {
-                SelectGlobalFrameRange(
-                    app->GravityKeys(),
-                    static_cast<std::uint32_t>(from),
-                    static_cast<std::uint32_t>(to));
-            } else {
-                // accessory slot scan (loc_482C54..loc_482CED): the slot
-                // whose byte +0x49D equals cursor-4; its AccessoryKey
-                // timeline is swept.
-                for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
-                    mdl::AccessoryRecord* acc = app->AccessorySlot(slot);
-                    if (acc != nullptr &&
-                        static_cast<unsigned int>(acc->order) ==
-                            static_cast<unsigned int>(sel - 4)) {
-                        auto* keys = app->AccessoryKeys(slot);
-                        SelectGlobalFrameRange(
-                            keys, static_cast<std::uint32_t>(from),
-                            static_cast<std::uint32_t>(to));
-                        break;
-                    }
-                }
-            }
-            PanelPaint(app);
-            SelectionReeval(app);
-            SetFocus(hwnd);
-        }
+    case 415:  // frame-range selection (0x004829E4) -> Cmd400_FrameRangeSelect
+        Cmd400_FrameRangeSelect(app, hwnd);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 416 (0x0048073E): selection-mark synchronisation.  For every entry
-    // of each frame table whose selection mark is set, the equal-frame
-    // entry of the *other* tables is marked via their frame-sorted linked
-    // lists (frame dword +0, next index +8; walks start at the current
-    // index for the model-mode bone/morph searches and at the head
-    // otherwise).  0x2F8 == 0: tables 0x26E0 (+0x38) / 0x26E4 (+0x10) /
-    // 0x26E8 (+0x14), camera entries only propagate into bone+morph.
-    // 0x2F8 != 0: app tables 0x374 (+0x48) / 0x378 (+0x24) / 0x37C
-    // (+0x14) / 0x380 (+0x21) plus the 0x384 accessory blobs (+0x18),
-    // then every marked blob entry re-marks the four app tables and the
-    // other blobs.  Tail: PanelPaint + SelectionReeval (no SetFocus).
-    // ------------------------------------------------------------------
-    case 416: {
-        if (app->state.optflag[0] == 0) {
-            // ---- model mode (loc_480D1D..loc_4810F3) ----
-            unsigned char* model = ActiveModel(app);
-            mdl::ModelRecord* modelRecord = mdl::Mdl(model);
-            mdl::BoneKey* boneKeys = mdl::BoneKeys(model);
-            mdl::MorphKey* morphKeys = mdl::MorphKeys(model);
-            mdl::DisplayKey* displayKeys = mdl::DisplayKeys(model);
-
-            // loop A: bone marks -> bone/morph/camera
-            for (std::uint32_t keyIndex = 0; keyIndex < static_cast<std::uint32_t>(mdl::kBoneKeyCapacity); ++keyIndex) {
-                if (boneKeys[keyIndex].allocated != 0) {
-                    const std::uint32_t frame = boneKeys[keyIndex].frame;
-                    if (modelRecord->boneCount > 0) {
-                        for (std::uint32_t i = 0; i < modelRecord->boneCount;
-                             ++i) {
-                            MarkModelFrameAllocated(boneKeys, i, frame);
-                        }
-                    }
-                    if (modelRecord->morphCount > 0) {
-                        for (std::uint32_t i = 0; i < modelRecord->morphCount;
-                             ++i) {
-                            MarkModelFrameAllocated(morphKeys, i, frame);
-                        }
-                    }
-                    MarkModelFrameAllocated(displayKeys, 0, frame);
-                }
-            }
-            // loop B: morph marks -> bone/morph/camera
-            for (std::uint32_t keyIndex = 0; keyIndex < 20000; ++keyIndex) {
-                if (morphKeys[keyIndex].allocated != 0) {
-                    const std::uint32_t frame = morphKeys[keyIndex].frame;
-                    if (modelRecord->boneCount > 0) {
-                        for (std::uint32_t i = 0; i < modelRecord->boneCount;
-                             ++i) {
-                            MarkModelFrameAllocated(boneKeys, i, frame);
-                        }
-                    }
-                    if (modelRecord->morphCount > 0) {
-                        for (std::uint32_t i = 0; i < modelRecord->morphCount;
-                             ++i) {
-                            MarkModelFrameAllocated(morphKeys, i, frame);
-                        }
-                    }
-                    MarkModelFrameAllocated(displayKeys, 0, frame);
-                }
-            }
-            // loop C: camera marks -> bone/morph only
-            for (std::uint32_t keyIndex = 0; keyIndex < 1000; ++keyIndex) {
-                if (displayKeys[keyIndex].allocated != 0) {
-                    const std::uint32_t frame = displayKeys[keyIndex].frame;
-                    if (modelRecord->boneCount > 0) {
-                        for (std::uint32_t i = 0; i < modelRecord->boneCount;
-                             ++i) {
-                            MarkModelFrameAllocated(boneKeys, i, frame);
-                        }
-                    }
-                    if (modelRecord->morphCount > 0) {
-                        for (std::uint32_t i = 0; i < modelRecord->morphCount;
-                             ++i) {
-                            MarkModelFrameAllocated(morphKeys, i, frame);
-                        }
-                    }
-                }
-            }
-            PanelPaint(app);
-            SelectionReeval(app);
-        } else {
-            // ---- camera mode (loc_480750..loc_480D18) ----
-            auto* cameraKeys = app->CameraKeys();
-            auto* lightKeys = app->LightKeys();
-            auto* shadowKeys = app->ShadowKeys();
-            auto* gravityKeys = app->GravityKeys();
-
-            const auto markAccessories =
-                [app](std::uint32_t frame, std::int32_t excludedSlot) {
-                    for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
-                        if (slot == excludedSlot ||
-                            app->AccessorySlot(slot) == nullptr) {
-                            continue;
-                        }
-                        auto* keys = app->AccessoryKeys(slot);
-                        MarkFrameSelected(keys, 0, frame);
-                    }
-                };
-
-            for (std::int32_t i = 0; i < 0x2710; ++i) {
-                if (cameraKeys[i].selected != 0) {
-                    const std::uint32_t frame = cameraKeys[i].frame;
-                    MarkFrameSelected(lightKeys, 0, frame);
-                    MarkFrameSelected(shadowKeys, 0, frame);
-                    MarkFrameSelected(gravityKeys, 0, frame);
-                    markAccessories(frame, -1);
-                }
-                if (lightKeys[i].selected != 0) {
-                    const std::uint32_t frame = lightKeys[i].frame;
-                    MarkFrameSelected(cameraKeys, 0, frame);
-                    MarkFrameSelected(shadowKeys, 0, frame);
-                    MarkFrameSelected(gravityKeys, 0, frame);
-                    markAccessories(frame, -1);
-                }
-                if (shadowKeys[i].selected != 0) {
-                    const std::uint32_t frame = shadowKeys[i].frame;
-                    MarkFrameSelected(cameraKeys, 0, frame);
-                    MarkFrameSelected(lightKeys, 0, frame);
-                    MarkFrameSelected(gravityKeys, 0, frame);
-                    markAccessories(frame, -1);
-                }
-                if (gravityKeys[i].selected != 0) {
-                    const std::uint32_t frame = gravityKeys[i].frame;
-                    MarkFrameSelected(cameraKeys, 0, frame);
-                    MarkFrameSelected(lightKeys, 0, frame);
-                    MarkFrameSelected(shadowKeys, 0, frame);
-                    markAccessories(frame, -1);
-                }
-            }
-            // accessory-blob marks (loc_480B7C..480D04): each marked blob
-            // entry re-marks the four app tables and every *other* blob
-            for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
-                if (app->AccessorySlot(slot) == nullptr) {
-                    continue;
-                }
-                auto* keys = app->AccessoryKeys(slot);
-                for (std::int32_t i = 0; i < 0x2710; ++i) {
-                    if (keys[i].selected == 0) {
-                        continue;
-                    }
-                    const std::uint32_t frame = keys[i].frame;
-                    MarkFrameSelected(cameraKeys, 0, frame);
-                    MarkFrameSelected(lightKeys, 0, frame);
-                    MarkFrameSelected(shadowKeys, 0, frame);
-                    MarkFrameSelected(gravityKeys, 0, frame);
-                    markAccessories(frame, slot);
-                }
-            }
-            PanelPaint(app);
-            SelectionReeval(app);
-        }
+    case 416:  // selection-mark sync (0x0048073E) -> Cmd400_SelectionMarkSync
+        Cmd400_SelectionMarkSync(app);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 420 (0x004834D2): frame copy.  Counts the marked entries and the
-    // minimum frame, then (re)allocates the copy buffers and copies every
-    // marked record.  0x2F8 == 0: counts 0x9DA28/0x9DA2C/0x9DA30, buffers
-    // 0x354 (bone, 0x54-stride) / 0x358 (morph, 0x28) / 0x35C (camera,
-    // 0x18; per-record bone-name/light arrays at +0x0C/+0x14).  0x2F8 !=
-    // 0: counts 0x9DA34..0x9DA44, buffers 0x360..0x370.  Controls 0x1A5
-    // (paste), 0x1A6 (delete) and menu 0xFA are gated on the totals; the
-    // record index for the name lookups walks the +4 rank pointers while
-    // idx >= count.  Tail: nothing (jmp loc_48F2E0).
-    // ------------------------------------------------------------------
-    case 420: {
-        std::uint32_t minFrame = 0xFFFFFFFFu;  // ebx
-        if (app->state.optflag[0] == 0) {
-            // ---- model mode (loc_483E7C..) ----
-            // free the previous camera records' sub-buffers (loc_483E7C)
-            if (app->DisplayClipboard() != nullptr &&
-                app->ClipboardCounts().displays != 0) {
-                auto* records = app->DisplayClipboard();
-                const std::uint32_t camCount =
-                    app->ClipboardCounts().displays;
-                for (std::uint32_t i = 0; i < camCount; ++i) {
-                    if (records[i].ikStates != nullptr) {
-                        free(records[i].ikStates);
-                        records[i].ikStates = nullptr;
-                    }
-                    if (records[i].selectorStates != nullptr) {
-                        free(records[i].selectorStates);
-                        records[i].selectorStates = nullptr;
-                    }
-                }
-            }
-            auto& clipboardCounts = app->ClipboardCounts();
-            clipboardCounts.bones = 0;
-            clipboardCounts.morphs = 0;
-            clipboardCounts.displays = 0;
-            // selected-entry counts + min frame
-            {
-                unsigned char* model = ActiveModel(app);
-                clipboardCounts.bones = CountMarkedModelKeys(
-                    mdl::BoneKeys(model), mdl::kBoneKeyCapacity, minFrame);
-                clipboardCounts.morphs = CountMarkedModelKeys(
-                    mdl::MorphKeys(model), 20000, minFrame);
-                clipboardCounts.displays = CountMarkedModelKeys(
-                    mdl::DisplayKeys(model), 1000, minFrame);
-            }
-            const std::uint32_t boneSel = clipboardCounts.bones;
-            const std::uint32_t morphSel = clipboardCounts.morphs;
-            const std::uint32_t camSel = clipboardCounts.displays;
-            if (boneSel == 0 && morphSel == 0 && camSel == 0) {
-                // loc_48402C..48406D: nothing selected
-                EnableWindow(GetDlgItem(hwnd, 0x1A5), FALSE);
-                EnableWindow(GetDlgItem(hwnd, 0x1A6), FALSE);
-                EnableMenuItem(GetMenu(hwnd), 0xFA, TRUE);
-                break;
-            }
-            EnableWindow(GetDlgItem(hwnd, 0x1A5), TRUE);
-            EnableMenuItem(GetMenu(hwnd), 0xFA, FALSE);
-            EnableWindow(GetDlgItem(hwnd, 0x1A6),
-                         boneSel != 0 ? TRUE : FALSE);
-            // bone buffer 0x354 (0x54-stride records)
-            if (app->BoneClipboard() != nullptr) {
-                free(app->BoneClipboard());
-                app->BoneClipboard() = nullptr;
-            }
-            if (boneSel != 0) {
-                void* p = malloc(boneSel * sizeof(BoneClipboardRecord));
-                if (p != nullptr) {
-                    Sub401150(p, sizeof(BoneClipboardRecord), boneSel,
-                              reinterpret_cast<void*>(&Sub4C46F0));
-                }
-                app->BoneClipboard() = static_cast<BoneClipboardRecord*>(p);
-                memset(p, 0, boneSel * sizeof(BoneClipboardRecord));
-            }
-            // morph buffer 0x358 (0x28-stride records)
-            if (app->MorphClipboard() != nullptr) {
-                free(app->MorphClipboard());
-                app->MorphClipboard() = nullptr;
-            }
-            if (morphSel != 0) {
-                void* p = malloc(morphSel * sizeof(MorphClipboardRecord));
-                app->MorphClipboard() = static_cast<MorphClipboardRecord*>(p);
-                memset(p, 0, morphSel * sizeof(MorphClipboardRecord));
-            }
-            // camera buffer 0x35C (0x18-stride records) + per-record
-            // bone-name (0x2D88 * 0x15) and light (0x4CCE8 * 0x1C) arrays
-            if (app->DisplayClipboard() != nullptr) {
-                free(app->DisplayClipboard());
-                app->DisplayClipboard() = nullptr;
-            }
-            if (camSel != 0) {
-                unsigned char* model = ActiveModel(app);
-                void* p = malloc(camSel * sizeof(DisplayClipboardRecord));
-                app->DisplayClipboard() =
-                    static_cast<DisplayClipboardRecord*>(p);
-                memset(p, 0, camSel * sizeof(DisplayClipboardRecord));
-                if (mdl::Mdl(model)->ikChainCount > 0 &&
-                    camSel != 0) {
-                    auto* records = app->DisplayClipboard();
-                    const std::uint32_t cnt = mdl::Mdl(model)->ikChainCount;
-                    for (std::uint32_t i = 0; i < camSel; ++i) {
-                        records[i].ikStates = static_cast<IkClipboardState*>(
-                            malloc(cnt * sizeof(IkClipboardState)));
-                    }
-                }
-                if (mdl::Mdl(model)->boneOrderCount > 0 &&
-                    camSel != 0) {
-                    auto* records = app->DisplayClipboard();
-                    const std::uint32_t cnt =
-                        mdl::Mdl(model)->boneOrderCount;
-                    for (std::uint32_t i = 0; i < camSel; ++i) {
-                        records[i].selectorStates =
-                            static_cast<SelectorClipboardState*>(
-                                malloc(cnt * sizeof(SelectorClipboardState)));
-                    }
-                }
-            }
-            // bone record copy (loc_484321..484551)
-            {
-                unsigned char* model = ActiveModel(app);
-                mdl::BoneKey* boneKeys = mdl::BoneKeys(model);
-                const mdl::BoneRecord* bones = mdl::Mdl(model)->boneTable;
-                const std::uint32_t boneCount = mdl::Mdl(model)->boneCount;
-                auto* dst = app->BoneClipboard();
-                std::uint32_t cnt = 0;
-                for (std::uint32_t recordIndex = 0; recordIndex < static_cast<std::uint32_t>(mdl::kBoneKeyCapacity);
-                     ++recordIndex) {
-                    const mdl::BoneKey& key = boneKeys[recordIndex];
-                    if (key.allocated == 0) {
-                        continue;
-                    }
-                    // rank walk: while idx >= boneCount follow the +4
-                    // pointer (loc_484350)
-                    std::uint32_t idx = recordIndex;
-                    while (idx >= boneCount) {
-                        idx = boneKeys[idx].previous;
-                    }
-                    BoneClipboardRecord& rec = dst[cnt];
-                    strcpy_s(rec.name, sizeof(rec.name), bones[idx].name);
-                    rec.frame = key.frame - minFrame;
-                    std::memcpy(rec.rotation, key.rotation,
-                                sizeof(rec.rotation));
-                    std::memcpy(rec.position, key.position,
-                                sizeof(rec.position));
-                    rec.physicsDisabled = key.physicsDisabled;
-                    for (std::int32_t i = 0; i < 4; ++i) {
-                        rec.interpolation[i] = key.interpolation[i];
-                        rec.interpolation[4 + i] = key.interpolation[4 + i];
-                        rec.interpolation[8 + i] = key.interpolation[8 + i];
-                        rec.interpolation[12 + i] = key.interpolation[12 + i];
-                    }
-                    ++cnt;
-                }
-            }
-            // morph record copy (loc_484590..484667, gated 0x2D80 > 0)
-            if (mdl::Mdl(ActiveModel(app))->morphCount > 0) {
-                unsigned char* model = ActiveModel(app);
-                mdl::MorphKey* morphKeys = mdl::MorphKeys(model);
-                const mdl::MorphRecord* morphs = mdl::Mdl(model)->morphs;
-                const std::uint32_t morphCount = mdl::Mdl(model)->morphCount;
-                auto* dst = app->MorphClipboard();
-                std::uint32_t cnt = 0;
-                for (std::uint32_t recordIndex = 0; recordIndex < 20000;
-                     ++recordIndex) {
-                    const mdl::MorphKey& key = morphKeys[recordIndex];
-                    if (key.allocated == 0) {
-                        continue;
-                    }
-                    std::uint32_t idx = recordIndex;
-                    while (idx >= morphCount) {
-                        idx = morphKeys[idx].previous;
-                    }
-                    MorphClipboardRecord& rec = dst[cnt];
-                    strcpy_s(rec.name, sizeof(rec.name), morphs[idx].name);
-                    rec.frame = key.frame - minFrame;
-                    rec.value = key.value;
-                    ++cnt;
-                }
-            }
-            // display record copy (loc_484675..)
-            {
-                unsigned char* model = ActiveModel(app);
-                mdl::DisplayKey* displayKeys = mdl::DisplayKeys(model);
-                const mdl::BoneRecord* bones = mdl::Mdl(model)->boneTable;
-                auto* records = app->DisplayClipboard();
-                const std::int32_t boneIdxCount =
-                    mdl::Mdl(model)->ikChainCount;
-                const std::int32_t lightCount =
-                    mdl::Mdl(model)->boneOrderCount;
-                std::uint32_t cnt = 0;
-                for (std::uint32_t keyIndex = 0; keyIndex < 1000;
-                     ++keyIndex) {
-                    const mdl::DisplayKey& key = displayKeys[keyIndex];
-                    if (key.allocated == 0) {
-                        continue;
-                    }
-                    DisplayClipboardRecord& rec = records[cnt];
-                    rec.frame = key.frame - minFrame;
-                    rec.visible = key.visible;
-                    rec.ikCount = boneIdxCount;
-                    // per-bone records at +0x0C (0x15 stride: 0x14-byte
-                    // name + value byte)
-                    if (boneIdxCount > 0) {
-                        const mdl::IkChain* chains =
-                            mdl::Mdl(model)->ikChains;
-                        const auto* pose = mdl::IkStates(key);
-                        for (std::int32_t i = 0; i < boneIdxCount; ++i) {
-                            const std::uint32_t boneIdx =
-                                chains[i].boneIndex;
-                            strcpy_s(rec.ikStates[i].boneName,
-                                     sizeof(rec.ikStates[i].boneName),
-                                     bones[boneIdx].name);
-                            rec.ikStates[i].enabled = pose[i];
-                        }
-                    }
-                    // light records at +0x14 (0x1C stride)
-                    rec.selectorCount = lightCount;
-                    const auto* lightData = mdl::SelectorStates(key);
-                    strcpy_s(rec.selectorStates[0].boneName,
-                             sizeof(rec.selectorStates[0].boneName),
-                             kLightNameRoot);
-                    rec.selectorStates[0].modelIndex = lightData[0].modelIndex;
-                    rec.selectorStates[0].boneIndex = lightData[0].boneIndex;
-                    if (lightCount > 1) {
-                        const auto* order = static_cast<const mdl::BoneOrderEntry*>(
-                            mdl::Mdl(model)->boneOrderTable);
-                        for (std::int32_t i = 1; i < lightCount; ++i) {
-                            const std::uint32_t boneIdx = order[i].boneIndex;
-                            strcpy_s(rec.selectorStates[i].boneName,
-                                     sizeof(rec.selectorStates[i].boneName),
-                                     bones[boneIdx].name);
-                            rec.selectorStates[i].modelIndex =
-                                lightData[i].modelIndex;
-                            rec.selectorStates[i].boneIndex =
-                                lightData[i].boneIndex;
-                        }
-                    }
-                    ++cnt;
-                }
-            }
-        } else {
-            // ---- camera mode (loc_4834E2..) ----
-            auto& clipboardCounts = app->ClipboardCounts();
-            clipboardCounts.cameras = 0;
-            clipboardCounts.lights = 0;
-            clipboardCounts.shadows = 0;
-            clipboardCounts.gravity = 0;
-            clipboardCounts.accessories = 0;
-            clipboardCounts.cameras =
-                CountSelectedKeys(app->CameraKeys(), 10000, minFrame);
-            clipboardCounts.lights =
-                CountSelectedKeys(app->LightKeys(), 10000, minFrame);
-            clipboardCounts.shadows =
-                CountSelectedKeys(app->ShadowKeys(), 10000, minFrame);
-            clipboardCounts.gravity =
-                CountSelectedKeys(app->GravityKeys(), 10000, minFrame);
-            {
-                std::uint32_t accessoryCount = 0;
-                for (std::size_t keyIndex = 0; keyIndex < 10000;
-                     ++keyIndex) {
-                    for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
-                        auto* keys = app->AccessoryKeys(slot);
-                        const mdl::AccessoryKey& key = keys[keyIndex];
-                        if (key.selected != 0) {
-                            ++accessoryCount;
-                            if (key.frame < minFrame) {
-                                minFrame = key.frame;
-                            }
-                        }
-                    }
-                }
-                clipboardCounts.accessories = accessoryCount;
-            }
-            const std::uint32_t cameraCount = clipboardCounts.cameras;
-            const std::uint32_t lightCount = clipboardCounts.lights;
-            const std::uint32_t shadowCount = clipboardCounts.shadows;
-            const std::uint32_t gravityCount = clipboardCounts.gravity;
-            const std::uint32_t accessoryCount = clipboardCounts.accessories;
-            if (cameraCount == 0 && lightCount == 0 && shadowCount == 0 &&
-                gravityCount == 0 && accessoryCount == 0) {
-                // loc_483657..48369C
-                EnableWindow(GetDlgItem(hwnd, 0x1A5), FALSE);
-                EnableWindow(GetDlgItem(hwnd, 0x1A6), FALSE);
-                EnableMenuItem(GetMenu(hwnd), 0xFA, TRUE);
-                break;
-            }
-            EnableWindow(GetDlgItem(hwnd, 0x1A5), TRUE);
-            EnableWindow(GetDlgItem(hwnd, 0x1A6), FALSE);
-            EnableMenuItem(GetMenu(hwnd), 0xFA, FALSE);
-            // buffers 0x360..0x370 (0x48/0x1C/0x0C/0x1C/0x34 strides)
-            ReplaceClipboardBuffer(app->CameraClipboard(), cameraCount);
-            ReplaceClipboardBuffer(app->LightClipboard(), lightCount);
-            ReplaceClipboardBuffer(app->ShadowClipboard(), shadowCount);
-            ReplaceClipboardBuffer(app->GravityClipboard(), gravityCount);
-            ReplaceClipboardBuffer(app->AccessoryClipboard(), accessoryCount);
-            // copy loop 1: 0x374 marked -> 0x360 records (0x48 stride)
-            {
-                auto* keys = app->CameraKeys();
-                auto* dst = app->CameraClipboard();
-                std::uint32_t cnt = 0;
-                for (std::size_t i = 0; i < 10000; ++i) {
-                    const mdl::CameraKey& key = keys[i];
-                    if (key.selected == 0) {
-                        continue;
-                    }
-                    CameraClipboardRecord& rec = dst[cnt];
-                    rec.frame = key.frame - minFrame;
-                    std::memcpy(rec.eye, key.eye, sizeof(rec.eye));
-                    std::memcpy(rec.target, key.target, sizeof(rec.target));
-                    rec.fov = key.fov;
-                    rec.perspective = key.perspective;
-                    std::memcpy(rec.interpolation, key.interpolation,
-                                sizeof(rec.interpolation));
-                    rec.distance = key.distance;
-                    rec.parentModel = key.parentModel;
-                    rec.parentBone = key.parentBone;
-                    ++cnt;
-                }
-            }
-            // copy loop 2: 0x378 marked -> 0x364 records (0x1C stride)
-            {
-                auto* keys = app->LightKeys();
-                auto* dst = app->LightClipboard();
-                std::uint32_t cnt = 0;
-                for (std::size_t i = 0; i < 10000; ++i) {
-                    const mdl::LightKey& key = keys[i];
-                    if (key.selected == 0) {
-                        continue;
-                    }
-                    LightClipboardRecord& rec = dst[cnt];
-                    rec.frame = key.frame - minFrame;
-                    std::memcpy(rec.direction, key.direction,
-                                sizeof(rec.direction));
-                    std::memcpy(rec.color, key.color, sizeof(rec.color));
-                    ++cnt;
-                }
-            }
-            // copy loop 3: 0x37C marked -> 0x368 records (0x0C stride)
-            {
-                auto* keys = app->ShadowKeys();
-                auto* dst = app->ShadowClipboard();
-                std::uint32_t cnt = 0;
-                for (std::size_t i = 0; i < 10000; ++i) {
-                    const mdl::SelfShadowKey& key = keys[i];
-                    if (key.selected == 0) {
-                        continue;
-                    }
-                    ShadowClipboardRecord& rec = dst[cnt];
-                    rec.frame = key.frame - minFrame;
-                    rec.mode = key.mode;
-                    rec.distance = key.distance;
-                    ++cnt;
-                }
-            }
-            // copy loop 4: 0x380 marked -> 0x36C records (0x1C stride)
-            {
-                auto* keys = app->GravityKeys();
-                auto* dst = app->GravityClipboard();
-                std::uint32_t cnt = 0;
-                for (std::size_t i = 0; i < 10000; ++i) {
-                    const mdl::GravityKey& key = keys[i];
-                    if (key.selected == 0) {
-                        continue;
-                    }
-                    GravityClipboardRecord& rec = dst[cnt];
-                    rec.frame = key.frame - minFrame;
-                    rec.acceleration = key.acceleration;
-                    std::memcpy(rec.direction, key.direction,
-                                sizeof(rec.direction));
-                    rec.noise = key.noise;
-                    rec.noiseEnabled = key.noiseEnabled;
-                    ++cnt;
-                }
-            }
-            // copy loop 5: accessory blobs -> 0x370 records (0x34 stride,
-            // slot index at +4)
-            {
-                auto* dst = app->AccessoryClipboard();
-                std::uint32_t cnt = 0;
-                for (std::size_t keyIndex = 0; keyIndex < 10000;
-                     ++keyIndex) {
-                    for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
-                        auto* keys = app->AccessoryKeys(slot);
-                        const mdl::AccessoryKey& key = keys[keyIndex];
-                        if (key.selected == 0) {
-                            continue;
-                        }
-                        mdl::AccessoryClipboardKey& rec = dst[cnt];
-                        rec.frameOffset = key.frame - minFrame;
-                        rec.slot = static_cast<std::uint8_t>(slot);
-                        rec.visible = key.visible;
-                        rec.shadowEnabled = key.shadowEnabled;
-                        rec.parentModel = key.parentModel;
-                        rec.parentBone = key.parentBone;
-                        std::memcpy(rec.position, key.position,
-                                    sizeof(rec.position));
-                        std::memcpy(rec.rotation, key.rotation,
-                                    sizeof(rec.rotation));
-                        rec.scale = key.scale;
-                        rec.opacity = key.opacity;
-                        ++cnt;
-                    }
-                }
-            }
-        }
+    case 420:  // frame copy (0x004834D2) -> Cmd400_FrameCopy
+        Cmd400_FrameCopy(app, hwnd);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 421 (0x00484973): frame paste.  0x2F8 == 0: when any model-mode
-    // count is non-zero, clear all marks, open an undo-table entry
-    // (0x26EC, 0x1C stride: type 2 at +0, frame at +0x0C, bone-name
-    // snapshot at +0x10, light snapshot at +0x14; second 0x1C-stride
-    // history at 0x23F0 zeroed), snapshot the bone records, then paste
-    // the copy buffers: Sub49D880 per 0x354 bone record, Sub49F190 per
-    // 0x358 morph record (0x28), Sub49F8C0 per 0x35C camera record (0x18)
-    // with the light-record slot fixup (stale model slots severed).
-    // 0x2F8 != 0: same over the 0x360..0x370 camera-mode buffers with
-    // Sub410AA0/Sub411900/Sub4120B0/Sub412DF0/Sub414110.  Common tail:
-    // byte 0x9EDB5 = 1, PanelPaint, SelectionReeval, Sub4B4260(model,
-    // frame, 0xA0CC4), and for camera mode the reload chain (Sub42E640,
-    // Sub411070, Sub411B90, Sub412330, Sub413120 per slot, Sub4134E0).
-    // ------------------------------------------------------------------
-    case 421: {
-        if (app->state.optflag[0] == 0) {
-            const auto& clipboardCounts = app->ClipboardCounts();
-            const std::uint32_t boneSel = clipboardCounts.bones;
-            const std::uint32_t morphSel = clipboardCounts.morphs;
-            const std::uint32_t camSel = clipboardCounts.displays;
-            TraceModelPaste("enter bone=%u morph=%u display=%u", boneSel,
-                            morphSel, camSel);
-            if (boneSel == 0 && morphSel == 0 && camSel == 0) {
-                break;
-            }
-            app->SceneModified() = 1;
-            const std::int32_t frame =
-                app->state.currentFrame;
-            unsigned char* model = ActiveModel(app);
-            TraceModelPaste("active model=%p frame=%d", model, frame);
-            // clear all model-mode marks (loc_4849C0..)
-            ClearModelKeyMarks(mdl::BoneKeys(model), mdl::kBoneKeyCapacity);
-            ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
-            ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
-            if (boneSel != 0) {
-                // undo/redo buttons + undo-table entry (loc_484C84..)
-                EnableWindow(GetDlgItem(hwnd, 0x190), TRUE);
-                EnableWindow(GetDlgItem(hwnd, 0x191), FALSE);
-                mdl::Mdl(model)->undoDirty = 1;
-                mdl::Mdl(model)->redoDirty = 0;
-                mdl::ModelRecord& record = *mdl::Mdl(model);
-                const std::int32_t next = record.undoState[0] + 1;
-                record.undoState[0] = next >= 0x1E ? 0 : next;
-                const std::int32_t cur = record.undoState[0];
-                record.undoState[1] = cur;
-                auto& undo = mikudancestudio::mdl::Mdl(model)->undoRings[0].slots[cur];
-                undo.operation = 2;
-                undo.frame = frame;
-                // bone-name snapshot buffer (+0x10 of the entry, 0x24-
-                // stride records)
-                void* p = undo.bonePose;
-                if (p != nullptr) {
-                    free(p);
-                    undo.bonePose = nullptr;
-                }
-                const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
-                auto* undoBone = static_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
-                    malloc(static_cast<std::uint32_t>(boneCount) *
-                           sizeof(mikudancestudio::mdl::BonePoseSnapshot)));
-                if (undoBone != nullptr) {
-                    Sub401150(undoBone,
-                              sizeof(mikudancestudio::mdl::BonePoseSnapshot),
-                              static_cast<std::uint32_t>(boneCount),
-                              reinterpret_cast<void*>(&Sub4C46F0));
-                }
-                undo.bonePose = undoBone;
-                memset(undoBone, 0,
-                       static_cast<std::uint32_t>(boneCount) *
-                           sizeof(mikudancestudio::mdl::BonePoseSnapshot));
-                if (boneCount > 0) {
-                    const mdl::ModelRecord& record = *mdl::Mdl(model);
-                    const mdl::BoneRecord* bones = record.boneTable;
-                    unsigned char* boneState = record.bonePhysicsState;
-                    for (std::int32_t i = 0; i < boneCount; ++i) {
-                        auto& rec = undoBone[i];
-                        const auto& src = bones[i];
-                        rec.boneIndex = i;
-                        memcpy(rec.position, src.trans, sizeof rec.position);
-                        memcpy(rec.rotation, src.rotQuat, sizeof rec.rotation);
-                        rec.physicsDisabled = boneState[i];
-                    }
-                }
-                // second undo-history table (0x23F0 base, 0x1C stride):
-                // entry cnt+0x164 cleared
-                undo.dirty = 0;
-                // light snapshot buffer (+0x14 of the entry, 3*0x40 *
-                // boneSel bytes)
-                p = undo.auxiliaryPose;
-                if (p != nullptr) {
-                    free(p);
-                    undo.auxiliaryPose = nullptr;
-                }
-                unsigned char* undoLight = static_cast<unsigned char*>(
-                    malloc(boneSel * 3 * 0x40));
-                if (undoLight != nullptr) {
-                    Sub401150(undoLight, 0x40, boneSel * 3,
-                              reinterpret_cast<void*>(&Sub4C46F0));
-                }
-                undo.auxiliaryPose = undoLight;
-                memset(undoLight, 0, boneSel * 3 * 0x40);
-            }
-            std::memset(mdl::Mdl(model)->keyVisitMap, 0,
-                        sizeof(mdl::Mdl(model)->keyVisitMap));
-            Sub4A4940(model);
-            TraceModelPaste("undo-ready free=%d",
-                            mdl::Mdl(model)->searchCursor);
-            // bone paste loop (loc_485130..485174): 0x54-byte record +
-            // frame + 0 flag; original is __userpurge(ecx = model,
-            // ebx = i) - the stub drops the index
-            if (boneSel != 0) {
-                const auto* src = app->BoneClipboard();
-                std::uint32_t i = 0;
-                do {
-                    BoneClipboardRecord rec = src[i];
-                    if (Sub49D880(model,
-                                  reinterpret_cast<unsigned char*>(&rec),
-                                  frame, 0) == 0) {
-                        break;
-                    }
-                    ++i;
-                } while (i < boneSel);
-            }
-            Sub4A49A0(model);
-            TraceModelPaste("bone-done free=%d",
-                            mdl::Mdl(model)->searchCursor);
-            // morph paste loop (loc_48519B..4851DD)
-            if (morphSel != 0) {
-                const auto* src = app->MorphClipboard();
-                std::uint32_t i = 0;
-                do {
-                    const MorphClipboardRecord rec = src[i];
-                    if (Sub49F190(model,
-                                  reinterpret_cast<const unsigned char*>(&rec),
-                                  frame) == 0) {
-                        break;
-                    }
-                    ++i;
-                } while (i < morphSel);
-            }
-            Sub4A4A00(model);
-            TraceModelPaste("morph-done display-free=%d",
-                            mdl::Mdl(model)->searchCursor);
-            // camera paste loop (loc_485210..4852E4): light-record slot
-            // fixup + Sub49F8C0 with the 6 record dwords + frame
-            if (camSel != 0) {
-                auto* records = app->DisplayClipboard();
-                std::uint32_t i = 0;
-                do {
-                    DisplayClipboardRecord& rec = records[i];
-                    const std::int32_t lightCount = rec.selectorCount;
-                    TraceModelPaste(
-                        "display[%u] rec=%p rel=%d relptr=%p ik=%d ikptr=%p",
-                        i, &rec, lightCount, rec.selectorStates,
-                        rec.ikCount, rec.ikStates);
-                    if (lightCount > 0) {
-                        for (std::int32_t j = 0; j < lightCount; ++j) {
-                            SelectorClipboardState& state =
-                                rec.selectorStates[j];
-                            const std::int32_t slotIdx = state.modelIndex;
-                            TraceModelPaste(
-                                "display[%u] relation[%d] slot=%d bone=%d",
-                                i, j, slotIdx, state.boneIndex);
-                            if (slotIdx < 0) {
-                                continue;
-                            }
-                            unsigned char* slotModel =
-                                app->ModelSlot(slotIdx);
-                            if (slotModel == nullptr) {
-                                state.modelIndex = -1;
-                                state.boneIndex = 0;
-                            } else if (static_cast<std::int32_t>(
-                                           mdl::Mdl(slotModel)->boneCount) <
-                                       state.boneIndex) {
-                                state.boneIndex = 0;
-                            }
-                        }
-                    }
-                    TraceModelPaste("display[%u] fixup-done", i);
-                    if (Sub49F8C0(model,
-                                  rec.frame, rec.visible, rec.ikCount,
-                                  reinterpret_cast<unsigned char*>(rec.ikStates),
-                                  rec.selectorCount,
-                                  reinterpret_cast<unsigned char*>(
-                                      rec.selectorStates),
-                                  frame) == 0) {
-                        break;
-                    }
-                    TraceModelPaste("display[%u] registrar-done", i);
-                    ++i;
-                } while (i < camSel);
-            }
-            app->PhysicsResetPending() = 1;
-            TraceModelPaste("model-paste loops done");
-        } else {
-            // ---- camera mode (loc_4849A0..) ----
-            const auto& clipboardCounts = app->ClipboardCounts();
-            const std::uint32_t cameraCount = clipboardCounts.cameras;
-            const std::uint32_t lightCount = clipboardCounts.lights;
-            const std::uint32_t shadowCount = clipboardCounts.shadows;
-            const std::uint32_t gravityCount = clipboardCounts.gravity;
-            const std::uint32_t accessoryCount = clipboardCounts.accessories;
-            if (cameraCount == 0 && lightCount == 0 && shadowCount == 0 &&
-                gravityCount == 0 && accessoryCount == 0) {
-                break;
-            }
-            app->SceneModified() = 1;
-            // clear all camera-mode marks (single sweep over the four
-            // tables + the blobs)
-            ClearSelectedKeys(app->CameraKeys(), 10000);
-            ClearSelectedKeys(app->LightKeys(), 10000);
-            ClearSelectedKeys(app->ShadowKeys(), 10000);
-            ClearSelectedKeys(app->GravityKeys(), 10000);
-            // (the original dereferences every blob pointer here - the
-            // 0x384 table is expected to be fully populated)
-            for (std::int32_t slot = 0; slot < 0xFF; ++slot) {
-                auto* keys = app->AccessoryKeys(slot);
-                ClearSelectedKeys(keys, 10000);
-            }
-            const std::int32_t frame =
-                app->state.currentFrame;
-            // paste loops (loc_484A54..484Bxx): record-by-value + bool
-            if (cameraCount != 0) {
-                const auto* src = app->CameraClipboard();
-                std::uint32_t i = 0;
-                do {
-                    const CameraClipboardRecord rec = src[i];
-                    if (Sub410AA0(app, &rec) == 0) {
-                        break;
-                    }
-                    ++i;
-                } while (i < cameraCount);
-            }
-            if (lightCount != 0) {
-                const auto* src = app->LightClipboard();
-                std::uint32_t i = 0;
-                do {
-                    const LightClipboardRecord rec = src[i];
-                    if (Sub411900(app, &rec) == 0) {
-                        break;
-                    }
-                    ++i;
-                } while (i < lightCount);
-            }
-            if (shadowCount != 0) {
-                const auto* src = app->ShadowClipboard();
-                std::uint32_t i = 0;
-                do {
-                    const ShadowClipboardRecord rec = src[i];
-                    if (Sub4120B0(app, &rec) == 0) {
-                        break;
-                    }
-                    ++i;
-                } while (i < shadowCount);
-            }
-            if (gravityCount != 0) {
-                const auto* src = app->GravityClipboard();
-                std::uint32_t i = 0;
-                do {
-                    const GravityClipboardRecord rec = src[i];
-                    if (Sub412DF0(app, &rec) == 0) {
-                        break;
-                    }
-                    ++i;
-                } while (i < gravityCount);
-            }
-            if (accessoryCount != 0) {
-                auto* src = app->AccessoryClipboard();
-                std::uint32_t i = 0;
-                do {
-                    mdl::AccessoryClipboardKey rec = src[i];
-                    if (Sub414110(app, &rec, 0) == 0) {
-                        break;
-                    }
-                    ++i;
-                } while (i < accessoryCount);
-            }
-            app->PhysicsResetPending() = 1;
-        }
-        // common tail (loc_4852F1..485382)
-        PanelPaint(app);
-        SelectionReeval(app);
-        unsigned char* model = ActiveModel(app);
-        if (model != nullptr) {
-            Sub4B4260(model, app->state.currentFrame,
-                      app->PlaybackPhysicsMode());
-        }
-        if (app->state.optflag[0] != 0) {
-            Sub42E640(app);
-            Sub411070(app);
-            Sub411B90(app);
-            Sub412330(app);
-            for (std::int32_t i = 0; i < 0xFF; ++i) {
-                if (app->AccessorySlot(i) != nullptr) {
-                    Sub413120(app, i);
-                }
-            }
-            Sub4134E0(app);
-        }
+    case 421:  // frame paste (0x00484973) -> Cmd400_FramePaste
+        Cmd400_FramePaste(app, hwnd);
         break;
-    }
 
-    // ------------------------------------------------------------------
-    // 422 (0x00485CF2): reverse paste.  0x2F8 == 0 with a non-zero bone
-    // count: identical undo-table setup as 421 (bone snapshot), then the
-    // Sub49E310 mirrored insert loop over 0x354 bone records; morph/camera
-    // buffers are left untouched.  Tail: PanelPaint, SelectionReeval,
-    // Sub4B4260(model, frame, 0xA0CC4) and byte 0x9EDB5 = 1 (no camera-
-    // mode branch at all).
-    // ------------------------------------------------------------------
-    case 422: {
-        if (app->state.optflag[0] != 0) {
-            break;
-        }
-        const std::uint32_t boneSel = app->ClipboardCounts().bones;
-        if (boneSel == 0) {
-            break;
-        }
-        app->SceneModified() = 1;
-        const std::int32_t frame =
-            app->state.currentFrame;
-        unsigned char* model = ActiveModel(app);
-        // clear all model-mode marks (loc_485D60..)
-        ClearModelKeyMarks(mdl::BoneKeys(model), mdl::kBoneKeyCapacity);
-        ClearModelKeyMarks(mdl::MorphKeys(model), 20000);
-        ClearModelKeyMarks(mdl::DisplayKeys(model), 1000);
-        // undo-table entry (loc_485D88..) - identical shape to 421
-        EnableWindow(GetDlgItem(hwnd, 0x190), TRUE);
-        EnableWindow(GetDlgItem(hwnd, 0x191), FALSE);
-        mdl::Mdl(model)->undoDirty = 1;
-        mdl::Mdl(model)->redoDirty = 0;
-        mdl::ModelRecord& record = *mdl::Mdl(model);
-        const std::int32_t next = record.undoState[0] + 1;
-        record.undoState[0] = next >= 0x1E ? 0 : next;
-        const std::int32_t cur = record.undoState[0];
-        record.undoState[1] = cur;
-        auto& undo = mikudancestudio::mdl::Mdl(model)->undoRings[0].slots[cur];
-        undo.operation = 2;
-        undo.frame = frame;
-        void* p = undo.bonePose;
-        if (p != nullptr) {
-            free(p);
-            undo.bonePose = nullptr;
-        }
-        const std::int32_t boneCount = mdl::Mdl(model)->boneCount;
-        auto* undoBone = static_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
-            malloc(static_cast<std::uint32_t>(boneCount) *
-                   sizeof(mikudancestudio::mdl::BonePoseSnapshot)));
-        if (undoBone != nullptr) {
-            Sub401150(undoBone, sizeof(mikudancestudio::mdl::BonePoseSnapshot),
-                      static_cast<std::uint32_t>(boneCount),
-                      reinterpret_cast<void*>(&Sub4C46F0));
-        }
-        undo.bonePose = undoBone;
-        memset(undoBone, 0, static_cast<std::uint32_t>(boneCount) *
-                                sizeof(mikudancestudio::mdl::BonePoseSnapshot));
-        if (boneCount > 0) {
-            const mdl::BoneRecord* bones = record.boneTable;
-            unsigned char* boneState = record.bonePhysicsState;
-            for (std::int32_t i = 0; i < boneCount; ++i) {
-                auto& rec = undoBone[i];
-                const auto& src = bones[i];
-                rec.boneIndex = i;
-                memcpy(rec.position, src.trans, sizeof rec.position);
-                memcpy(rec.rotation, src.rotQuat, sizeof rec.rotation);
-                rec.physicsDisabled = boneState[i];
-            }
-        }
-        undo.dirty = 0;
-        p = undo.auxiliaryPose;
-        if (p != nullptr) {
-            free(p);
-            undo.auxiliaryPose = nullptr;
-        }
-        unsigned char* undoLight =
-            static_cast<unsigned char*>(malloc(boneSel * 3 * 0x40));
-        if (undoLight != nullptr) {
-            Sub401150(undoLight, 0x40, boneSel * 3,
-                      reinterpret_cast<void*>(&Sub4C46F0));
-        }
-        undo.auxiliaryPose = undoLight;
-        memset(undoLight, 0, boneSel * 3 * 0x40);
-        std::memset(record.keyVisitMap, 0, sizeof(record.keyVisitMap));
-        Sub4A4940(model);
-        // mirrored bone paste loop (loc_486255..486291)
-        if (boneSel != 0) {
-            const auto* src = app->BoneClipboard();
-            std::uint32_t i = 0;
-            do {
-                BoneClipboardRecord rec = src[i];
-                if (Sub49E310(model,
-                              reinterpret_cast<unsigned char*>(&rec),
-                              frame) == 0) {
-                    break;
-                }
-                ++i;
-            } while (i < boneSel);
-        }
-        // tail (loc_4862A5..4862DB)
-        PanelPaint(app);
-        SelectionReeval(app);
-        Sub4B4260(model, frame,
-                  app->PlaybackPhysicsMode());
-        app->PhysicsResetPending() = 1;
+    case 422:  // reverse paste (0x00485CF2) -> Cmd400_FrameReversePaste
+        Cmd400_FrameReversePaste(app, hwnd);
         break;
-    }
 
     // ------------------------------------------------------------------
     // 424 (0x00488300): frame-edit dialog.  0x2F8 == 0 only; dirty
@@ -3072,15 +3128,15 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
         if (app->state.optflag[0] != 0) {
             break;
         }
-        app->state.bC = 1;
+        app->state.enterKeyState = 1;
         if (app->state.englishUI != 0) {
             DialogBoxParamA(static_cast<HINSTANCE>(app->HInstance()),
                             reinterpret_cast<LPCSTR>(0x28C), hwnd,
-                            &Sub44C5D0, 0);
+                            &FrameRangeDlgProc, 0);
         } else {
             DialogBoxParamA(static_cast<HINSTANCE>(app->HInstance()),
                             reinterpret_cast<LPCSTR>(0x25E), hwnd,
-                            &Sub44C5D0, 0);
+                            &FrameRangeDlgProc, 0);
         }
         break;
     }

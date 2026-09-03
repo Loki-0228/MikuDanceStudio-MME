@@ -47,7 +47,7 @@
 //   CheckMenuItem(GetMenu(hwnd), 0x124, MF_UNCHECKED)
 //   OpenNIClean() through +0xA03C4 - unconditional, like the original
 //   +0xA03B8 = 0, +0xA0D68 = 0
-//   model slot (byte +0x910) non-empty -> Sub4B4260(model, +0x980, +0xA0CC4)
+//   model slot (byte +0x910) non-empty -> SeekModelFrame(model, +0x980, +0xA0CC4)
 //   +0xA08E0 <- saved +0xA03E0; +0x9EDB5 = 1; +0xA03DF = 0
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
@@ -161,7 +161,7 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     _close(fd);                                                    // 0x506b88
 
     HMODULE module = LoadLibraryA("Data\\DxOpenNI.dll");           // 0x429d3d
-    s.state.a03BC = module;
+    s.state.oniModule = module;
     if (module == nullptr) {
         ShowWin32ErrorMessage(app, "GetProcAddress", GetLastError());
         KinMessageBox(app,
@@ -185,13 +185,13 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
             "(Version1.30 is necessary)",                           // 0x52c2d8
             kJpOniVersion130);                                      // 0x52c298
         FreeLibrary(module);                                        // 0x42a008
-        s.state.a03BC = nullptr;
+        s.state.oniModule = nullptr;
         return;
     }
 
     // 0x429ed4..0x429f2d: version gate (1.30 / 1.40 / 1.50 bit-exact).
     auto getVersion = reinterpret_cast<void(__stdcall*)(float*)>(
-        s.state.a03D8);
+        s.state.oniExportSlot6);
     float version = 0.0f;
     getVersion(&version);
     std::uint8_t versionCode;
@@ -207,20 +207,20 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
             "(Version1.30 or 1.40 or 1.50 is necessary)",           // 0x52c240
             kJpOniVersionRange);                                    // 0x52c1f8
         FreeLibrary(module);
-        s.state.a03BC = nullptr;
+        s.state.oniModule = nullptr;
         return;
     }
     s.state.openniVersion = versionCode;
 
     // 0x429f2f..0x429f5b: OpenNIInit(hwnd, english, device, exedir, path).
     auto init = reinterpret_cast<OpenNiInitFn>(
-        s.state.a03C0);
+        s.state.oniExportSlot0);
     const unsigned char ok = init(hwnd, s.EnglishUI(), OniRenderDevice(app),
                                   s.state.exeDir,
                                   sjisPath);
     if (ok == 0) {
         FreeLibrary(module);                                        // 0x42a001
-        s.state.a03BC = nullptr;
+        s.state.oniModule = nullptr;
         return;
     }
 
@@ -236,7 +236,7 @@ void OpenNiInit(MMDApp* app, const char* sjisPath) {
     s.state.fpsLimitSaved =
         s.state.fpsLimit;
     if (sjisPath != nullptr) {
-        s.state.a03DF = 1;
+        s.state.kinectCaptureActive = 1;
         s.state.fpsLimit = 30.0f;              // 0x52997c
     }
     s.state.autoRepeat = 0;                   // 0x429fc4
@@ -254,7 +254,7 @@ void DisableKinect(MMDApp* app) {
     // Unconditional call through the stored OpenNIClean pointer, exactly
     // like the original (reachable only after a successful OpenNiInit).
     auto clean = reinterpret_cast<void(__stdcall*)()>(
-        s.state.a03C4);
+        s.state.oniExportSlot1);
     clean();                                                        // 0x42a074
 
     s.state.depthDeviceEnabled = 0;                   // 0x42a084
@@ -262,13 +262,13 @@ void DisableKinect(MMDApp* app) {
 
     unsigned char* model = s.SelectedModel();
     if (model != nullptr)                                           // 0x42a092
-        Sub4B4260(model, s.state.currentFrame,
+        SeekModelFrame(model, s.state.currentFrame,
                   s.PlaybackPhysicsMode());
 
     s.state.fpsLimit =                         // 0x42a0ac
         s.state.fpsLimitSaved;
     s.PhysicsResetPending() = 1;                                   // 0x42a0b9
-    s.state.a03DF = 0;                   // 0x42a0c0
+    s.state.kinectCaptureActive = 0;                   // 0x42a0c0
 }
 
 }  // namespace mikudancestudio

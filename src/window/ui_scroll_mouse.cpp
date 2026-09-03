@@ -23,12 +23,14 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 
 #include <cstdint>
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
@@ -44,7 +46,7 @@ void HandleVScroll(LPARAM lParam, WPARAM wParam) {
     const HWND ctrl = reinterpret_cast<HWND>(lParam);          // a2: control HWND
     const std::uint32_t code = LOWORD(wParam);                 // a3: SB_ code
 
-    if (ctrl == GetDlgItem(hwnd, 427)) {
+    if (ctrl == GetDlgItem(hwnd, panel::kTimelineVScroll)) {
         if (app->state.optflag[0] != 0) {
             // mode 0x2F8 set: operate on the app timeline frame counter
             switch (code) {
@@ -110,9 +112,9 @@ void HandleVScroll(LPARAM lParam, WPARAM wParam) {
         return;
     }
 
-    if (ctrl == GetDlgItem(hwnd, 534)) {
-        HWND slider = GetDlgItem(hwnd, 534);
-        LRESULT pos = SendMessageA(slider, 0x400 /*TBM_GETPOS*/, 0, 0);
+    if (ctrl == GetDlgItem(hwnd, panel::kFrameVolumeSlider)) {
+        HWND slider = GetDlgItem(hwnd, panel::kFrameVolumeSlider);
+        LRESULT pos = SendMessageA(slider, TBM_GETPOS, 0, 0);
         app->FrameNormalization() = 100 - static_cast<int>(pos);
         SetFrameNormalized(100 - static_cast<int>(pos));          // 0x4C2B80
     }
@@ -155,13 +157,13 @@ void HandleMouseWheel(int delta) {
         app->SidebarWidth()) {
         // playing: three line-steps on the timeline strip per notch
         if (wheel <= 0) {
-            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, 427)), 1);
-            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, 427)), 1);
-            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, 427)), 1);
+            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, panel::kTimelineVScroll)), 1);
+            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, panel::kTimelineVScroll)), 1);
+            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, panel::kTimelineVScroll)), 1);
         } else {
-            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, 427)), 0);
-            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, 427)), 0);
-            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, 427)), 0);
+            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, panel::kTimelineVScroll)), 0);
+            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, panel::kTimelineVScroll)), 0);
+            HandleVScroll(reinterpret_cast<LPARAM>(GetDlgItem(hwnd, panel::kTimelineVScroll)), 0);
         }
         return;
     }
@@ -177,12 +179,12 @@ void HandleMouseWheel(int delta) {
     } else {
         const bool morphFollow =
             mode == 0 &&
-            app->state.v9ed98 != 0 &&
+            app->state.followCameraEnabled != 0 &&
             app->PlaybackActive() == 0 &&
             axis == static_cast<int>(app->SelectedModelSlot()) &&
             axis >= 0;
         if (morphFollow) {
-            app->state.b6568481 = 1;                       // 656849 (0xA05D1)
+            app->state.viewDirty = 1;                       // 656849 (0xA05D1)
             app->WindowLayoutReady() = 0;
             PostLanguageSweep2(app);                              // 0x40D070
             app->WindowLayoutReady() = 1;

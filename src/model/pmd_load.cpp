@@ -73,6 +73,10 @@ bool FailBox(HWND hwnd, bool en, bool enData, const char* enMsg,
     return false;
 }
 
+// Porting-era trace under MIKUDANCESTUDIO_PMM_TRACE_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call site
+// valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void LogPmdRigid(const wchar_t* path, std::uint32_t rigidIndex,
                  std::int32_t boneIndex, std::uint32_t boneCount,
                  const void* bones) {
@@ -91,29 +95,34 @@ void LogPmdRigid(const wchar_t* path, std::uint32_t rigidIndex,
             bones);
     fclose(stream);
 }
+#else
+inline void LogPmdRigid(const wchar_t*, std::uint32_t, std::int32_t,
+                        std::uint32_t, const void*) {}
+#endif
 
 
 }  // namespace
 
 bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
-                  D3DRenderer* sub, int a5, std::uint8_t a6,
-                  std::uint8_t a7, PhysicsScene* a8,
+                  D3DRenderer* sub, int unusedA06CE, std::uint8_t boxGate,
+                  std::uint8_t englishUi, PhysicsScene* sub048,
                   PathResolutionWorkspace& paths) {          // 0x4BF3E0
-    // Arg map (original 0x46050F call site, pushes -0x20..-0x4):
-    //   a2 hwnd, a3 path, a4 sub1d574 (device), a5 app+0xA06CE (unused),
-    //   a6 constant 1 (message-box gate), a7 EnglishUI *(app+0xA0B4C)
-    //   (stored to m+12740), a8 Sub048 pointer *(app+0x9EDB0), typed as
-    //   PhysicsScene* (stored to
+    // Arg map (original 0x46050F call site, pushes -0x20..-0x4; the
+    // trailing (aN) tags are the original decompiler parameter names):
+    //   a2 hwnd, a3 path, a4 sub1d574 (device), unusedA06CE (a5) app+0xA06CE
+    //   (unused), boxGate (a6) constant 1 (message-box gate), englishUi
+    //   (a7) EnglishUI *(app+0xA0B4C) (stored to m+12740), sub048 (a8) the
+    //   Sub048 pointer *(app+0x9EDB0), typed as PhysicsScene* (stored to
     //   m+60 - the physics scene wrapper: gizmos +4..44, constraint-id
     //   counter +56, btDiscreteDynamicsWorld* +64), a9 appPathBuf.
-    const bool enData = a7 != 0;
+    const bool enData = englishUi != 0;
     mdl::ModelRecord& model = *mdl::Mdl(m);
     char text[256];
     wchar_t wide1[256], wide2[384], wide3[384];
 
     model.hwnd = hwnd;
-    model.scenePtr = a8;               // 0x4BF42B
-    model.physicsFlags = a7;           // 0x4BF431: English-data byte
+    model.scenePtr = sub048;               // 0x4BF42B
+    model.physicsFlags = englishUi;           // 0x4BF431: English-data byte
 
     ResolveUserFilePath(paths, path);                         // 0x4089F0
     wcscpy_s(model.path, 0x100, paths.resolvedPath);
@@ -123,7 +132,7 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
         model.path,
         _O_BINARY, _SH_DENYNO, _S_IREAD);
     if (err != 0) {
-        if (a6) {
+        if (boxGate) {
             if (enData)
                 sprintf_s(text, 0x100,
                           "Cannot open file:%d\n"
@@ -157,7 +166,7 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
     _read(fh, text, 3);
     if (text[0] != 'P' || text[1] != 'm' || text[2] != 'd') {
         if (text[0] == 'P' && text[1] == 'M' && text[2] == 'X')
-            return LoadPMX(m, sub, a6, a7, paths,
+            return LoadPMX(m, sub, boxGate, englishUi, paths,
                            fh);                              // 0x4B77E0
     _close(fh);
         if (enData) {
@@ -172,7 +181,7 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
     _read(fh, text, 4);                                   // version
     _read(fh, model.name, sizeof(model.name));
     _read(fh, model.comment, sizeof(model.comment));
-    if (!enData && a6 &&
+    if (!enData && boxGate &&
         MessageBoxA(hwnd, model.comment,
                     kTitleModelInfoJp, 0x40001u) != 1) {
         _close(fh);
@@ -389,7 +398,7 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
         bone->matWorld[10] = bone->matWorld[15] = 1.0f;
         bone->slotIndex = -1;
         bone->rigidIdx = -296;
-        bone->flags |= 8;
+        bone->flags |= mikudancestudio::mdl::kBoneFlagVisible;
     }
 
     // ---- IK chains --------------------------------------------------------
@@ -417,21 +426,23 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
     }
 
     // physics-driven bone sweep (0x4C0258, C precedence kept verbatim:
-    // (parent flagged) || ((type==5 || (inherit-flags && physMode==2))
-    // && tail-type 2/4) - type 5 is NOT gated by physMode)
+    // (parent flagged) || ((RotateGrant || (inherit-flags && physMode==2))
+    // && tail is Ik/UnderIk) - RotateGrant is NOT gated by physMode)
     for (std::uint32_t i = 0; i < boneCount; ++i) {
         mikudancestudio::mdl::BoneRecord* bone = &bones[i];
         bone->hasFlag = 0;
         const std::int32_t parent = bone->parent;
         const std::int32_t tail = bone->tailIdx;
-        const std::uint8_t tailType = bones[tail].type;
+        const mikudancestudio::mdl::BoneType tailType = bones[tail].type;
         const bool arm1 =
             parent >= 0 &&
             mikudancestudio::mdl::Bones(m)[parent].hasFlag != 0;
         const bool arm2 =
-            (bone->type == 5 ||
-             ((bone->flags & 0x300) != 0 && model.physicsMode == 2)) &&
-            (tailType == 2 || tailType == 4);
+            (bone->type == mikudancestudio::mdl::BoneType::RotateGrant ||
+             ((bone->flags & mikudancestudio::mdl::kBoneFlagInheritMask) != 0 &&
+              model.physicsMode == 2)) &&
+            (tailType == mikudancestudio::mdl::BoneType::Ik ||
+             tailType == mikudancestudio::mdl::BoneType::UnderIk);
         bone->hasFlag = (arm1 || arm2) ? 1 : 0;
     }
     InitBoneSortOrder(m);                                    // 0x490070 stub
@@ -558,7 +569,7 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
     std::int8_t hasEn = 0;
     const int enRead = _read(fh, &hasEn, 1);
     if (hasEn == 0 || enRead == 0) {
-        if ((a6 & model.physicsFlags) != 0)
+        if ((boxGate & model.physicsFlags) != 0)
             MessageBoxA(hwnd,
                         "For this model, there is no English data.\n"
                         "\n"
@@ -588,7 +599,7 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
         model.nameEn[19] = 0;
         _read(fh, model.commentEn, sizeof(model.commentEn));
         model.commentEn[255] = 0;
-        if (model.physicsFlags != 0 && a6 &&
+        if (model.physicsFlags != 0 && boxGate &&
             MessageBoxA(hwnd, model.commentEn,
                         "model infomation", 0x40001u) != 1) {
             _close(fh);
@@ -721,7 +732,7 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
                 rigid.body = bodyOut[1];
                 const std::int32_t bi = rigid.boneIndex;
                 if (rigid.mode > 0 && bi >= 0)
-                    bones[bi].f492 = 1;
+                    bones[bi].hasRigidBody = 1;
                 D3DXMATRIXF inv, t2;
                 // The original indexes the x86 bone record as float[77..79]
                 // (its `position` member).  That indexing crosses the two

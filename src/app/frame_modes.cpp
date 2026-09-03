@@ -57,10 +57,10 @@ static void ViewRefreshGate(MMDApp* s) {
     // Original dword gates (Ghidra: this+0x9ED98 select-state gate,
     // this+0xA0430 frame cursor).  The old literals 650136/657456 were
     // decimal slips - 650136 landed inside aviOutputPath and 657456 inside
-    // exeDir.  0x9ED98 is a dword over v9ed98 and the two shadow bytes;
+    // exeDir.  0x9ED98 is a dword over followCameraEnabled and the two shadow bytes;
     // 0x2F8 is a dword over the first four radio flags.
     const bool frameGate =
-        (s->state.v9ed98 | s->state.playbackStartsAtCurrentFrame |
+        (s->state.followCameraEnabled | s->state.playbackStartsAtCurrentFrame |
          s->state.projectedShadowBlendEnabled) != 0 &&
         s->state.slotIdx == s->state.cameraParentModel &&
         (s->state.optflag[0] | s->state.optflag[1] |
@@ -68,9 +68,9 @@ static void ViewRefreshGate(MMDApp* s) {
         s->state.cameraParentModel >= 0 &&
         s->state.playbackActive == 0;
     if (frameGate) {
-        // 0xA05D1 = b6568481 view-dirty byte (the old literal 658257 was a
+        // 0xA05D1 = viewDirty view-dirty byte (the old literal 658257 was a
         // decimal slip that landed on the frame-range dialog HWND's byte 1)
-        s->state.b6568481 = 1;                                   // 0xA05D1
+        s->state.viewDirty = 1;                                   // 0xA05D1
         s->state.windowLayoutReady = 0;
         PostLanguageSweep2(s);                                    // 0x40D070
         s->state.windowLayoutReady = 1;
@@ -270,7 +270,7 @@ void WarpCursor(MMDApp* app, POINT point) {
         return;
     ClientToScreen(window, &point);
     SetCursorPos(point.x, point.y);
-    app->state.v9f12c = 1;
+    app->state.separateWindowMouseSeen = 1;
 }
 
 void BeginCenteredDrag(MMDApp* app, int operation) {
@@ -283,7 +283,7 @@ void BeginCenteredDrag(MMDApp* app, int operation) {
     app->PreviousMouseY() = point.y;
     app->ViewToolDragOperation() =
         static_cast<ViewportToolAction>(operation);
-    app->state.b6568483 = 0;
+    app->state.mouseJumped = 0;
     WarpCursor(app, point);
     while (ShowCursor(FALSE) >= 0) {}
 }
@@ -319,13 +319,16 @@ unsigned char* ActiveBoneModel(MMDApp* app) {
 }
 
 bool BoneCanBePicked(MMDApp* app, const unsigned char* bone) {
-    if ((mdl::At<std::uint32_t>(const_cast<unsigned char*>(bone), 500) & 8u) == 0)
+    if ((mdl::At<std::uint32_t>(const_cast<unsigned char*>(bone), 500) &
+         mdl::kBoneFlagVisible) == 0)
         return false;
-    const std::uint8_t type = bone[484];
+    const mdl::BoneType type =
+        static_cast<mdl::BoneType>(bone[484]);
     const int physicsMode = app->PlaybackPhysicsMode();
-    if (physicsMode == 2 && type != 0 && bone[493] == 0)
+    if (physicsMode == 2 && type != mdl::BoneType::RotateMove &&
+        bone[493] == 0)
         return false;
-    if (physicsMode == 1 && type != 0)
+    if (physicsMode == 1 && type != mdl::BoneType::RotateMove)
         return false;
     return true;
 }
@@ -400,8 +403,11 @@ void UpdateBoneBoxSelection(MMDApp* app) {
     bool changed = false;
     for (int i = 0; i < count; ++i) {
         unsigned char* bone = mikudancestudio::mdl::BoneBytes(bones, i);
-        const std::uint8_t type = bone[484];
-        const bool eligible = type <= 6 || type == 8;
+        const mdl::BoneType type =
+            static_cast<mdl::BoneType>(bone[484]);
+        const bool eligible =
+            type <= mdl::BoneType::Effector ||
+            type == mdl::BoneType::FixedAxis;
         const int x = mdl::At<std::int32_t>(bone, 452);
         const int y = mdl::At<std::int32_t>(bone, 456);
         const bool inside = eligible && x > left && x < right &&
@@ -435,18 +441,18 @@ void BeginOrEndViewportToolDrag(MMDApp* app, int operation) {
             }
             if (operation <= 8) {
                 app->EditMode() = ViewportEditMode::ToolDrag;
-                Sub42D6E0(app);
+                PushBoneEditUndo(app);
             } else if (operation <= 14) {
-                Sub42D6E0(app);
+                PushBoneEditUndo(app);
                 app->state.a06B5 = 1;
             } else {
-                const int target = app->state.v9ed9c;
+                const int target = app->state.coordinateSystem;
                 RefreshRequest(target == 2
-                    ? app->state.selLightAccSlotOrUint32 : -1);
+                    ? app->state.selectedObjectSlot : -1);
                 app->state.a06B5 = 1;
             }
         } else if (operation == 21) {
-            int& target = app->state.v9ed9c;
+            int& target = app->state.coordinateSystem;
             const int limit = app->state.optflag[0] != 0 ? 3 : 2;
             if (++target >= limit)
                 target = 0;
@@ -508,7 +514,7 @@ void MouseInteractionBegin(MMDApp* app) {
         {VK_DELETE, &MMDAppState::deleteKeyState},
         {VK_ESCAPE, &MMDAppState::escKeyState},
         {VK_TAB, &MMDAppState::tabKeyState},
-        {VK_RETURN, &MMDAppState::bC},
+        {VK_RETURN, &MMDAppState::enterKeyState},
         {VK_MENU, &MMDAppState::menuKeyState},
         {221, &MMDAppState::keyState221},
         {226, &MMDAppState::keyState226},
@@ -542,30 +548,14 @@ void MouseInteractionBegin(MMDApp* app) {
     PollKey(app, app->RightMouseButtonState(), VK_RBUTTON);
     PollKey(app, app->MiddleMouseButtonState(), VK_MBUTTON);
 
-    // A/B automation cannot safely hold global Ctrl/Shift while IDA and
-    // PowerShell share the desktop.  Mirror the original internal key state
-    // only during an active test drag; normal runs never set this variable.
-    char forcedModifier[8]{};
-    if (app->LeftMouseButtonState() != 0 &&
-        GetEnvironmentVariableA("MIKUDANCESTUDIO_AB_MODIFIER", forcedModifier,
-                                sizeof(forcedModifier)) != 0) {
-        if (_stricmp(forcedModifier, "Shift") == 0)
-            app->ShiftModifierState() = 3;
-        else if (_stricmp(forcedModifier, "Ctrl") == 0)
-            app->CtrlModifierState() = 3;
-    }
-
     // 0x46FF07..0x46FF32 immediately follows the 0x42D3A0 call: input is
     // active when the foreground HWND is A0D38, or the main HWND when A0D38
     // is null.
     HWND active = app->FloatingWindow();
     if (active == nullptr)
         active = app->state.hwnd;
-    char forceInput[2]{};
-    const bool forced = GetEnvironmentVariableA(
-        "MIKUDANCESTUDIO_AB_FORCE_INPUT", forceInput, sizeof(forceInput)) != 0;
     app->ViewportInputActive() = static_cast<std::uint8_t>(
-        forced || GetForegroundWindow() == active);
+        GetForegroundWindow() == active);
     const int operation = ViewportToolAtPoint(app);
     BeginOrEndViewportToolDrag(app, operation);
     if (app->ViewportInputActive() == 0)
@@ -628,7 +618,7 @@ bool SelA3(MMDApp* s) { return s->ShiftModifierActive(); }
 bool SelB3(MMDApp* s) { return s->CtrlModifierActive(); }
 
 unsigned char* RegSlotOf(MMDApp* s) {
-    const unsigned idx = s->state.selLightAccSlotOrUint32;
+    const unsigned idx = s->state.selectedObjectSlot;
     return reinterpret_cast<unsigned char*>(s->AccessorySlot(idx));
 }
 
@@ -647,7 +637,7 @@ void ModeCameraAdjust(MMDApp* app, int axis) {
     static const std::size_t kSlotOff[3] = {0x214, 0x218, 0x21C};
     static const int kEdit[3] = {0x1DE, 0x1DF, 0x1E0};
     if (axis < 0 || axis > 2) { ViewRefreshGate(app); return; }
-    const int target = app->state.v9ed9c;
+    const int target = app->state.coordinateSystem;
     const int dy = DyOf(app);
     double scale;
     if (SelA3(app)) scale = g_MouseScaleA;            // 0x52B8F0
@@ -702,7 +692,7 @@ void ModeAngleAdjust(MMDApp* app, int axis) {
     static const std::size_t kSlotOff[3] = {0x220, 0x224, 0x228};
     static const int kEdit[3] = {0x1E1, 0x1E2, 0x1E3};
     if (axis < 0 || axis > 2) { ViewRefreshGate(app); return; }
-    const int target = app->state.v9ed9c;
+    const int target = app->state.coordinateSystem;
     const int dy = DyOf(app);
     double scale;
     if (SelA3(app)) scale = g_Scale52E9F0;            // 0.2
@@ -760,7 +750,8 @@ void ModePhysicsBody(MMDApp* app, int) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x0041ACD0 - Sub41ACD0(app, oldMode): physics-mode switch apply
+// VA 0x0041ACD0 - ApplyCameraReferenceModeChange(app, oldMode) (was
+// Sub41ACD0): camera-reference switch re-anchor
 // (command dispatch 0x47FA60/0x47FA88, control 0x213 family).  When the mode
 // byte at +0x340 (kByte340) changes, the accessory ground position stored at
 // app+0x308/+0x30C/+0xA08DC is re-anchored: both the OLD mode (the `mode`
@@ -781,7 +772,7 @@ void ModePhysicsBody(MMDApp* app, int) {
 //           value-identical)
 //   else:   origin = (0, 0, 0)
 // ---------------------------------------------------------------------------
-void Sub41ACD0(MMDApp* app, int mode) {
+void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode) {
     auto& api = d3dx::Get();
     if (!(api.Load() && api.rotX && api.rotY && api.rotZ && api.multiply &&
           api.translation))
@@ -829,7 +820,7 @@ void Sub41ACD0(MMDApp* app, int mode) {
     };
 
     d3dx::D3DXMATRIXF tOld{}, tNew{};
-    modeOrigin(mode, &tOld);                          // a2 (old mode)
+    modeOrigin(oldMode, &tOld);                       // a2 (old mode)
     modeOrigin(static_cast<int>(app->CameraReferenceMode()), &tNew);
     api.multiply(&tOld, &tOld, &rot);                 // 0x41B005
     api.multiply(&tNew, &tNew, &rot);                 // 0x41B01A

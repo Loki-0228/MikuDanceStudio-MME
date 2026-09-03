@@ -20,13 +20,14 @@
 //      - main grid (ids 427..453): Y = clientBottom - k (stretched to the
 //        window bottom), X = sidebar-derived or fixed; several controls get
 //        W/H = clientBottom - k (e.g. 427 H, 428 W, 434/436/443 big panels).
-//      - option bands (ids 455..535): X = const - v52 / const - v110 where
+//      - option bands (ids 455..535): X = const - bandXBase / const -
+//        bandXBase2 where
 //        the two bases accumulate conditional deltas from the UI option
 //        flag bytes this+0x2F8..0x2FE (kByteOptflag0..6), see the body.
 //   4. 0x444B3B  visibility re-toggle: five id ranges (455..469, 471..488,
 //      504..528, 402..414, 531..535) get ShowWindow(SW_HIDE) followed by
 //      ShowWindow(SW_SHOW) when IsWindowVisible.
-//   5. 0x444C9D  refresh tail: Sub42C810 (0x42C810) then Sub40CAC0
+//   5. 0x444C9D  refresh tail: RefreshMainWindowViewport (0x42C810) then Sub40CAC0
 //      (0x40CAC0).
 //
 // All MoveWindow calls pass bRepaint = TRUE; every GetDlgItem handle is
@@ -70,7 +71,8 @@ void ToggleVisible(HWND parent, int firstId, int lastId) {
 }  // namespace
 
 void PanelPaint(MMDApp* app);  // VA 0x00414610 (defined in ui_panel_paint.cpp)
-void Sub40CAC0(MMDApp* app);   // VA 0x0040CAC0 (stub in unported/stubs.cpp)
+void LayoutViewportPanels(MMDApp* app);   // VA 0x0040CAC0, was Sub40CAC0
+                                          // (ui_viewport_layout.cpp)
 
 void HandleWindowSize(MMDApp* app) {
     auto& s = *app;
@@ -95,12 +97,12 @@ void HandleWindowSize(MMDApp* app) {
         sidebar = cr1.right - 3;                               // 0x4433B8
         PostLanguageSweep(app);                                // 0x4433BE
     } else {
-        std::int32_t v2 = static_cast<std::int32_t>(
+        std::int32_t newSidebar = static_cast<std::int32_t>(
             static_cast<double>(s.SidebarRatio()) *
             cr1.right);                                        // 0x4433CF
-        if (v2 < 250) v2 = 250;                                // 0x4433D9
-        const bool grew = sidebar < v2;                        // 0x4433E0
-        sidebar = v2;                                          // 0x4433E6
+        if (newSidebar < 250) newSidebar = 250;                                // 0x4433D9
+        const bool grew = sidebar < newSidebar;                        // 0x4433E0
+        sidebar = newSidebar;                                          // 0x4433E6
         if (grew) PanelPaint(app);                             // 0x4433EC
     }
     const std::int32_t side = sidebar;
@@ -159,8 +161,8 @@ void HandleWindowSize(MMDApp* app) {
     MoveCtrl(hwnd, 454, 363, bottom - 155, 14, 14);
     MoveCtrl(hwnd, 453, 363, bottom - 155, 14, 14);
 
-    // --- option band 1: base v52 (0x443B02..0x443D9E) -----------------------
-    // v52 = -18, or 117 while bone mode is off (optflag[0] set) and the
+    // --- option band 1: base bandXBase (original v52; 0x443B02..0x443D9E) --
+    // bandXBase = -18, or 117 while bone mode is off (optflag[0] set) and the
     // expand toggle optflag[1] is clear.
     const std::uint8_t opt0 = s.CameraMode();     // 760
     const std::uint8_t opt1 = s.UiOptionFlag(1);  // 761
@@ -170,61 +172,61 @@ void HandleWindowSize(MMDApp* app) {
     const std::uint8_t opt5 = s.UiOptionFlag(5);  // 765
     const std::uint8_t opt6 = s.UiOptionFlag(6);  // 766
 
-    std::int32_t v52 = -18;
-    if (opt0 != 0 && opt1 == 0) v52 = 117;                   // 0x443B1A
-    MoveCtrl(hwnd, 455, 514 - v52, bottom - 140, 136, 18);
-    MoveCtrl(hwnd, 461, 650 - v52, bottom - 140, 23, 14);
-    MoveCtrl(hwnd, 456, 514 - v52, bottom - 122, 136, 18);
-    MoveCtrl(hwnd, 462, 650 - v52, bottom - 122, 23, 14);
-    MoveCtrl(hwnd, 457, 514 - v52, bottom - 104, 136, 18);
-    MoveCtrl(hwnd, 463, 650 - v52, bottom - 104, 23, 14);
-    MoveCtrl(hwnd, 458, 514 - v52, bottom - 84, 132, 20);
-    MoveCtrl(hwnd, 464, 646 - v52, bottom - 84, 27, 14);
-    MoveCtrl(hwnd, 459, 514 - v52, bottom - 66, 132, 20);
-    MoveCtrl(hwnd, 465, 646 - v52, bottom - 66, 27, 14);
-    MoveCtrl(hwnd, 460, 514 - v52, bottom - 48, 132, 20);
-    MoveCtrl(hwnd, 466, 646 - v52, bottom - 48, 27, 14);
-    MoveCtrl(hwnd, 468, 590 - v52, bottom - 26, 75, 20);
-    MoveCtrl(hwnd, 467, 524 - v52, bottom - 26, 50, 20);
-    MoveCtrl(hwnd, 470, 501 - v52, bottom - 155, 14, 14);
-    MoveCtrl(hwnd, 469, 501 - v52, bottom - 155, 14, 14);
+    std::int32_t bandXBase = -18;
+    if (opt0 != 0 && opt1 == 0) bandXBase = 117;                   // 0x443B1A
+    MoveCtrl(hwnd, 455, 514 - bandXBase, bottom - 140, 136, 18);
+    MoveCtrl(hwnd, 461, 650 - bandXBase, bottom - 140, 23, 14);
+    MoveCtrl(hwnd, 456, 514 - bandXBase, bottom - 122, 136, 18);
+    MoveCtrl(hwnd, 462, 650 - bandXBase, bottom - 122, 23, 14);
+    MoveCtrl(hwnd, 457, 514 - bandXBase, bottom - 104, 136, 18);
+    MoveCtrl(hwnd, 463, 650 - bandXBase, bottom - 104, 23, 14);
+    MoveCtrl(hwnd, 458, 514 - bandXBase, bottom - 84, 132, 20);
+    MoveCtrl(hwnd, 464, 646 - bandXBase, bottom - 84, 27, 14);
+    MoveCtrl(hwnd, 459, 514 - bandXBase, bottom - 66, 132, 20);
+    MoveCtrl(hwnd, 465, 646 - bandXBase, bottom - 66, 27, 14);
+    MoveCtrl(hwnd, 460, 514 - bandXBase, bottom - 48, 132, 20);
+    MoveCtrl(hwnd, 466, 646 - bandXBase, bottom - 48, 27, 14);
+    MoveCtrl(hwnd, 468, 590 - bandXBase, bottom - 26, 75, 20);
+    MoveCtrl(hwnd, 467, 524 - bandXBase, bottom - 26, 50, 20);
+    MoveCtrl(hwnd, 470, 501 - bandXBase, bottom - 155, 14, 14);
+    MoveCtrl(hwnd, 469, 501 - bandXBase, bottom - 155, 14, 14);
 
-    // --- option band 2: v52 += 162 with expand toggle optflag[2] (0x443DB3) --
-    if (opt0 != 0 && opt2 == 0) v52 += 162;
-    MoveCtrl(hwnd, 567, 684 - v52, bottom - 155, 14, 14);
-    MoveCtrl(hwnd, 566, 684 - v52, bottom - 155, 14, 14);
-    MoveCtrl(hwnd, 562, 688 - v52, bottom - 135, 54, 22);
-    MoveCtrl(hwnd, 563, 745 - v52, bottom - 135, 54, 22);
-    MoveCtrl(hwnd, 564, 802 - v52, bottom - 135, 54, 22);
-    MoveCtrl(hwnd, 560, 683 - v52, bottom - 80, 176, 25);
-    MoveCtrl(hwnd, 561, 820 - v52, bottom - 100, 30, 14);
-    MoveCtrl(hwnd, 565, 745 - v52, bottom - 36, 54, 30);
+    // --- option band 2: bandXBase += 162 with expand toggle optflag[2] (0x443DB3)
+    if (opt0 != 0 && opt2 == 0) bandXBase += 162;
+    MoveCtrl(hwnd, 567, 684 - bandXBase, bottom - 155, 14, 14);
+    MoveCtrl(hwnd, 566, 684 - bandXBase, bottom - 155, 14, 14);
+    MoveCtrl(hwnd, 562, 688 - bandXBase, bottom - 135, 54, 22);
+    MoveCtrl(hwnd, 563, 745 - bandXBase, bottom - 135, 54, 22);
+    MoveCtrl(hwnd, 564, 802 - bandXBase, bottom - 135, 54, 22);
+    MoveCtrl(hwnd, 560, 683 - bandXBase, bottom - 80, 176, 25);
+    MoveCtrl(hwnd, 561, 820 - bandXBase, bottom - 100, 30, 14);
+    MoveCtrl(hwnd, 565, 745 - bandXBase, bottom - 36, 54, 30);
 
-    // --- option band 3: v52 += 160 with expand toggle optflag[6] (0x443F19) --
-    if (opt0 != 0 && opt6 == 0) v52 += 160;
-    MoveCtrl(hwnd, 489, 864 - v52, bottom - 155, 14, 14);
-    MoveCtrl(hwnd, 488, 864 - v52, bottom - 155, 14, 14);
-    MoveCtrl(hwnd, 471, 868 - v52, bottom - 140, 125, 150);
-    MoveCtrl(hwnd, 472, 867 - v52, bottom - 116, 60, 18);
-    MoveCtrl(hwnd, 473, 934 - v52, bottom - 116, 60, 18);
-    MoveCtrl(hwnd, 476, 1000 - v52, bottom - 142, 13, 13);
-    MoveCtrl(hwnd, 486, 1000 - v52, bottom - 127, 13, 13);
-    MoveCtrl(hwnd, 477, 999 - v52, bottom - 113, 53, 17);
-    MoveCtrl(hwnd, 474, 868 - v52, bottom - 95, 90, 100);
-    MoveCtrl(hwnd, 475, 962 - v52, bottom - 95, 90, 300);
-    MoveCtrl(hwnd, 478, 877 - v52, bottom - 70, 48, 14);
-    MoveCtrl(hwnd, 479, 940 - v52, bottom - 70, 48, 14);
-    MoveCtrl(hwnd, 480, 1003 - v52, bottom - 70, 48, 14);
-    MoveCtrl(hwnd, 481, 877 - v52, bottom - 50, 48, 14);
-    MoveCtrl(hwnd, 482, 940 - v52, bottom - 50, 48, 14);
-    MoveCtrl(hwnd, 483, 1003 - v52, bottom - 50, 48, 14);
-    MoveCtrl(hwnd, 484, 877 - v52, bottom - 30, 48, 14);
-    MoveCtrl(hwnd, 485, 940 - v52, bottom - 30, 48, 14);
-    MoveCtrl(hwnd, 487, 995 - v52, bottom - 32, 58, 26);
+    // --- option band 3: bandXBase += 160 with expand toggle optflag[6] (0x443F19)
+    if (opt0 != 0 && opt6 == 0) bandXBase += 160;
+    MoveCtrl(hwnd, 489, 864 - bandXBase, bottom - 155, 14, 14);
+    MoveCtrl(hwnd, 488, 864 - bandXBase, bottom - 155, 14, 14);
+    MoveCtrl(hwnd, 471, 868 - bandXBase, bottom - 140, 125, 150);
+    MoveCtrl(hwnd, 472, 867 - bandXBase, bottom - 116, 60, 18);
+    MoveCtrl(hwnd, 473, 934 - bandXBase, bottom - 116, 60, 18);
+    MoveCtrl(hwnd, 476, 1000 - bandXBase, bottom - 142, 13, 13);
+    MoveCtrl(hwnd, 486, 1000 - bandXBase, bottom - 127, 13, 13);
+    MoveCtrl(hwnd, 477, 999 - bandXBase, bottom - 113, 53, 17);
+    MoveCtrl(hwnd, 474, 868 - bandXBase, bottom - 95, 90, 100);
+    MoveCtrl(hwnd, 475, 962 - bandXBase, bottom - 95, 90, 300);
+    MoveCtrl(hwnd, 478, 877 - bandXBase, bottom - 70, 48, 14);
+    MoveCtrl(hwnd, 479, 940 - bandXBase, bottom - 70, 48, 14);
+    MoveCtrl(hwnd, 480, 1003 - bandXBase, bottom - 70, 48, 14);
+    MoveCtrl(hwnd, 481, 877 - bandXBase, bottom - 50, 48, 14);
+    MoveCtrl(hwnd, 482, 940 - bandXBase, bottom - 50, 48, 14);
+    MoveCtrl(hwnd, 483, 1003 - bandXBase, bottom - 50, 48, 14);
+    MoveCtrl(hwnd, 484, 877 - bandXBase, bottom - 30, 48, 14);
+    MoveCtrl(hwnd, 485, 940 - bandXBase, bottom - 30, 48, 14);
+    MoveCtrl(hwnd, 487, 995 - bandXBase, bottom - 32, 58, 26);
 
-    // --- option band 4: v52 += 178 with expand toggle optflag[3] (0x44422B);
+    // --- option band 4: bandXBase += 178 with expand toggle optflag[3] (0x44422B);
     // band 4 controls use fixed X -------------------------------------------
-    if (opt0 != 0 && opt3 == 0) v52 += 178;
+    if (opt0 != 0 && opt3 == 0) bandXBase += 178;
     MoveCtrl(hwnd, 503, 363, bottom - 155, 14, 14);
     MoveCtrl(hwnd, 502, 363, bottom - 155, 14, 14);
     MoveCtrl(hwnd, 490, 366, bottom - 140, 60, 28);
@@ -240,59 +242,60 @@ void HandleWindowSize(MMDApp* app) {
     MoveCtrl(hwnd, 495, 430, bottom - 32, 60, 24);
     MoveCtrl(hwnd, 500, 366, bottom - 36, 60, 28);
 
-    // --- option band 5: second base v110 (0x44444C..0x4448BE) --------------
-    // optflag[4]/optflag[0] both clear -> v52 += 179; then v110 = v52 - 180
-    // (bone mode on) or v52 + 53; optflag[5]/optflag[0] both clear -> v110 +=
-    // 251; optflag[0] clear -> v110 += 13.
-    if (opt4 == 0 && opt0 == 0) v52 += 179;                   // 0x444453
-    std::int32_t v110 = opt0 != 0 ? v52 - 180 : v52 + 53;     // 0x44445D
-    MoveCtrl(hwnd, 529, 598 - v110, bottom - 155, 14, 14);
-    MoveCtrl(hwnd, 528, 598 - v110, bottom - 155, 14, 14);
-    MoveCtrl(hwnd, 509, 618 - v110, bottom - 120, 92, 500);
-    MoveCtrl(hwnd, 512, 602 - v110, bottom - 121, 16, 22);
-    MoveCtrl(hwnd, 513, 710 - v110, bottom - 121, 16, 22);
-    MoveCtrl(hwnd, 510, 597 - v110, bottom - 100, 135, 25);
-    MoveCtrl(hwnd, 511, 642 - v110, bottom - 138, 28, 14);
-    MoveCtrl(hwnd, 504, 618 - v110, bottom - 50, 92, 500);
-    MoveCtrl(hwnd, 507, 602 - v110, bottom - 51, 16, 22);
-    MoveCtrl(hwnd, 508, 710 - v110, bottom - 51, 16, 22);
-    MoveCtrl(hwnd, 505, 597 - v110, bottom - 30, 135, 25);
-    MoveCtrl(hwnd, 506, 642 - v110, bottom - 68, 28, 14);
-    MoveCtrl(hwnd, 514, 749 - v110, bottom - 120, 92, 500);
-    MoveCtrl(hwnd, 517, 733 - v110, bottom - 121, 16, 22);
-    MoveCtrl(hwnd, 518, 841 - v110, bottom - 121, 16, 22);
-    MoveCtrl(hwnd, 515, 729 - v110, bottom - 100, 135, 25);
-    MoveCtrl(hwnd, 516, 773 - v110, bottom - 138, 28, 14);
-    MoveCtrl(hwnd, 519, 749 - v110, bottom - 50, 92, 500);
-    MoveCtrl(hwnd, 522, 733 - v110, bottom - 51, 16, 22);
-    MoveCtrl(hwnd, 523, 841 - v110, bottom - 51, 16, 22);
-    MoveCtrl(hwnd, 520, 729 - v110, bottom - 30, 135, 25);
-    MoveCtrl(hwnd, 521, 773 - v110, bottom - 68, 28, 14);
-    MoveCtrl(hwnd, 524, 675 - v110, bottom - 141, 50, 19);
-    MoveCtrl(hwnd, 525, 675 - v110, bottom - 71, 50, 19);
-    MoveCtrl(hwnd, 526, 807 - v110, bottom - 71, 50, 19);
-    MoveCtrl(hwnd, 527, 807 - v110, bottom - 141, 50, 19);
+    // --- option band 5: second base bandXBase2 (original v110;
+    // 0x44444C..0x4448BE) ----------------------------------------------------
+    // optflag[4]/optflag[0] both clear -> bandXBase += 179; then bandXBase2 = bandXBase - 180
+    // (bone mode on) or bandXBase + 53; optflag[5]/optflag[0] both clear -> bandXBase2 +=
+    // 251; optflag[0] clear -> bandXBase2 += 13.
+    if (opt4 == 0 && opt0 == 0) bandXBase += 179;                   // 0x444453
+    std::int32_t bandXBase2 = opt0 != 0 ? bandXBase - 180 : bandXBase + 53;     // 0x44445D
+    MoveCtrl(hwnd, 529, 598 - bandXBase2, bottom - 155, 14, 14);
+    MoveCtrl(hwnd, 528, 598 - bandXBase2, bottom - 155, 14, 14);
+    MoveCtrl(hwnd, 509, 618 - bandXBase2, bottom - 120, 92, 500);
+    MoveCtrl(hwnd, 512, 602 - bandXBase2, bottom - 121, 16, 22);
+    MoveCtrl(hwnd, 513, 710 - bandXBase2, bottom - 121, 16, 22);
+    MoveCtrl(hwnd, 510, 597 - bandXBase2, bottom - 100, 135, 25);
+    MoveCtrl(hwnd, 511, 642 - bandXBase2, bottom - 138, 28, 14);
+    MoveCtrl(hwnd, 504, 618 - bandXBase2, bottom - 50, 92, 500);
+    MoveCtrl(hwnd, 507, 602 - bandXBase2, bottom - 51, 16, 22);
+    MoveCtrl(hwnd, 508, 710 - bandXBase2, bottom - 51, 16, 22);
+    MoveCtrl(hwnd, 505, 597 - bandXBase2, bottom - 30, 135, 25);
+    MoveCtrl(hwnd, 506, 642 - bandXBase2, bottom - 68, 28, 14);
+    MoveCtrl(hwnd, 514, 749 - bandXBase2, bottom - 120, 92, 500);
+    MoveCtrl(hwnd, 517, 733 - bandXBase2, bottom - 121, 16, 22);
+    MoveCtrl(hwnd, 518, 841 - bandXBase2, bottom - 121, 16, 22);
+    MoveCtrl(hwnd, 515, 729 - bandXBase2, bottom - 100, 135, 25);
+    MoveCtrl(hwnd, 516, 773 - bandXBase2, bottom - 138, 28, 14);
+    MoveCtrl(hwnd, 519, 749 - bandXBase2, bottom - 50, 92, 500);
+    MoveCtrl(hwnd, 522, 733 - bandXBase2, bottom - 51, 16, 22);
+    MoveCtrl(hwnd, 523, 841 - bandXBase2, bottom - 51, 16, 22);
+    MoveCtrl(hwnd, 520, 729 - bandXBase2, bottom - 30, 135, 25);
+    MoveCtrl(hwnd, 521, 773 - bandXBase2, bottom - 68, 28, 14);
+    MoveCtrl(hwnd, 524, 675 - bandXBase2, bottom - 141, 50, 19);
+    MoveCtrl(hwnd, 525, 675 - bandXBase2, bottom - 71, 50, 19);
+    MoveCtrl(hwnd, 526, 807 - bandXBase2, bottom - 71, 50, 19);
+    MoveCtrl(hwnd, 527, 807 - bandXBase2, bottom - 141, 50, 19);
 
-    // The original updates v110 only after the complete facial group above;
+    // The original updates bandXBase2 only after the complete facial group above;
     // the adjusted base belongs exclusively to the following view/play band.
-    if (opt5 == 0 && opt0 == 0) v110 += 251;                  // 0x4448A8
-    if (opt0 == 0) v110 += 13;                                // 0x444895
-    MoveCtrl(hwnd, 402, 886 - v110, bottom - 141, 38, 17);
-    MoveCtrl(hwnd, 403, 925 - v110, bottom - 141, 37, 17);
-    MoveCtrl(hwnd, 404, 963 - v110, bottom - 141, 37, 17);
-    MoveCtrl(hwnd, 405, 886 - v110, bottom - 121, 38, 17);
-    MoveCtrl(hwnd, 406, 925 - v110, bottom - 121, 37, 17);
-    MoveCtrl(hwnd, 407, 963 - v110, bottom - 121, 37, 17);
-    MoveCtrl(hwnd, 408, 887 - v110, bottom - 63, 50, 24);
-    MoveCtrl(hwnd, 409, 888 - v110, bottom - 36, 50, 14);
-    MoveCtrl(hwnd, 410, 952 - v110, bottom - 36, 50, 14);
-    MoveCtrl(hwnd, 411, 952 - v110, bottom - 58, 13, 13);
-    MoveCtrl(hwnd, 412, 902 - v110, bottom - 99, 13, 13);
-    MoveCtrl(hwnd, 531, 971 - v110, bottom - 99, 13, 13);
-    MoveCtrl(hwnd, 413, 952 - v110, bottom - 19, 13, 13);
-    MoveCtrl(hwnd, 414, 888 - v110, bottom - 19, 13, 13);
-    MoveCtrl(hwnd, 534, 1017 - v110, bottom - 63, 22, 57);
-    MoveCtrl(hwnd, 535, 1002 - v110, bottom - 141, 35, 37);
+    if (opt5 == 0 && opt0 == 0) bandXBase2 += 251;                  // 0x4448A8
+    if (opt0 == 0) bandXBase2 += 13;                                // 0x444895
+    MoveCtrl(hwnd, 402, 886 - bandXBase2, bottom - 141, 38, 17);
+    MoveCtrl(hwnd, 403, 925 - bandXBase2, bottom - 141, 37, 17);
+    MoveCtrl(hwnd, 404, 963 - bandXBase2, bottom - 141, 37, 17);
+    MoveCtrl(hwnd, 405, 886 - bandXBase2, bottom - 121, 38, 17);
+    MoveCtrl(hwnd, 406, 925 - bandXBase2, bottom - 121, 37, 17);
+    MoveCtrl(hwnd, 407, 963 - bandXBase2, bottom - 121, 37, 17);
+    MoveCtrl(hwnd, 408, 887 - bandXBase2, bottom - 63, 50, 24);
+    MoveCtrl(hwnd, 409, 888 - bandXBase2, bottom - 36, 50, 14);
+    MoveCtrl(hwnd, 410, 952 - bandXBase2, bottom - 36, 50, 14);
+    MoveCtrl(hwnd, 411, 952 - bandXBase2, bottom - 58, 13, 13);
+    MoveCtrl(hwnd, 412, 902 - bandXBase2, bottom - 99, 13, 13);
+    MoveCtrl(hwnd, 531, 971 - bandXBase2, bottom - 99, 13, 13);
+    MoveCtrl(hwnd, 413, 952 - bandXBase2, bottom - 19, 13, 13);
+    MoveCtrl(hwnd, 414, 888 - bandXBase2, bottom - 19, 13, 13);
+    MoveCtrl(hwnd, 534, 1017 - bandXBase2, bottom - 63, 22, 57);
+    MoveCtrl(hwnd, 535, 1002 - bandXBase2, bottom - 141, 35, 37);
 
     // --- visibility re-toggle, five id ranges (0x444B3B..0x444C99) ---------
     ToggleVisible(hwnd, 455, 469);
@@ -302,11 +305,17 @@ void HandleWindowSize(MMDApp* app) {
     ToggleVisible(hwnd, 531, 535);
 
     // --- refresh tail (0x444C9D..0x444CB0) ---------------------------------
-    Sub42C810(app);
-    Sub40CAC0(app);  // original tail call: `return sub_40CAC0(this);`
+    RefreshMainWindowViewport(app);
+    LayoutViewportPanels(app);  // original tail call: `return sub_40CAC0(this);`
 }
 
-void Sub442EB0(MMDApp* app) {
+// was Sub442EB0, VA 0x00442EB0 - live relayout of the sidebar-anchored
+// controls (top tool row 400..417/532/533/558/559 plus the bottom frame
+// grid 415..434) at the current sidebar width and client height; the
+// visibility re-toggle refreshes those bands without the full WM_SIZE
+// option-band pass.  Called by the sidebar-resize drag (HandleMouseMove
+// 0x444CC0), the scene loaders and the mic window procs.
+void RelayoutSidebarControls(MMDApp* app) {
     const HWND hwnd = static_cast<HWND>(app->Hwnd());
     const int side = app->SidebarWidth();
     RECT client{};
@@ -341,8 +350,8 @@ void Sub442EB0(MMDApp* app) {
     ToggleVisible(hwnd, 415, 426);
     ToggleVisible(hwnd, 558, 559);
     ToggleVisible(hwnd, 434, 434);
-    Sub42C810(app);
-    Sub40CAC0(app);
+    RefreshMainWindowViewport(app);
+    LayoutViewportPanels(app);
 }
 
 }  // namespace mikudancestudio

@@ -12,6 +12,10 @@ namespace mikudancestudio {
 
 namespace {
 
+// Porting-era trace under MIKUDANCESTUDIO_PMM_TRACE_DIR (CMake option
+// MIKUDANCESTUDIO_DIAG, default OFF); the OFF stub keeps the call sites
+// valid and inlines away to nothing.
+#ifdef MIKUDANCESTUDIO_DIAG
 void TraceAccessoryRelease(int slot, const char* phase, const void* track) {
     const char* directory = std::getenv("MIKUDANCESTUDIO_PMM_TRACE_DIR");
     if (directory == nullptr || directory[0] == '\0')
@@ -25,6 +29,9 @@ void TraceAccessoryRelease(int slot, const char* phase, const void* track) {
             slot, track);
     fclose(stream);
 }
+#else
+inline void TraceAccessoryRelease(int, const char*, const void*) {}
+#endif
 
 }  // namespace
 

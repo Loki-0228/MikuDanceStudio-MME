@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 #include <d3d9.h>
 
 #include <cstdio>
@@ -15,12 +16,13 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
 
 void SelectionReeval(MMDApp* app);  // 0x430510
-void Sub412330(MMDApp* app);        // 0x412330
-void Sub413120(MMDApp* app, int);   // 0x413120
+void ApplyGravityTrack(MMDApp* app);        // 0x412330
+void ApplyAccessoryTrack(MMDApp* app, int);   // 0x413120
 
 namespace {
 
@@ -83,11 +85,13 @@ void BonePoint(mikudancestudio::mdl::BoneRecord* bone, float out[3]) {
 }  // namespace
 
 void PostModelReload(MMDApp* app) {  // 0x41A650
+#ifdef MIKUDANCESTUDIO_DIAG
     if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
         FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
         if (tf) { fprintf(tf, "PostModelReload targetSlot=%d\n",
                           app->CameraParentModel()); fclose(tf); }
     }
+#endif
     auto& api = d3dx::Get();
     if (!api.Load())
         return;
@@ -201,9 +205,8 @@ void PostModelReload(MMDApp* app) {  // 0x41A650
                              referenceTranslation.m[3][2];
 }
 
-void Sub41A650(MMDApp* app) {
-    PostModelReload(app);
-}
+// (Sub41A650 was a local alias wrapper of PostModelReload above - removed;
+//  callers now use the PostModelReload name directly.)
 
 void PostModelReload2(MMDApp* app) {  // 0x40D940
     const bool cameraMode =
@@ -257,7 +260,7 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     // enables both controls and stores the record count at 0x9DA24.
     if (!cameraMode &&
         app->state.optflag[5] != 0 &&
-        app->state.v9da24[0] == 0) {
+        app->state.copiedBoneCount == 0) {
         EnableWindow(MainControl(app, 497), FALSE);
         EnableWindow(MainControl(app, 498), FALSE);
     }
@@ -272,14 +275,14 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
         EnableWindow(MainControl(app, 401), FALSE);
         if (app->EnglishUI() != 0) {
             SetWindowTextA(MainControl(app, 407), "btm");
-            SetWindowTextA(GetDlgItem(viewportWindow, 536), "To model");
+            SetWindowTextA(GetDlgItem(viewportWindow, panel::kModelEditToggle), "To model");
         } else {
             SetWindowTextW(MainControl(app, 407), L"\x4e0b\x9762");
-            SetWindowTextW(GetDlgItem(viewportWindow, 536),
+            SetWindowTextW(GetDlgItem(viewportWindow, panel::kModelEditToggle),
                            L"\x30e2\x30c7\x30eb\x7de8");
         }
-        ShowWindow(GetDlgItem(viewportWindow, 543), SW_SHOW);
-        ShowWindow(GetDlgItem(viewportWindow, 550), SW_SHOW);
+        ShowWindow(GetDlgItem(viewportWindow, panel::kCameraDistanceButton), SW_SHOW);
+        ShowWindow(GetDlgItem(viewportWindow, panel::kReadoutDistEdit), SW_SHOW);
         return;
     }
 
@@ -288,45 +291,45 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     EnableWindow(MainControl(app, 401), model[12733] != 0);
     if (app->EnglishUI() != 0) {
         SetWindowTextA(MainControl(app, 407), "camer");
-        SetWindowTextA(GetDlgItem(viewportWindow, 536), "To camera");
+        SetWindowTextA(GetDlgItem(viewportWindow, panel::kModelEditToggle), "To camera");
     } else {
         SetWindowTextW(MainControl(app, 407), L"\x30ab\x30e1\x30e9");
-        SetWindowTextW(GetDlgItem(viewportWindow, 536),
+        SetWindowTextW(GetDlgItem(viewportWindow, panel::kModelEditToggle),
                        L"\x30ab\x30e1\x30e9\x7de8");
     }
-    ShowWindow(GetDlgItem(viewportWindow, 543), SW_HIDE);
-    ShowWindow(GetDlgItem(viewportWindow, 550), SW_HIDE);
+    ShowWindow(GetDlgItem(viewportWindow, panel::kCameraDistanceButton), SW_HIDE);
+    ShowWindow(GetDlgItem(viewportWindow, panel::kReadoutDistEdit), SW_HIDE);
 }
 
-void Sub44D610(MMDApp* app) {  // 0x44D610
+void RebuildModelModePanel(MMDApp* app) {  // was Sub44D610, 0x44D610
     app->state.optflag[0] = 0;
     HWND combo = MainControl(app, 433);
     SendMessageA(combo, CB_DELETESTRING, 5, 0);
     SendMessageA(combo, CB_DELETESTRING, 4, 0);
     SendMessageA(combo, CB_SETCURSEL, 3, 0);
 
-    if (app->state.v9ed9c == 2)
-        app->state.v9ed9c = 0;
+    if (app->state.coordinateSystem == 2)
+        app->state.coordinateSystem = 0;
 
-    if (app->state.v9ed98 != 0) {
+    if (app->state.followCameraEnabled != 0) {
         app->ViewOffsetX() = 0.0f;
         app->ViewOffsetY() = 0.0f;
         ReloadModels(app);
-        Sub411070(app);
-        Sub411B90(app);
-        Sub412330(app);
+        RefreshLightPanel(app);
+        RefreshSelfShadowPanel(app);
+        ApplyGravityTrack(app);
         for (int index = 0; index < 255; ++index) {
             if (app->ObjectSlot(index) != nullptr)
-                Sub413120(app, index);
+                ApplyAccessoryTrack(app, index);
         }
-        Sub4134E0(app);
+        SyncAccessoryEditPanel(app);
     }
 
     app->CameraAttachmentTransformSuppressed() = 0;
     PostModelReload(app);
     SelectionReeval(app);
 
-    if (app->state.v9ed98 == 0) {
+    if (app->state.followCameraEnabled == 0) {
         D3DLIGHT9& light = app->SceneLight();
         D3DVECTOR& direction = *reinterpret_cast<D3DVECTOR*>(
             app->LightDirection());
@@ -353,7 +356,7 @@ void Sub44D610(MMDApp* app) {  // 0x44D610
     }
 }
 
-void Sub44D780(MMDApp* app) {  // 0x44D780
+void RebuildCameraModePanel(MMDApp* app) {  // was Sub44D780, 0x44D780
     // Rebuild the camera-mode transform combo exactly as the original does.
     // Item four is the model-mode "all" entry; the three camera entries are
     // appended in its place.
@@ -380,14 +383,14 @@ void Sub44D780(MMDApp* app) {  // 0x44D780
     app->ViewOffsetY() = 0.0f;
     SelectionReeval(app);
     ReloadModels(app);
-    Sub411070(app);
-    Sub411B90(app);
-    Sub412330(app);
+    RefreshLightPanel(app);
+    RefreshSelfShadowPanel(app);
+    ApplyGravityTrack(app);
     for (int slot = 0; slot < 255; ++slot) {
         if (app->ObjectSlot(slot) != nullptr)
-            Sub413120(app, slot);
+            ApplyAccessoryTrack(app, slot);
     }
-    Sub4134E0(app);
+    SyncAccessoryEditPanel(app);
 
     // 0xA0438 is the four-by-four selection/reference basis.  The original
     // writes all sixteen floats individually; the resulting value is identity.
@@ -399,10 +402,10 @@ void Sub44D780(MMDApp* app) {  // 0x44D780
     basis[15] = 1.0f;
 }
 
-void Sub44D940(MMDApp* app) {  // 0x44D940
+void ApplyModelComboSelection(MMDApp* app) {  // was Sub44D940, 0x44D940
     HWND hwnd = static_cast<HWND>(app->Hwnd());
     const int selection = static_cast<int>(
-        SendMessageA(GetDlgItem(hwnd, 436), CB_GETCURSEL, 0, 0));
+        SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_GETCURSEL, 0, 0));
     static constexpr int kModeCommands[] = {
         0xFD, 0xD9, 0xDC, 0xDA, 0xCA, 0xCB, 0xDB, 0xDE,
         0xFB, 0xFC,
@@ -410,8 +413,8 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
 
     if (selection == 0) {
         if (app->state.optflag[0] == 0) {
-            SendMessageA(GetDlgItem(hwnd, 443), CB_RESETCONTENT, 0, 0);
-            HWND frameCombo = GetDlgItem(hwnd, 434);
+            SendMessageA(GetDlgItem(hwnd, panel::kIkChainCombo), CB_RESETCONTENT, 0, 0);
+            HWND frameCombo = GetDlgItem(hwnd, panel::kRegisterScopeCombo);
             SendMessageA(frameCombo, CB_RESETCONTENT, 0, 0);
             if (app->EnglishUI() != 0) {
                 static constexpr const char* kNames[] = {
@@ -432,7 +435,7 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
                 }
             }
 
-            HWND accessoryCombo = GetDlgItem(hwnd, 471);
+            HWND accessoryCombo = GetDlgItem(hwnd, panel::kAccessoryCombo);
             const int count = static_cast<int>(
                 SendMessageA(accessoryCombo, CB_GETCOUNT, 0, 0));
             for (int index = 0; index < count; ++index) {
@@ -443,8 +446,8 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
                              reinterpret_cast<LPARAM>(name));
             }
             SendMessageA(frameCombo, CB_SETCURSEL, 0, 0);
-            SendMessageA(GetDlgItem(hwnd, 439), BM_SETCHECK, BST_UNCHECKED, 0);
-            Sub44D780(app);
+            SendMessageA(GetDlgItem(hwnd, panel::kModelVisibleCheckbox), BM_SETCHECK, BST_UNCHECKED, 0);
+            RebuildCameraModePanel(app);
             app->state.optflag[0] = 1;
             PostModelReload2(app);
             HandleWindowSize(app);
@@ -467,26 +470,26 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
         for (int id = 0xED; id <= 0xF2; ++id)
             EnableMenuItem(menu, id, MF_ENABLED);
 
-        EnableWindow(GetDlgItem(hwnd, 424), FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kExpandShrinkButton), FALSE);
         const bool canRegister =
             app->ClipboardCounts().accessories != 0 ||
             app->ClipboardCounts().lights != 0 ||
             app->ClipboardCounts().shadows != 0 ||
             app->ClipboardCounts().cameras != 0 ||
             app->ClipboardCounts().gravity != 0;
-        EnableWindow(GetDlgItem(hwnd, 421), canRegister ? TRUE : FALSE);
-        EnableWindow(GetDlgItem(hwnd, 422), FALSE);
-        SendMessageA(GetDlgItem(hwnd, 440), BM_SETCHECK, BST_UNCHECKED, 0);
-        SendMessageA(GetDlgItem(hwnd, 441), BM_SETCHECK, BST_UNCHECKED, 0);
-        HWND optionWindow = app->state.modelInfoDialog;
+        EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), canRegister ? TRUE : FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton), FALSE);
+        SendMessageA(GetDlgItem(hwnd, panel::kShadowCheckbox), BM_SETCHECK, BST_UNCHECKED, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kAddBlendCheckbox), BM_SETCHECK, BST_UNCHECKED, 0);
+        HWND optionWindow = app->state.edgeThicknessDialog;
         if (optionWindow != nullptr) {
             DestroyWindow(optionWindow);
-            app->state.modelInfoDialog = nullptr;
+            app->state.edgeThicknessDialog = nullptr;
         }
         SetPhysicsMenuState(hwnd, MFS_DISABLED);
     } else {
-        if (app->state.v9ed9c == 2)
-            app->state.v9ed9c = 0;
+        if (app->state.coordinateSystem == 2)
+            app->state.coordinateSystem = 0;
 
         const int selectedSlot = FindModelSlotByComboId(app, selection);
         if (selectedSlot >= 0) {
@@ -500,15 +503,15 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
         }
 
         if (app->state.optflag[0] != 0) {
-            Sub44D610(app);
+            RebuildModelModePanel(app);
             app->state.optflag[0] = 0;
             PostModelReload2(app);
             HandleWindowSize(app);
             InvalidateRect(hwnd, nullptr, FALSE);
         } else if (app->CameraParentModel() >= 0 &&
-                   app->state.v9ed98 != 0) {
+                   app->state.followCameraEnabled != 0) {
             const int oldSelection =
-                app->state.a042C;
+                app->state.mainModelComboSelection;
             int oldSlot = 0;
             if (oldSelection != 0) {
                 const int found = FindModelSlotByComboId(app, oldSelection);
@@ -526,11 +529,11 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
             }
         }
 
-        app->state.a042C = selection;
-        SendMessageA(GetDlgItem(hwnd, 491), BM_SETCHECK, BST_UNCHECKED, 0);
-        SendMessageA(GetDlgItem(hwnd, 492), BM_SETCHECK, BST_UNCHECKED, 0);
-        SendMessageA(GetDlgItem(hwnd, 493), BM_SETCHECK, BST_UNCHECKED, 0);
-        SendMessageA(GetDlgItem(hwnd, 490), BM_SETCHECK, BST_CHECKED, 0);
+        app->state.mainModelComboSelection = selection;
+        SendMessageA(GetDlgItem(hwnd, panel::kBoxSelectRadio), BM_SETCHECK, BST_UNCHECKED, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneMoveRadio), BM_SETCHECK, BST_UNCHECKED, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneRotateRadio), BM_SETCHECK, BST_UNCHECKED, 0);
+        SendMessageA(GetDlgItem(hwnd, panel::kBoneSelectRadio), BM_SETCHECK, BST_CHECKED, 0);
         app->EditMode() = ViewportEditMode::Bone;
 
         HMENU menu = GetMenu(hwnd);
@@ -548,28 +551,28 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
         for (int id = 0xED; id <= 0xF2; ++id)
             EnableMenuItem(menu, id, MF_GRAYED);
 
-        EnableWindow(GetDlgItem(hwnd, 424), TRUE);
-        EnableWindow(GetDlgItem(hwnd, 421), FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kExpandShrinkButton), TRUE);
+        EnableWindow(GetDlgItem(hwnd, panel::kPasteButton), FALSE);
         const bool hasMainSelection =
             app->ClipboardCounts().bones != 0;
         const bool hasOtherSelection =
             app->ClipboardCounts().morphs != 0 ||
             app->ClipboardCounts().displays != 0;
-        EnableWindow(GetDlgItem(hwnd, 421),
+        EnableWindow(GetDlgItem(hwnd, panel::kPasteButton),
                      (hasOtherSelection || hasMainSelection) ? TRUE : FALSE);
-        EnableWindow(GetDlgItem(hwnd, 422),
+        EnableWindow(GetDlgItem(hwnd, panel::kReversePasteButton),
                      hasMainSelection ? TRUE : FALSE);
 
         unsigned char* model = app->SelectedModel();
-        HWND optionWindow = app->state.modelInfoDialog;
+        HWND optionWindow = app->state.edgeThicknessDialog;
         if (optionWindow != nullptr && model != nullptr) {
             char text[256]{};
             sprintf_s(text, "%3.2f", mikudancestudio::mdl::Mdl(model)->edgeScale);
-            HWND edit = GetDlgItem(optionWindow, 646);
+            HWND edit = GetDlgItem(optionWindow, panel::kEdgeThicknessEdit);
             SendMessageA(edit, EM_SETSEL, 0, GetWindowTextLengthA(edit));
             SendMessageA(edit, EM_REPLACESEL, 0,
                          reinterpret_cast<LPARAM>(text));
-            SendMessageA(GetDlgItem(optionWindow, 647), 0x405 /*TBM_SETPOS*/, TRUE,
+            SendMessageA(GetDlgItem(optionWindow, panel::kEdgeThicknessSlider), TBM_SETPOS, TRUE,
                          static_cast<LPARAM>(
                              mikudancestudio::mdl::Mdl(model)->edgeScale *
                              100.0f));
@@ -581,13 +584,13 @@ void Sub44D940(MMDApp* app) {  // 0x44D940
     }
 
     if (app->state.optflag[0] != 0) {
-        EnableWindow(GetDlgItem(hwnd, 400), FALSE);
-        EnableWindow(GetDlgItem(hwnd, 401), FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), FALSE);
+        EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);
     } else {
         unsigned char* model = app->SelectedModel();
-        EnableWindow(GetDlgItem(hwnd, 400),
+        EnableWindow(GetDlgItem(hwnd, panel::kUndoButton),
                      model != nullptr && model[12732] != 0);
-        EnableWindow(GetDlgItem(hwnd, 401),
+        EnableWindow(GetDlgItem(hwnd, panel::kRedoButton),
                      model != nullptr && model[12733] != 0);
     }
     PostLanguageSweep(app);

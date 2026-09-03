@@ -110,7 +110,7 @@ void PrepareFrameTextOverlay(MMDApp* app) {  // 0x423420
         if (fps > 0) {
             float xOffset = 15.0f;
             const bool numeric = app->PlaybackActive() != 0 ||
-                app->state.flag672800 == 0;
+                app->state.frameVolumeControlEnabled == 0;
             if (numeric) {
                 char value[256]{};
                 std::snprintf(value, sizeof(value), "%3d", fps);
