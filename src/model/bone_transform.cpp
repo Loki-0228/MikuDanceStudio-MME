@@ -142,7 +142,7 @@ void WriteIkProbe(unsigned char* model, int chainIndex, int iteration,
 
 void WriteIkPrecheck(unsigned char* model, int chainIndex, int iteration,
                      int linkIndex, const float d1[3], const float d2[3],
-                     double diff2, const mdl::BoneRecord& target,
+                     float diff2, const mdl::BoneRecord& target,
                      const mdl::BoneRecord& root,
                      const mdl::BoneRecord& link) {
     if (InterlockedCompareExchange(&gIkProbeArmed, 0, 0) == 0 ||
@@ -162,10 +162,9 @@ void WriteIkPrecheck(unsigned char* model, int chainIndex, int iteration,
     WriteFloatBits(stream, d1, 3);
     std::fputs(",\n  \"d2_bits\": ", stream);
     WriteFloatBits(stream, d2, 3);
-    std::uint64_t diffBits = 0;
+    std::uint32_t diffBits = 0;
     std::memcpy(&diffBits, &diff2, sizeof(diffBits));
-    std::fprintf(stream, ",\n  \"diff2_bits\": \"%016llX\"",
-                 static_cast<unsigned long long>(diffBits));
+    std::fprintf(stream, ",\n  \"diff2_bits\": \"%08X\"", diffBits);
     const mdl::BoneRecord* records[] = {&target, &root, &link};
     const char* names[] = {"target_matrix_bits", "root_matrix_bits",
                            "link_matrix_bits"};
@@ -185,8 +184,10 @@ void WriteIkPrecheck(unsigned char* model, int chainIndex, int iteration,
 
 #endif  // MIKUDANCESTUDIO_DIAG
 
-// (float)pi as the original x87 constant (0x40490FDB promoted to double)
-constexpr double kPiF = 3.140000104904175;
+// The original's truncated "pi": 0x4048F5C3 (x64 dword_7FF7CB552B90,
+// 3.1400001f - NOT float(pi), the mantissa-truncated constant both
+// binaries carry).
+constexpr float kPiF = 3.140000104904175f;
 constexpr float kEps = 1.1920929e-7f;              // 0x493BF7 FLT_EPSILON
 constexpr float kHalfPi = 1.570796012878418f;      // 0x495947 (float pi/2)
 constexpr float kKneeClamp = 1.535889f;            // 0x4959CC
@@ -237,13 +238,12 @@ void Vec3Norm(float out[3], const float in[3]) {
         api->vec3Normalize(out, in);
         return;
     }
-    const double len = std::sqrt(static_cast<double>(in[0]) * in[0] +
-                                 static_cast<double>(in[1]) * in[1] +
-                                 static_cast<double>(in[2]) * in[2]);
-    if (len > 0.0) {
-        out[0] = static_cast<float>(in[0] / len);
-        out[1] = static_cast<float>(in[1] / len);
-        out[2] = static_cast<float>(in[2] / len);
+    const float len = std::sqrt(in[0] * in[0] + in[1] * in[1] +
+                                in[2] * in[2]);
+    if (len > 0.0f) {
+        out[0] = in[0] / len;
+        out[1] = in[1] / len;
+        out[2] = in[2] / len;
     } else {
         out[0] = out[1] = out[2] = 0.0f;
     }
@@ -345,6 +345,9 @@ private:
 
 // quat of the source bone's +116 matrix scaled about its own axis by
 // `rate`, post-multiplied onto q (0x493B12..0x493CA4 pattern).
+// x64 (0x7FF7CB4DA373..0x7FF7CB4DA476): acosf/sqrtf/sinf/cosf and a
+// divss sin/len - single precision end to end; kPiF is the float image
+// 0x4048F5C3 (dword_7FF7CB552B90).
 void InheritRotQuat(float q[4], const mdl::BoneRecord* bones, int srcIdx,
                     float rate) {
     D3 d3;
@@ -352,30 +355,29 @@ void InheritRotQuat(float q[4], const mdl::BoneRecord* bones, int srcIdx,
     std::memcpy(&rot, bones[srcIdx].matLocal, sizeof(rot));
     float sq[4];
     d3.quatFromMatrix(sq, &rot);
-    if (sq[3] <= 1.0) {
-        if (sq[3] < -1.0) sq[3] = -1.0f;
+    if (sq[3] <= 1.0f) {
+        if (sq[3] < -1.0f) sq[3] = -1.0f;
     } else {
         sq[3] = 1.0f;
     }
-    double angle = std::acos(sq[3]);
-    if (sq[3] < 0.0)
+    float angle = std::acos(sq[3]);
+    if (sq[3] < 0.0f)
         angle -= kPiF;
-    const double len = std::sqrt(static_cast<double>(sq[0]) * sq[0] +
-                                 static_cast<double>(sq[1]) * sq[1] +
-                                 static_cast<double>(sq[2]) * sq[2]);
+    const float len = std::sqrt(sq[0] * sq[0] + sq[1] * sq[1] +
+                                sq[2] * sq[2]);
     float part[4];
-    if (angle == 0.0 || len < kEps) {
+    if (angle == 0.0f || len < kEps) {
         part[0] = 0.0f;
         part[1] = 0.0f;
         part[2] = 0.0f;
         part[3] = 1.0f;
     } else {
-        const double scaled = angle * rate;
-        const float s = static_cast<float>(std::sin(scaled) / len);
+        const float scaled = angle * rate;
+        const float s = std::sin(scaled) / len;
         part[0] = s * sq[0];
         part[1] = s * sq[1];
         part[2] = s * sq[2];
-        part[3] = static_cast<float>(std::cos(scaled));
+        part[3] = std::cos(scaled);
     }
     float out[4];
     QuatMul(out, part, q);
@@ -478,9 +480,13 @@ float Dot3X87(const float a[3], const float b[3]) {
 #endif
 }
 
-double SquaredDiff3X87(const float a[3], const float b[3]) {
+// x64 0x7FF7CB4DB862..0x7FF7CB4DB88A: the CCD alignment test subtracts,
+// squares and accumulates in SINGLE precision (subss/mulss/addss, the
+// y term first, then x, then z) and compares against comiss 1e-7f
+// (dword_7FF7CB552C48).
+float SquaredDiff3X87(const float a[3], const float b[3]) {
 #if defined(_M_IX86)
-    double result;
+    float result;
     __asm {
         mov eax, a
         mov edx, b
@@ -495,14 +501,14 @@ double SquaredDiff3X87(const float a[3], const float b[3]) {
         fsub dword ptr [edx+8]
         fmul st, st
         faddp st(1), st
-        fstp qword ptr [result]
+        fstp dword ptr [result]
     }
     return result;
 #else
-    const double dx = a[0] - b[0];
-    const double dy = a[1] - b[1];
-    const double dz = a[2] - b[2];
-    return dx * dx + dy * dy + dz * dz;
+    const float dx = a[0] - b[0];
+    const float dy = a[1] - b[1];
+    const float dz = a[2] - b[2];
+    return dy * dy + dx * dx + dz * dz;
 #endif
 }
 
@@ -639,32 +645,32 @@ void BoneTransform_StandardLocals(D3& d3, mdl::BoneRecord* boneRecords,
             bone.rotQuat2[3] = 1.0f;
         }
         if (bone.type == mdl::BoneType::CoRotate) {    // 0x493F1F
+            // x64 0x7FF7CB4DD069..0x7FF7CB4DD18A: acosf/sqrtf/sinf/cosf,
+            // ((float)rate * angle) / 100.0f (divss), single precision.
             const mdl::BoneRecord& tail = boneRecords[bone.tailBone];
             float sq[4] = {tail.physicsQuat[0], tail.physicsQuat[1], tail.physicsQuat[2],
                            tail.physicsQuat[3]};
-            if (sq[3] <= 1.0) {
-                if (sq[3] < -1.0) sq[3] = -1.0f;
+            if (sq[3] <= 1.0f) {
+                if (sq[3] < -1.0f) sq[3] = -1.0f;
             } else {
                 sq[3] = 1.0f;
             }
-            double angle = std::acos(sq[3]);
-            if (sq[3] < 0.0)
+            float angle = std::acos(sq[3]);
+            if (sq[3] < 0.0f)
                 angle -= kPiF;
-            const double len = std::sqrt(
-                static_cast<double>(sq[0]) * sq[0] +
-                static_cast<double>(sq[1]) * sq[1] +
-                static_cast<double>(sq[2]) * sq[2]);
-            if (angle == 0.0 || len < kEps) {
+            const float len = std::sqrt(sq[0] * sq[0] + sq[1] * sq[1] +
+                                        sq[2] * sq[2]);
+            if (angle == 0.0f || len < kEps) {
                 bone.physicsQuat[0] = bone.physicsQuat[1] = bone.physicsQuat[2] = 0.0f;
                 bone.physicsQuat[3] = 1.0f;
             } else {
-                const double scaled = angle *
-                    static_cast<double>(bone.tailIdx) / 100.0;
-                const float s = static_cast<float>(std::sin(scaled) / len);
+                const float scaled =
+                    (static_cast<float>(bone.tailIdx) * angle) / 100.0f;
+                const float s = std::sin(scaled) / len;
                 bone.physicsQuat[0] = s * sq[0];
                 bone.physicsQuat[1] = s * sq[1];
                 bone.physicsQuat[2] = s * sq[2];
-                bone.physicsQuat[3] = static_cast<float>(std::cos(scaled));
+                bone.physicsQuat[3] = std::cos(scaled);
             }
         }
         float q[4] = {bone.physicsQuat[0], bone.physicsQuat[1], bone.physicsQuat[2], bone.physicsQuat[3]};
@@ -873,12 +879,12 @@ void BoneTransform_CcdIk(D3& d3, unsigned char* m,
                                linkPos[2] - eff[2]};
                 Vec3Norm(d1, d1);
                 Vec3Norm(d2, d2);
-                const double diff2 = SquaredDiff3X87(d1, d2);
+                const float diff2 = SquaredDiff3X87(d1, d2);
 #ifdef MIKUDANCESTUDIO_DIAG
                 WriteIkPrecheck(m, ci, iter, li, d1, d2, diff2, target,
                                 root, link);
 #endif
-                if (diff2 < static_cast<double>(1e-7f)) { // 0x494F37
+                if (diff2 < 1e-7f) {                   // 0x494F37 / x64 comiss
                     iter = loops;                      // skip all iterations
                     exitAll = true;
                     break;
@@ -973,27 +979,34 @@ void BoneTransform_CcdIk(D3& d3, unsigned char* m,
                         axis[2] = fz;
                     }
                 }
-                // LABEL_136: half-angle with alignment and weight clamp
+                // LABEL_136: half-angle with alignment and weight clamp.
+                // x64 0x7FF7CB4DC0A8..0x7FF7CB4DC194: single precision -
+                // float dot (3x mulss + 2 addss), +-1.0f clamp (comiss
+                // against 1.0f / -1.0f, NOT the slerp's 0.999999), acosf,
+                // half = acos * 0.5f * align (mulss chain), the limit
+                // ((float)(li+1) * chainAngle) * +-2.0f, and rotq built
+                // from sinf(half)/cosf(half) with per-component mulss.
                 float dot = Dot3X87(d2, d1);
-                if (dot > 1.0)
+                if (dot > 1.0f)
                     dot = 1.0f;
-                else if (dot < -1.0)
+                else if (dot < -1.0f)
                     dot = -1.0f;
-                double half = std::acos(dot) * 0.5 * align;
-                const double wlim = 2.0 * static_cast<double>(chainAngle) *
-                                     static_cast<double>(li + 1);
-                if (half >= 0.0) {
+                float half = (std::acos(dot) * 0.5f) * align;
+                const float wlim =
+                    (static_cast<float>(li + 1) * chainAngle) * 2.0f;
+                if (half >= 0.0f) {
                     if (wlim < half)
                         half = wlim;
                 } else {
                     if (-wlim > half)
                         half = -wlim;
                 }
+                const float sinHalf = std::sin(half);
                 float rotq[4] = {
-                    static_cast<float>(std::sin(half)) * axis[0],
-                    static_cast<float>(std::sin(half)) * axis[1],
-                    static_cast<float>(std::sin(half)) * axis[2],
-                    static_cast<float>(std::cos(half))};
+                    sinHalf * axis[0],
+                    sinHalf * axis[1],
+                    sinHalf * axis[2],
+                    std::cos(half)};
                 float acc[4] = {link.rotQuat2[0], link.rotQuat2[1],
                                 link.rotQuat2[2], link.rotQuat2[3]};
 #ifdef MIKUDANCESTUDIO_DIAG
@@ -1178,35 +1191,34 @@ void BoneTransform_PostIkPass(D3& d3, mdl::BoneRecord* boneRecords,
             bone.hasFlag == 0)
             continue;
         if (bone.type == mdl::BoneType::CoRotate) {    // 0x4968F3
+            // x64 twin of the phase-B block (acosf/sqrtf/sinf/cosf).
             const mdl::BoneRecord& tail = boneRecords[bone.tailBone];
             const float* sourceQuat =
                 tail.type == mdl::BoneType::UnderIk ? tail.rotQuat2
                                                     : tail.physicsQuat;
             float sq[4] = {sourceQuat[0], sourceQuat[1], sourceQuat[2],
                            sourceQuat[3]};
-            if (sq[3] <= 1.0) {
-                if (sq[3] < -1.0) sq[3] = -1.0f;
+            if (sq[3] <= 1.0f) {
+                if (sq[3] < -1.0f) sq[3] = -1.0f;
             } else {
                 sq[3] = 1.0f;
             }
-            double angle = std::acos(sq[3]);
-            if (sq[3] < 0.0)
+            float angle = std::acos(sq[3]);
+            if (sq[3] < 0.0f)
                 angle -= kPiF;
-            const double len = std::sqrt(
-                static_cast<double>(sq[0]) * sq[0] +
-                static_cast<double>(sq[1]) * sq[1] +
-                static_cast<double>(sq[2]) * sq[2]);
-            if (angle == 0.0 || len < kEps) {
+            const float len = std::sqrt(sq[0] * sq[0] + sq[1] * sq[1] +
+                                        sq[2] * sq[2]);
+            if (angle == 0.0f || len < kEps) {
                 bone.physicsQuat[0] = bone.physicsQuat[1] = bone.physicsQuat[2] = 0.0f;
                 bone.physicsQuat[3] = 1.0f;
             } else {
-                const double scaled = angle *
-                    static_cast<double>(bone.tailIdx) / 100.0;
-                const float s = static_cast<float>(std::sin(scaled) / len);
+                const float scaled =
+                    (static_cast<float>(bone.tailIdx) * angle) / 100.0f;
+                const float s = std::sin(scaled) / len;
                 bone.physicsQuat[0] = s * sq[0];
                 bone.physicsQuat[1] = s * sq[1];
                 bone.physicsQuat[2] = s * sq[2];
-                bone.physicsQuat[3] = static_cast<float>(std::cos(scaled));
+                bone.physicsQuat[3] = std::cos(scaled);
             }
         }
         float q[4] = {bone.physicsQuat[0], bone.physicsQuat[1], bone.physicsQuat[2], bone.physicsQuat[3]};

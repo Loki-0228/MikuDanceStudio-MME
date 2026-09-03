@@ -86,18 +86,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         } else {
             std::uint32_t nowLow = timeGetTime();           // v9
             std::uint32_t nowHigh = 0;                       // v10
-            // v13 = (now - last) * 0.001  (64-bit delta, double mul)
+            // v13 = (now - last) * 0.001.  x64 0x7FF7CB4FB4B0..0x7FF7CB4FB4B8:
+            // the subtraction runs against the FULL 64-bit last tick
+            // (sub rax, rdi), then one cvtsi2ss and a single-precision
+            // mulss by the 0.001f slot (xmm7, same bits as MilliToSec).
+            // The old port multiplied in double.
+            const std::int64_t lastTick =
+                (static_cast<std::int64_t>(timeHigh) << 32) | timeLow;
             float delta = static_cast<float>(
-                static_cast<double>(nowLow - timeLow) * 0.001000000047497451);
+                static_cast<std::int64_t>(nowLow) - lastTick) * 0.001f;
             app->DeltaTime() = delta;                        // [Block+0xA077C]
 
-            // v14 = 1/fpsLimit - delta;  Sleep when cap enabled and positive.
+            // v14 = 1/fpsLimit - delta (divss + subss, both float);
+            // Sleep when cap enabled and positive.
             float sleepSec = 1.0f / app->FpsLimit() - delta;
             if (app->RecordingWindow() == nullptr && sleepSec > 0.0f) {
                 DWORD pre = timeGetTime();
                 Sleep(static_cast<DWORD>(sleepSec * 1000.0f));
-                std::uint64_t addMs =
-                    static_cast<std::uint64_t>(sleepSec / 0.001000000047497451);
+                // x64 0x7FF7CB4FB4FD: divss by the same 0.001f slot, then
+                // cvttss2si r64.  Float division, not double: the last-ulp
+                // difference is magnified by the truncation below.
+                std::uint64_t addMs = static_cast<std::uint64_t>(
+                    static_cast<std::int64_t>(sleepSec / 0.001f));
                 nowHigh = static_cast<std::uint32_t>(addMs >> 32);
                 nowLow += static_cast<std::uint32_t>(addMs);
                 app->DeltaTime() = sleepSec + app->DeltaTime();

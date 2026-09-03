@@ -144,13 +144,18 @@ struct ModelRecord {
 #if defined(_M_X64)
     // The two pointer fields above grow by eight bytes on x64; preserve the
     // directly recovered offsets of the following timeline fields.
-    RawPad<996> gap15;  // x64: 0x3158..0x353c (unrecovered)
-#else
-    RawPad<1004> gap15;  // 11708..12712 (unrecovered)
 #endif
-#if defined(_M_X64)
-    RawPad<8> x64UndoStorage;  // x64-only undo bookkeeping
-#endif
+    // Bone-list line bookkeeping written by PostLanguageSweep (0x42F1E0) and
+    // read by the panel paint (0x414610) and the name-column click path
+    // (0x446A70): the frame-1 head line, the 200 per-line type bytes (1 =
+    // bone row / 2 = face row / rigid type otherwise) and the 200 per-line
+    // records (bone index, rigid index or -1-morph; -999 = no record).
+    // x86 11708/11712/11912; x64 0x3158/0x315C/0x3224 (E-build click
+    // handler reads the type bytes at [model+0x315C] and the records at
+    // [model+0x3224], 0x7FF7CB45A2CE / 0x7FF7CB459F00).
+    std::int32_t boneListSelLine;         // 11708 x86 / 0x3158 x64
+    unsigned char boneListRowType[200];   // 11712 x86 / 0x315C x64
+    std::int32_t boneListRowRecord[200];  // 11912 x86 / 0x3224 x64
     std::int32_t boneListRows;  // 12712  (scrollbar 0x47C0A0)
     std::int32_t boneListPos;  // 12716
     std::uint32_t maxFrame;  // 12720  (model timeline upper bound)
@@ -346,6 +351,12 @@ static_assert(offsetof(ModelRecord, boneKeyIndices) == 11700,
               "boneKeyIndices x86");
 static_assert(offsetof(ModelRecord, morphKeyIndices) == 11704,
               "morphKeyIndices x86");
+static_assert(offsetof(ModelRecord, boneListSelLine) == 11708,
+              "boneListSelLine x86");
+static_assert(offsetof(ModelRecord, boneListRowType) == 11712,
+              "boneListRowType x86");
+static_assert(offsetof(ModelRecord, boneListRowRecord) == 11912,
+              "boneListRowRecord x86");
 static_assert(offsetof(ModelRecord, boneListRows) == 12712,
               "boneListRows x86");
 static_assert(offsetof(ModelRecord, boneListPos) == 12716,
@@ -474,6 +485,14 @@ static_assert(offsetof(ModelRecord, boneKeyIndices) == 0x3148,
               "boneKeyIndices x64");
 static_assert(offsetof(ModelRecord, morphKeyIndices) == 0x3150,
               "morphKeyIndices x64");
+static_assert(offsetof(ModelRecord, boneListSelLine) == 0x3158,
+              "boneListSelLine x64");
+static_assert(offsetof(ModelRecord, boneListRowType) == 0x315C,
+              "boneListRowType x64");
+static_assert(offsetof(ModelRecord, boneListRowRecord) == 0x3224,
+              "boneListRowRecord x64");
+static_assert(offsetof(ModelRecord, boneListRows) == 0x3544,
+              "boneListRows x64");
 static_assert(offsetof(ModelRecord, rigidTable) == 13672,
               "rigidTable x64");
 static_assert(offsetof(ModelRecord, jointTable) == 13680,

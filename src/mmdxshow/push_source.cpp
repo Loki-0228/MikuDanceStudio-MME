@@ -101,17 +101,48 @@ DEFINE_GUID(MMDXSHOW_IID_IFilterMapper,
 HRESULT RegisterFilterMapper1(const MMDXSHOW_FILTER_SETUP* pSetup,
                               IFilterMapper* pMapper, BOOL bRegister);
 
-// CPushPinDIBSq object offsets touched by this filter (0x5B8-byte object;
-// reached through the m_pPin member at filter +0x74):
-//   +0x5A0 (1440) BITMAPINFOHEADER* (0x2C bytes allocated, 0x28 copied)
-//   +0x5A4 (1444) int n
-//   +0x5A8 (1448) REFERENCE_TIME AvgTimePerFrame (64-bit)
-//   +0x5B0 (1456) flag byte, set by SetBitmapInfo
-//   +0x5B1 (1457) streaming-state byte (Get/Set by IPushSource)
-//   +0x5B2 (1458) flag byte, set by StartStreaming and by the dtor
-//   +0x5B3 (1459) "streaming begun" latch, set by BeginStreaming and the dtor;
-//                 guards EVERY IPushSource method with E_FAIL
-//   +0x5B4 (1460) DWORD stored by StartStreaming's second parameter
+// CPushPinDIBSq object offsets touched by this filter (x86 0x5B8-byte object,
+// reached through the m_pPin member at filter +0x74; the x64 VC10 rebuild is
+// 0x660 bytes, m_pPin at +0xB8):
+//   x86 +0x5A0 / x64 +0x630  BITMAPINFOHEADER* (0x2C bytes allocated, 0x28 copied)
+//   x86 +0x5A4 / x64 +0x640  int n
+//   x86 +0x5A8 / x64 +0x648  REFERENCE_TIME AvgTimePerFrame (64-bit)
+//   x86 +0x5B0 / x64 +0x650  flag byte, set by SetBitmapInfo
+//   x86 +0x5B1 / x64 +0x651  streaming-state byte (Get/Set by IPushSource)
+//   x86 +0x5B2 / x64 +0x652  flag byte, set by StartStreaming and by the dtor
+//   x86 +0x5B3 / x64 +0x653  "streaming begun" latch, set by BeginStreaming
+//                            and the dtor; guards EVERY IPushSource method
+//                            with E_FAIL
+//   x86 +0x5B4 / x64 +0x658  pointer stored by StartStreaming's second parameter
+#if defined(_M_X64)
+enum PinSlot {
+    kPinOff_PushCfg     = 0x630,
+    kPinOff_PushExtra   = 0x640,
+    kPinOff_AvgPerFrame = 0x648,
+    kPinOff_BitmapSet   = 0x650,
+    kPinOff_FrameAck    = 0x651,
+    kPinOff_FrameReady  = 0x652,
+    kPinOff_StreamEnded = 0x653,
+    kPinOff_FrameBits   = 0x658,
+    kFilterOff_PushSrc  = 0xB0,   // IPushSource sub-object
+    kFilterAllocSize    = 0xC0,   // operator new size at 0x180001A60
+    kPinAllocSize       = 0x660   // operator new size at 0x1800019D2
+};
+#else
+enum PinSlot {
+    kPinOff_PushCfg     = 0x5A0,
+    kPinOff_PushExtra   = 0x5A4,
+    kPinOff_AvgPerFrame = 0x5A8,
+    kPinOff_BitmapSet   = 0x5B0,
+    kPinOff_FrameAck    = 0x5B1,
+    kPinOff_FrameReady  = 0x5B2,
+    kPinOff_StreamEnded = 0x5B3,
+    kPinOff_FrameBits   = 0x5B4,
+    kFilterOff_PushSrc  = 0x70,   // IPushSource sub-object
+    kFilterAllocSize    = 0x78,   // operator new size at 0x10001B70
+    kPinAllocSize       = 0x5B8   // operator new size at 0x10001AF7
+};
+#endif
 
 // VA 0x100018B0 - CPushSourceDIBSq::NonDelegatingQueryInterface (primary
 // vtable slot +0x00; the only primary-slot override besides the dtor).
@@ -120,8 +151,8 @@ HRESULT STDMETHODCALLTYPE CPushSourceDIBSq::NonDelegatingQueryInterface(
 {
     if (!MMDxShow_IsEqualGUID16(&riid, &MMDXSHOW_IID_IPushSource))   // 0x10001000 / .rdata 0x1000830C
         return CBaseFilter::NonDelegatingQueryInterface(riid, ppv);  // 0x10002790, non-virtual
-    return MMDxShow_ReturnSelf(this ? reinterpret_cast<BYTE*>(this) + 0x70
-                                    : NULL,    // 0x10004FD0 with this+0x70
+    return MMDxShow_ReturnSelf(this ? reinterpret_cast<BYTE*>(this) + kFilterOff_PushSrc
+                                    : NULL,    // 0x10004FD0 with this+0x70 (x64 +0xB0)
                              ppv);
 }
 
@@ -161,24 +192,28 @@ HRESULT CPushSourceDIBSq::SetBitmapInfo(const void* pBitmapInfo,
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
-    if (pb[1459] != 0)                     // pin+0x5B3: streaming begun
+    if (pb[kPinOff_StreamEnded] != 0)      // streaming-begun latch
         return E_FAIL;                     // 0x80004005
 
     // operator new(0x2C) — the VC8 CRT new in this DLL returns NULL on
     // exhaustion and the original then memcpys into NULL; keep the unchecked
     // shape (faithful).
     void* p = operator new(0x2C, std::nothrow);
-    *reinterpret_cast<void**>(pb + 1440) = p;
+    *reinterpret_cast<void**>(pb + kPinOff_PushCfg) = p;
     memcpy(p, pBitmapInfo, 0x28);          // 40 bytes = BITMAPINFOHEADER
     // (0x2C allocated, 0x28 copied — the 4 trailing bytes are never written;
-    //  a pre-existing pin+0x5A0 allocation is overwritten WITHOUT delete.)
-    *reinterpret_cast<int*>(pb + 1444) = n;
+    //  a pre-existing push-cfg allocation is overwritten WITHOUT delete.)
+    *reinterpret_cast<int*>(pb + kPinOff_PushExtra) = n;
 
-    *reinterpret_cast<LONGLONG*>(pb + 1448) =
-        10000000 / (LONGLONG)(unsigned __int64)fps;      // AvgTimePerFrame
+    // AvgTimePerFrame.  The x86 binary converts fps straight to unsigned
+    // __int64 (x87 path); the VC10 x64 rebuild truncates to 32-bit first and
+    // zero-extends — identical results for any fps below 2^31, so the x86
+    // shape is kept for both flavours.
+    *reinterpret_cast<LONGLONG*>(pb + kPinOff_AvgPerFrame) =
+        10000000 / (LONGLONG)(unsigned __int64)fps;
 
-    pb[1456] = 1;                          // pin+0x5B0
-    pb[1457] = 1;                          // pin+0x5B1 (state byte -> 1)
+    pb[kPinOff_BitmapSet] = 1;
+    pb[kPinOff_FrameAck]  = 1;             // state byte -> 1
     return S_OK;                           // 0
 }
 
@@ -189,42 +224,44 @@ HRESULT CPushSourceDIBSq::GetStreamingState(void* pState)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
-    if (pb[1459] != 0)                     // pin+0x5B3: streaming begun
+    if (pb[kPinOff_StreamEnded] != 0)      // streaming begun
         return E_FAIL;
-    *reinterpret_cast<BYTE*>(pState) = pb[1457];   // one byte, pin+0x5B1
+    *reinterpret_cast<BYTE*>(pState) = pb[kPinOff_FrameAck];   // one byte
     return S_OK;
 }
 
 // VA 0x10001800 - IPushSource slot +0x14 - StartStreaming
 // (was PushSource_v14_StartStreaming).
 // Binary ABI: __stdcall(this, DWORD dwBits), retn 8; dwBits is stored verbatim
-// at pin+0x5B4 (0x10001828: mov [ecx+5B4h], edx).
-HRESULT CPushSourceDIBSq::StartStreaming(DWORD dwBits)
+// at pin+0x5B4 (0x10001828: mov [ecx+5B4h], edx).  The stored value is the
+// EXE's frame-bits pointer, so the x64 rebuild stores the full 8-byte slot
+// (0x180001730: mov [rbx+658h], rdx) — DWORD_PTR keeps both shapes.
+HRESULT CPushSourceDIBSq::StartStreaming(DWORD_PTR dwBits)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
-    if (pb[1459] != 0)                     // pin+0x5B3: streaming begun
+    if (pb[kPinOff_StreamEnded] != 0)      // streaming begun
         return E_FAIL;
-    pb[1457] = 0;                          // pin+0x5B1 = 0
-    *reinterpret_cast<DWORD*>(pb + 1460) = dwBits;   // pin+0x5B4
-    pb[1458] = 1;                          // pin+0x5B2 = 1
+    pb[kPinOff_FrameAck] = 0;
+    *reinterpret_cast<DWORD_PTR*>(pb + kPinOff_FrameBits) = dwBits;
+    pb[kPinOff_FrameReady] = 1;
     MMDXTrace("StartStreaming bits=%x ready->1\n", (unsigned)dwBits);
     return S_OK;
 }
 
 // VA 0x10001840 - IPushSource slot +0x18 - BeginStreaming
 // (was PushSource_v18_BeginStreaming).
-// Latches pin+0x5B3 — from here on every IPushSource method returns E_FAIL
-// until the object is destroyed.
+// Latches the streaming-begun byte — from here on every IPushSource method
+// returns E_FAIL until the object is destroyed.
 HRESULT CPushSourceDIBSq::BeginStreaming(void)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
-    if (pb[1459] != 0)                     // pin+0x5B3: streaming begun
+    if (pb[kPinOff_StreamEnded] != 0)      // streaming begun
         return E_FAIL;
-    pb[1459] = 1;                          // pin+0x5B3 = 1
-    pb[1457] = 0;                          // pin+0x5B1 = 0
-    pb[1458] = 0;                          // pin+0x5B2 = 0
+    pb[kPinOff_StreamEnded] = 1;
+    pb[kPinOff_FrameAck]   = 0;
+    pb[kPinOff_FrameReady] = 0;
     return S_OK;
 }
 
@@ -237,7 +274,7 @@ HRESULT CPushSourceDIBSq::GetRate(float* pRate)
 {
     BYTE* pb = reinterpret_cast<BYTE*>(m_pPin);
 
-    if (pb[1459] != 0)                     // pin+0x5B3: streaming begun
+    if (pb[kPinOff_StreamEnded] != 0)      // streaming begun
         return E_FAIL;
     *pRate = 1.02f;
     return S_OK;
@@ -267,15 +304,16 @@ HRESULT CPushSourceDIBSq::GetRate(float* pRate)
 // VA 0x10001A70 - CPushSourceDIBSq constructor.
 // Binary body: CSource base ctor 0x10001E90 with pName = NULL and the filter
 // CLSID (passed by value there; the header takes it by pointer), four vtable
-// stores (implicit in C++), then operator new(0x5B8) + CPushPinDIBSq ctor
-// 0x10001960(pin, phr, this), the pin pointer parked at +0x74, and
+// stores (implicit in C++), then operator new(0x5B8) (x64 rebuild: 0x660 at
+// 0x1800019D2) + CPushPinDIBSq ctor 0x10001960(pin, phr, this), the pin
+// pointer parked at +0x74 / x64 +0xB8, and
 // *phr = pin ? S_OK : E_OUTOFMEMORY.
 CPushSourceDIBSq::CPushSourceDIBSq(LPUNKNOWN pUnkOuter, HRESULT* phr)
     : CSource(NULL, pUnkOuter, &MMDXSHOW_CLSID_PushSourceDIBSq)
 {
     // CPushPinDIBSq's ctor is defined by push_pin.cpp against the same
     // header declaration (HRESULT* phr, CSource* pParent) — binary order.
-    void* pMem = operator new(0x5B8, std::nothrow);   // VC8 new: NULL on OOM
+    void* pMem = operator new(kPinAllocSize, std::nothrow);   // VC8 new: NULL on OOM
     CPushPinDIBSq* pPin = (CPushPinDIBSq*)pMem;
     if (pPin != NULL)
         pPin = new (pPin) CPushPinDIBSq(phr, this);
@@ -295,9 +333,9 @@ CPushSourceDIBSq::~CPushSourceDIBSq()
     CPushPinDIBSq* pPin = m_pPin;
     BYTE* pb = reinterpret_cast<BYTE*>(pPin);
 
-    pb[1459] = 1;                    // pin+0x5B3 — UNCHECKED in the binary:
-    pb[1458] = 1;                    // pin+0x5B2   a failed pin allocation in
-                                     // the ctor makes the dtor fault right here.
+    pb[kPinOff_StreamEnded] = 1;     // UNCHECKED in the binary: a failed pin
+    pb[kPinOff_FrameReady] = 1;      // allocation in the ctor makes the dtor
+                                     // fault right here.
     if (pPin != NULL) {
         void** vtbl = *reinterpret_cast<void***>(pPin);   // CAMThread root vtable
         ((void (__thiscall *)(void*, unsigned))(vtbl[1]))(pPin, 1);
@@ -305,13 +343,13 @@ CPushSourceDIBSq::~CPushSourceDIBSq()
 }
 
 // VA 0x10001B70 - MMDxShow_NewPushSourceDIBSq (g_Templates[0].m_lpfnNew).
-// Binary: operator new(0x78) — the VC8 CRT new in this DLL returns NULL on
-// exhaustion instead of throwing — then the ctor, then
-// *phr = result ? S_OK : E_OUTOFMEMORY.
+// Binary: operator new(0x78) (x64 rebuild: 0xC0 at 0x180001A60) — the VC8 CRT
+// new in this DLL returns NULL on exhaustion instead of throwing — then the
+// ctor, then *phr = result ? S_OK : E_OUTOFMEMORY.
 CUnknown* MMDxShow_NewPushSourceDIBSq(LPUNKNOWN pUnkOuter, HRESULT* phr)
 {
     CPushSourceDIBSq* pObject =
-        (CPushSourceDIBSq*)operator new(0x78, std::nothrow);
+        (CPushSourceDIBSq*)operator new(kFilterAllocSize, std::nothrow);
     if (pObject != NULL)
         pObject = new (pObject) CPushSourceDIBSq(pUnkOuter, phr);
     if (phr != NULL)

@@ -3,9 +3,14 @@
 // ===========================================================================
 // 0x4B0C50 restores and accumulates vertex morphs, locks model+8/model+12,
 // and dispatches one of the 0x4A9400-family OpenMP skinning workers. This
-// file currently closes only the original PMD path serially; the separate
-// x64 PMX BDEF/SDEF/UV-morph worker family must be recovered from the x64
-// reference before this function can claim full parity.
+// file closes the PMD path serially and the x64 PMX twin family in full:
+// the five stride workers selected by the additional-UV count (x64
+// 0x14011F3A0 / 0x140120D20 / 0x140122720 / 0x140124150 / 0x140125BF0),
+// the per-frame PMX vertex/UV morph restore+apply pass that feeds them
+// (x64 0x1400E1415..0x1400E2670), and the SDEF quaternion blend helper
+// (x64 0x1400E2D20). The PMD arithmetic keeps its x87 __asm bit-parity
+// branch; the PMX arithmetic follows the x64 SSE orderings, which is the
+// behavior baseline for this port.
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -17,6 +22,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
@@ -134,26 +140,41 @@ void Blend3(float out[3], const float a[3], const float b[3], float wa) {
     out[2] = a[2] * wa + b[2] * wb;
 }
 
-constexpr float kPmxIdentityMatrix[16] = {
-    1.0f, 0.0f, 0.0f, 0.0f,
-    0.0f, 1.0f, 0.0f, 0.0f,
-    0.0f, 0.0f, 1.0f, 0.0f,
-    0.0f, 0.0f, 0.0f, 1.0f,
+float EdgeComponent(float position, float normal, float amount) {
+#if defined(_M_IX86)
+    float result = 0.0f;
+    __asm {
+        fld dword ptr [normal]
+        fmul dword ptr [amount]
+        fadd dword ptr [position]
+        fstp dword ptr [result]
+    }
+    return result;
+#else
+    return position + normal * amount;
+#endif
+}
+
+// x64 fetches one matInit per referenced bone and only tests the sign of
+// the index; a negative reference contributes an all-zero matrix, not an
+// identity. The upper bound is a port-side guard against corrupt files -
+// every loader-produced index is inside the table.
+constexpr float kPmxZeroMatrix[16] = {
+    0.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 0.0f,
 };
 
 const float* PmxSkinMatrix(const mdl::BoneRecord* bones, int boneCount,
                            std::int32_t boneIndex) {
     return boneIndex >= 0 && boneIndex < boneCount
         ? bones[boneIndex].matInit
-        : kPmxIdentityMatrix;
+        : kPmxZeroMatrix;
 }
 
-// x64 PMX worker 0x14011F97D: BDEF1 obtains one matInit matrix (or an
-// identity fallback for a negative index), then writes position and normal
-// into the 32-byte main vertex record. This helper is deliberately not wired
-// into the PMX dispatcher until BDEF2/BDEF4/SDEF and the common edge tail are
-// buffer-compared against the x64 reference.
-[[maybe_unused]]
+// x64 PMX worker 0x14011F991: BDEF1 transforms position with the full
+// matrix and normal without translation into the 32-byte base record.
 void SkinPmxBdef1(const mdl::PmxVertex& source,
                   const mdl::BoneRecord* bones, int boneCount,
                   mdl::SkinnedVertexBase& destination) {
@@ -223,25 +244,9 @@ no_translation_0:
 #endif
 }
 
-float EdgeComponent(float position, float normal, float amount) {
-#if defined(_M_IX86)
-    float result = 0.0f;
-    __asm {
-        fld dword ptr [normal]
-        fmul dword ptr [amount]
-        fadd dword ptr [position]
-        fstp dword ptr [result]
-    }
-    return result;
-#else
-    return position + normal * amount;
-#endif
-}
-
 // x64 PMX worker 0x14011F513: BDEF2 uses bone 1 first with (1-weight),
 // then adds bone 0 scaled by weight. BlendTransformComponent preserves that
-// source order on the x64 path.
-[[maybe_unused]]
+// source order on the x64 path (and bit-exactly on the x87 path).
 void SkinPmxBdef2(const mdl::PmxVertex& source,
                   const mdl::BoneRecord* bones, int boneCount,
                   mdl::SkinnedVertexBase& destination) {
@@ -267,32 +272,11 @@ float TransformComponent(const float input[3], const float matrix[16],
 }
 
 // x64 PMX worker 0x14011FB7F: BDEF4 retrieves all four matrices with the
-// same negative-index identity fallback as BDEF1/2.  Its scalar additions
-// start with bone 1, then add bones 0, 2, and 3.  The order matters for the
-// final float bits, so it is named here rather than hidden in a generic loop.
-[[maybe_unused]]
-float BlendTransformComponent4(const float input[3],
-                               const float matrix0[16],
-                               const float matrix1[16],
-                               const float matrix2[16],
-                               const float matrix3[16],
-                               const float weight[4], int component,
-                               bool position) {
-    float value = TransformComponent(input, matrix1, component, position) *
-                  weight[1];
-    value += TransformComponent(input, matrix0, component, position) *
-             weight[0];
-    value += TransformComponent(input, matrix2, component, position) *
-             weight[2];
-    value += TransformComponent(input, matrix3, component, position) *
-             weight[3];
-    return value;
-}
-
-// Not connected until the x64 BDEF4 fixture has a passing vertex-buffer
-// comparison.  Keeping the worker arithmetic in this typed helper avoids
-// spreading model-byte offsets into the actual skinning path.
-[[maybe_unused]]
+// same negative-index zero fallback. The scalar chains are ordered
+// differently for positions and normals in the original: the position
+// accumulates bone 1 first and then bones 0, 2 and 3, while the normal
+// starts from bone 0. Float addition does not associate, so both orders
+// are spelled out instead of being hidden in one generic loop.
 void SkinPmxBdef4(const mdl::PmxVertex& source,
                   const mdl::BoneRecord* bones, int boneCount,
                   mdl::SkinnedVertexBase& destination) {
@@ -301,60 +285,262 @@ void SkinPmxBdef4(const mdl::PmxVertex& source,
     const float* matrix2 = PmxSkinMatrix(bones, boneCount, source.bone[2]);
     const float* matrix3 = PmxSkinMatrix(bones, boneCount, source.bone[3]);
     for (int component = 0; component < 3; ++component) {
-        destination.position[component] = BlendTransformComponent4(
-            source.position, matrix0, matrix1, matrix2, matrix3,
-            source.weight, component, true);
-        destination.normal[component] = BlendTransformComponent4(
-            source.normal, matrix0, matrix1, matrix2, matrix3,
-            source.weight, component, false);
+        float position =
+            TransformComponent(source.position, matrix1, component, true) *
+            source.weight[1];
+        position +=
+            TransformComponent(source.position, matrix0, component, true) *
+            source.weight[0];
+        position +=
+            TransformComponent(source.position, matrix2, component, true) *
+            source.weight[2];
+        position +=
+            TransformComponent(source.position, matrix3, component, true) *
+            source.weight[3];
+        destination.position[component] = position;
+
+        float normal =
+            TransformComponent(source.normal, matrix0, component, false) *
+            source.weight[0];
+        normal +=
+            TransformComponent(source.normal, matrix1, component, false) *
+            source.weight[1];
+        normal +=
+            TransformComponent(source.normal, matrix2, component, false) *
+            source.weight[2];
+        normal +=
+            TransformComponent(source.normal, matrix3, component, false) *
+            source.weight[3];
+        destination.normal[component] = normal;
     }
 }
 
-// x64 PMX common tail 0x140120ABF: edge vertices are a separate 16-byte
-// stream.  The source worker multiplies in this precise order before adding
-// the skinned position: normal * modelScale * vertexScale * materialSize.
-// It remains disconnected with the other PMX helpers until its packed color
-// branch has a passing original-vs-rebuilt buffer capture.
-[[maybe_unused]]
-void WritePmxEdgeVertex(const mdl::PmxVertex& source,
-                        const mdl::SkinnedVertexBase& skinned,
-                        const mdl::ModelMaterialRecord& material,
-                        float frameEdgeScale, mdl::EdgeVertex& destination) {
+// x64 helper 0x1400E2D20: SDEF rotates through a blended quaternion that
+// the original builds with a dot-sign-corrected normalized lerp (not a
+// true slerp). `t` reaches 1 - weight0, so weight0 = 1 keeps q0.
+void BlendSdefQuaternions(float out[4], const float from[4],
+                          const float to[4], float t) {
+    const float dot = ((to[0] * from[0] + to[3] * from[3]) +
+                       to[1] * from[1]) + to[2] * from[2];
+    float delta[4];
+    if (dot >= 0.0f) {
+        delta[0] = to[0] - from[0];
+        delta[1] = to[1] - from[1];
+        delta[2] = to[2] - from[2];
+        delta[3] = to[3] - from[3];
+    } else {
+        t = -t;
+        delta[0] = to[0] + from[0];
+        delta[1] = to[1] + from[1];
+        delta[2] = to[2] + from[2];
+        delta[3] = to[3] + from[3];
+    }
+    out[0] = delta[0] * t + from[0];
+    out[1] = delta[1] * t + from[1];
+    out[2] = delta[2] * t + from[2];
+    out[3] = delta[3] * t + from[3];
+    const float length = std::sqrt(
+        ((out[0] * out[0] + out[1] * out[1]) + out[2] * out[2]) +
+        out[3] * out[3]);
+    if (length <= 0.0f) {
+        out[0] = 0.0f;
+        out[1] = 0.0f;
+        out[2] = 0.0f;
+        out[3] = 1.0f;
+        return;
+    }
+    const float inverse = 1.0f / length;
+    out[0] *= inverse;
+    out[1] *= inverse;
+    out[2] *= inverse;
+    out[3] *= inverse;
+}
+
+// x64 PMX worker 0x140120285. The loader has already rebased R0/R1 onto the
+// weighted SDEF midpoint, which makes the blend stable at the bind pose.
+// For every component the original computes
+//   Pc = M0(C)*w0 + M1(C)*(1-w0)            (full affine transforms)
+//   U  = M0linear(R0)*w0 + M1linear(R1)*(1-w0)  (no translation)
+//   center = ((U + Pc) + Pc) * 0.5          (exact x64 folding)
+// and places the vertex at R * (position - C) + center, where R comes from
+// D3DXQuaternionRotationMatrix on both bone matrices, the nlerp above, and
+// D3DXMatrixRotationQuaternion - the very entry points the x64 imports, so
+// even degenerate zero-matrix references produce identical bits.
+void SkinPmxSdef(d3dx::Api& d3dxApi, const mdl::PmxVertex& source,
+                 const mdl::BoneRecord* bones, int boneCount,
+                 mdl::SkinnedVertexBase& destination) {
+    const float* matrix0 = PmxSkinMatrix(bones, boneCount, source.bone[0]);
+    const float* matrix1 = PmxSkinMatrix(bones, boneCount, source.bone[1]);
+    const float weight0 = source.weight[0];
+    const float weight1 = 1.0f - weight0;
+    const float* center = source.sdef.center;
+    const float* r0 = source.sdef.r0Offset;
+    const float* r1 = source.sdef.r1Offset;
+
+    float pivot[3];
     for (int component = 0; component < 3; ++component) {
-        float amount = skinned.normal[component] * frameEdgeScale;
-        amount *= source.edgeScale;
-        amount *= material.edgeSize;
-        destination.position[component] = skinned.position[component] + amount;
+        const float blendedCenter =
+            TransformComponent(center, matrix0, component, true) * weight0 +
+            TransformComponent(center, matrix1, component, true) * weight1;
+        const float blendedArms =
+            TransformComponent(r0, matrix0, component, false) * weight0 +
+            TransformComponent(r1, matrix1, component, false) * weight1;
+        pivot[component] = ((blendedArms + blendedCenter) + blendedCenter) *
+                           0.5f;
+    }
+
+    float quaternion0[4];
+    float quaternion1[4];
+    float quaternion[4];
+    d3dxApi.quatFromMatrix(
+        quaternion0, reinterpret_cast<const d3dx::D3DXMATRIXF*>(matrix0));
+    d3dxApi.quatFromMatrix(
+        quaternion1, reinterpret_cast<const d3dx::D3DXMATRIXF*>(matrix1));
+    BlendSdefQuaternions(quaternion, quaternion0, quaternion1, weight1);
+    d3dx::D3DXMATRIXF blended;
+    d3dxApi.matrixRotationQuaternion(&blended, quaternion);
+    const float* rotation = &blended.m[0][0];
+
+    const float delta[3] = {
+        source.position[0] - center[0],
+        source.position[1] - center[1],
+        source.position[2] - center[2]};
+    for (int component = 0; component < 3; ++component) {
+        destination.position[component] =
+            TransformComponent(delta, rotation, component, false) +
+            pivot[component];
+        destination.normal[component] =
+            TransformComponent(source.normal, rotation, component, false);
     }
 }
 
-// One common-tail color branch at 0x1401209AF converts the material's edge
-// RGB channels to truncated 8-bit values and emits a D3DCOLOR-style opaque
-// ARGB word. The alternate branch has a different, still-unidentified
-// runtime mode and is intentionally not folded into this helper.
-[[maybe_unused]]
-std::uint32_t PackOpaquePmxEdgeColor(const mdl::ModelMaterialRecord& material) {
-    const auto colorByte = [](float channel) -> std::uint32_t {
+// x64 PMX common tail 0x140120A01/0x140120A9C: both branches truncate the
+// material's edge channels to 8 bits. The self-shadow render pass forces an
+// opaque alpha word; the regular pass keeps the material's own edge alpha.
+std::uint32_t PackPmxEdgeColor(const mdl::ModelMaterialRecord& material,
+                               bool opaqueAlpha) {
+    const auto channel = [](float value) -> std::uint32_t {
         return static_cast<std::uint8_t>(static_cast<std::int32_t>(
-            channel * 255.0f));
+            value * 255.0f));
     };
-    return 0xFF000000u | (colorByte(material.edgeColor[0]) << 16) |
-           (colorByte(material.edgeColor[1]) << 8) |
-           colorByte(material.edgeColor[2]);
+    const std::uint32_t red = channel(material.edgeColor[0]);
+    const std::uint32_t green = channel(material.edgeColor[1]);
+    const std::uint32_t blue = channel(material.edgeColor[2]);
+    const std::uint32_t alpha =
+        opaqueAlpha ? 0xFFu : channel(material.edgeColor[3]);
+    return (alpha << 24) | (red << 16) | (green << 8) | blue;
 }
 
 // The x64 worker ladder uses a 32-byte base record plus one contiguous
-// float4 for every PMX additional UV set. Keeping this copy typed ensures a
-// future UV1--UV4 worker cannot accidentally transpose the loader's
+// float4 for every PMX additional UV set, transposed out of the loader's
 // component-first source storage.
 template <std::size_t AdditionalUvCount>
-[[maybe_unused]]
 void CopyPmxAdditionalUvs(const mdl::PmxVertex& source,
                           mdl::SkinnedVertex<AdditionalUvCount>& destination) {
+    destination.base.uv[0] = source.uv[0];
+    destination.base.uv[1] = source.uv[1];
     for (std::size_t uv = 0; uv < AdditionalUvCount; ++uv)
         for (std::size_t component = 0; component < 4; ++component)
             destination.additionalUv[uv][component] =
                 source.additionalUvByComponent[component][uv];
+}
+
+// One PMX morph's vertex/UV contribution (the x64 direct ladder at
+// 0x1400E2030..0x1400E2659; group references 0x1400E1870 reuse it with the
+// group weight folded in after the morph value, one multiply at a time).
+// Bone (2) and material (8) morphs live in ModelApplyMorphs instead.
+void AccumPmxVertexMorph(mdl::PmxVertex* vertices,
+                         const mdl::MorphRecord& morph, float value,
+                         float groupWeight) {
+    if (morph.type == 1) {
+        const int count = morph.offsetCount;
+        for (int k = 0; k < count; ++k) {
+            const mdl::PmdVertexMorphEntry& entry = morph.vertexEntries[k];
+            mdl::PmxVertex& vertex = vertices[entry.vertexIndex];
+            vertex.position[0] += entry.offset[0] * value * groupWeight;
+            vertex.position[1] += entry.offset[1] * value * groupWeight;
+            vertex.position[2] += entry.offset[2] * value * groupWeight;
+        }
+        return;
+    }
+    if (morph.type < 3 || morph.type > 7)
+        return;
+    const int family = morph.type - 3;
+    const int count = morph.uvCounts[family];
+    const mdl::PmxUvMorphEntry* entries = morph.uvEntries[family];
+    for (int k = 0; k < count; ++k) {
+        const mdl::PmxUvMorphEntry& entry = entries[k];
+        mdl::PmxVertex& vertex = vertices[entry.vertexIndex];
+        if (family == 0) {
+            vertex.uv[0] += entry.offset[0] * value * groupWeight;
+            vertex.uv[1] += entry.offset[1] * value * groupWeight;
+        } else {
+            for (int component = 0; component < 4; ++component)
+                vertex.additionalUvByComponent[component][family - 1] +=
+                    entry.offset[component] * value * groupWeight;
+        }
+    }
+}
+
+// 0x1400E1415..0x1400E17E8 plus 0x1400E17FE..0x1400E2670: the PMX twin of
+// the PMD morph pass. Morph zero's aggregated position table and the five
+// flattened UV base tables restore every morph-targeted component first,
+// then each morph (including morph zero - unlike PMD) accumulates its
+// weighted offsets; group morphs scale the vertex/UV morphs they reference.
+void ApplyPmxVertexMorphs(unsigned char* model) {
+    mdl::ModelRecord& record = *mdl::Mdl(model);
+    mdl::MorphRecord* morphs = mdl::Morphs(model);
+    mdl::PmxVertex* vertices = record.pmxVertices;
+    if (morphs == nullptr || vertices == nullptr)
+        return;
+
+    const mdl::PmdVertexMorphEntry* base = mdl::BaseVertexMorphTable(model);
+    const std::uint32_t baseCount = mdl::BaseVertexMorphCount(model);
+    if (base != nullptr) {
+        for (std::uint32_t i = 0; i < baseCount; ++i) {
+            mdl::PmxVertex& vertex = vertices[base[i].vertexIndex];
+            vertex.position[0] = base[i].offset[0];
+            vertex.position[1] = base[i].offset[1];
+            vertex.position[2] = base[i].offset[2];
+        }
+    }
+
+    for (int family = 0; family < 5; ++family) {
+        const mdl::PmxUvMorphEntry* entries =
+            mdl::UvMorphTables(model).byFamily[family];
+        const std::int32_t count = mdl::UvMorphCounts(model).byFamily[family];
+        if (entries == nullptr || count <= 0)
+            continue;
+        for (int i = 0; i < count; ++i) {
+            mdl::PmxVertex& vertex = vertices[entries[i].vertexIndex];
+            if (family == 0) {
+                vertex.uv[0] = entries[i].offset[0];
+                vertex.uv[1] = entries[i].offset[1];
+            } else {
+                for (int component = 0; component < 4; ++component)
+                    vertex.additionalUvByComponent[component][family - 1] =
+                        entries[i].offset[component];
+            }
+        }
+    }
+
+    const int morphCount = record.morphCount;
+    for (int i = 0; i < morphCount; ++i) {
+        const mdl::MorphRecord& morph = morphs[i];
+        const float weight = morph.value;
+        if (weight == 0.0f)
+            continue;
+        if (morph.type != 0) {
+            AccumPmxVertexMorph(vertices, morph, weight, 1.0f);
+            continue;
+        }
+        const int groupCount = morph.groupCount;
+        for (int k = 0; k < groupCount; ++k) {
+            const mdl::PmxGroupMorphEntry& ref = morph.groupEntries[k];
+            AccumPmxVertexMorph(vertices, morphs[ref.morphIndex], weight,
+                                ref.weight);
+        }
+    }
 }
 
 // 0x4B0C74..0x4B0CE9 and 0x4B1C9C..0x4B1D8B.  PMD morph zero is
@@ -475,6 +661,136 @@ void SkinPmd(unsigned char* model, float edgeDistance,
     }
 }
 
+// The x64 stride workers share one per-vertex shape: dispatch on the weight
+// type (QDEF and any unknown type leave position/normal untouched, only the
+// common tail runs), then copy UVs, pack the edge color and expand the
+// outline. The vertex marker at +172 picks between the material-driven
+// expansion normal * frame scale * vertex scale * material size and the
+// fixed 0.005 shrink.
+template <std::size_t AdditionalUvCount>
+void SkinPmx(unsigned char* model, float edgeDistance, bool opaqueEdge,
+             mdl::EdgeVertex* edgeVertices,
+             mdl::SkinnedVertex<AdditionalUvCount>* mainVertices) {
+    const mdl::ModelRecord& record = *mdl::Mdl(model);
+    const std::uint32_t vertexCount = record.vertexCount;
+    const mdl::PmxVertex* vertices = record.pmxVertices;
+    const mdl::BoneRecord* bones = mdl::Bones(model);
+    const mdl::ModelMaterialRecord* materials = mdl::Materials(model);
+    const int boneCount = static_cast<int>(record.boneCount);
+    d3dx::Api& d3dxApi = d3dx::Get();
+    if (vertices == nullptr || bones == nullptr || materials == nullptr)
+        return;
+
+    for (std::uint32_t i = 0; i < vertexCount; ++i) {
+        const mdl::PmxVertex& source = vertices[i];
+        mdl::SkinnedVertex<AdditionalUvCount>& main = mainVertices[i];
+        mdl::EdgeVertex& edge = edgeVertices[i];
+        switch (source.weightType) {
+        case mdl::PmxWeightType::bdef2:
+            SkinPmxBdef2(source, bones, boneCount, main.base);
+            break;
+        case mdl::PmxWeightType::bdef1:
+            SkinPmxBdef1(source, bones, boneCount, main.base);
+            break;
+        case mdl::PmxWeightType::bdef4:
+            SkinPmxBdef4(source, bones, boneCount, main.base);
+            break;
+        case mdl::PmxWeightType::sdef:
+            SkinPmxSdef(d3dxApi, source, bones, boneCount, main.base);
+            break;
+        default:
+            break;
+        }
+        CopyPmxAdditionalUvs(source, main);
+
+        const mdl::ModelMaterialRecord& material =
+            materials[source.materialIndex];
+        edge.diffuse = PackPmxEdgeColor(material, opaqueEdge);
+        if (source.hasPmxEdgeData == 0) {
+            for (int component = 0; component < 3; ++component)
+                edge.position[component] =
+                    main.base.position[component] -
+                    main.base.normal[component] * 0.004999999888241291f;
+        } else {
+            for (int component = 0; component < 3; ++component) {
+                float amount = edgeDistance * main.base.normal[component];
+                amount *= source.edgeScale;
+                amount *= material.edgeSize;
+                edge.position[component] =
+                    main.base.position[component] + amount;
+            }
+        }
+    }
+}
+
+// x64 0x1400E2A5F..0x1400E2CEC: the PMX branch locks the main buffer with
+// 32 + 16 * additionalUvCount bytes per vertex and the edge buffer with 16,
+// then dispatches the stride worker selected by the additional-UV count.
+// A count above four matches no worker and the original leaves both
+// buffers untouched that frame. The frame edge scale is the same
+// camera-distance value the PMD path uses (x64 computes it once for both).
+void UpdatePmxModelVertexBuffers(MMDApp* app, unsigned char* model,
+                                 const float frameWorld[16]) {
+    mdl::ModelRecord& state = *mdl::Mdl(model);
+    ApplyPmxVertexMorphs(model);
+
+    const unsigned int additionalUv = state.pmxAdditionalUvCount;
+    if (additionalUv > 4)
+        return;
+    auto* mainVb = mdl::ResourceAs<IDirect3DVertexBuffer9>(
+        state.vertexBuffer);
+    auto* edgeVb = mdl::ResourceAs<IDirect3DVertexBuffer9>(
+        state.vertexBuffer2);
+    if (mainVb == nullptr || edgeVb == nullptr)
+        return;
+    d3dx::Api& d3dxApi = d3dx::Get();
+    if (!d3dxApi.Load() || d3dxApi.quatFromMatrix == nullptr ||
+        d3dxApi.matrixRotationQuaternion == nullptr)
+        return;
+
+    const UINT count = state.vertexCount;
+    const UINT stride = 32 + 16 * additionalUv;
+    mdl::SkinnedVertexBase* mainVertices = nullptr;
+    mdl::EdgeVertex* edgeVertices = nullptr;
+    if (FAILED(mainVb->Lock(0, stride * count,
+                            reinterpret_cast<void**>(&mainVertices), 0)))
+        return;
+    if (FAILED(edgeVb->Lock(0, 16 * count,
+                            reinterpret_cast<void**>(&edgeVertices), 0))) {
+        mainVb->Unlock();
+        return;
+    }
+
+    const float edgeDistance = PmdEdgeDistance(app, model, frameWorld);
+    const bool opaqueEdge = app->state.selfShadowEnabled != 0;
+    switch (additionalUv) {
+    case 0:
+        SkinPmx<0>(model, edgeDistance, opaqueEdge, edgeVertices,
+                   reinterpret_cast<mdl::SkinnedVertex<0>*>(mainVertices));
+        break;
+    case 1:
+        SkinPmx<1>(model, edgeDistance, opaqueEdge, edgeVertices,
+                   reinterpret_cast<mdl::SkinnedVertex<1>*>(mainVertices));
+        break;
+    case 2:
+        SkinPmx<2>(model, edgeDistance, opaqueEdge, edgeVertices,
+                   reinterpret_cast<mdl::SkinnedVertex<2>*>(mainVertices));
+        break;
+    case 3:
+        SkinPmx<3>(model, edgeDistance, opaqueEdge, edgeVertices,
+                   reinterpret_cast<mdl::SkinnedVertex<3>*>(mainVertices));
+        break;
+    default:
+        SkinPmx<4>(model, edgeDistance, opaqueEdge, edgeVertices,
+                   reinterpret_cast<mdl::SkinnedVertex<4>*>(mainVertices));
+        break;
+    }
+    DumpModelVertexBuffers(app, model, mainVertices, edgeVertices, count,
+                           stride);
+    mainVb->Unlock();
+    edgeVb->Unlock();
+}
+
 }  // namespace
 
 void UpdateModelVertexBuffers(MMDApp* app, unsigned char* model,
@@ -485,10 +801,13 @@ void UpdateModelVertexBuffers(MMDApp* app, unsigned char* model,
     if (state.loadComplete == 0 || state.vertexCount == 0)
         return;
 
-    // The PMX branch selects four additional stride/SDEF workers.  Keep it
-    // out of the PMD path until those workers are ported byte-for-byte.
-    if (state.physicsMode == 2)
+    // The PMX twin (x64 0x1400E13C0) runs its own restore+morph pass and
+    // dispatches the additional-UV stride workers; PMD keeps the serial
+    // 0x4A9400 path below untouched.
+    if (state.physicsMode == 2) {
+        UpdatePmxModelVertexBuffers(app, model, frameWorld);
         return;
+    }
 
     ApplyPmdVertexMorphs(model);
     auto* mainVb = mdl::ResourceAs<IDirect3DVertexBuffer9>(

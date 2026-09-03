@@ -74,37 +74,80 @@ namespace {
 
 constexpr double kPiOver180 = 0.01745329238474369;   // dbl_52BB20 region
 
-// VA 0x00410140 - camera-channel bezier easing.  ch 0..5 selects the
-// control-byte column; the X curve 3(1-u)^2 u x1 + 3(1-u) u^2 x2 + u^3 is
-// inverted by 12 halving steps starting at u = 0.5, then the Y curve
-// 3(1-u) u^2 y2 + 3(1-u)^2 u y1 + u^3 gives the eased fraction.
+// VA 0x00410140 / x64 sub_7FF7CB47A8B0 - camera-channel bezier easing.
+// ch 0..5 selects the control-byte column; the X curve 3(1-u)^2 u x1 +
+// 3(1-u) u^2 x2 + u^3 is inverted by 12 halving steps starting at u = 0.5,
+// then the Y curve 3(1-u) u^2 y2 + 3(1-u)^2 u y1 + u^3 gives the eased
+// fraction.
+//
+// Precision (x64 0x7FF7CB47A8B0, instruction-pinned): the whole evaluator
+// runs single-precision SSE - cvtdq2ps + divss 127.0f for the X control
+// scales, mulss/addss chains for gx, ucomiss float equality for the
+// early exit, and the Y terms multiply the raw byte FIRST and divide by
+// 127.0f afterwards (0x7FF7CB47AC19/0x7FF7CB47AC1E).  The x86 original
+// (0x410140) instead keeps the control scales in double locals, runs the
+// polynomial on the x87 stack and round-trips u/step/gx through float
+// stack slots; that shape stays in the _M_IX86 branch.
 float CameraEase(const mdl::CameraKey* keys, int ch, int idx, float t) {
     const auto& interpolation = keys[idx].interpolation;
     if (interpolation[0][ch] == interpolation[1][ch] &&
         interpolation[2][ch] == interpolation[3][ch])
         return t;                                        // linear 0x410180
+#if defined(_M_IX86)
+    // x86 0x410140: v47/v46 are double locals ((double)byte / 127.0), the
+    // polynomial evaluates on the x87 stack, and u/step/gx live in float
+    // stack slots (fstp/fld around the compare and the update).
     const double x1 = static_cast<double>(
                           static_cast<signed char>(interpolation[0][ch])) / 127.0;
-    const double y1 = static_cast<double>(
-                          static_cast<signed char>(interpolation[1][ch])) / 127.0;
     const double x2 = static_cast<double>(
                           static_cast<signed char>(interpolation[2][ch])) / 127.0;
-    const double y2 = static_cast<double>(
-                          static_cast<signed char>(interpolation[3][ch])) / 127.0;
-    double u = 0.5;
-    double half = 0.25;
+    float u = 0.5f, half = 0.25f;
     for (int i = 0; i < 12; ++i) {                       // 0x4101E5..4E5
-        const double v = 1.0 - u;
-        const double gx = v * 3.0 * u * u * x2 + v * (v * 3.0) * u * x1 +
+        const float om = 1.0f - u;
+        const double gx = om * 3.0 * u * u * x2 + om * (om * 3.0) * u * x1 +
                           u * u * u;
-        if (gx == static_cast<double>(t))
+        if (static_cast<float>(gx) == t)                 // float-slot compare
             break;
-        u = gx >= static_cast<double>(t) ? u - half : u + half;
-        half *= 0.5;
+        u = static_cast<float>(gx >= static_cast<double>(t) ? u - half
+                                                            : u + half);
+        half *= 0.5f;
     }
-    const double v = 1.0 - u;                            // 0x4104EF
-    return static_cast<float>(3.0 * v * u * u * y2 + v * (v * 3.0) * u * y1 +
-                              u * u * u);
+    const float om = 1.0f - u;                           // 0x4104EF
+    return static_cast<float>(
+        3.0 * om * u * u *
+            static_cast<double>(
+                static_cast<signed char>(interpolation[3][ch])) / 127.0 +
+        om * (om * 3.0) * u *
+            static_cast<double>(
+                static_cast<signed char>(interpolation[1][ch])) / 127.0 +
+        u * u * u);
+#else
+    // x64: X scales pre-divided (divss 127.0f at 0x7FF7CB47A970/A979); the
+    // loop compare is ucomiss on float gx; the Y tail multiplies the raw
+    // bytes first and divides each product by 127.0f.
+    const float x1 = static_cast<float>(
+                         static_cast<signed char>(interpolation[0][ch])) / 127.0f;
+    const float x2 = static_cast<float>(
+                         static_cast<signed char>(interpolation[2][ch])) / 127.0f;
+    const float y1b = static_cast<float>(
+        static_cast<signed char>(interpolation[1][ch]));
+    const float y2b = static_cast<float>(
+        static_cast<signed char>(interpolation[3][ch]));
+    float u = 0.5f, half = 0.25f;
+    for (int i = 0; i < 12; ++i) {                       // 0x7FF7CB47A980..B95
+        const float v = 1.0f - u;
+        const float v3 = v * 3.0f;
+        const float gx = (v3 * v * u) * x1 + (v3 * u * u) * x2 + u * u * u;
+        if (gx == t)                                     // ucomiss 0x7FF7CB47A9C3
+            break;
+        u = gx >= t ? u - half : u + half;               // comiss/addss/subss
+        half *= 0.5f;
+    }
+    const float v = 1.0f - u;                            // 0x7FF7CB47ABC2
+    const float v3 = v * 3.0f;
+    return (v3 * v * u) * y1b / 127.0f + (v3 * u * u) * y2b / 127.0f +
+           u * u * u;
+#endif
 }
 
 // Camera-key payload copy (fields shared by the exact/terminal branches;

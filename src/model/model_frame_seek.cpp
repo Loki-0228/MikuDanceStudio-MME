@@ -72,7 +72,9 @@ double PiHalfBits() {
     std::memcpy(&d, &bits, sizeof d);
     return d;
 }
-const float kQuatClamp = 0.99999994f;  // 0x3F7FFFFF
+// x86 flt_531134 / x64 flt_7FF7CB552C24: both originals clamp to
+// +-0x3F7FFFEF (0.999999f), not 0x3F7FFFFF as first transcribed.
+const float kQuatClamp = 0.999999f;
 
 }  // namespace
 
@@ -355,12 +357,17 @@ int SeekModelFrame(unsigned char* model, int frameArg, int physicsMode) {  // wa
             // the slerp, raw fraction eases each position axis
             const float cq[4] = {rec.rotation[0], rec.rotation[1],
                                  rec.rotation[2], rec.rotation[3]};
-            const float tF = (float)(
-                (double)(frameU32 - prevFrame) /
-                (double)(std::uint32_t)((std::int32_t)curFrame -
-                                        (std::int32_t)prevFrame));
+            // x64 0x7FF7CB4ED26E..A3: sub + cvtsi2ss x2 + divss - the raw
+            // fraction divides in SINGLE precision.
+            const float tF =
+                static_cast<float>(frameU32 - prevFrame) /
+                static_cast<float>(static_cast<int>(curFrame) -
+                                   static_cast<int>(prevFrame));
             const float eRot = BoneEase(m, 3, found, tF);
 
+#if defined(_M_IX86)
+            // x86 0x4B53F7: CRT double acos/sin on float-rounded
+            // intermediates; weights divide (sin/s).
             const double dotD = (double)pq[0] * cq[0] +
                                 (double)pq[1] * cq[1] +
                                 (double)pq[2] * cq[2] +
@@ -415,6 +422,43 @@ int SeekModelFrame(unsigned char* model, int frameArg, int physicsMode) {  // wa
                                     (double)w1 * (double)cq[c]);
                 }
             }
+#else
+            // x64 sub_7FF7CB4EBD90 @ 0x7FF7CB4ED2C4..0x7FF7CB4ED576: SSE
+            // single precision - float dot accumulation, acosf/sinf, float
+            // angle products.  UNLIKE the advance path, the weights here
+            // DIVIDE (divss sin/s at 0x7FF7CB4ED413/0x7FF7CB4ED429), not
+            // the reciprocal-multiply the advance copy uses.  The pi/2
+            // gate compares against dword_7FF7CB552C1C = 0x3FC90FD8 (the
+            // float-exact image of the truncated-double constant).
+            const float dot = pq[0] * cq[0] + pq[1] * cq[1] +
+                              pq[2] * cq[2] + pq[3] * cq[3];
+            if (1.0f - dot * dot == 0.0f) {
+                // parallel quaternions: previous key verbatim (0x4B534A)
+                for (int c = 0; c < 4; ++c) bone->rotQuat[c] = pq[c];
+            } else {
+                float dc = dot;
+                if (dc > 1.0f)
+                    dc = kQuatClamp;
+                else if (dc < -1.0f)
+                    dc = -kQuatClamp;
+                const float th = std::acos(dc);
+                if (th > 1.570796012878418f && dc < 0.0f) {
+                    // long way around (0x4B53F7)
+                    const float th2 = std::acos(-dc);
+                    const float s = std::sin(th2);
+                    const float w0 = std::sin((1.0f - eRot) * th2) / s;
+                    const float w1 = std::sin(eRot * th2) / s;
+                    for (int c = 0; c < 4; ++c)
+                        bone->rotQuat[c] = pq[c] * w0 - w1 * cq[c];
+                } else {
+                    const float s = std::sin(th);
+                    const float w0 = std::sin((1.0f - eRot) * th) / s;
+                    const float w1 = std::sin(eRot * th) / s;
+                    for (int c = 0; c < 4; ++c)
+                        bone->rotQuat[c] = pq[c] * w0 + w1 * cq[c];
+                }
+            }
+#endif
 
             // position easing (0x4B55E1) - same type gate again (always
             // true here because of the bone-level gate, kept for fidelity)

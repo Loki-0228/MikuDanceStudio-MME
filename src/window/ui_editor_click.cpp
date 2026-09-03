@@ -596,11 +596,12 @@ static void HandleLButtonDown_MarginColumnToggle(MMDApp* app,
         unsigned char* model = app->SelectedModel();
         if (model == nullptr)
             return;
-        const std::int32_t type = static_cast<std::int8_t>(model[Div14(y - 0xA0) + 0x2DC0]);
+        const std::int32_t type =
+            static_cast<std::int8_t>(
+                mdl::Mdl(model)->boneListRowType[Div14(y - 0xA0)]);
         if (type > 0) {
-            unsigned char* tbl = *reinterpret_cast<unsigned char**>(model + 0x26D0);
-            unsigned char* flag = tbl + type * 0x65 + 0x64;
-            *flag = (*flag == 0) ? 1 : 0;       // cmp/setz toggle
+            mdl::DisplayGroup& frame = mdl::DisplayGroups(model)[type];
+            frame.flags = (frame.flags == 0) ? 1 : 0;   // cmp/setz toggle
             PostLanguageSweep(app);             // 0x42F1E0
         }
     }
@@ -693,12 +694,12 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
             unsigned char* mm = ActiveModel(app);
             mikudancestudio::mdl::Mdl(mm)->boneSelection[i] = 0;
         }
-        for (int i = 0; i < m0[0x2DAC]; ++i) {
+        for (int i = 0;
+             i < static_cast<int>(mdl::Mdl(m0)->facialFrameCount); ++i) {
             unsigned char* mm = ActiveModel(app);
-            *reinterpret_cast<unsigned char*>(
-                *reinterpret_cast<unsigned char**>(mm + 0x26DC) + i * 0x2E + 0x2C) = 0;
+            mdl::DisplayFrames(mm)[i].selected = 0;
         }
-        ActiveModel(app)[0x38FC] = 0;
+        mikudancestudio::mdl::Mdl(ActiveModel(app))->displayKeyframesPresent = 0;
     }
 
     // loc_446C8A: row lookup + selection toggle
@@ -706,7 +707,7 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
         unsigned char* m = ActiveModel(app);
         const std::int32_t row = Div14(y - 0xA0);
         const std::int32_t idx =
-            *reinterpret_cast<std::int32_t*>(m + 0x2E88 + 4 * row);
+            mikudancestudio::mdl::Mdl(m)->boneListRowRecord[row];
         if (idx >= 0) {
             unsigned char* p = mikudancestudio::mdl::Mdl(m)->boneSelection + idx;
             if (*p != 0) {
@@ -719,26 +720,23 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
         }
         if (idx == -999) {                               // 0xFFFFFC19
             const std::int32_t want = -1 - idx;
-            const std::int32_t morphCount = m[0x2DAC];
+            const std::int32_t morphCount =
+                static_cast<std::int32_t>(mdl::Mdl(m)->facialFrameCount);
             int i = 0;
             for (; i < morphCount; ++i) {
-                if (*reinterpret_cast<std::uint16_t*>(
-                        *reinterpret_cast<unsigned char**>(m + 0x26DC) +
-                        i * 0x2E + 0x2A) == want)
+                if (mdl::DisplayFrames(m)[i].targetIndex == want)
                     break;
             }
             if (i < morphCount) {
                 // morph row found: toggle its flag, then sync the bone
                 // name combo (controls 0x1F8..0x209 by bone row type)
-                unsigned char* mrec =
-                    *reinterpret_cast<unsigned char**>(m + 0x26DC) + i * 0x2E;
-                if (mrec[0x2C] != 0) {
-                    mrec[0x2C] = 0;
+                mdl::FrameGroup& faceRec = mdl::DisplayFrames(m)[i];
+                if (faceRec.selected != 0) {
+                    faceRec.selected = 0;
                     goto L_rowtype;                      // via 0x44702D
                 }
-                mrec[0x2C] = 1;
-                const std::int32_t morphIndex =
-                    *reinterpret_cast<std::uint16_t*>(mrec + 0x2A);
+                faceRec.selected = 1;
+                const std::int32_t morphIndex = faceRec.targetIndex;
                 auto& morph = mikudancestudio::mdl::Morphs(m)[morphIndex];
                 const auto panel = morph.panel;
                 HWND hCombo = nullptr, hSpin = nullptr, hText = nullptr;
@@ -801,18 +799,20 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
     {
         unsigned char* m = ActiveModel(app);
         const std::int32_t type =
-            static_cast<std::int8_t>(m[Div14(y - 0xA0) + 0x2DC0]);
+            static_cast<std::int8_t>(
+                mikudancestudio::mdl::Mdl(m)->boneListRowType[Div14(y - 0xA0)]);
         if (type == 1) {
-            m[0x38FC] = (m[0x38FC] == 0) ? 1 : 0;         // setz toggle
+            mdl::Mdl(m)->displayKeyframesPresent =
+                (mdl::Mdl(m)->displayKeyframesPresent == 0) ? 1 : 0;  // setz
             PostLanguageSweep(app);
             PostLanguageSweep2(app);
             return;
         }
         if (type == 2) {
-            for (int i = 0; i < m[0x2DAC]; ++i) {
-                unsigned char* f = *reinterpret_cast<unsigned char**>(m + 0x26DC) +
-                                   i * 0x2E + 0x2C;
-                *f = (*f == 0) ? 1 : 0;
+            for (int i = 0;
+                 i < static_cast<int>(mdl::Mdl(m)->facialFrameCount); ++i) {
+                mdl::FrameGroup& face = mdl::DisplayFrames(m)[i];
+                face.selected = (face.selected == 0) ? 1 : 0;
             }
             PostLanguageSweep(app);
             PostLanguageSweep2(app);
@@ -822,13 +822,16 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
             PostLanguageSweep2(app);
             return;
         }
+        // Rigid-group rows (x86 0x4470FA..0x44718A / x64 0x7FF7CB45A379..):
+        // walk the 46-byte (0x2E) FrameGroup records at model+0x26D8, and
+        // for each record whose type byte (record+0x28, read signed like
+        // the original movsx) matches the clicked row type, toggle the
+        // selection flag of the bone named by the uint16 at record+0x2A.
         for (int i = 0;
-             i < *reinterpret_cast<std::int32_t*>(m + 0x2DB0); ++i) {
-            unsigned char* rigid =
-                *reinterpret_cast<unsigned char**>(m + 0x26D8);
-            if (static_cast<std::int8_t>(rigid[i + 0x28]) == type) {
-                const std::int32_t boneIdx =
-                    *reinterpret_cast<std::uint16_t*>(rigid + i + 0x2A);
+             i < static_cast<int>(mdl::Mdl(m)->rigidBodyCount); ++i) {
+            mdl::FrameGroup& rigid = mdl::RigidGroups(m)[i];
+            if (static_cast<std::int8_t>(rigid.groupIndex) == type) {
+                const std::int32_t boneIdx = rigid.targetIndex;
                 unsigned char* p =
                     mikudancestudio::mdl::Mdl(m)->boneSelection + boneIdx;
                 if (*p != 0)

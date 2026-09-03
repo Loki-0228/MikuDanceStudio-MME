@@ -1158,18 +1158,13 @@ public:
     std::int32_t& PlaybackPhysicsMode() {
         return state.playbackPhysicsMode;
     }
-    // x64-only pump counter (app+0xA1E18): refreshed from playing /
-    // idle-suppress-off / physics-dialog-open at the main-pump prologue,
-    // walks 1->2->3->0, and gate 0x7FF7CB44B8E7 skips the whole physics
-    // section once it hits 0.  The x86 layout has no such field, so this
-    // lives outside the compatibility blob (see PhysicsFrame for the full
-    // ladder and the port's trigger coverage).
-    std::int32_t& PhysicsPumpCounter() {
-        return m_physicsPumpCounter;
-    }
-    std::int32_t PhysicsPumpCounter() const {
-        return m_physicsPumpCounter;
-    }
+    // x64 app+0xA1E18 / x86 app+0xA0D6C = state.messageSeen: ONE shared
+    // counter in both originals (refreshed from playing / idle-suppress-off
+    // / model-edge-dialog-open at the main-pump prologue, walks 1->2->3->0,
+    // reset to 1 by every window message) that gates the physics section
+    // (0x7FF7CB44B8E7 / x86 0x46EFBE), the pump regions and the Present.
+    // Use MessageSeen() directly - see PhysicsFrame and
+    // AdvanceFrameRenderGate for the full ladder.
     std::int32_t& SidebarWidth() {
         return state.sidebarWidth;
     }
@@ -1362,12 +1357,13 @@ public:
         return state.openniTrackingCallback;  // 0xA03D4
 #endif
     }
-    // Kinect 捕获阶段字节（x64 0xA1E14；菜单 0x124 的自动帧录制状态机，
-    // 0x7FF7CB45F550 置 1、定时器 0x7FF7CB4FBBF0 递增到 4、泵块
-    // 0x7FF7CB44C560 以 ==4 判“录制中”、满 12600 样本时清零）。x86 槽位
-    // 未定谳，双 ABI 走镜像；无 DxOpenNI.dll 时恒 0。
-    std::uint8_t& KinectCaptureStage() { return m_kinectCaptureStage; }
-    std::uint8_t KinectCaptureStage() const { return m_kinectCaptureStage; }
+    // Kinect 捕获阶段字节（x64 0xA1E14 / x86 0xA0D68——已定谳，即
+    // state.autoRepeat 本尊：菜单 0x124/WM_COMMAND 292 置 1、WM_TIMER 0x65
+    // 每 1.5s 递增到 4 后停摆、泵块 0x7FF7CB44C560 以 ==4 判“录制中”、
+    // OpenNiInit/DisableKinect/满 12600 样本/丢失跟踪时清零）。别名访问器，
+    // 供泵块按语义取名；写读一律走同一字节。
+    std::uint8_t& KinectCaptureStage() { return state.autoRepeat; }
+    std::uint8_t KinectCaptureStage() const { return state.autoRepeat; }
     // The seven DxOpenNI.dll export slots (0xA03C0..0xA03DC, one pointer
     // each in the x86 blob).  Slots 2/4 sit in 4-byte uint32 blob members,
     // so x64 reinterprets would clobber neighbours - mirrors there.
@@ -1447,11 +1443,6 @@ public:
 
 
 private:
-
-    // x64 app+0xA1E18 pump physics-enable counter (see PhysicsPumpCounter).
-    // Initialised to 1 like the original constructor write at 0x7FF7CB42CA53;
-    // the x86 layout has no counterpart field.
-    std::int32_t m_physicsPumpCounter = 1;
 
 #if defined(_M_X64)
     // In the original x86 blob, 0x9E180 is a D3DLIGHT9 overlay spanning
@@ -1541,11 +1532,6 @@ private:
     wchar_t m_captureSavePath[256] = {};
     unsigned char m_boneFrameScratch[140] = {};
 #endif
-
-    // Kinect 捕获阶段字节（x64 0xA1E14）。x86 槽位未定谳，双 ABI 统一走
-    // 类成员镜像（同 m_openniTrackingCallback 的处理思路）；无
-    // DxOpenNI.dll 时恒 0。
-    std::uint8_t m_kinectCaptureStage = 0;
 };
 
 static_assert(sizeof(MMDApp) >= sizeof(MMDAppState),

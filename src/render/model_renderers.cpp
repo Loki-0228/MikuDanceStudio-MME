@@ -1179,8 +1179,11 @@ void BeginProjectedShadowPass(D3DRenderer* sub, IDirect3DDevice9* device) {
 
 void RestoreModelMaterialPass(MMDApp* app, D3DRenderer* sub,
                               IDirect3DDevice9* device) {
-    // Restore the exact state observed immediately after the projected pass
-    // and before the first material submission.
+    // Fixed-frame restore, x64 sub_7FF7CB4BFB20 @0x7FF7CB4C07B0..0x7FF7CB4C0875
+    // (FILLMODE -> stencil trio -> CULLMODE -> ZFUNC; port collapses the
+    // FILLMODE/stencil order).  The effect frame no longer routes through
+    // here: sub_7FF7CB4C1E60 defers CULLMODE/ZFUNC past the FxSet block and
+    // adds ALPHABLENDENABLE, so RenderModelsEffect spells its restore inline.
     SetProjectedStencil(sub, device, false);
     device->SetRenderState(D3DRS_FILLMODE,
         app->WireframeRenderingEnabled() == 0 ? D3DFILL_SOLID
@@ -1443,6 +1446,22 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     Multiply(&worldView, &frame, &view);
     Multiply(&wvp, &worldView, &projection);
     std::memcpy(&app->WorldViewProjection(), &wvp, sizeof(wvp));
+    // x64 twin sub_7FF7CB4C1E60 submits the background before any frame
+    // render state: picture quad 0x7FF7CB4C1F36..0x7FF7CB4C1F61 (gate
+    // app+0x9F310, ZENABLE(7) off/on around the quad), AVI quad
+    // 0x7FF7CB4C200C..0x7FF7CB4C20DC (gate app+0x13EC == 1), then the ground
+    // 0x7FF7CB4C20E2..0x7FF7CB4C2133 (gate app+0x355).  Only afterwards come
+    // the LightDir/Place/matrix FxSets (0x7FF7CB4C2193..0x7FF7CB4C22FD) and
+    // the ALPHABLENDENABLE/FILLMODE/LIGHTING triple
+    // (0x7FF7CB4C231D..0x7FF7CB4C236C) - the same quads -> ground -> RS(8)
+    // shape the fixed frame gained in the FILLMODE round, so wireframe mode
+    // never rasterises the background or the ground here either.  The head
+    // also binds nothing to stage 0: the first stage-0 write after the
+    // matrices is the projected-pass preamble's null (0x7FF7CB4C301B); every
+    // accessory path rebinds stage 0 itself.
+    DrawPreModelQuads(app, device);
+    DrawGroundGeometry(app, device);
+
     float light[4] = {app->LightDirection()[0], app->LightDirection()[1],
                       app->LightDirection()[2], 1.0f};
     d3dx::Get().vec3Normalize(light, light);
@@ -1461,24 +1480,42 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
                 reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
     FxSetMatrix(effect, "matRotate",
                 reinterpret_cast<const Matrix*>(&app->ViewRotationTransform()));
-    FxSetInt(effect, "transp", app->state.characterTransparentMode != 0);
-    device->SetTexture(0, sub->hdrTexture);
     device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     device->SetRenderState(D3DRS_FILLMODE,
         app->WireframeRenderingEnabled() == 0
             ? D3DFILL_SOLID : D3DFILL_WIREFRAME);
     device->SetRenderState(D3DRS_LIGHTING, TRUE);
-    DrawPreModelQuads(app, device);
-    DrawGroundGeometry(app, device);
 
     const int accessorySplit = std::max(0, std::min(
         app->AccessoryRenderSplitOrder(), 255));
     RenderAccessoriesEffectRange(app, 0, accessorySplit);
     BeginProjectedShadowPass(sub, device);
     RenderProjectedGroundShadowPass(app, device);
-    RestoreModelMaterialPass(app, sub, device);
+    // Post-projected restore + model preamble, x64 0x7FF7CB4C33B1..0x7FF7CB4C3566
+    // (unconditional - the ground-shadow gate re-enters at 0x7FF7CB4C33B1):
+    // stencil trio -> FILLMODE -> TSS(1, TEXCOORDINDEX, 1) -> SetTexture(0,
+    // hdr) -> matWorldViewProj/matLightViewProj re-set -> transp -> ZFUNC ->
+    // CULLMODE -> ALPHABLENDENABLE, immediately before the walk.  The matrix
+    // re-set is load-bearing: the accessory effect range leaves the last
+    // accessory's matWorldViewProj/matLightViewProj in the effect, and the
+    // model materials would sample those without it.  matRotate stays
+    // clobbered - the original does not restore it here either.  transp is
+    // first set at 0x7FF7CB4C34E9 (not at the frame head), so the leading
+    // accessory range runs with the previous frame's trailing zero.
+    SetProjectedStencil(sub, device, false);
+    device->SetRenderState(D3DRS_FILLMODE,
+        app->WireframeRenderingEnabled() == 0 ? D3DFILL_SOLID
+                                              : D3DFILL_WIREFRAME);
     device->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
     device->SetTexture(0, sub->hdrTexture);
+    FxSetMatrix(effect, "matWorldViewProj",
+                reinterpret_cast<const Matrix*>(&app->WorldViewProjection()));
+    FxSetMatrix(effect, "matLightViewProj",
+                reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
+    FxSetInt(effect, "transp", app->state.characterTransparentMode != 0);
+    device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+    device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
+    device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
 
     // x64 twin sub_7FF7CB4C1E60+0x4C3570..0x4C36D0 (toonFlag dispatch at
     // model+0x3B68): order and slot both run to 0xFF (cmp edi,0FFh
@@ -1533,6 +1570,11 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     device->SetPixelShader(nullptr);
     device->SetTexture(0, nullptr);
     RestoreTextureStages(device);
+    // Frame tail, x64 sub_7FF7CB4C1E60 @0x7FF7CB4C461F/0x7FF7CB4C463D (after
+    // the accessory-light restore SetLight at 0x7FF7CB4C4601):
+    // DESTBLEND(20)=INVSRCALPHA then FILLMODE(8)=SOLID - the same closing
+    // pair as the fixed frame (0x7FF7CB4C0FC3/0x7FF7CB4C0FE3).
+    device->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
     device->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
     app->ActiveRenderPass() = AccessoryRenderPass::None;
 }

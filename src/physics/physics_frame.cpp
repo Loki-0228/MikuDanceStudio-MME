@@ -651,25 +651,23 @@ void ModelPhysicsReadback(unsigned char* m) {
         float ma[16], mb[16];
         TransformToMatrix(ma, bodyA->getWorldTransform());
         TransformToMatrix(mb, bodyB->getWorldTransform());
-        // Original 0x4B26B5: d2 = ((dy*dy + dx*dx) + dz*dz); the sqrt result
-        // is kept extended for the limit/dist quotient (one rounding), while
-        // the threshold compare uses the float-rounded length.
+        // Original 0x4B26B5 / x64 0x7FF7CB4E3660..0x7FF7CB4E36D9: d2 =
+        // ((dy*dy + dx*dx) + dz*dz) and everything downstream runs single
+        // precision - sqrtf, the (dist - limit) comiss, divss limit/dist
+        // for k, and the (mb-ma)*k products as mulss into the translation.
         const float dy = ma[13] - mb[13], dx = ma[12] - mb[12],
                     dz = ma[14] - mb[14];
         const float d2 = dy * dy + dx * dx + dz * dz;
-        const double distExt = std::sqrt(static_cast<double>(d2));
-        const float dist = static_cast<float>(distExt);
+        const float dist = std::sqrt(d2);
         const float limit = joint.radiusBound;
         if (dist - limit < 2.0f)
             continue;
-        const double kExt = limit / distExt;
-        // Each (mb-ma)*k product stays extended until the single float store
-        // into the translation argument (0x4B2728..0x4B2760).
+        const float k = limit / dist;
         float t[16];
         D3dxTranslation(reinterpret_cast<D3DXMATRIXF*>(t),
-                        static_cast<float>((mb[12] - ma[12]) * kExt),
-                        static_cast<float>((mb[13] - ma[13]) * kExt),
-                        static_cast<float>((mb[14] - ma[14]) * kExt));
+                        (mb[12] - ma[12]) * k,
+                        (mb[13] - ma[13]) * k,
+                        (mb[14] - ma[14]) * k);
         D3dxMul(reinterpret_cast<D3DXMATRIXF*>(ma),
                 reinterpret_cast<const D3DXMATRIXF*>(ma),
                 reinterpret_cast<const D3DXMATRIXF*>(t));
@@ -768,24 +766,24 @@ void ModelPhysicsReadback(unsigned char* m) {
                                            tb.matLocal));
             if (limit[3] > 1.0f) limit[3] = 1.0f;
             if (limit[3] < -1.0f) limit[3] = -1.0f;
-            // CRT double acos, rounded once (0x4B2CAA).
-            float angle = static_cast<float>(
-                std::acos(static_cast<double>(limit[3])));
+            // x64 0x7FF7CB4E3C85: acosf (float CRT), then subss with the
+            // truncated-pi float 0x4048F5C3.
+            float angle = std::acos(limit[3]);
             if (limit[3] < 0.0f)
                 angle -= 3.140000104904175f;                 // 0x529xxx
-            // Original 0x4B2CED: ((y*y + x*x) + z*z).
+            // Original 0x4B2CED / x64 0x7FF7CB4E3CD6: ((y*y + x*x) + z*z)
+            // through sqrtf.
             const float axisLen = std::sqrt(limit[1] * limit[1] +
                                             limit[0] * limit[0] +
                                             limit[2] * limit[2]);
             if (angle != 0.0f && axisLen >= 0.00000011920929f) {
                 const float a = angle * bone.inheritRatio;
-                // Original calls CRT double sin/cos and rounds once to float.
-                const float s = static_cast<float>(
-                    std::sin(static_cast<double>(a))) / axisLen;
+                // x64 0x7FF7CB4E3D0E/0x7FF7CB4E3D5F: sinf/cosf and a
+                // divss sin/axisLen.
+                const float s = std::sin(a) / axisLen;
                 const float rot[4] = {-limit[0] * s, -limit[1] * s,
                                       -limit[2] * s,
-                                      static_cast<float>(std::cos(
-                                          static_cast<double>(a)))};
+                                      std::cos(a)};
                 // Multiplication order differs per unrolled original path:
                 // parent>=0 (0x4B2DB6) computes rot*q; parent<0 (0x4B3339)
                 // computes q*rot in place.
@@ -836,35 +834,27 @@ void ModelPhysicsReadback(unsigned char* m) {
 // dynamic result is read back after the settle iterations.
 void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     auto& s = *app;
-    // ---- gate A: the pump physics-enable counter (x64 app+0xA1E18) ------
-    // Refreshed at the main-pump prologue (0x7FF7CB44755E..0x7FF7CB4475DD):
-    // the counter is set to 1 while playing ([app+0x368]), while the
-    // idle-physics suppress toggle is OFF ([app+0xA54CC] == 0) or while the
-    // modeless physics dialog is open ([app+0xA1B98] != 0); afterwards it
-    // walks 1->2->3->0.  0x7FF7CB44B8E7 (`cmp [app+0xA1E18],0 / jz ->
-    // 0x7FF7CB44C8D6`) skips the ENTIRE physics section - wind, gravity,
-    // settle request, pose passes, world pass and readback - once it has
-    // decayed to 0, i.e. two pump passes after the last trigger dropped.
-    // The port has neither the suppress toggle nor the modeless physics
-    // dialog yet, so the second trigger is permanently true here and the
-    // gate cannot close today; the ladder is kept 1:1 so porting either
-    // trigger reactivates it without touching this function again.
+    // ---- gate A: the shared message-seen / pump counter ------------------
+    // ONE field in both originals (x64 app+0xA1E18 / x86 app+0xA0D6C =
+    // state.messageSeen), with three jobs: the Present gate in section 9 of
+    // FrameDriver, the pump-region gates, and this physics gate. Every
+    // window message (MainWndProc entry) and each dialog-proc entry point
+    // resets it to 1; the pump prologue (AdvanceFrameRenderGate,
+    // 0x7FF7CB44755E..0x7FF7CB4475DD / x86 0x46B0B1..0x46B117, called at the
+    // top of FrameDriver) refreshes it to 1 while playing ([0x368]/[0x330]),
+    // while the idle-physics suppress toggle is OFF ([0xA54CC] / x86
+    // 0xA4420 = FrameVolumeControlEnabled, menu 299) or while the modeless
+    // model-edge dialog is open ([0xA1B98] / x86 0xA0B50 = FrameRangeDialog,
+    // menu 259); otherwise it walks 1->2->3->0.  0x7FF7CB44B8E7
+    // (`cmp [app+0xA1E18],0 / jz -> 0x7FF7CB44C8D6`, x86 twin 0x46EFBE)
+    // skips the ENTIRE physics section - wind, gravity, settle request,
+    // pose passes, world pass and readback - once it has decayed to 0, i.e.
+    // two pump passes after the last trigger dropped.  A mouse hovering the
+    // window keeps it alive through WM_MOUSEMOVE, like the original.
     // (PlaybackCatchup is not behind this gate in the port: the x64
     // catch-up blocks share it but can only run while playing, which
     // already holds the counter open.)
-    const bool physicsIdleSuppressed = false;  // x64 app+0xA54CC toggle
-    const bool physicsDialogOpen = false;      // x64 app+0xA1B98 dialog
-    std::int32_t& pumpCounter = s.PhysicsPumpCounter();   // x64 0xA1E18
-    if (s.PlaybackActive() != 0 || !physicsIdleSuppressed ||
-        physicsDialogOpen)
-        pumpCounter = 1;
-    if (pumpCounter == 1)
-        pumpCounter = 2;
-    else if (pumpCounter == 2)
-        pumpCounter = 3;
-    else if (pumpCounter == 3)
-        pumpCounter = 0;
-    if (pumpCounter == 0)
+    if (s.state.messageSeen == 0)
         return;                       // 0x7FF7CB44B8E7 -> 0x7FF7CB44C8D6
     PhysicsScene* scene = s.Physics();
     if (scene == nullptr)
@@ -952,30 +942,29 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             world->setGravity(btVector3(e0, e1, e2));
             s.state.gravityNoiseTimer = 0.0f;                     // 0x46F6AC
 #else
-            // portable fallback (double chains, float strength round-trip)
-            const float strengthF = static_cast<float>(
-                static_cast<double>(std::rand()) * 10.0 / 32767.0 *
-                    static_cast<double>(
-                        s.GravityNoise()) +
-                static_cast<double>(s.GravityMagnitude()));
-            const double kNoise = 0.20000000298023224;   // dbl_52E9F0
-            const double kOffset = 0.10000000149011612;  // dbl_52BEA8
-            const double strength = static_cast<double>(strengthF);
-            const double e0 =
-                (static_cast<double>(std::rand()) * kNoise / 32767.0 -
-                 kOffset + static_cast<double>(s.GravityX())) *
-                strength;
-            const double e1 =
-                (static_cast<double>(std::rand()) * kNoise / 32767.0 -
-                 kOffset + static_cast<double>(s.GravityY())) *
-                strength;
-            const double e2 =
-                (static_cast<double>(std::rand()) * kNoise / 32767.0 -
-                 kOffset + static_cast<double>(s.GravityZ())) *
-                strength;
-            world->setGravity(btVector3(static_cast<float>(e0),
-                                        static_cast<float>(e1),
-                                        static_cast<float>(e2)));
+            // x64 0x7FF7CB44BECF..0x7FF7CB44BFB7: the SAME chain as the
+            // x87 block but in single precision - cvtdq2ps + mulss 10.0f
+            // + divss 32767.0f (0x46FFFE00) for the strength, then per
+            // axis mulss 0.2f / divss 32767.0f / subss 0.1f / addss dir /
+            // mulss strength.  The strength stays a float value end to
+            // end (no double round-trip).
+            const int rStrength = std::rand();
+            const float noise =
+                static_cast<float>(s.GravityNoise());
+            const float gravmag = s.GravityMagnitude();
+            const float strength =
+                ((static_cast<float>(rStrength) * 10.0f) / 32767.0f) *
+                    noise + gravmag;
+            const float e0 =
+                ((static_cast<float>(std::rand()) * 0.2f) / 32767.0f -
+                 0.1f + s.GravityX()) * strength;
+            const float e1 =
+                ((static_cast<float>(std::rand()) * 0.2f) / 32767.0f -
+                 0.1f + s.GravityY()) * strength;
+            const float e2 =
+                ((static_cast<float>(std::rand()) * 0.2f) / 32767.0f -
+                 0.1f + s.GravityZ()) * strength;
+            world->setGravity(btVector3(e0, e1, e2));
             s.state.gravityNoiseTimer = 0.0f;                     // 0x46F6AC
 #endif
         }
@@ -983,11 +972,13 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     }
     // ---- normal per-pass gravity apply (0x46F6B9..0x46F7D9) ------------
     // Runs every physics pass with the noise mode off: an all-zero
-    // direction gets Y nudged to 0.1f (flt_529624), the direction goes
-    // through the real D3DXVec3Normalize (x87 codegen), and each gravity
-    // component is (mag*n_i)*10.0 on the x87 stack with a single store
-    // (dbl_52C170 = 10.0).  The wind block above jumps to 0x46F7DB -
-    // right past this setGravity - and physics-off (A0CC4<=0) skips both.
+    // direction gets Y nudged to 0.1f (flt_0x529624), the direction goes
+    // through the real D3DXVec3Normalize, and each gravity component is
+    // (n_i*mag)*10.0f.  x64 0x7FF7CB44C0C1..0x7FF7CB44C0E9 runs that
+    // product as two mulss (mag, then the preloaded 10.0f) - single
+    // precision, one rounding per multiply.  The wind block above jumps
+    // to 0x46F7DB - right past this setGravity - and physics-off
+    // (A0CC4<=0) skips both.
     if (count > 0 && !windRan) {
         float dir[3] = {s.state.gravityX,
                         s.state.gravityY,
@@ -999,12 +990,11 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
             // 重力对话框读到的都是被拨正后的 0.1。
             s.state.gravityY = dir[1] = 0.1f;                  // flt 0x529624
         D3dxVec3Normalize(dir, dir);                          // 0x46F741
-        const double mag =
-            static_cast<double>(s.state.gravityMagnitude);
+        const float mag = s.state.gravityMagnitude;
         world->setGravity(btVector3(
-            static_cast<float>((mag * dir[0]) * 10.0),
-            static_cast<float>((mag * dir[1]) * 10.0),
-            static_cast<float>((mag * dir[2]) * 10.0)));      // 0x46F7D9
+            (dir[0] * mag) * 10.0f,
+            (dir[1] * mag) * 10.0f,
+            (dir[2] * mag) * 10.0f));                         // 0x46F7D9
     }
     // 0x46F575: `cmp [ebx+0xA0CC4], 0 / jle 0x46F7DB` - A0CC4 == 0
     // ("physical operation: no calculation") skips the random-wind block

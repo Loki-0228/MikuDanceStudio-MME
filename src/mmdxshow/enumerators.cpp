@@ -262,7 +262,7 @@ STDMETHODIMP CEnumPins::Clone(IEnumPins** ppEnum)
         *ppEnum = NULL;
         return VFW_E_ENUM_OUT_OF_SYNC;
     }
-    CEnumPins* pNew = new (std::nothrow) CEnumPins(m_pFilter, this);   // new(0x30)
+    CEnumPins* pNew = new (std::nothrow) CEnumPins(m_pFilter, this);   // new(0x30) / x64 new(0x48)
     *ppEnum = pNew;
     if (pNew == NULL)
         return E_OUTOFMEMORY;
@@ -403,7 +403,7 @@ STDMETHODIMP CEnumMediaTypes::Clone(IEnumMediaTypes** ppEnum)
         *ppEnum = NULL;
         return VFW_E_ENUM_OUT_OF_SYNC;
     }
-    CEnumMediaTypes* pNew = new (std::nothrow) CEnumMediaTypes(m_pPin, this); // new(0x14)
+    CEnumMediaTypes* pNew = new (std::nothrow) CEnumMediaTypes(m_pPin, this); // new(0x14) / x64 new(0x20)
     *ppEnum = pNew;
     if (pNew == NULL)
         return E_OUTOFMEMORY;

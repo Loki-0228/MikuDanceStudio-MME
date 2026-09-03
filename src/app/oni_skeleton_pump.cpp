@@ -31,7 +31,9 @@
 //                  = FPS/10（30fps -> 3 样本，60fps -> 6 样本，内部钳 30）。
 //   0x7FF7CB44C52D  模型+0x3CA0(matMisc / x86 14584，SM-Lip 追踪采样计数)
 //                  >= 0x3138(12600) 时：CheckMenuItem(菜单 0x124, MF_UNCHECKED)
-//                  + [app+0xA1E14]=0（捕获阶段字节，见 KinectCaptureStage）。
+//                  + [app+0xA1E14]=0（捕获阶段字节 = state.autoRepeat，
+//                  x86 0xA0D68——即菜单 0x124/WM_TIMER 0x65 的同一状态机
+//                  字节，13 处读写在双架构间一一对应）。
 //   0x7FF7CB44C560  ModelStandardPoseSetup(模型, [0xA1E14]==4,
 //                  kinectMirrorEnabled(0xA1370/x86 0xA03DC),
 //                  kinectInitLostBone(0xA1371/x86 0xA03DD))——x64
@@ -521,14 +523,14 @@ void PumpKinectSkeleton(MMDApp* app, unsigned char selActive) {
     if (static_cast<std::uint32_t>(mdl::Mdl(model)->matMisc) >= 12600) {
         CheckMenuItem(GetMenu(static_cast<HWND>(s.Hwnd())), 0x124,
                       MF_UNCHECKED);
-        s.KinectCaptureStage() = 0;              // x64 0xA1E14
+        s.state.autoRepeat = 0;                  // x64 0xA1E14 / x86 0xA0D68
     }
 
     // ④ 标准姿态装填 + 录制沿检测（0x7FF7CB44C560..0x7FF7CB44C59B）：
     // 返回 0（本帧没有结束一段录制）-> 直接落到 gate B。
     const char wasRecording = ModelStandardPoseSetup(
         model,
-        s.KinectCaptureStage() == 4 ? 1 : 0,     // dl = (阶段==4)
+        s.state.autoRepeat == 4 ? 1 : 0,         // dl = (阶段==4)
         s.state.kinectMirrorEnabled,             // r8 = 0xA1370
         s.state.kinectInitLostBone);             // r9 = 0xA1371
     if (wasRecording == 0)
@@ -551,6 +553,47 @@ void PumpKinectSkeleton(MMDApp* app, unsigned char selActive) {
     s.state.kinectCaptureActive = 0;              // 0xA1373 / x86 0xA03DF
     s.state.fpsLimit = s.state.fpsLimitSaved;     // [0xA1904] = [0xA1374]
     PanelPaint(app);                              // 0x7FF7CB480EA0
+}
+
+// ---------------------------------------------------------------------------
+// x86 0x46DCCF..0x46DD61 / x64 0x7FF7CB44A34C..0x7FF7CB44A3EC -
+// ManageKinectRecordGate：泵序言里 OpenNIIsTracking 探测（frame_driver.cpp
+// 的 selActive 块）的紧后处理。调用方已保证门条件（Kinect 已启用且非逐帧
+// 回放）；本函数无返回值。
+//
+//   ① 深度图绘制请求（0x46DCCF/0x7FF7CB44A34C）：
+//      OpenNIDrawDepthMap(bool)（导出槽 2，x86 [app+0xA03C8] /
+//      x64 [app+0xA1348]）——kinectCaptureActive(0xA03DF)与捕获阶段
+//      (0xA0D68/0xA1E14)都为 0（完全闲置）时传 0，否则传 1。
+//   ② 菜单 0x124 卫生（0x46DCFE..0x46DD61/0x7FF7CB44A37C..0x7FF7CB44A3E4）：
+//      selActive && 非相机模式(app+0x2F8/0x328) -> EnableMenuItem(0x124,
+//      MF_ENABLED(0))；否则 EnableMenuItem(0x124, MF_GRAYED(1)) +
+//      CheckMenuItem(0x124, MF_UNCHECKED) + 捕获阶段清零（丢失跟踪时把
+//      自动帧录制的菜单掐灭并复位状态机；DisableKinect 0x42A044 同款）。
+// ---------------------------------------------------------------------------
+void ManageKinectRecordGate(MMDApp* app, unsigned char selActive) {
+    auto& s = *app;
+
+    // ① 深度图：闲置（既不在捕获文件驱动下、也不在录制状态机的任一
+    // 阶段）时不画。
+    auto drawDepthMap = reinterpret_cast<void (__stdcall*)(unsigned char)>(
+        s.OniExportSlot(2));                      // x64 [app+0xA1348]
+    if (drawDepthMap != nullptr)
+        drawDepthMap(
+            (s.state.kinectCaptureActive == 0 &&   // x86 0xA03DF
+             s.state.autoRepeat == 0)              // x86 0xA0D68
+                ? 0
+                : 1);
+
+    // ② 菜单 0x124：跟踪中且非相机模式才可用。
+    HMENU menu = GetMenu(static_cast<HWND>(s.Hwnd()));
+    if (selActive != 0 && s.state.optflag[0] == 0) {
+        EnableMenuItem(menu, 0x124, 0);           // MF_ENABLED
+        return;
+    }
+    EnableMenuItem(menu, 0x124, 1);               // MF_GRAYED
+    CheckMenuItem(menu, 0x124, MF_UNCHECKED);
+    s.state.autoRepeat = 0;                       // x64 0xA1E14 / x86 0xA0D68
 }
 
 }  // namespace mikudancestudio

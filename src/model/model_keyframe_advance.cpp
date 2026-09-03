@@ -43,13 +43,17 @@
 //       working position/quaternion copies, +484 type byte, +492 notify
 //       gate, +493 current mode, +600 selector index (-1 = none).
 //
-//      Quaternion blend is a hand-rolled slerp (0x4A43EF): dot clamp to
-//      +-0.99999994f (0x3F7FFFFF), angle = acos (double), and when the angle
-//      exceeds the original's pi/2 constant (double 0x3FF921FB00000000 -
+//      Quaternion blend is a hand-rolled slerp (0x4A43EF / x64
+//      0x7FF7CB4F1D91): dot clamp to +-0.999999f (0x3F7FFFEF, x86
+//      flt_531134 = x64 flt_7FF7CB552C24 - NOT 0x3F7FFFFF as first
+//      transcribed), and when the angle exceeds the original's pi/2
+//      constant (x86 double 0x3FF921FB00000000 / x64 float 0x3FC90FD8 -
 //      pi/2 truncated to a 24-bit mantissa, NOT the exact double) while
 //      dot < 0 the complement angle acos(-dot) with SUBTRACTED weights is
-//      used; otherwise normal added weights.  sin/acos run in double on
-//      float-rounded intermediates.
+//      used; otherwise normal added weights.  x86 runs sin/acos in double
+//      on float-rounded intermediates; x64 is single precision end to end
+//      (acosf/sinf, weights = sin * (1/s) in this advance copy - the
+//      0x4B4260 seek copy divides sin/s instead).
 //
 //      DECOMPILER TRAP (same class as the 0x41789E one, opposite direction):
 //      Hex-Rays shows the slerp weights using the RAW fraction; live disasm
@@ -128,13 +132,18 @@ double PiHalfBits() {
     return d;
 }
 
-const float kQuatClamp = 0.99999994f;
+// x86 flt_531134 / x64 flt_7FF7CB552C24: both originals clamp the slerp
+// dot to +-0x3F7FFFEF (0.999999f) - the earlier 0.99999994f (0x3F7FFFFF)
+// was a misread of the constant's low byte.
+const float kQuatClamp = 0.999999f;
 
 const double kCpScale = 0.02362200058996677;
+// x64 uses the float image of that double: 0x3CC182ED (dword_7FF7CB552988).
+const float kCpScaleF = 0.02362200058996677f;
 
 }  // namespace
 
-// ---- VA 0x004A05A0 --------------------------------------------------------
+// ---- VA 0x004A05A0 / x64 sub_7FF7CB4EDB00 ----------------------------------
 float BoneEase(unsigned char* model, int channel, int keyIdx, float t) {  // was Sub4A05A0
     const mdl::BoneKey& rec = mdl::BoneKeys(model)[keyIdx];
     const unsigned char x1 = rec.interpolation[channel];
@@ -143,6 +152,9 @@ float BoneEase(unsigned char* model, int channel, int keyIdx, float t) {  // was
     const unsigned char y2 = rec.interpolation[channel + 12];
     if (x2 == y2 && x1 == y1) return t;  // linear curve (0x4A05DE)
 
+#if defined(_M_IX86)
+    // x86 0x4A05A0: double scale locals, x87-extended polynomial, float
+    // u/step stack slots (the compare keeps the pre-store value).
     const double x1c = static_cast<double>(
                            static_cast<signed char>(x1)) * kCpScale;
     const double x2c = static_cast<double>(
@@ -170,6 +182,37 @@ float BoneEase(unsigned char* model, int channel, int keyIdx, float t) {  // was
         (double)u * ((double)u * (double)u) +
         (double)om * (double)om * (double)u * y1c +
         (double)om * (double)u * (double)u * y2c);
+#else
+    // x64 sub_7FF7CB4EDB00: single precision end to end - the byte*scale
+    // products (mulss dword_7FF7CB552988 = 0x3CC182ED), the bisection
+    // compare (ucomiss on float gx) and the tail, which multiplies the
+    // raw y bytes first and applies the scale afterwards
+    // (0x7FF7CB4EDBC0..0x7FF7CB4EDE2E).
+    const float x1c = static_cast<float>(
+                          static_cast<signed char>(x1)) * kCpScaleF;
+    const float x2c = static_cast<float>(
+                          static_cast<signed char>(x2)) * kCpScaleF;
+    const float y1b = static_cast<float>(
+        static_cast<signed char>(y1));
+    const float y2b = static_cast<float>(
+        static_cast<signed char>(y2));
+
+    // 12 halving bisection steps on X(u) = t (the step halves BEFORE the
+    // update: mulss xmm2, 0.5f at each unrolled block head).
+    float u = 0.5f, step = 0.5f;
+    for (int i = 0; i < 12; ++i) {
+        const float om = 1.0f - u;
+        const float gx = (om * om * u) * x1c + (om * u * u) * x2c +
+                         u * u * u;
+        if (gx == t) break;                              // ucomiss
+        step *= 0.5f;
+        u = gx >= t ? u - step : u + step;
+    }
+
+    const float om = 1.0f - u;
+    return (om * om * u) * y1b * kCpScaleF + (om * u * u) * y2b * kCpScaleF +
+           u * u * u;
+#endif
 }
 
 // ---- VA 0x00499B50 --------------------------------------------------------
@@ -582,14 +625,19 @@ void AdvanceModelKeyframes(unsigned char* model, float cursor, int physicsMode) 
             // full interpolation (LABEL_122, 0x4A433D)
             const float cq[4] = {rec.rotation[0], rec.rotation[1],
                                  rec.rotation[2], rec.rotation[3]};
-            const float tF = (float)(
-                (frame - (double)prevFrame) /
-                (double)(std::uint32_t)((std::int32_t)curFrame -
-                                        (std::int32_t)prevFrame));
+            // x64 0x7FF7CB4F1D34..DD: cvtsi2ss + subss + divss - the raw
+            // fraction divides in SINGLE precision on the float-cast frame.
+            const float tF =
+                (static_cast<float>(frame) - static_cast<float>(prevFrame)) /
+                static_cast<float>(static_cast<int>(curFrame) -
+                                   static_cast<int>(prevFrame));
             // EASED rotation fraction - the slerp below uses this value
             // (see the file header's decompiler-trap note)
             const float eRot = BoneEase(m, 3, cursorIdx, tF);
 
+#if defined(_M_IX86)
+            // x86 0x4A43EF: CRT double acos/sin on float-rounded
+            // intermediates (the x87 blend products stay extended).
             const double dotD = (double)pq[0] * cq[0] +
                                 (double)pq[1] * cq[1] +
                                 (double)pq[2] * cq[2] +
@@ -610,41 +658,75 @@ void AdvanceModelKeyframes(unsigned char* model, float cursor, int physicsMode) 
                     // long way around (0x4A44C6): complement angle, weights
                     // subtracted
                     const float th2 = (float)std::acos(-(double)dc);
-                    const float s = (float)std::sin((double)th2);
+                    const float invS =
+                        (float)(1.0 / (double)(float)std::sin((double)th2));
                     const float aStart =
                         (float)((1.0 - (double)eRot) * (double)th2);
-                    const float sin0 =
-                        (float)std::sin((double)aStart);
                     const float w0 =
-                        (float)((double)sin0 / (double)s);
+                        (float)std::sin((double)aStart) * invS;
                     const float aEnd = (float)((double)eRot * (double)th2);
-                    const float sin1 =
-                        (float)std::sin((double)aEnd);
                     const float w1 =
-                        (float)((double)sin1 / (double)s);
+                        (float)std::sin((double)aEnd) * invS;
                     for (int c = 0; c < 4; ++c)
                         bone->rotQuat[c] =
                             (float)((double)pq[c] * (double)w0 -
                                     (double)w1 * (double)cq[c]);
                 } else {
-                    const float s = (float)std::sin((double)th);
+                    const float invS =
+                        (float)(1.0 / (double)(float)std::sin((double)th));
                     const float aStart =
                         (float)((1.0 - (double)eRot) * (double)th);
-                    const float sin0 =
-                        (float)std::sin((double)aStart);
                     const float w0 =
-                        (float)((double)sin0 / (double)s);
+                        (float)std::sin((double)aStart) * invS;
                     const float aEnd = (float)((double)eRot * (double)th);
-                    const float sin1 =
-                        (float)std::sin((double)aEnd);
                     const float w1 =
-                        (float)((double)sin1 / (double)s);
+                        (float)std::sin((double)aEnd) * invS;
                     for (int c = 0; c < 4; ++c)
                         bone->rotQuat[c] =
                             (float)((double)pq[c] * (double)w0 +
                                     (double)w1 * (double)cq[c]);
                 }
             }
+#else
+            // x64 0x7FF7CB4F1D91..0x7FF7CB4F2040: SSE single precision -
+            // float dot accumulation, ucomiss parallel test on
+            // 1.0f - dot*dot, acosf/sinf, float angle products, and the
+            // weights formed as sin * (1.0f/s) with the reciprocal
+            // computed ONCE by divss (0x7FF7CB4F1EB7, then mulss at
+            // 0x7FF7CB4F1ED8/0x7FF7CB4F1EEE).  The pi/2 gate compares
+            // against dword_7FF7CB552C1C = 0x3FC90FD8 (the float image of
+            // the truncated-double constant - float-exact, so the double
+            // compare below is bit-identical).
+            const float dot = pq[0] * cq[0] + pq[1] * cq[1] +
+                              pq[2] * cq[2] + pq[3] * cq[3];
+            if (1.0f - dot * dot == 0.0f) {
+                // parallel quaternions: previous key verbatim (0x4A4414)
+                for (int c = 0; c < 4; ++c) bone->rotQuat[c] = pq[c];
+            } else {
+                float dc = dot;
+                if (dc > 1.0f)
+                    dc = kQuatClamp;
+                else if (dc < -1.0f)
+                    dc = -kQuatClamp;
+                const float th = std::acos(dc);
+                if (th > 1.570796012878418f && dc < 0.0f) {
+                    // long way around (0x4A44C6): complement angle, weights
+                    // subtracted
+                    const float th2 = std::acos(-dc);
+                    const float invS = 1.0f / std::sin(th2);
+                    const float w0 = std::sin((1.0f - eRot) * th2) * invS;
+                    const float w1 = std::sin(eRot * th2) * invS;
+                    for (int c = 0; c < 4; ++c)
+                        bone->rotQuat[c] = pq[c] * w0 - w1 * cq[c];
+                } else {
+                    const float invS = 1.0f / std::sin(th);
+                    const float w0 = std::sin((1.0f - eRot) * th) * invS;
+                    const float w1 = std::sin(eRot * th) * invS;
+                    for (int c = 0; c < 4; ++c)
+                        bone->rotQuat[c] = pq[c] * w0 + w1 * cq[c];
+                }
+            }
+#endif
 
             // position easing (0x4A46AF); the raw fraction goes in, the
             // callee eases per axis.  Type gate uses a SIGNED <= 6 compare

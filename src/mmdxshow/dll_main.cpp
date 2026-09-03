@@ -1,6 +1,18 @@
 // =============================================================================
 // MMDxShow.dll — Phase A: exports, class factory, registration  (dll_main.cpp)
 // =============================================================================
+// x64 flavour note (MikuMikuDanceE_v932x64/Data/MMDxShow.dll, VC10 rebuild):
+// the registration/module-plumbing logic is identical function-for-function
+// (same template walk, same CLSID/InprocServer32/ThreadingModel="Both" keys,
+// same IFilterMapper2-then-IFilterMapper fallback, same FilterData via
+// REGFILTER2{1, merit 0x200000}, same DllCanUnloadNow/DllMain shape).  The
+// rebuild was compiled against the wide flavours of the registry/version
+// APIs (its imports are RegCreateKeyW/RegSetValueW/RegEnumKeyExW/GetVersionExW
+// + _vsnwprintf), where the VC8 x86 binary imports the ANSI ones.  The
+// registry-visible state is byte-identical either way (the registry stores
+// UTF-16 natively and converts ANSI on write), so this port keeps the x86
+// ANSI shape for both architectures.
+//
 // Faithful port of the original module-plumbing functions:
 //   DllMain                 0x10001C10 (thunk) -> 0x10005930
 //   DllCanUnloadNow         0x10005AB0
@@ -320,7 +332,7 @@ extern "C" HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void**
         }
     }
 
-    CClassFactory* pFactory = new CClassFactory(pTemplate);   // operator new(0xC)
+    CClassFactory* pFactory = new CClassFactory(pTemplate);   // operator new(0xC) / x64 new(0x18)
     *ppv = pFactory;
     if (pFactory == NULL)
         return E_OUTOFMEMORY;
@@ -390,6 +402,8 @@ static LSTATUS RecursiveDeleteKeyA(HKEY hKey, LPCSTR lpSubKey)
 }
 
 // 0x10005330 — HKCR\CLSID\{...} = name, InprocServer32 = module, ThreadingModel = "Both"
+// (the x64 rebuild's 0x180005730 is the same body over the W APIs, including
+//  the fixed 260-element buffer passed as a 0x208-byte RegSetValueW size)
 static HRESULT RegSetClassIdKey(REFCLSID clsid, LPCWSTR wszName, LPCWSTR wszModule,
                                 LPCWSTR wszThreadingModel /* L"Both" */,
                                 LPCWSTR wszServerKey /* L"InprocServer32" */)
@@ -456,7 +470,7 @@ static HRESULT RegisterServerClassIds(LPCWSTR wszModule, BOOL bRegister)
     return hr;
 }
 
-// 0x100055F0 — IFilterMapper2 path.
+// 0x100055F0 (x64 0x180005670) — IFilterMapper2 path.
 // Builds REGFILTER2 {1, dwMerit, cPins, rgPins} out of the setup blob.
 // NOTE: the original calls vtable+0x10 (UnregisterFilter) with three pushed
 // arguments (NULL, NULL, clsid) — an artifact of the old headers it was built

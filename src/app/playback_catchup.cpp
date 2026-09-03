@@ -60,7 +60,10 @@
 //                               !(end < target).
 //   "test ah,5 / jnp loop"    = continue while cursor < target (NaN exits)
 //                               -> plain float < in C++.
-//   1/60 additions run in double and round to float on store (fstp dword).
+//   1/60 additions: x86 runs them in double and rounds to float on store
+//   (fstp dword); the x64 twin (sub_7FF7CB4474F0 region 0x7FF7CB44BA81
+//   etc.) is a plain addss against the .rdata float 0x3C888889 - the
+//   port follows the x64 single-precision form (behavior basis).
 //
 // The var_14A1 local ("selection active") is threaded in from FrameDriver
 // where the original computes it (0x46DCA6..0x46DCCD): zeroed, then filled
@@ -104,11 +107,11 @@
 namespace mikudancestudio {
 namespace {
 
-// fild dword + "test/jge/fadd flt_52B9F0": signed int loaded, +2^32 when
-// negative - i.e. reinterpret the dword as unsigned.
-double UnsigInt(std::int32_t v) {
-    return v < 0 ? static_cast<double>(v) + 4294967296.0
-                 : static_cast<double>(v);
+// fild dword + "test/jge/fadd flt_52B9F0" (x86) / zero-extended
+// cvtsi2ss r64 (x64, e.g. 0x7FF7CB44B96B): signed dword reinterpreted as
+// unsigned before the float conversion.
+float UnsigFlt(std::int32_t v) {
+    return static_cast<float>(static_cast<std::uint32_t>(v));
 }
 
 inline float& Cursor(MMDApp* app) {
@@ -130,11 +133,10 @@ void StepWorld(btDiscreteDynamicsWorld* world) {
     world->stepSimulation(1.0f / 60.0f, 10, 1.0f / 60.0f);   // 0x46F206
 }
 
-// Cursor += 1/60: the addition runs in double (fadd dbl_52EA08) and is
-// rounded to float when stored.
+// Cursor += 1/60.  x64: addss against the .rdata float 0x3C888889
+// (xmm10 slot 0x7FF7CB552D34) - one single-precision rounding.
 void BumpCursor(MMDApp* app) {
-    Cursor(app) = static_cast<float>(static_cast<double>(Cursor(app)) +
-                                     (1.0 / 60.0));
+    Cursor(app) += 1.0f / 60.0f;
 }
 
 // 0x46F171..0x46F1DD (block 1) / 0x46F41B..0x46F4BE (block 2): per-model
@@ -257,8 +259,9 @@ void PlayingBeyondEnd(MMDApp* app) {
         GetWindowTextA(GetDlgItem(static_cast<HWND>(s.Hwnd()), panel::kPlayStartFrameEdit),
                        text, 8);
         const std::int32_t frame = std::atol(text);
-        s.PlaybackStartSeconds() =
-            static_cast<float>(UnsigInt(frame) / 30.0);
+        // x64 0x7FF7CB44BC3E..0x7FF7CB44BC4B: cvtsi2ss of the
+        // zero-extended frame, then divss by the 30.0f slot.
+        s.PlaybackStartSeconds() = UnsigFlt(frame) / 30.0f;
         s.PlaybackPhysicsMode() = s.SavedPlaybackPhysicsMode();
         Cursor(app) = s.PlaybackStartSeconds();
         UpdateBoneFrames(app);                              // 0x433A40
@@ -292,12 +295,15 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
     const bool selSkip = selActive != 0;
 
     // ---- 1. frame counter display + N++ (0x46EEE0..0x46EFB7) ------------
+    // x64 0x7FF7CB44B850..0x7FF7CB44B8A4, all single precision: N*30 as an
+    // INTEGER (imul eax, 1Eh) then movd/cvtdq2ss, divss by the fps float,
+    // addss the zero-extended frameA, cvttss2si r32.
     if (s.state.aviStereoOutput == 0) {
         const std::int32_t n = s.state.recordedFrameCount;
         const std::int32_t frameA = s.AviRecordStartFrame();
-        const double fps = s.AviRecordFps();
+        const float fps = s.AviRecordFps();
         const int shown = static_cast<int>(
-            UnsigInt(frameA) + static_cast<double>(n * 30) / fps);
+            static_cast<float>(n * 30) / fps + UnsigFlt(frameA));
         wchar_t buf[0x100];
         if (s.state.englishUI != 0) {
             swprintf_s(buf, 0x100, L" %dframe recording(until %dframe)",
@@ -327,46 +333,58 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
 
     if (s.FrameStepPlayback() != 0) {
         // ---- 4. frame-step mode (0x46EFFB..0x46F25B) --------------------
-        // var_14C8 = 1/fps (0x46F00D, x87 double divide, one rounding at
-        // the float store): the frame's FULL dt budget, of which the BLOCK
+        // var_14C8 = 1/fps: the frame's FULL dt budget, of which the BLOCK
         // loop substeps below consume their 1/60s and the settle main
-        // step steps the remainder.
+        // step steps the remainder.  x64 0x7FF7CB44B940..0x7FF7CB44B956:
+        // movss 1.0f then divss by the fps float - single precision.
         const std::int32_t n = s.state.recordedFrameCount;
         const std::int32_t frameA = s.AviRecordStartFrame();
-        const double fps = s.AviRecordFps();
-        g_CatchupDtBudget = static_cast<float>(1.0 / fps);    // 0x46F00D
-        // x87 sequence 0x46F011..0x46F054, operand order decoded from the
-        // disassembly: (N*30)/fps [one rounding], + frameA [one rounding],
-        // /30 into the target store [one rounding].  I.e. the frame-step
-        // target advances N/fps SECONDS per pass (one frame per pass at
-        // fps 30) - the port first read it as (frameA+30/fps)/(N*30),
-        // which DECREASES with N and pinned the recording cursor at 0.
-        const double term = UnsigInt(frameA) +
-                            static_cast<double>(n) * 30.0 / fps;
-        const float target = static_cast<float>(term / 30.0);  // 0x46F054
-        const std::uint32_t gate =
-            static_cast<std::uint32_t>(static_cast<int>(term));
+        const float fps = s.AviRecordFps();
+        g_CatchupDtBudget = 1.0f / fps;                     // 0x46F00D
+        // x64 0x7FF7CB44B92E..0x7FF7CB44B984, all single precision:
+        //   term   = ((float)N * 30.0f) / fps + (float)(u32)frameA
+        //            [movd/cvtdq2ss N, mulss 30.0f, divss fps,
+        //             cvtsi2ss zero-extended frameA, addss]
+        //   gate   = (u32)(int64)term   [cvttss2si r64, low half]
+        //   target = term / 30.0f       [divss]
+        // I.e. the frame-step target advances N/fps SECONDS per pass (one
+        // frame per pass at fps 30) - the port first read it as
+        // (frameA+30/fps)/(N*30), which DECREASES with N and pinned the
+        // recording cursor at 0.  NOTE: the display formula above
+        // multiplies N*30 as INTEGERS first; this path multiplies as
+        // float - keep the two apart.
+        const float term = static_cast<float>(n) * 30.0f / fps +
+                           UnsigFlt(frameA);
+        const float target = term / 30.0f;                  // 0x46F054
+        const std::uint32_t gate = static_cast<std::uint32_t>(
+            static_cast<std::int64_t>(term));
         const std::uint32_t limit = static_cast<std::uint32_t>(
             s.AviRecordEndFrame() + 1);
         if (gate < limit) {                                 // 0x46F06A jb
-            // BLOCK 1 (0x46F12C): catch-up loop, no selection skip.
-            BumpCursor(app);
-            btDiscreteDynamicsWorld* world = PlayWorld(app);
-            if (target > Cursor(app)) {
-                do {
-                    PlaybackPoseAdvance(app, 1);           // 0x46F16C
-                    OrderedMorphPhysicsPass(app, count, false);
-                    // 0x46F1DF: `lea 0x780(%ebx),%edi; add $0x4` - FORWARD
-                    // slot order (block 2 at 0x46F4CA is forward too).
-                    KinematicSyncPass(app, false, false);
-                    StepWorld(world);
-                    // 0x46F226: the dt budget pays for the substep (double
-                    // subtract, one rounding at the float store).
-                    g_CatchupDtBudget = static_cast<float>(
-                        static_cast<double>(g_CatchupDtBudget) -
-                        (1.0 / 60.0));
-                    BumpCursor(app);
-                } while (Cursor(app) < target);             // 0x46F255
+            // BLOCK 1 (0x46F12C): catch-up loop, no selection skip.  The
+            // block is gated on the physics-mode counter exactly like
+            // BLOCK 2 (x86 `cmp [this+0xA0CC4],1 / jl` at 0x46F12C; x64
+            // `cmp [r12+0xA1D4C],1 / jl` at 0x7FF7CB44BA6A, reached from
+            // the frame-step gate's jb at 0x7FF7CB44B986) - the port
+            // previously ran the loop unconditionally here.
+            if (count >= 1) {
+                BumpCursor(app);
+                btDiscreteDynamicsWorld* world = PlayWorld(app);
+                if (target > Cursor(app)) {
+                    do {
+                        PlaybackPoseAdvance(app, 1);       // 0x46F16C
+                        OrderedMorphPhysicsPass(app, count, false);
+                        // 0x46F1DF: `lea 0x780(%ebx),%edi; add $0x4` -
+                        // FORWARD slot order (block 2 at 0x46F4CA is
+                        // forward too).
+                        KinematicSyncPass(app, false, false);
+                        StepWorld(world);
+                        // 0x46F226 / x64 0x7FF7CB44BB64: the dt budget
+                        // pays for the substep (subss 1/60f).
+                        g_CatchupDtBudget -= 1.0f / 60.0f;
+                        BumpCursor(app);
+                    } while (Cursor(app) < target);         // 0x46F255
+                }
             }
             Cursor(app) = target;                           // 0x46F566
             // 0x46F566 falls THROUGH to 0x46F56C: the final
@@ -437,11 +455,14 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
     const std::uint64_t t0 =
         (static_cast<std::uint64_t>(s.PlaybackClockAnchorHigh()) << 32) |
         s.PlaybackClockAnchorLow();
-    const double elapsed =
-        static_cast<double>(static_cast<std::int64_t>(now - t0));
-    const float target = static_cast<float>(
-        elapsed * static_cast<double>(s.MilliToSec()) +
-        static_cast<double>(s.PlaybackStartSeconds()));
+    // x64 0x7FF7CB44BB86..0x7FF7CB44BBB3, all single precision: the 64-bit
+    // tick delta goes straight into a float (cvtsi2ss rax), then mulss by
+    // MilliToSec and addss the start seconds.  The old port widened
+    // everything to double and rounded once at the store.
+    const std::int64_t elapsed =
+        static_cast<std::int64_t>(now - t0);
+    const float target = static_cast<float>(elapsed) * s.MilliToSec() +
+                         s.PlaybackStartSeconds();
     const float end = s.PlaybackEndSeconds();
 
 #ifdef MIKUDANCESTUDIO_DIAG
@@ -451,7 +472,7 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
             fprintf(tf,
                     "pass cursor=%.5f target=%.5f end=%.5f elapsed=%.3f "
                     "b330=%d sel=%d\n",
-                    Cursor(app), target, end, elapsed,
+                    Cursor(app), target, end, static_cast<double>(elapsed),
                     s.PlaybackActive(), selSkip);
             fclose(tf);
         }
@@ -469,11 +490,9 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive) {
                     OrderedMorphPhysicsPass(app, count, selSkip);
                     KinematicSyncPass(app, false, selSkip);
                     StepWorld(world);
-                    // BLOCK 2 twin of 0x46F226: the substep is paid from
-                    // the dt budget.
-                    g_CatchupDtBudget = static_cast<float>(
-                        static_cast<double>(g_CatchupDtBudget) -
-                        (1.0 / 60.0));
+                    // BLOCK 2 twin of 0x46F226 (x64 0x7FF7CB44BE57):
+                    // the substep is paid from the dt budget (subss 1/60f).
+                    g_CatchupDtBudget -= 1.0f / 60.0f;
                     BumpCursor(app);
 #ifdef MIKUDANCESTUDIO_DIAG
                     if (tracePlayLeft > 0 && getenv("MIKUDANCESTUDIO_TRACE_PLAY")) {

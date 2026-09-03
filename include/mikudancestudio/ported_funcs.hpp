@@ -440,6 +440,10 @@ void DisableKinect(MMDApp* app);                     // VA 0x0042A020
 // x64 泵 0x7FF7CB44C12E..0x7FF7CB44C656（settle 门内、gate B 前），
 // 由 frame_driver.cpp 在 PhysicsFrame 之前调用（见该处注释）。
 void PumpKinectSkeleton(MMDApp* app, unsigned char selActive);
+// 泵序言的 Kinect 探测后处理（x86 0x46DCCF..0x46DD61 / x64 0x7FF7CB44A34C..
+// 0x7FF7CB44A3EC）：深度图绘制请求 + 菜单 0x124 使能/灰化维护，由
+// frame_driver.cpp 的 selActive 探测块尾部调用。
+void ManageKinectRecordGate(MMDApp* app, unsigned char selActive);
 bool RegisterKinectPoseCapture(unsigned char* model, unsigned frame);  // sub_7FF7CB4F2EB0
 bool RegisterTraceBoneKey(unsigned char* model, unsigned boneIdx,      // sub_7FF7CB4F23E0
                           int slot, int mode, unsigned frame);

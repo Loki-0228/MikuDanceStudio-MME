@@ -480,6 +480,10 @@ void FrameDriver(MMDApp* app) {
         if (cb != nullptr)
             reinterpret_cast<void (__thiscall*)(void*, unsigned char*)>(cb)(
                 &selActive, &selActive);
+        // 0x46DCCF..0x46DD61（x64 0x7FF7CB44A34C..0x7FF7CB44A3EC）：原版
+        // 泵在探测之后立即做的深度图请求与菜单 0x124 卫生（oni_skeleton_
+        // pump.cpp 含地址锚点）。
+        ManageKinectRecordGate(app, selActive);
     }
 
     // ---- 5. dynamic overlay producer + D3D scene envelope ---------------

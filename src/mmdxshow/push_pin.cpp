@@ -3,16 +3,21 @@
 // =============================================================================
 // Source binary : MikuMikuDanceE_v932/Data/MMDxShow.dll (image base 0x10000000)
 // Ground truth  : Hex-Rays decompilation + disassembly of the original.
+// x64 flavour   : MikuMikuDanceE_v932x64/Data/MMDxShow.dll (VC10 rebuild,
+//                 image base 0x180000000) — same source, so every body below
+//                 is shared; only the member offsets shifted (see the map).
 //
 // CLASS SHAPE (as the .rdata vtables/RTTI say, corrected against the binary):
 //
 //   object size 0x5B8 (the filter ctor news 0x5B8 bytes for the pin,
-//   see 0x10001AF7 operator new(0x5B8)).
+//   see 0x10001AF7 operator new(0x5B8); the x64 rebuild news 0x660 at
+//   0x1800019D2).
 //
 //   +0x000  CAMThread root           vtable @0x10008244  (8 slots)
 //   +0x048  CBasePin/CBaseOutputPin  vtable @0x100081E4  (23 slots)
 //   +0x054  IPin                     vtable @0x10008194  (18 slots)
 //   +0x058  IQualityControl          vtable @0x1000817C  (5 slots)
+//   (x64: the same four at +0x000 / +0x078 / +0x090 / +0x098)
 //
 //   Root vtable @0x10008244 (CSourceStream's own is @0x100084A4):
 //     +0x00 0x10002570  ThreadProc — the CAMThread request/dispatch state
@@ -60,17 +65,24 @@
 //   +0x5B3  BYTE m_bStreamEnded         (BeginStreaming / dtor set 1)
 //   +0x5B4  const void* m_pFrameBits    (EXE push frame DIB bits)
 //
-//   The IPushSource methods that write +0x5A0..+0x5B4 (0x10001730 /
+//   x64 rebuild: pad +0x168, frame count +0x178, csRender +0x180 (40B),
+//   csDisplay +0x1A8, display block +0x1D0 (0x460 bytes — see the probe
+//   note below for the 0x464 memset quirk), push cfg +0x630, extra +0x640,
+//   avg-per-frame +0x648, flags +0x650..+0x653, frame bits +0x658.
+//
+//   The IPushSource methods that write the push-cfg triple (0x10001730 /
 //   0x100017D0 / 0x10001800 / 0x10001840 / 0x10001880) belong to the filter
 //   Phase-B file (push_source.cpp); the handshake they implement is
 //   documented in FillBuffer below.
 //
-// PUSH CONFIGURATION (header members, offsets verified against the binary):
-//   m_pPushCfg    +0x5A0  void* — operator new(0x2C) block from 0x10001730,
-//                          0x28 bytes of EXE-pushed BITMAPINFOHEADER copied
-//                          into it (4 trailing bytes never written)
-//   m_nPushExtra  +0x5A4  int — SetBitmapInfo's n
-//   m_rtAvgPerFrame +0x5A8 LONGLONG — 10000000 / fps
+// PUSH CONFIGURATION (header members, offsets verified against the binary;
+// x64 offsets after the slash):
+//   m_pPushCfg    +0x5A0/+0x630  void* — operator new(0x2C) block from
+//                          0x10001730, 0x28 bytes of EXE-pushed
+//                          BITMAPINFOHEADER copied into it (4 trailing
+//                          bytes never written)
+//   m_nPushExtra  +0x5A4/+0x640  int — SetBitmapInfo's n
+//   m_rtAvgPerFrame +0x5A8/+0x648 LONGLONG — 10000000 / fps
 // =============================================================================
 
 #include "mmdxshow.hpp"
@@ -277,13 +289,24 @@ int FixupDisplayVIH_100050E0(VIDEOINFOHEADER* pVIH)
 // Struct at pin+0x120 in the binary:
 //   +0x120 CRITICAL_SECTION (m_csDisplay)
 //   +0x138 VIDEOINFOHEADER + color table, 0x464 bytes (m_displayBlock)
+// x64 rebuild (probe inlined at 0x180005360): critsec at +0x1A8, block at
+//   +0x1D0 — and the block is 4 bytes SHORTER (0x460, so the push-cfg
+//   pointer can sit at +0x630) while the memset STILL clears 0x464 bytes,
+//   clobbering m_pPushCfg's low half.  Harmless in the original (the ctor
+//   zeroes the slot right after the probe) and reproduced faithfully below.
 HRESULT ProbeDisplayFormat_10005140(CPushPinDIBSq* pPin, LPCSTR pszDevice)
 {
     VIDEOINFOHEADER* pVIH =
         reinterpret_cast<VIDEOINFOHEADER*>(pPin->m_displayBlock);
 
     ::EnterCriticalSection(&pPin->m_csDisplay);
+#if defined(_M_X64)
+    // the VC10 rebuild's literal 0x464 overruns its 0x460-byte block by the
+    // 4 bytes the next member grew — keep the byte count, not sizeof()
+    memset(pPin->m_displayBlock, 0, 0x464);
+#else
     memset(pPin->m_displayBlock, 0, sizeof(pPin->m_displayBlock));
+#endif
     pVIH->bmiHeader.biSize = 40;                    // [pCS+72] = 40
 
     HDC hdc;
@@ -314,7 +337,8 @@ HRESULT ProbeDisplayFormat_10005140(CPushPinDIBSq* pPin, LPCSTR pszDevice)
 // VA 0x10005220 — ctor helper: InitializeCriticalSection + display probe.
 // The original ignores ProbeDisplayFormat's failure; so does the port.
 // (m_csDisplay itself is initialized here to mirror the binary order:
-//  InitializeCriticalSection(+0x104) first, then sub_10005220(+0x120).)
+//  InitializeCriticalSection(+0x104) first, then sub_10005220(+0x120) —
+//  the x64 rebuild folds both into 0x180005500, critsecs +0x180/+0x1A8.)
 void InitDisplayState_10005220(CPushPinDIBSq* pPin)
 {
     ::InitializeCriticalSection(&pPin->m_csDisplay);
@@ -337,33 +361,37 @@ void InitDisplayState_10005220(CPushPinDIBSq* pPin)
 //   sub_10005220(pin+0x120)          // InitDisplayState (DISPLAY probe)
 //   pin+0x5A0 / +0x5A4 / +0x5A8(qword) = 0
 //   pin+0x5B0..+0x5B3 = 0
+// (x64 rebuild, ctor 0x180001870: pin+0x168..0x178 zeroes, critsecs at
+//  +0x180/+0x1A8, then the +0x630/+0x640/+0x648 triple and +0x650 dword.)
 //
 // The name pushed as the 4th CSourceStream ctor argument is L"Out"
-// (.rdata 0x1000831C).  The binary's first CSourceStream stack argument is
-// a NULL ANSI name (CBaseObject name — see 0x10002110 -> 0x10004970 ->
-// 0x100046B0 -> 0x10005000).
+// (.rdata 0x1000831C, x64 .rdata 0x180008748).  The binary's first
+// CSourceStream stack argument is a NULL ANSI name (CBaseObject name —
+// see 0x10002110 -> 0x10004970 -> 0x100046B0 -> 0x10005000).
 CPushPinDIBSq::CPushPinDIBSq(HRESULT* phr, CSource* pParent)
     : CSourceStream(NULL, phr, pParent, L"Out")
 {
-    m_padF0[0] = NULL;                     // pin+0xF0 (ctor zeroes)
-    m_padF0[1] = NULL;                     // pin+0xF4
-    m_padF0[2] = NULL;                     // pin+0xF8
-    m_padF0[3] = NULL;                     // pin+0xFC
-    m_frameCount = 0;                      // pin+0x100
-    ::InitializeCriticalSection(&m_csRender);   // pin+0x104
-    InitDisplayState_10005220(this);            // pin+0x120 block
-    PushBIH(this)   = NULL;                // pin+0x5A0
-    m_nPushExtra = 0;                          // pin+0x5A4
-    m_rtAvgPerFrame = 0;                      // pin+0x5A8 (qword)
-    m_bBitmapSet   = 0;                    // pin+0x5B0
-    m_bFrameAck    = 0;                    // pin+0x5B1
-    m_bFrameReady  = 0;                    // pin+0x5B2
-    m_bStreamEnded = 0;                    // pin+0x5B3
-    // m_pFrameBits (pin+0x5B4) is NOT zeroed by the binary ctor either.
+    // the post-CBasePin pad: four dwords (pin+0xF0..+0x100) on x86, two
+    // qwords (pin+0x168..+0x178) on x64 — the array width follows the arch
+    for (size_t i = 0; i < sizeof(m_padF0) / sizeof(m_padF0[0]); ++i)
+        m_padF0[i] = NULL;
+    m_frameCount = 0;                      // pin+0x100 / x64 +0x178
+    ::InitializeCriticalSection(&m_csRender);   // pin+0x104 / x64 +0x180
+    InitDisplayState_10005220(this);            // pin+0x120 block / x64 +0x1A8
+    PushBIH(this)   = NULL;                // pin+0x5A0 / x64 +0x630
+    m_nPushExtra = 0;                          // pin+0x5A4 / x64 +0x640
+    m_rtAvgPerFrame = 0;                      // pin+0x5A8 (qword) / x64 +0x648
+    m_bBitmapSet   = 0;                    // pin+0x5B0 / x64 +0x650
+    m_bFrameAck    = 0;                    // pin+0x5B1 / x64 +0x651
+    m_bFrameReady  = 0;                    // pin+0x5B2 / x64 +0x652
+    m_bStreamEnded = 0;                    // pin+0x5B3 / x64 +0x653
+    // m_pFrameBits (pin+0x5B4 / x64 +0x658) is NOT zeroed by the binary ctor
+    // either.
 }
 
 // VA 0x100010D0 — CPushPinDIBSq destructor body (entered from the scalar
-// deleting dtors: pin-primary+0x0C 0x10001950 -> root 0x10001A50).
+// deleting dtors: pin-primary+0x0C 0x10001950 -> root 0x10001A50; x64 root
+// deleting dtor 0x180001930 -> body 0x180001020).
 //
 // Binary flow:
 //   vtables <- CPushPinDIBSq  (dtor re-stores, compiler artifact)
@@ -374,15 +402,15 @@ CPushPinDIBSq::CPushPinDIBSq(HRESULT* phr, CSource* pParent)
 //   sub_10001DC0()                    // ~CSourceStream chain (implicit)
 CPushPinDIBSq::~CPushPinDIBSq()
 {
-    m_bStreamEnded = 1;                    // pin+0x5B3
-    m_bFrameReady  = 1;                    // pin+0x5B2
+    m_bStreamEnded = 1;                    // pin+0x5B3 / x64 +0x653 (one WORD
+    m_bFrameReady  = 1;                    // pin+0x5B2 / x64 +0x652  store)
     if (PushBIH(this))
     {
         ::operator delete((void*)PushBIH(this)); // scalar delete (??3)
         PushBIH(this) = NULL;
     }
-    ::DeleteCriticalSection(&m_csDisplay); // pin+0x120
-    ::DeleteCriticalSection(&m_csRender);  // pin+0x104
+    ::DeleteCriticalSection(&m_csDisplay); // pin+0x120 / x64 +0x1A8
+    ::DeleteCriticalSection(&m_csRender);  // pin+0x104 / x64 +0x180
     // ~CSourceStream()/~CBaseOutputPin()/~CBasePin()/~CAMThread() implicit.
 }
 

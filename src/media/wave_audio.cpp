@@ -86,11 +86,12 @@
 namespace mikudancestudio {
 namespace {
 
-// .rdata double constants used by the 0x4C2F70 waveform maths.
-constexpr double kDbl531720 = 0.03333299979567528;   // ~1/30 (dbl @0x531720)
-constexpr double kDbl52EAB0 = 13.0;                  // dbl @0x52EAB0
-constexpr double kDbl531718 = -390.0;                // dbl @0x531718
-constexpr float  kFlt52B9F0 = 4294967296.0f;         // 2^32 unsigned fixup
+// Waveform-column constants.  x86 0x4C2F70 ran these as x87 doubles
+// (0x531720 ~ 1/30, 0x52EAB0 = 13.0, 0x531718 = -390.0); the x64 twin
+// sub_7FF7CB4FA380 uses .rdata FLOAT slots with the same magnitudes:
+// 0x7FF7CB552C18 = 0x3D088889 (1/30f), 0x7FF7CB552C14 = 13.0f,
+// 0x7FF7CB552C10 = 390.0f.  The port follows the x64 single-precision
+// chain (behavior basis); 1.0f/30.0f folds to 0x3D088889 exactly.
 
 // Diagnostic-only file trace under MIKUDANCESTUDIO_TRACE_WAVE (CMake
 // option MIKUDANCESTUDIO_DIAG, default OFF); the OFF stubs keep the call
@@ -300,13 +301,15 @@ bool WaveLoadFile(void* obj, const wchar_t* path,
     free(audio->waveformMin);                                      // 0x4C3167
 
     // bytes per waveform column: (int)(avgBytes * (1/30) / 13 / blockAlign)
-    // then * blockAlign (x87 sequence 0x4C317B..0x4C31A4; _ftol truncates).
-    double avgD = static_cast<double>(audio->format.nAvgBytesPerSec);
-    if (avgD < 0.0)
-        avgD += kFlt52B9F0;                                        // 0x4C327C fixup
+    // then * blockAlign.  x64 0x7FF7CB4FA61E..0x7FF7CB4FA64A: avg is read
+    // as a dword, ZERO-extended into rax and cvtsi2ss'd (the x86 fild +
+    // 2^32 fixup collapses to the zero extension), then mulss 1/30f,
+    // divss 13.0f, divss (float)blockAlign, cvttss2si, integer imul.
+    const float avgF = static_cast<float>(
+        static_cast<std::uint32_t>(audio->format.nAvgBytesPerSec));
     const int blockAlign = audio->format.nBlockAlign;
-    const int colUnits =
-        static_cast<int>(avgD * kDbl531720 / kDbl52EAB0 / blockAlign);
+    const int colUnits = static_cast<int>(
+        avgF * (1.0f / 30.0f) / 13.0f / static_cast<float>(blockAlign));
     const int colBytes = colUnits * blockAlign;
 
     unsigned char* scratch = static_cast<unsigned char*>(malloc(colBytes));
@@ -332,15 +335,18 @@ bool WaveLoadFile(void* obj, const wchar_t* path,
         int i = 0;                                                 // 0x4C3238
         int bytesSoFar = 0;                                        // ebp
         do {
-            // x87 0x4C3264..0x4C32A6: t = trunc(avg * (i / -390.0));
-            // skip = (unsigned)(-t - bytesSoFar) / blockAlign
-            double d = static_cast<double>(audio->format.nAvgBytesPerSec);
-            if (d < 0.0)
-                d += kFlt52B9F0;
-            const long long t = static_cast<long long>(
-                d * (static_cast<double>(i) / kDbl531718));
+            // x64 0x7FF7CB4FA715..0x7FF7CB4FA745, all single precision:
+            // t = (int)((i / 390.0f) * avgF)  [movd/cvtdq2ss i, divss
+            // 390.0f, cvtsi2ss zero-extended avg, mulss, cvttss2si r64];
+            // skip = (unsigned)(t - bytesSoFar) / (unsigned)blockAlign.
+            // (x86 computed avg * (i / -390.0) in double and negated -
+            // algebraically identical, IEEE sign-symmetric.)
+            const float d = static_cast<float>(
+                static_cast<std::uint32_t>(audio->format.nAvgBytesPerSec));
+            const int t = static_cast<int>(
+                (static_cast<float>(i) / 390.0f) * d);
             const unsigned skipBlocks =
-                static_cast<unsigned>(-static_cast<int>(t) - bytesSoFar) /
+                static_cast<unsigned>(t - bytesSoFar) /
                 static_cast<unsigned>(blockAlign);                 // 0x4C32AA
             if (static_cast<int>(skipBlocks) > 0) {                // 0x4C32B0
                 const int skip = blockAlign * static_cast<int>(skipBlocks);

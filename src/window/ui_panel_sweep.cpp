@@ -67,10 +67,10 @@ namespace {
 constexpr std::size_t kListLeft = 91;         // 0x5B  label column width
 
 // --- model display-tree offsets (model object, PMD/PMX chain) ---------------
-constexpr std::size_t kModelSelLine = 0x2DBC;     // head line of frame 1 (bone list)
-constexpr std::size_t kModelLineType = 0x2DC0;    // byte[200] per-line frame type
-constexpr std::size_t kModelRecs = 0x2E88;        // int[200] per-line records (rigid idx / -1-morph)
-constexpr std::size_t kModelSelFlag = 0x38FC;     // frame-1 selection flag (byte)
+// The per-line bookkeeping lives in ModelRecord::boneListSelLine /
+// boneListRowType / boneListRowRecord (typed fields since the x86-raw
+// constants drifted from the x64 layout: the old 0x2E88 -999 reset run
+// landed on x64 boneCount/facialFrameCount and corrupted live models).
 
 // --- physics joint record offsets (124-byte PMD records) --------------------
 constexpr std::size_t kJointName = 0x238;  // name
@@ -176,24 +176,12 @@ void PostLanguageSweep(MMDApp* app) {
                     sizeof(std::uint32_t) * record->boneCount);
         std::memset(morphLineByIndex, 0,
                     sizeof(std::uint32_t) * record->morphCount);
-        *reinterpret_cast<std::int32_t*>(model + kModelSelLine) = 0;
-        {
-            int typeCursor = 0;  // running byte offset into the 200-line type array
-            for (int i = 11916; i < 12716; i += 20) {
-                model[typeCursor + kModelLineType] = 0;
-                *reinterpret_cast<std::int32_t*>(model + i - 4) = -999;
-                model[typeCursor + kModelLineType + 1] = 0;
-                *reinterpret_cast<std::int32_t*>(model + i) = -999;
-                model[typeCursor + kModelLineType + 2] = 0;
-                *reinterpret_cast<std::int32_t*>(model + i + 4) = -999;
-                model[typeCursor + kModelLineType + 3] = 0;
-                *reinterpret_cast<std::int32_t*>(model + i + 8) = -999;
-                model[typeCursor + kModelLineType + 4] = 0;
-                *reinterpret_cast<std::int32_t*>(model + i + 12) = -999;
-                typeCursor += 5;
-            }
+        record->boneListSelLine = 0;
+        for (int line0 = 0; line0 < 200; ++line0) {
+            record->boneListRowType[line0] = 0;
+            record->boneListRowRecord[line0] = -999;
         }
-        *reinterpret_cast<std::int32_t*>(model + kModelRecs) = rootIdx;
+        record->boneListRowRecord[0] = rootIdx;
         record->boneListRows = 1;
 
         // --- display-frame iteration (0x42FA13..0x4304F7) -------------------
@@ -237,7 +225,7 @@ void PostLanguageSweep(MMDApp* app) {
                         DrawFrameName(app, frames[frameIdx], panel, 14 * line + 17,
                                       s.state.themeColors[33]);
                     }
-                    if (((frameType == 1) & *reinterpret_cast<std::uint8_t*>(model + kModelSelFlag)) != 0) {
+                    if (((frameType == 1) & record->displayKeyframesPresent) != 0) {
                         DrawFrameName(app, frames[frameIdx], panel, 14 * line + 17,
                                       s.state.themeColors[34]);
                         s.PanelRowFlags()[line] = 1;
@@ -280,9 +268,9 @@ void PostLanguageSweep(MMDApp* app) {
                         }
                     }
                     // line type byte + morph/rigid back-links (0x42FE37)
-                    model[line + kModelLineType] = frameType;
+                    record->boneListRowType[line] = frameType;
                     if (frameType == 1)
-                        *reinterpret_cast<std::int32_t*>(model + kModelSelLine) = line;
+                        record->boneListSelLine = line;
                     for (std::uint8_t j = 0;
                          j < mdl::Mdl(model)->facialFrameCount; ++j) {
                         const mdl::FrameGroup& face = faces[j];
@@ -315,18 +303,18 @@ void PostLanguageSweep(MMDApp* app) {
                         DrawFrameName(app, frames[frameIdx], panel, 14 * line + 17,
                                       s.state.themeColors[33]);
                     }
-                    model[line++ + kModelLineType] = frameType;
+                    record->boneListRowType[line++] = frameType;
                     frameIdx = frameType;
                 }
                 ++record->boneListRows;
                 if (frameIdx == 1) {
-                    *reinterpret_cast<std::int32_t*>(model + kModelSelLine) = line - 1;
+                    record->boneListSelLine = line - 1;
                 } else if (record->facialFrameCount != 0 && frameIdx == 2) {
                     // face section (frame 2) - list the frame's face records
                     // (0x430153..0x43030B; LABEL_122/123/139 were the skip /
                     // advance / exhausted edges of this loop).
                     faceIdx = 0;  // 0x430138
-                    int recOff = 4 * line + kModelRecs;
+                    int recOff = line;  // index into boneListRowRecord
                     int rowY = 14 * line + 17;
                     for (;;) {
                         if (record->boneListRows > record->boneListPos &&
@@ -343,10 +331,10 @@ void PostLanguageSweep(MMDApp* app) {
                             }
                             if (face.selected != 0)  // LABEL_122 skip
                                 s.PanelRowFlags()[line] = 1;
-                            *reinterpret_cast<std::int32_t*>(model + recOff) =
+                            record->boneListRowRecord[recOff] =
                                 -1 - face.targetIndex;
                             morphLineByIndex[face.targetIndex] = line++;
-                            recOff += 4;
+                            ++recOff;
                             rowY += 14;
                         }
                         ++record->boneListRows;  // LABEL_123
@@ -355,7 +343,7 @@ void PostLanguageSweep(MMDApp* app) {
                     }
                 } else if (groupCnt) {
                     // rigid-group section (0x43031D..0x4304D8)
-                    int recOff = 4 * line + kModelRecs;
+                    int recOff = line;  // index into boneListRowRecord
                     int rowY = 14 * line + 17;
                     for (unsigned int g = 0;
                          g < static_cast<unsigned int>(groupCnt); ++g) {
@@ -371,10 +359,10 @@ void PostLanguageSweep(MMDApp* app) {
                                     DrawRecordName(app, rigid, panel, rowY,
                                                    s.state.themeColors[33]);
                                 }
-                                *reinterpret_cast<std::int32_t*>(model + recOff) =
+                                record->boneListRowRecord[recOff] =
                                     rigid.targetIndex;
                                 boneLineByIndex[rigid.targetIndex] = line++;
-                                recOff += 4;
+                                ++recOff;
                                 rowY += 14;
                             }
                             ++record->boneListRows;

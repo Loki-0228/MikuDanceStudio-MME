@@ -133,9 +133,12 @@ void HandleVScroll(LPARAM lParam, WPARAM wParam) {
 // The original re-fetches GetDlgItem(.., 427) before every call (the
 // handle is identical each time).
 //
-// Otherwise the wheel scales a float by delta * 0.05 - the multiply is
-// done in double against the 0.05f constant (bit-exact with dbl_52D738),
-// the result is stored back to float (fmul/fadd/fstp dword):
+// Otherwise the wheel scales a float by delta * 0.05 - x86 runs
+// fild/fmul dbl_52D738/fadd/fstp dword (double multiply, one rounding at
+// the float store); the x64 twin sub_7FF7CB45F300 is pure SSE single
+// precision (movsx/movd/cvtdq2ps, mulss against the dword slot
+// 0x7FF7CB552CB0 whose image value IS 0x3D4CCCCD = 0.05f, addss the
+// field, movss back) - the port follows the x64 form:
 //   camera mode (this+760 set AND this+656432 >= 0) -> this+828 (0x33C)
 //   morph-follow special branch (this+760 == 0 && this+650648 &&
 //       this+816 == 0 && this+656432 == this+2320 && this+656432 >= 0):
@@ -172,10 +175,10 @@ void HandleMouseWheel(int delta) {
     const std::uint8_t mode = app->state.optflag[0];  // 760
 
     if ((mode & (axis >= 0 ? 1u : 0u)) != 0) {
-        // camera distance: this+828 (float) += delta * 0.05
-        app->CameraPosition()[2] = static_cast<float>(
-            static_cast<double>(wheel) * 0.05f +
-            static_cast<double>(app->CameraPosition()[2]));
+        // camera distance: this+828 (float) += wheel * 0.05
+        // (x64 0x7FF7CB45F340: cvtdq2ps/mulss 0.05f/addss/movss)
+        app->CameraPosition()[2] =
+            static_cast<float>(wheel) * 0.05f + app->CameraPosition()[2];
     } else {
         const bool morphFollow =
             mode == 0 &&
@@ -192,10 +195,10 @@ void HandleMouseWheel(int delta) {
             PostViewRefresh(app);                                 // 0x40D130
             return;
         }
-        // view angle: this+657628 (float) += delta * 0.05
-        app->CameraDistance() = static_cast<float>(
-            static_cast<double>(wheel) * 0.05f +
-            static_cast<double>(app->CameraDistance()));
+        // view angle: this+657628 (float) += wheel * 0.05
+        // (x64 0x7FF7CB45F410: same single-precision chain)
+        app->CameraDistance() =
+            static_cast<float>(wheel) * 0.05f + app->CameraDistance();
     }
     RefreshRequest(-1);       // 0x440AC0
     PostViewRefresh(app);     // 0x40D130

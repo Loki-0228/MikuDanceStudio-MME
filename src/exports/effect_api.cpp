@@ -11,23 +11,29 @@
 // the former file-local CountModels twin was removed and its callers
 // (ExpGetPmdNum + the two ordering helpers) now forward to GetPmdNum.
 //
-// Model-object offsets used below (model = slot array app+0x780 [100]):
-//   +0x001C  material count (0x4A48D0)
-//   +0x0020  material records, 2292 B each; first 68 B = 17 floats
-//            (0x4A48E0 / 0x42AC50 accessory twin uses 68 B records)
-//   +0x24BC  wchar_t path[256] (resolved model path)
-//   +0x26BC  bone records base pointer, 604 B (0x25C) stride, name at +0
-//   +0x26C4  morph records base pointer, 136 B (0x88) stride, name at +0,
-//            morph value (float) at +0x30
-//   +0x2D7C  combo order byte (+1 based)
-//   +0x2D80  morph count (dword)
-//   +0x2D84  bone count (dword)
-//   +0x2D8D  display flag byte
+// Model-object layout used below (model = slot array app+0x780 [100]).
+// Every model field goes through the mdl::ModelRecord members or the
+// typed BoneRecord/MorphRecord/ModelMaterialRecord views, so one field
+// name compiles to the correct offset on both ABIs.  x86 offset ->
+// x64 twin (each verified on the x64 export twins in MikuMikuDance.exe):
+//   materialCount   +0x001C -> +0x0038  (0x4A48D0)
+//   materials       +0x0020 -> +0x0040  2292 B records, first 68 B = 17
+//                                       floats (0x4A48E0; the 0x42AC50
+//                                       accessory twin uses 68 B records)
+//   path            +0x24BC -> +0x2548  wchar_t[256] (resolved model path)
+//   boneTable       +0x26BC -> +0x2748  BoneRecord 604/624 B, name at +0
+//   morphs          +0x26C4 -> +0x2758  MorphRecord 136/192 B, name at +0,
+//                                       morph value (float) +0x30/+0x38
+//   comboSelIndex   +0x2D7C -> +0x3108  combo/draw order byte (+1 based)
+//   morphCount      +0x2D80 -> +0x310C  (dword)
+//   boneCount       +0x2D84 -> +0x3110  (dword)
+//   loadComplete    +0x2D8D -> +0x3119  display flag byte
+//   toonShared      +0x37C4 -> +0x3B6C  current material index (render
+//                                       state; see ExpGetCurrentMaterial)
 //   +0x31C0  current-FPS float (0x41E950/0x41E980)
 //   +0x33D8  enhance-model name block, 10 x char[100]
-//   +0x37C4  current material index (render state)
-// Bone record sub-fields: world matrix 4x4 at +0x34 (64 B), position
-// (x,y,z) floats at +0x134/+0x138/+0x13C.
+// Bone record sub-fields: matInit 4x4 at +0x34/+0x3C, position (x,y,z)
+// floats at +0x134/+0x138/+0x13C (x64 +0x13C..+0x144).
 //
 // Accessory-object offsets (acc = slot array app+0x9DD70 [255]):
 //   +0x0004  material records base pointer, 68 B (17 float) stride
@@ -102,11 +108,9 @@ int CountAcs(MMDApp* app) {
     return count;
 }
 
-// Model/accessory field accessors over the flat byte layout.
-template <typename T>
-T& Fld(void* obj, std::size_t off) {
-    return *reinterpret_cast<T*>(static_cast<unsigned char*>(obj) + off);
-}
+// Model/accessory fields are reached through the typed records
+// (mdl::Mdl / mdl::Bones / mdl::Morphs / mdl::Materials), never through
+// numeric offsets - the layouts differ between the x86 and x64 ABIs.
 
 // ---- D3DX wrappers with local fallbacks (d3dx9_32.dll may be absent) ------
 void Identity(mikudancestudio::d3dx::D3DXMATRIXF* m) {
@@ -235,7 +239,7 @@ __declspec(dllexport) int ExpGetPmdOrder(int index) {
     for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
         if (slot != nullptr && ++occupied == index)
-            return static_cast<unsigned char>(slot[0x2D7C]) + base;
+            return mikudancestudio::mdl::Mdl(slot)->comboSelIndex + base;
     }
     return 0;
 }
@@ -245,7 +249,7 @@ __declspec(dllexport) int ExpGetPmdMatNum(int index) {
     unsigned char* model = ModelByIndex(mikudancestudio::g_Block, index);
     if (model == nullptr)
         return 0;
-    return Fld<std::int32_t>(model, 0x1C);
+    return static_cast<int>(mikudancestudio::mdl::Mdl(model)->materialCount);
 }
 
 // 0x4C3610 -> 0x42A210 -> 0x4A48E0: copy 17 material floats into `out`.
@@ -257,12 +261,13 @@ __declspec(dllexport) float* ExpGetPmdMaterial(float* out, int index,
     unsigned char* model = ModelByIndex(mikudancestudio::g_Block, index);
     if (model == nullptr)
         return out;
-    const std::int32_t count = Fld<std::int32_t>(model, 0x1C);
-    if (static_cast<std::uint32_t>(mat) <=
-        static_cast<std::uint32_t>(count)) {
-        const float* rec = Fld<float*>(model, 0x20) +
-                           (0x8F4 / 4) * static_cast<std::size_t>(mat);
-        std::memcpy(out, rec, 0x44);
+    const std::uint32_t count =
+        mikudancestudio::mdl::Mdl(model)->materialCount;
+    if (static_cast<std::uint32_t>(mat) <= count) {
+        const mikudancestudio::mdl::ModelMaterialRecord& rec =
+            mikudancestudio::mdl::Materials(model)[
+                static_cast<std::size_t>(mat)];
+        std::memcpy(out, &rec, 0x44);
     }
     return out;
 }
@@ -272,7 +277,7 @@ __declspec(dllexport) int ExpGetPmdBoneNum(int index) {
     unsigned char* model = ModelByIndex(mikudancestudio::g_Block, index);
     if (model == nullptr)
         return 0;
-    return Fld<std::int32_t>(model, 0x2D84);
+    return static_cast<int>(mikudancestudio::mdl::Mdl(model)->boneCount);
 }
 
 // 0x4C3670 -> 0x42A2E0: SJIS bone name = bone record base (name at +0).
@@ -280,8 +285,7 @@ __declspec(dllexport) char* ExpGetPmdBoneName(int index, int bone) {
     unsigned char* model = ModelByIndex(mikudancestudio::g_Block, index);
     if (model == nullptr)
         return nullptr;
-    return reinterpret_cast<char*>(Fld<unsigned char*>(model, 0x26BC) +
-                                   0x25C * static_cast<std::size_t>(bone));
+    return mikudancestudio::mdl::Bones(model)[bone].name;
 }
 
 // 0x4C3690 -> 0x42A330: out = T(bone position) * bone world matrix;
@@ -292,17 +296,15 @@ __declspec(dllexport) float* ExpGetPmdBoneWorldMat(float* out, int index,
     Identity(&m);
     unsigned char* model = ModelByIndex(mikudancestudio::g_Block, index);
     if (model != nullptr) {
-        mikudancestudio::mdl::BoneRecord* boneRec =
-            reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(
-                Fld<unsigned char*>(model, 0x26BC)) +
-            bone;
+        mikudancestudio::mdl::BoneRecord& boneRec =
+            mikudancestudio::mdl::Bones(model)[bone];
         mikudancestudio::d3dx::D3DXMATRIXF t;
         D3dx d3;
-        d3.Translation(&t, Fld<float>(boneRec, 0x134),
-                       Fld<float>(boneRec, 0x138), Fld<float>(boneRec, 0x13C));
+        d3.Translation(&t, boneRec.position[0], boneRec.position[1],
+                       boneRec.position[2]);
         d3.Multiply(&m, &m, &t);
         d3.Multiply(&m, &m,
-                    reinterpret_cast<const mikudancestudio::d3dx::D3DXMATRIXF*>(boneRec->matInit));
+                    reinterpret_cast<const mikudancestudio::d3dx::D3DXMATRIXF*>(boneRec.matInit));
     }
     std::memcpy(out, &m, 0x40);
     return out;
@@ -313,7 +315,7 @@ __declspec(dllexport) int ExpGetPmdMorphNum(int index) {
     unsigned char* model = ModelByIndex(mikudancestudio::g_Block, index);
     if (model == nullptr)
         return 0;
-    return Fld<std::int32_t>(model, 0x2D80);
+    return static_cast<int>(mikudancestudio::mdl::Mdl(model)->morphCount);
 }
 
 // 0x4C36F0 -> 0x42A4B0: SJIS morph name = morph record base (name at +0).
@@ -321,8 +323,7 @@ __declspec(dllexport) char* ExpGetPmdMorphName(int index, int morph) {
     unsigned char* model = ModelByIndex(mikudancestudio::g_Block, index);
     if (model == nullptr)
         return nullptr;
-    return reinterpret_cast<char*>(Fld<unsigned char*>(model, 0x26C4) +
-                                   0x88 * static_cast<std::size_t>(morph));
+    return mikudancestudio::mdl::Morphs(model)[morph].name;
 }
 
 // 0x4C3710 -> 0x42A500: morph value (float) at record +0x30.
@@ -330,9 +331,7 @@ __declspec(dllexport) float ExpGetPmdMorphValue(int index, int morph) {
     unsigned char* model = ModelByIndex(mikudancestudio::g_Block, index);
     if (model == nullptr)
         return 0.0f;
-    return Fld<float>(Fld<unsigned char*>(model, 0x26C4) +
-                          0x88 * static_cast<std::size_t>(morph),
-                      0x30);
+    return mikudancestudio::mdl::Morphs(model)[morph].value;
 }
 
 // 0x4C3730 -> 0x42A560: display byte model+0x2D8D.
@@ -393,14 +392,12 @@ __declspec(dllexport) float* ExpGetAcsWorldMat(float* out, int index) {
         mikudancestudio::d3dx::D3DXMATRIXF bone;
         if (parentSlot != -1) {
             unsigned char* model = app->ModelSlot(parentSlot);
-            mikudancestudio::mdl::BoneRecord* boneRec =
-                reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(
-                    Fld<unsigned char*>(model, 0x26BC)) +
-                acc->parentBone;
-            px = Fld<float>(boneRec, 0x134);
-            py = Fld<float>(boneRec, 0x138);
-            pz = Fld<float>(boneRec, 0x13C);
-            std::memcpy(&bone, boneRec->matInit, sizeof(bone));
+            mikudancestudio::mdl::BoneRecord& boneRec =
+                mikudancestudio::mdl::Bones(model)[acc->parentBone];
+            px = boneRec.position[0];
+            py = boneRec.position[1];
+            pz = boneRec.position[2];
+            std::memcpy(&bone, boneRec.matInit, sizeof(bone));
         } else {
             Identity(&bone);
         }
@@ -519,13 +516,14 @@ __declspec(dllexport) int ExpGetCurrentObject() {
     for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
         if (slot == cur)
-            return static_cast<unsigned char>(cur[0x2D7C]) + base;
+            return mikudancestudio::mdl::Mdl(slot)->comboSelIndex + base;
     }
     return 0;
 }
 
 // 0x4C39B0 -> 0x42AD70: current material index of the object being
-// rendered (accessory +0x4A8 / model +0x37C4); -1 when null or unmatched.
+// rendered (accessory currentMaterial / model toonShared, the render-state
+// material cursor at +0x37C4/+0x3B6C); -1 when null or unmatched.
 __declspec(dllexport) int ExpGetCurrentMaterial() {
     MMDApp* app = mikudancestudio::g_Block;
     unsigned char* cur = static_cast<unsigned char*>(app->state.activeRenderObject);
@@ -539,7 +537,8 @@ __declspec(dllexport) int ExpGetCurrentMaterial() {
     for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
         if (slot == cur)
-            return Fld<std::int32_t>(cur, 0x37C4);
+            return static_cast<std::int32_t>(
+                mikudancestudio::mdl::Mdl(cur)->toonShared);
     }
     return -1;
 }

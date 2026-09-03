@@ -40,11 +40,11 @@ unsigned char* ModelAt(MMDApp* app, int slot) {
 }
 
 int FindModelSlotByComboId(MMDApp* app, int comboId) {
-    // x64 twin sub_7FF7CB486B0: both comboSelIndex (model+0x3108) scans run
-    // to 255 (cmp ecx, 0FFh at 0x7FF7CB48724D and 0x7FF7CB48735A).
+    // x64 twin sub_7FF7CB486B0: both comboSelIndex (model+0x3108/x86 11644)
+    // scans run to 255 (cmp ecx, 0FFh at 0x7FF7CB48724D and 0x7FF7CB48735A).
     for (int slot = 0; slot < kModelSlotCount; ++slot) {
         unsigned char* model = ModelAt(app, slot);
-        if (model != nullptr && model[11644] == comboId)
+        if (model != nullptr && mdl::Mdl(model)->comboSelIndex == comboId)
             return slot;
     }
     return -1;
@@ -582,7 +582,7 @@ void ApplyModelComboSelection(MMDApp* app) {  // was Sub44D940, 0x44D940
                              100.0f));
         }
         SetPhysicsMenuState(
-            hwnd, model != nullptr && model[14590] == 2
+            hwnd, model != nullptr && mdl::Mdl(model)->physicsMode == 2
                       ? MFS_DISABLED
                       : MFS_ENABLED);
     }

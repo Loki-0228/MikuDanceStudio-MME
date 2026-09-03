@@ -254,30 +254,28 @@ set_target_properties(MikuDanceStudio PROPERTIES
 )
 
 # ---------------------------------------------------------------------------
-# MMDxShow.dll - the companion DirectShow push-source filter (original at
-# ../MikuMikuDanceE_v932/Data/MMDxShow.dll, VC8 x86).  Self-registration
-# entry points match the original export table (ordinals 1..5).
+# MMDxShow.dll - the companion DirectShow push-source filter.  Built for both
+# architectures: the x86 build pins the VC8 original's layout
+# (../MikuMikuDanceE_v932/Data/MMDxShow.dll), the x64 build pins the VC10
+# rebuild (../MikuMikuDanceE_v932x64/Data/MMDxShow.dll) - the per-flavour
+# static_asserts live in src/mmdxshow/mmdxshow.hpp.  Both originals export
+# the same ordinals 1..5 via the .def (no per-arch def needed).
 # ---------------------------------------------------------------------------
-if (CMAKE_SIZEOF_VOID_P EQUAL 4)
-    # The layout static_asserts pin the VC8 x86 binary layout; the x64
-    # companion DLL is a separate port (the original x64 exe ships its own
-    # MMDxShow.dll flavour) and is not built here yet.
-    add_library(MMDxShow SHARED
-        src/mmdxshow/dll_main.cpp
-        src/mmdxshow/enumerators.cpp
-        src/mmdxshow/source_base.cpp
-        src/mmdxshow/push_source.cpp
-        src/mmdxshow/push_pin.cpp
-        src/mmdxshow/guids.cpp
-        src/mmdxshow/crt_ledger.cpp
-    )
-    target_include_directories(MMDxShow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/mmdxshow)
-    target_link_libraries(MMDxShow PRIVATE
-        kernel32 advapi32 gdi32 user32 ole32 uuid
-    )
-    target_link_options(MMDxShow PRIVATE
-        "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/src/mmdxshow/MMDxShow.def")
-    set_target_properties(MMDxShow PROPERTIES
-        OUTPUT_NAME "MMDxShow"
-    )
-endif()
+add_library(MMDxShow SHARED
+    src/mmdxshow/dll_main.cpp
+    src/mmdxshow/enumerators.cpp
+    src/mmdxshow/source_base.cpp
+    src/mmdxshow/push_source.cpp
+    src/mmdxshow/push_pin.cpp
+    src/mmdxshow/guids.cpp
+    src/mmdxshow/crt_ledger.cpp
+)
+target_include_directories(MMDxShow PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/mmdxshow)
+target_link_libraries(MMDxShow PRIVATE
+    kernel32 advapi32 gdi32 user32 ole32 uuid
+)
+target_link_options(MMDxShow PRIVATE
+    "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/src/mmdxshow/MMDxShow.def")
+set_target_properties(MMDxShow PROPERTIES
+    OUTPUT_NAME "MMDxShow"
+)

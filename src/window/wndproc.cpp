@@ -15,8 +15,10 @@
 //   WM_COMMAND     -> command dispatcher 0x47E8A0 (68 KB) [stubbed]
 //   WM_DROPFILES   -> sub_461300 [stubbed]
 //   0x318 (792)    -> palette: sub_42CEB0 + sub_42C140 [stubbed]
-//   WM_TIMER       -> timer 100: sub_429770; timer 101: auto-repeat counter
-//                     at this+658792 with 1500 ms re-arm
+//   WM_TIMER       -> timer 100: sub_429770; timer 101: the Kinect
+//                     auto-frame-record stage byte (app+658792 = 0xA0D68,
+//                     state.autoRepeat / x64 0xA1E14), walked 1->2->3->4
+//                     at 1500 ms intervals
 //   WM_H/VSCROLL   -> sub_44AEE0 / sub_44BB30 [stubbed]
 //   WM_CTLCOLORSTATIC(0x138) -> sub_40E0E0 [stubbed]
 //   WM_MOUSE*      -> capture handling + sub_446A70/44A9A0/44AAA0/4632F0
