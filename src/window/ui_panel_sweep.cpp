@@ -71,11 +71,9 @@ constexpr std::size_t kListLeft = 91;         // 0x5B  label column width
 // boneListRowType / boneListRowRecord (typed fields since the x86-raw
 // constants drifted from the x64 layout: the old 0x2E88 -999 reset run
 // landed on x64 boneCount/facialFrameCount and corrupted live models).
-
-// --- physics joint record offsets (124-byte PMD records) --------------------
-constexpr std::size_t kJointName = 0x238;  // name
-constexpr std::size_t kJointType = 0x49D;  // type byte
-constexpr std::size_t kJointFlag = 0x4AC;  // highlight flag byte
+// The display-object rows below read mdl::AccessoryRecord fields directly
+// (name / order / rowSelected) - the former raw x86 offsets 0x238/0x49D/
+// 0x4AC sat 16 bytes off the x64 record and matched no order byte.
 
 // JP panel texts (Shift-JIS; original byte_52C95C/52C958/52C980/52C978/
 // 52C96C/52C964).  EN texts are inline literals (asc_52C960/52C6D0,
@@ -434,42 +432,45 @@ void PostLanguageSweep(MMDApp* app) {
         }
     }
 
-    // === joint list below the tree (0x42F5F6..0x42F72A) =====================
+    // === accessory list below the fixed bands (0x42F5F6..0x42F72A) ==========
+    // Walks the accessory slots grouped by their order byte 0..254 and
+    // appends one panel row per loaded accessory, recording slot -> row in
+    // jointLineMap for the click/hover handlers.
     std::memset(s.state.jointLineMap, 0xFF, 0x320);  // 200 ints
     s.DisplayObjectListMatchCount() = 1;
-    std::uint8_t jointType = 0;                    // joint type byte 0..254
-    int typeOrdinal = 0;                           // type counter (scroll gate)
-    int jointLine = 0;                             // joint line counter
+    std::uint8_t order = 0;                        // accessory order byte 0..254
+    int ordinal = 0;                               // order counter (scroll gate)
+    int line = 0;                                  // row below the fixed bands
     do {
-        int jointSlot = 0;                         // joint record index
-        int rowY = 14 * jointLine + 73;
-        std::int32_t* map = s.state.jointLineMap + jointLine;
+        int slot = 0;                              // accessory slot index
+        int rowY = 14 * line + 73;
+        std::int32_t* map = s.state.jointLineMap + line;
         do {
-            unsigned char* joint = static_cast<unsigned char*>(s.ObjectSlot(jointSlot));
-            if (joint != nullptr && joint[kJointType] == jointType) {
-                if (typeOrdinal >= s.DisplayObjectListScrollPosition() && jointLine < 200) {
-                    if (joint[kJointFlag] != 0) {
-                        DrawPanelText(app,
-                                      reinterpret_cast<const char*>(joint + kJointName),
+            mdl::AccessoryRecord* accessory =
+                static_cast<mdl::AccessoryRecord*>(s.ObjectSlot(slot));
+            if (accessory != nullptr && accessory->order == order) {
+                if (ordinal >= s.DisplayObjectListScrollPosition() &&
+                    line < 200) {
+                    if (accessory->rowSelected != 0) {
+                        DrawPanelText(app, accessory->name,
                                       panel, 12, 12, rowY, s.state.themeColors[34]);
-                        s.PanelRowFlags()[4 + jointLine] = 1;
+                        s.PanelRowFlags()[4 + line] = 1;
                     } else {
-                        DrawPanelText(app,
-                                      reinterpret_cast<const char*>(joint + kJointName),
+                        DrawPanelText(app, accessory->name,
                                       panel, 12, 12, rowY, s.state.themeColors[33]);
                     }
-                    *map = jointSlot;
-                    ++jointLine;
+                    *map = slot;
+                    ++line;
                     ++map;
                     rowY += 14;
                 }
                 ++s.DisplayObjectListMatchCount();
             }
-            ++jointSlot;
-        } while (jointSlot < 255);
-        ++typeOrdinal;
-        ++jointType;
-    } while (jointType != 0xFF);
+            ++slot;
+        } while (slot < 255);
+        ++ordinal;
+        ++order;
+    } while (order != 0xFF);
 
     PanelPaint(app);  // 0x42F730 tail call (0x414610)
 }
