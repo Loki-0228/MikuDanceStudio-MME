@@ -92,8 +92,6 @@ const IID kIidISampleGrabber = {
     0x6b652fff, 0x11fe, 0x4fce, {0x92, 0xad, 0x02, 0x66, 0xb5, 0xd7, 0xc7, 0x8f}};
 
 // ---- helpers (same conventions as shutdown_cleanup.cpp) -------------------
-inline void** Vt(void* obj) { return *reinterpret_cast<void***>(obj); }
-
 template <typename T>
 void ReleaseCom(T*& object) {
     if (object != nullptr) {
@@ -103,14 +101,26 @@ void ReleaseCom(T*& object) {
 }
 
 // IAMVfwCompressDialogs raw slots (slot 3 / slot 6).
-inline HRESULT VfwShowDialog(void* vfw, int dialog, HWND hwnd) {
-    return reinterpret_cast<HRESULT(__stdcall*)(void*, int, HWND)>(
-        Vt(vfw)[3])(vfw, dialog, hwnd);
-}
-inline LONG_PTR VfwDriverMessage(void* vfw, int msg, LONG_PTR p1, LONG_PTR p2) {
-    return reinterpret_cast<LONG_PTR(__stdcall*)(void*, int, LONG_PTR, LONG_PTR)>(
-        Vt(vfw)[6])(vfw, msg, p1, p2);
-}
+// qedit.h is not shipped with modern SDKs (see the CLSID pin above), so the
+// SampleGrabber interface is declared here in the canonical qedit.h slot
+// order (SetMediaType = slot 4, exactly the slot the original hits).
+struct ISampleGrabberCB;
+MIDL_INTERFACE("6B652FFF-11FE-4FCE-92AD-0266B5D7C78F")
+ISampleGrabber : public IUnknown {
+public:
+    virtual HRESULT STDMETHODCALLTYPE SetOneShot(BOOL bOneShot) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetMediaType(
+        const AM_MEDIA_TYPE* pType) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetConnectedMediaType(
+        AM_MEDIA_TYPE* pType) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetBufferSamples(BOOL bBufferThem) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetCurrentBuffer(LONG* pBufferSize,
+                                                       LONG* pBuffer) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetCurrentSample(
+        IMediaSample** ppSample) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetCallback(
+        ISampleGrabberCB* pCallback, LONG WhichMethodToCallback) = 0;
+};
 
 // ---- JP message strings (byte-exact Shift-JIS from .rdata) ----------------
 #include "dshow_record_graph_jp.inc"
@@ -209,26 +219,23 @@ void BindSelectedCompressor(DShowRecorder* rec) {
     IMoniker* mon = nullptr;
     ULONG fetched = 0;
     enumMon->Next(1, &mon, &fetched);
-    if (mon == nullptr)                                          // 0x40920C
-        goto cleanup;
-    while (idx != 0) {                                           // 0x409210
+    while (mon != nullptr) {                                     // 0x40920C
+        if (idx == 0)
+            break;                                               // 0x409210
         --idx;
-        if (mon != nullptr)
-            mon->Release();
+        mon->Release();
         mon = nullptr;
         enumMon->Next(1, &mon, &fetched);
-        if (mon == nullptr)
-            goto cleanup;
     }
-    mon->BindToObject(nullptr, nullptr, IID_IBaseFilter,
-                      reinterpret_cast<void**>(&rec->compressor));
-    if (rec->compressor != nullptr)
-        rec->compressor->QueryInterface(
-            IID_IAMVfwCompressDialogs,
-            reinterpret_cast<void**>(&rec->compressorDialogs));
-    return;  // original leaks moniker + enumerators here
-
-cleanup:
+    if (mon != nullptr) {
+        mon->BindToObject(nullptr, nullptr, IID_IBaseFilter,
+                          reinterpret_cast<void**>(&rec->compressor));
+        if (rec->compressor != nullptr)
+            rec->compressor->QueryInterface(
+                IID_IAMVfwCompressDialogs,
+                reinterpret_cast<void**>(&rec->compressorDialogs));
+        return;  // original leaks moniker + enumerators here
+    }
     enumMon->Release();
     devEnum->Release();
 }
@@ -339,19 +346,23 @@ void RebindCodecOnComboChange(DShowRecorder* rec, int sel, HWND hButton,
         graph->AddFilter(source, L"File Source");
     rec->sourceOutput = FindOutputPin(rec, source, 0);
 
-    void* push = nullptr;
+    IPushSource* push = nullptr;
     if (source != nullptr)
-        source->QueryInterface(kIidPushSource, &push);           // 0x409FE3
+        source->QueryInterface(kIidPushSource,
+                               reinterpret_cast<void**>(&push));   // 0x409FE3
     if (push != nullptr) {
         // 0x409730's 10x10 ARGB probe config (40 bytes: 0x28/10/10/
         // 0x00200001/0/400) at a nominal 30 fps.
-        struct {
-            std::uint32_t size, w, h, flags, zero, bytes;
-            std::uint32_t tail[4];
-        } cfg = {40, 10, 10, 0x00200001, 0, 400, {0, 0, 0, 0}};
-        reinterpret_cast<HRESULT(__stdcall*)(void*, const void*, int, float)>(
-            Vt(push)[3])(push, &cfg, 40, 30.0f);                 // SetBitmapInfo
-        reinterpret_cast<IUnknown*>(push)->Release();
+        BITMAPINFOHEADER cfg = {};
+        cfg.biSize = sizeof(cfg);        // 40 (0x28)
+        cfg.biWidth = 10;
+        cfg.biHeight = 10;
+        cfg.biPlanes = 1;                // packed: 0x00200001
+        cfg.biBitCount = 32;             // (BI_RGB ARGB)
+        cfg.biCompression = BI_RGB;      // 0
+        cfg.biSizeImage = 400;           // 10*10*4
+        push->SetBitmapInfo(&cfg, sizeof(cfg), 30.0f);             // SetBitmapInfo
+        push->Release();
     }
 
     // ---- compressor moniker walk to `sel` (shared shape with 0x409170) ----
@@ -378,14 +389,13 @@ void RebindCodecOnComboChange(DShowRecorder* rec, int sel, HWND hButton,
         if (mon->BindToObject(nullptr, nullptr, IID_IBaseFilter,
                               reinterpret_cast<void**>(&rec->compressor)) >= 0) {
             IBaseFilter* comp = rec->compressor;
-            void* vfw = nullptr;
+            IAMVfwCompressDialogs* vfw = nullptr;
             if (comp != nullptr &&
                 comp->QueryInterface(IID_IAMVfwCompressDialogs,
-                                     &vfw) >= 0 &&
+                                     reinterpret_cast<void**>(&vfw)) >= 0 &&
                 vfw != nullptr) {
-                rec->compressorDialogs =
-                    static_cast<IAMVfwCompressDialogs*>(vfw);
-                if (VfwShowDialog(vfw, 4, hButton) == 0) {
+                rec->compressorDialogs = vfw;
+                if (vfw->ShowDialog(4, hButton) == 0) {
                     EnableWindow(hButton, TRUE);
                     if (graph != nullptr && comp != nullptr)
                         graph->AddFilter(comp, L"Compressor");
@@ -399,7 +409,7 @@ void RebindCodecOnComboChange(DShowRecorder* rec, int sel, HWND hButton,
                         devEnum->Release();
                     return;
                 }
-                reinterpret_cast<IUnknown*>(vfw)->Release();
+                vfw->Release();
                 rec->compressorDialogs = nullptr;
             }
         } else if (english) {
@@ -434,16 +444,17 @@ void ShowCodecConfigDialog(DShowRecorder* rec, HWND hDlg) {
     IAMVfwCompressDialogs* vfw = rec->compressorDialogs;
     if (vfw == nullptr)
         return;  // port-side guard (original would fault)
-    VfwShowDialog(vfw, 1, hDlg);                                 // 0x4092A9
-    LONG_PTR size = VfwDriverMessage(vfw, 0x5000, 0, 0);
+    vfw->ShowDialog(1, hDlg);                                    // 0x4092A9
+    long size = vfw->SendDriverMessage(0x5000, 0, 0);
     rec->compressorStateSize = static_cast<std::int32_t>(size);
     if (size > 0) {
         void* blob = std::malloc(static_cast<std::size_t>(size));
         rec->compressorState = blob;
         std::memset(blob, 0, static_cast<std::size_t>(size));
-        VfwDriverMessage(vfw, 0x5000,
-                         reinterpret_cast<LONG_PTR>(blob),
-                         static_cast<LONG_PTR>(size));
+        vfw->SendDriverMessage(
+            0x5000,
+            static_cast<long>(reinterpret_cast<UINT_PTR>(blob)),
+            size);
     }
 }
 
@@ -513,8 +524,9 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
     }
 
     // 2: frame-push handshake
-    void* push = nullptr;
-    if (source->QueryInterface(kIidPushSource, &push) < 0) {
+    IPushSource* push = nullptr;
+    if (source->QueryInterface(kIidPushSource,
+                               reinterpret_cast<void**>(&push)) < 0) {
         MessageBoxA(hwnd, english
                     ? "Could not get DIB Sequential source filter "
                       "interface."
@@ -524,8 +536,7 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
     }
     rec->framePush = push;
     float ver = 0.0f;
-    HRESULT hr = reinterpret_cast<HRESULT(__stdcall*)(void*, float*)>(
-        Vt(push)[7])(push, &ver);                                // GetRate
+    HRESULT hr = push->GetRate(&ver);                            // GetRate
     if (ver < 1.02f || hr < 0) {
         MessageBoxA(hwnd, english
                     ? "MMDxShow->dll is too old.\n\nPlease get newest "
@@ -535,8 +546,7 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
         TeardownDShowGraph(rec);
         return false;
     }
-    reinterpret_cast<HRESULT(__stdcall*)(void*, const void*, int, float)>(
-        Vt(push)[3])(push, config, 40, fps);                     // SetBitmapInfo
+    push->SetBitmapInfo(config, 40, fps);                        // SetBitmapInfo
 
     // 3: SampleGrabber with the video media type
     if (CoCreateInstance(kClsidSampleGrabber, nullptr, CLSCTX_INPROC_SERVER,
@@ -547,8 +557,9 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
         return false;
     }
     IBaseFilter* grabber = rec->videoGrabber;
-    void* sg = nullptr;
-    if (grabber->QueryInterface(kIidISampleGrabber, &sg) < 0) {
+    ISampleGrabber* sg = nullptr;
+    if (grabber->QueryInterface(kIidISampleGrabber,
+                                reinterpret_cast<void**>(&sg)) < 0) {
         MessageBoxA(hwnd, english ? "Failed create a SampleGrabber Interface"
                                   : JP_SG_IF, "DirectShow", 0);
         TeardownDShowGraph(rec);
@@ -557,8 +568,7 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
     {
         // CMediaType() default ctor (0x522DB0): zeroed, bFixedSizeSamples
         // TRUE, lSampleSize 1; SetType(MEDIATYPE_Video) / SetSubtype(...)
-        AM_MEDIA_TYPE mt;
-        std::memset(&mt, 0, sizeof mt);
+        AM_MEDIA_TYPE mt = {};
         mt.bFixedSizeSamples = TRUE;
         mt.lSampleSize = 1;
         mt.majortype = MEDIATYPE_Video;                          // "vids"
@@ -566,12 +576,11 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
             mt.subtype = kSubtypeArgb32;                         // 0x53CEE0
         else
             mt.subtype = MEDIASUBTYPE_RGB24;                     // 0x53CEF0
-        if (reinterpret_cast<HRESULT(__stdcall*)(void*, const AM_MEDIA_TYPE*)>(
-                Vt(sg)[4])(sg, &mt) < 0) {                       // SetMediaType
+        if (sg->SetMediaType(&mt) < 0) {                         // SetMediaType
             MessageBoxA(hwnd, english ? "Failed insert a SampleGrabber"
                                       : JP_SG_INSERT, "DirectShow", 0);
             TeardownDShowGraph(rec);
-            reinterpret_cast<IUnknown*>(sg)->Release();
+            sg->Release();
             return false;
         }
     }
@@ -581,11 +590,11 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
                     : JP_SG_ADD, "DirectShow", 0);
         TeardownDShowGraph(rec);
         if (sg != nullptr)
-            reinterpret_cast<IUnknown*>(sg)->Release();
+            sg->Release();
         return false;
     }
     if (sg != nullptr)
-        reinterpret_cast<IUnknown*>(sg)->Release();
+        sg->Release();
 
     // 4: capture builder - mux + file writer
     ICaptureGraphBuilder2* builder = nullptr;
@@ -667,9 +676,11 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
         if (rec->compressorStateSize > 0 &&
             vfw != nullptr) {
             // 0x40A4E8: re-apply the codec state blob captured by 0x4092A0
-            VfwDriverMessage(vfw, 0x5001,
-                             reinterpret_cast<LONG_PTR>(rec->compressorState),
-                             static_cast<LONG_PTR>(rec->compressorStateSize));
+            vfw->SendDriverMessage(
+                0x5001,
+                static_cast<long>(
+                    reinterpret_cast<UINT_PTR>(rec->compressorState)),
+                rec->compressorStateSize);
         }
     } else if (graph->Connect(grabOut, muxIn) < 0) {
         MessageBoxA(hwnd, english
@@ -697,18 +708,17 @@ bool BuildRecordingGraph(DShowRecorder* rec, HWND hwnd, unsigned char english,
                              CLSCTX_INPROC_SERVER, IID_IBaseFilter,
                              reinterpret_cast<void**>(&rec->audioGrabber));
             IBaseFilter* grabber2 = rec->audioGrabber;
-            void* sg2 = nullptr;
+            ISampleGrabber* sg2 = nullptr;
             if (grabber2 != nullptr)
-                grabber2->QueryInterface(kIidISampleGrabber, &sg2);
+                grabber2->QueryInterface(kIidISampleGrabber,
+                                         reinterpret_cast<void**>(&sg2));
             if (sg2 != nullptr) {
-                AM_MEDIA_TYPE mt;
-                std::memset(&mt, 0, sizeof mt);
+                AM_MEDIA_TYPE mt = {};
                 mt.bFixedSizeSamples = TRUE;
                 mt.lSampleSize = 1;
                 mt.majortype = MEDIATYPE_Audio;                   // "auds"
-                reinterpret_cast<HRESULT(__stdcall*)(
-                    void*, const AM_MEDIA_TYPE*)>(Vt(sg2)[4])(sg2, &mt);
-                reinterpret_cast<IUnknown*>(sg2)->Release();
+                sg2->SetMediaType(&mt);                          // SetMediaType
+                sg2->Release();
             }
             if (grabber2 != nullptr)
                 graph->AddFilter(grabber2, L"AudioGrabber");

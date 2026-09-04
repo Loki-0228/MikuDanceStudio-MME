@@ -251,232 +251,231 @@ static void SelectionStats(MMDApp* app, int x, int y, HWND hwnd) {
     app->SelectionBoxDragging() = 1;
     app->SelectionBoxAnchorX() = x - 6;
     app->SelectionBoxAnchorY() = y - 0x91;
-    if (app->TimelineSelectionChanged() == 0)
-        goto L_repaint;                               // loc_44A437
-    memset(app->TimelineSelectionRegion(), 0, 0x40);        // 656364 (0xA03EC)
-    if (app->state.optflag[0] != 0) {   // 760 (0x2F8)
-        // ---- display-mode counts (0x448F2A-0x44902F) ---------------------
-        // count set flags in the four record arrays (app+0x374 rigid
-        // 0x54-stride flag+0x48, app+0x378 joint 0x28-stride flag+0x24,
-        // app+0x37C IK 0x18-stride flag+0x14, app+0x380 morph 0x24-stride
-        // flag+0x21; 0x2710 samples each) and in the 255-slot record table
-        // app+0x384 (0x3C-stride flag+0x18, 0x2710 samples per slot).
-        unsigned char* rarr = reinterpret_cast<unsigned char*>(app->CameraKeys());
-        unsigned char* jarr = reinterpret_cast<unsigned char*>(app->LightKeys());
-        unsigned char* iarr = reinterpret_cast<unsigned char*>(app->ShadowKeys());
-        unsigned char* marr = reinterpret_cast<unsigned char*>(app->GravityKeys());
-        for (int off = 0; off < 0x2710; ++off) {
-            if (rarr[off * 0x54 + 0x48] != 0)
-                ++app->TimelineSelectionCount(TimelineSelectionBand::Camera);
-            if (jarr[off * 0x28 + 0x24] != 0)
-                ++app->TimelineSelectionCount(TimelineSelectionBand::Light);
-            if (iarr[off * 0x18 + 0x14] != 0)
-                ++app->TimelineSelectionCount(TimelineSelectionBand::SelfShadow);
-            if (marr[off * 0x24 + 0x21] != 0)
-                ++app->TimelineSelectionCount(TimelineSelectionBand::Gravity);
-            for (int g = 0; g < 0x33; ++g) {
-                for (int j = 0; j < 5; ++j) {
-                    unsigned char* slot = reinterpret_cast<unsigned char*>(
-                        app->AccessoryKeys(g * 5 + j));
-                    if (slot[off * 0x3C + 0x18] != 0)
-                        ++app->TimelineSelectionCount(TimelineSelectionBand::Accessory);
-                }
-            }
-        }
-        // count/ptr pairs: rigid 0xA03EC/0xA03F0, joint 0xA03F4/0xA03F8,
-        // IK 0xA03FC/0xA0400, morph 0xA0404/0xA0408
-        FillSelectionRecords(app, rarr, 0x1A4, 0x48, 0x54,
-                             TimelineSelectionBand::Camera);
-        FillSelectionRecords(app, jarr, 0xC8, 0x24, 0x28,
-                             TimelineSelectionBand::Light);
-        FillSelectionRecords(app, iarr, 0x78, 0x14, 0x18,
-                             TimelineSelectionBand::SelfShadow);
-        FillSelectionRecords(app, marr, 0xB4, 0x21, 0x24,
-                             TimelineSelectionBand::Gravity);
-        // accessory fill (0x4495B5-0x449790): records
-        // {0, frameIndex, slotIndex, slot[frameIndex].frame}.  The original
-        // keeps the frame index in a separate outer-loop counter and advances
-        // the slot index monotonically across all 51 groups.
-        if (app->TimelineSelectionCount(TimelineSelectionBand::Accessory) > 0) {
-            std::int32_t* out = static_cast<std::int32_t*>(::operator new(
-                static_cast<std::size_t>(app->TimelineSelectionCount(
-                    TimelineSelectionBand::Accessory)) * 0x10));
-            app->TimelineSelectionRecords(TimelineSelectionBand::Accessory) =
-                reinterpret_cast<TimelineSelectionRecord*>(out);
+    if (app->TimelineSelectionChanged() != 0) {
+        memset(app->TimelineSelectionRegion(), 0, 0x40);        // 656364 (0xA03EC)
+        if (app->state.optflag[0] != 0) {   // 760 (0x2F8)
+            // ---- display-mode counts (0x448F2A-0x44902F) ---------------------
+            // count set flags in the four record arrays (app+0x374 rigid
+            // 0x54-stride flag+0x48, app+0x378 joint 0x28-stride flag+0x24,
+            // app+0x37C IK 0x18-stride flag+0x14, app+0x380 morph 0x24-stride
+            // flag+0x21; 0x2710 samples each) and in the 255-slot record table
+            // app+0x384 (0x3C-stride flag+0x18, 0x2710 samples per slot).
+            unsigned char* rarr = reinterpret_cast<unsigned char*>(app->CameraKeys());
+            unsigned char* jarr = reinterpret_cast<unsigned char*>(app->LightKeys());
+            unsigned char* iarr = reinterpret_cast<unsigned char*>(app->ShadowKeys());
+            unsigned char* marr = reinterpret_cast<unsigned char*>(app->GravityKeys());
             for (int off = 0; off < 0x2710; ++off) {
+                if (rarr[off * 0x54 + 0x48] != 0)
+                    ++app->TimelineSelectionCount(TimelineSelectionBand::Camera);
+                if (jarr[off * 0x28 + 0x24] != 0)
+                    ++app->TimelineSelectionCount(TimelineSelectionBand::Light);
+                if (iarr[off * 0x18 + 0x14] != 0)
+                    ++app->TimelineSelectionCount(TimelineSelectionBand::SelfShadow);
+                if (marr[off * 0x24 + 0x21] != 0)
+                    ++app->TimelineSelectionCount(TimelineSelectionBand::Gravity);
                 for (int g = 0; g < 0x33; ++g) {
                     for (int j = 0; j < 5; ++j) {
                         unsigned char* slot = reinterpret_cast<unsigned char*>(
                             app->AccessoryKeys(g * 5 + j));
-                        if (slot[off * 0x3C + 0x18] != 0) {
-                            out[1] = off;
-                            out[2] = g * 5 + j;
-                            out[3] = *reinterpret_cast<std::int32_t*>(slot + off * 0x3C);
-                            out += 4;
+                        if (slot[off * 0x3C + 0x18] != 0)
+                            ++app->TimelineSelectionCount(TimelineSelectionBand::Accessory);
+                    }
+                }
+            }
+            // count/ptr pairs: rigid 0xA03EC/0xA03F0, joint 0xA03F4/0xA03F8,
+            // IK 0xA03FC/0xA0400, morph 0xA0404/0xA0408
+            FillSelectionRecords(app, rarr, 0x1A4, 0x48, 0x54,
+                                 TimelineSelectionBand::Camera);
+            FillSelectionRecords(app, jarr, 0xC8, 0x24, 0x28,
+                                 TimelineSelectionBand::Light);
+            FillSelectionRecords(app, iarr, 0x78, 0x14, 0x18,
+                                 TimelineSelectionBand::SelfShadow);
+            FillSelectionRecords(app, marr, 0xB4, 0x21, 0x24,
+                                 TimelineSelectionBand::Gravity);
+            // accessory fill (0x4495B5-0x449790): records
+            // {0, frameIndex, slotIndex, slot[frameIndex].frame}.  The original
+            // keeps the frame index in a separate outer-loop counter and advances
+            // the slot index monotonically across all 51 groups.
+            if (app->TimelineSelectionCount(TimelineSelectionBand::Accessory) > 0) {
+                std::int32_t* out = static_cast<std::int32_t*>(::operator new(
+                    static_cast<std::size_t>(app->TimelineSelectionCount(
+                        TimelineSelectionBand::Accessory)) * 0x10));
+                app->TimelineSelectionRecords(TimelineSelectionBand::Accessory) =
+                    reinterpret_cast<TimelineSelectionRecord*>(out);
+                for (int off = 0; off < 0x2710; ++off) {
+                    for (int g = 0; g < 0x33; ++g) {
+                        for (int j = 0; j < 5; ++j) {
+                            unsigned char* slot = reinterpret_cast<unsigned char*>(
+                                app->AccessoryKeys(g * 5 + j));
+                            if (slot[off * 0x3C + 0x18] != 0) {
+                                out[1] = off;
+                                out[2] = g * 5 + j;
+                                out[3] = *reinterpret_cast<std::int32_t*>(slot + off * 0x3C);
+                                out += 4;
+                            }
                         }
                     }
                 }
+                qsort(app->TimelineSelectionRecords(TimelineSelectionBand::Accessory),
+                      static_cast<std::size_t>(app->TimelineSelectionCount(
+                          TimelineSelectionBand::Accessory)),
+                      0x10, CompareFunction);
             }
-            qsort(app->TimelineSelectionRecords(TimelineSelectionBand::Accessory),
-                  static_cast<std::size_t>(app->TimelineSelectionCount(
-                      TimelineSelectionBand::Accessory)),
-                  0x10, CompareFunction);
-            goto L_repaint;
-        }
-        goto L_repaint;                               // 0x4495BD jle
-    } else {
-        // ---- edit-mode stats (loc_4497A1-0x44A426) ------------------------
-        // count the 6 bone display flags (model+0x26E0, 0x168-stride,
-        // flags at +0x38+i*0x3C) into 0xA0414
-        std::int32_t& boneCnt =
-            app->TimelineSelectionCount(TimelineSelectionBand::ModelIk);
-        boneCnt = 0;
-        unsigned char* m = ActiveModel(app);
-        if (m == nullptr)
-            goto L_repaint;
-        mikudancestudio::mdl::BoneKey* bones = mikudancestudio::mdl::BoneKeys(m);
-        for (std::size_t i = 0; i < mikudancestudio::mdl::kBoneKeyCapacity; ++i)
-            if (bones[i].allocated != 0) ++boneCnt;
-        if (boneCnt > 0) {
-            EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);      // 400
-            EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);     // 401
-            // keyframe-cluster append on the active model (0x449886-0x449A5A)
-            auto* record = mikudancestudio::mdl::Mdl(m);
-            record->undoDirty = 1;
-            record->redoDirty = 0;
-            std::uint32_t& kf = record->undoState[0];
-            kf = kf + 1;
-            if (kf >= 0x1E)
-                kf = 0;
-            record->undoState[1] = kf;
-            auto& undo = record->undoRings[0].slots[kf];
-            undo.operation = 2;
-            undo.frame = app->state.currentFrame;
-            auto*& bufSlot = undo.bonePose;
-            if (bufSlot != nullptr) {
-                free(bufSlot);
-                bufSlot = nullptr;
-            }
-            const std::int32_t boneN = mikudancestudio::mdl::Mdl(m)->boneCount;
-            bufSlot = static_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
-                ::operator new(static_cast<std::size_t>(boneN) *
-                               sizeof(mikudancestudio::mdl::BonePoseSnapshot)));
-            memset(bufSlot, 0, static_cast<std::size_t>(boneN) *
-                                   sizeof(mikudancestudio::mdl::BonePoseSnapshot));
-            mikudancestudio::mdl::BoneRecord* srcBase = mikudancestudio::mdl::Bones(m);
-            unsigned char* flagMap = mikudancestudio::mdl::Mdl(m)->bonePhysicsState;
-            for (int i = 0; i < boneN; ++i) {
-                auto& out = bufSlot[i];
-                out.boneIndex = 0;
-                memcpy(out.position, srcBase[i].trans, sizeof out.position);
-                memcpy(out.rotation, srcBase[i].rotQuat, sizeof out.rotation);
-                out.physicsDisabled = flagMap[i];
-            }
-            // second keyframe cluster + data buffer (0x449BB5-0x449CC2)
-            undo.dirty = 0;
-            void*& dataSlot = undo.auxiliaryPose;
-            if (dataSlot != nullptr) {
-                free(dataSlot);
-                dataSlot = nullptr;
-            }
-            dataSlot = ::operator new(static_cast<std::size_t>(boneCnt) * 0x40);
-            memset(dataSlot, 0, static_cast<std::size_t>(boneCnt) * 0x40);
-            memset(mikudancestudio::mdl::Mdl(m)->keyVisitMap, 0,
-                    sizeof(mikudancestudio::mdl::Mdl(m)->keyVisitMap));
-            // feed every set bone flag to 0x49D410 (0x449CF0-0x449D1C)
-            for (std::size_t i = 0; i < mikudancestudio::mdl::kBoneKeyCapacity; ++i)
-                if (bones[i].allocated != 0)
-                    AppendBoneKeyToUndo(ActiveModel(app), static_cast<int>(i));
-            // bone-temp records (0x449D1E-0x449F53): 6 flags per 0x168-stride
-            // record -> 0xA0414/0xA0418, qsorted
-            std::int32_t* bout = static_cast<std::int32_t*>(
-                ::operator new(static_cast<std::size_t>(boneCnt) * 0x10));
-            app->TimelineSelectionRecords(TimelineSelectionBand::ModelIk) =
-                reinterpret_cast<TimelineSelectionRecord*>(bout);
-            int idx = 2;
-            for (std::size_t i = 0; i < mikudancestudio::mdl::kBoneKeyCapacity / 6; ++i) {
-                for (int k = 0; k < 6; ++k) {
-                    mikudancestudio::mdl::BoneKey& key = bones[i * 6 + k];
-                    if (key.allocated != 0) {
-                        bout[0] = idx - 2 + k;
-                        bout[3] = static_cast<std::int32_t>(key.frame);
-                        bout += 4;
+            // 0x4495BD jle
+        } else {
+            // ---- edit-mode stats (loc_4497A1-0x44A426) ------------------------
+            // count the 6 bone display flags (model+0x26E0, 0x168-stride,
+            // flags at +0x38+i*0x3C) into 0xA0414
+            std::int32_t& boneCnt =
+                app->TimelineSelectionCount(TimelineSelectionBand::ModelIk);
+            boneCnt = 0;
+            unsigned char* m = ActiveModel(app);
+            if (m != nullptr) {
+                mikudancestudio::mdl::BoneKey* bones = mikudancestudio::mdl::BoneKeys(m);
+                for (std::size_t i = 0; i < mikudancestudio::mdl::kBoneKeyCapacity; ++i)
+                    if (bones[i].allocated != 0) ++boneCnt;
+                if (boneCnt > 0) {
+                    EnableWindow(GetDlgItem(hwnd, panel::kUndoButton), TRUE);      // 400
+                    EnableWindow(GetDlgItem(hwnd, panel::kRedoButton), FALSE);     // 401
+                    // keyframe-cluster append on the active model (0x449886-0x449A5A)
+                    auto* record = mikudancestudio::mdl::Mdl(m);
+                    record->undoDirty = 1;
+                    record->redoDirty = 0;
+                    std::uint32_t& kf = record->undoState[0];
+                    kf = kf + 1;
+                    if (kf >= 0x1E)
+                        kf = 0;
+                    record->undoState[1] = kf;
+                    auto& undo = record->undoRings[0].slots[kf];
+                    undo.operation = 2;
+                    undo.frame = app->state.currentFrame;
+                    auto*& bufSlot = undo.bonePose;
+                    if (bufSlot != nullptr) {
+                        free(bufSlot);
+                        bufSlot = nullptr;
+                    }
+                    const std::int32_t boneN = mikudancestudio::mdl::Mdl(m)->boneCount;
+                    bufSlot = static_cast<mikudancestudio::mdl::BonePoseSnapshot*>(
+                        ::operator new(static_cast<std::size_t>(boneN) *
+                                       sizeof(mikudancestudio::mdl::BonePoseSnapshot)));
+                    memset(bufSlot, 0, static_cast<std::size_t>(boneN) *
+                                           sizeof(mikudancestudio::mdl::BonePoseSnapshot));
+                    mikudancestudio::mdl::BoneRecord* srcBase = mikudancestudio::mdl::Bones(m);
+                    unsigned char* flagMap = mikudancestudio::mdl::Mdl(m)->bonePhysicsState;
+                    for (int i = 0; i < boneN; ++i) {
+                        auto& out = bufSlot[i];
+                        out.boneIndex = 0;
+                        memcpy(out.position, srcBase[i].trans, sizeof out.position);
+                        memcpy(out.rotation, srcBase[i].rotQuat, sizeof out.rotation);
+                        out.physicsDisabled = flagMap[i];
+                    }
+                    // second keyframe cluster + data buffer (0x449BB5-0x449CC2)
+                    undo.dirty = 0;
+                    void*& dataSlot = undo.auxiliaryPose;
+                    if (dataSlot != nullptr) {
+                        free(dataSlot);
+                        dataSlot = nullptr;
+                    }
+                    dataSlot = ::operator new(static_cast<std::size_t>(boneCnt) * 0x40);
+                    memset(dataSlot, 0, static_cast<std::size_t>(boneCnt) * 0x40);
+                    memset(mikudancestudio::mdl::Mdl(m)->keyVisitMap, 0,
+                            sizeof(mikudancestudio::mdl::Mdl(m)->keyVisitMap));
+                    // feed every set bone flag to 0x49D410 (0x449CF0-0x449D1C)
+                    for (std::size_t i = 0; i < mikudancestudio::mdl::kBoneKeyCapacity; ++i)
+                        if (bones[i].allocated != 0)
+                            AppendBoneKeyToUndo(ActiveModel(app), static_cast<int>(i));
+                    // bone-temp records (0x449D1E-0x449F53): 6 flags per 0x168-stride
+                    // record -> 0xA0414/0xA0418, qsorted
+                    std::int32_t* bout = static_cast<std::int32_t*>(
+                        ::operator new(static_cast<std::size_t>(boneCnt) * 0x10));
+                    app->TimelineSelectionRecords(TimelineSelectionBand::ModelIk) =
+                        reinterpret_cast<TimelineSelectionRecord*>(bout);
+                    int idx = 2;
+                    for (std::size_t i = 0; i < mikudancestudio::mdl::kBoneKeyCapacity / 6; ++i) {
+                        for (int k = 0; k < 6; ++k) {
+                            mikudancestudio::mdl::BoneKey& key = bones[i * 6 + k];
+                            if (key.allocated != 0) {
+                                bout[0] = idx - 2 + k;
+                                bout[3] = static_cast<std::int32_t>(key.frame);
+                                bout += 4;
+                            }
+                        }
+                        idx += 6;
+                    }
+                    qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelIk),
+                          static_cast<std::size_t>(boneCnt),
+                          0x10, CompareFunction);
+                }
+                // morph-temp records (0x449F56-0x44A1C2): 5 flags per 0x64-stride
+                // record -> 0xA041C/0xA0420, qsorted
+                std::int32_t& morphCnt =
+                    app->TimelineSelectionCount(TimelineSelectionBand::ModelMorph);
+                morphCnt = 0;
+                {
+                    unsigned char* mm = ActiveModel(app);
+                    mikudancestudio::mdl::MorphKey* morphs = mikudancestudio::mdl::MorphKeys(mm);
+                    for (std::size_t i = 0; i < mikudancestudio::mdl::kMorphKeyCapacity; ++i)
+                        if (morphs[i].allocated != 0) ++morphCnt;
+                    if (morphCnt > 0) {
+                        std::int32_t* mout = static_cast<std::int32_t*>(
+                            ::operator new(static_cast<std::size_t>(morphCnt) * 0x10));
+                        app->TimelineSelectionRecords(TimelineSelectionBand::ModelMorph) =
+                            reinterpret_cast<TimelineSelectionRecord*>(mout);
+                        int idx = 2;
+                        for (int i = 0; i < 0xFA0; ++i) {
+                            for (int k = 0; k < 5; ++k) {
+                                mikudancestudio::mdl::MorphKey& key = morphs[i * 5 + k];
+                                if (key.allocated != 0) {
+                                    mout[0] = idx - 2 + k;
+                                    mout[3] = static_cast<std::int32_t>(key.frame);
+                                    mout += 4;
+                                }
+                            }
+                            idx += 5;
+                        }
+                        qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelMorph),
+                              static_cast<std::size_t>(morphCnt),
+                              0x10, CompareFunction);
                     }
                 }
-                idx += 6;
-            }
-            qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelIk),
-                  static_cast<std::size_t>(boneCnt),
-                  0x10, CompareFunction);
-        }
-        // morph-temp records (0x449F56-0x44A1C2): 5 flags per 0x64-stride
-        // record -> 0xA041C/0xA0420, qsorted
-        std::int32_t& morphCnt =
-            app->TimelineSelectionCount(TimelineSelectionBand::ModelMorph);
-        morphCnt = 0;
-        {
-            unsigned char* mm = ActiveModel(app);
-            mikudancestudio::mdl::MorphKey* morphs = mikudancestudio::mdl::MorphKeys(mm);
-            for (std::size_t i = 0; i < mikudancestudio::mdl::kMorphKeyCapacity; ++i)
-                if (morphs[i].allocated != 0) ++morphCnt;
-            if (morphCnt > 0) {
-                std::int32_t* mout = static_cast<std::int32_t*>(
-                    ::operator new(static_cast<std::size_t>(morphCnt) * 0x10));
-                app->TimelineSelectionRecords(TimelineSelectionBand::ModelMorph) =
-                    reinterpret_cast<TimelineSelectionRecord*>(mout);
-                int idx = 2;
-                for (int i = 0; i < 0xFA0; ++i) {
-                    for (int k = 0; k < 5; ++k) {
-                        mikudancestudio::mdl::MorphKey& key = morphs[i * 5 + k];
-                        if (key.allocated != 0) {
-                            mout[0] = idx - 2 + k;
-                            mout[3] = static_cast<std::int32_t>(key.frame);
-                            mout += 4;
+                // IK-temp records (0x44A1C2-0x44A426): 5 flags per 0x8C-stride
+                // record -> 0xA0424/0xA0428, qsorted at loc_44A426
+                std::int32_t& ikCnt =
+                    app->TimelineSelectionCount(TimelineSelectionBand::ModelBone);
+                ikCnt = 0;
+                {
+                    unsigned char* mm = ActiveModel(app);
+                    mikudancestudio::mdl::DisplayKey* displayKeys = mikudancestudio::mdl::DisplayKeys(mm);
+                    for (std::size_t i = 0; i < mikudancestudio::mdl::kDisplayKeyCapacity; ++i)
+                        if (displayKeys[i].allocated != 0) ++ikCnt;
+                    if (ikCnt > 0) {
+                        std::int32_t* iout = static_cast<std::int32_t*>(
+                            ::operator new(static_cast<std::size_t>(ikCnt) * 0x10));
+                        app->TimelineSelectionRecords(TimelineSelectionBand::ModelBone) =
+                            reinterpret_cast<TimelineSelectionRecord*>(iout);
+                        int idx = 2;
+                        for (int i = 0; i < 0xC8; ++i) {       // 0x6D60/0x8C
+                            for (int k = 0; k < 5; ++k) {
+                                mikudancestudio::mdl::DisplayKey& key = displayKeys[i * 5 + k];
+                                if (key.allocated != 0) {
+                                    iout[0] = idx - 2 + k;
+                                    iout[3] = static_cast<std::int32_t>(key.frame);
+                                    iout += 4;
+                                }
+                            }
+                            idx += 5;
                         }
                     }
-                    idx += 5;
                 }
-                qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelMorph),
-                      static_cast<std::size_t>(morphCnt),
+                // fall into the shared qsort site at loc_44A426 with the IK pair.
+                qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelBone),
+                      static_cast<std::size_t>(
+                          app->TimelineSelectionCount(TimelineSelectionBand::ModelBone)),
                       0x10, CompareFunction);
             }
         }
-        // IK-temp records (0x44A1C2-0x44A426): 5 flags per 0x8C-stride
-        // record -> 0xA0424/0xA0428, qsorted at loc_44A426
-        std::int32_t& ikCnt =
-            app->TimelineSelectionCount(TimelineSelectionBand::ModelBone);
-        ikCnt = 0;
-        {
-            unsigned char* mm = ActiveModel(app);
-            mikudancestudio::mdl::DisplayKey* displayKeys = mikudancestudio::mdl::DisplayKeys(mm);
-            for (std::size_t i = 0; i < mikudancestudio::mdl::kDisplayKeyCapacity; ++i)
-                if (displayKeys[i].allocated != 0) ++ikCnt;
-            if (ikCnt > 0) {
-                std::int32_t* iout = static_cast<std::int32_t*>(
-                    ::operator new(static_cast<std::size_t>(ikCnt) * 0x10));
-                app->TimelineSelectionRecords(TimelineSelectionBand::ModelBone) =
-                    reinterpret_cast<TimelineSelectionRecord*>(iout);
-                int idx = 2;
-                for (int i = 0; i < 0xC8; ++i) {       // 0x6D60/0x8C
-                    for (int k = 0; k < 5; ++k) {
-                        mikudancestudio::mdl::DisplayKey& key = displayKeys[i * 5 + k];
-                        if (key.allocated != 0) {
-                            iout[0] = idx - 2 + k;
-                            iout[3] = static_cast<std::int32_t>(key.frame);
-                            iout += 4;
-                        }
-                    }
-                    idx += 5;
-                }
-            }
-        }
-        // fall into the shared qsort site at loc_44A426 with the IK pair.
-        qsort(app->TimelineSelectionRecords(TimelineSelectionBand::ModelBone),
-              static_cast<std::size_t>(
-                  app->TimelineSelectionCount(TimelineSelectionBand::ModelBone)),
-              0x10, CompareFunction);
     }
-L_repaint:;                                        // loc_44A437
+    // loc_44A437
     PanelPaint(app);                               // 0x414610
     app->ClearTimelineRange();
     SelectionReeval(app);                          // 0x430510
@@ -716,9 +715,8 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
                 *p = 1;
                 mikudancestudio::mdl::Mdl(m)->selectedBone = idx;
             }
-            goto L_rowtype;                              // via 0x44702D
-        }
-        if (idx == -999) {                               // 0xFFFFFC19
+            // via 0x44702D
+        } else if (idx == -999) {                       // 0xFFFFFC19
             const std::int32_t want = -1 - idx;
             const std::int32_t morphCount =
                 static_cast<std::int32_t>(mdl::Mdl(m)->facialFrameCount);
@@ -733,69 +731,69 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
                 mdl::FrameGroup& faceRec = mdl::DisplayFrames(m)[i];
                 if (faceRec.selected != 0) {
                     faceRec.selected = 0;
-                    goto L_rowtype;                      // via 0x44702D
-                }
-                faceRec.selected = 1;
-                const std::int32_t morphIndex = faceRec.targetIndex;
-                auto& morph = mikudancestudio::mdl::Morphs(m)[morphIndex];
-                const auto panel = morph.panel;
-                HWND hCombo = nullptr, hSpin = nullptr, hText = nullptr;
-                switch (panel) {                         // 0x446D99-0x446E77
-                    case mikudancestudio::mdl::MorphPanel::eyebrow:
-                        hCombo = GetDlgItem(hwnd, panel::kMorphCombo0);
-                        hSpin = GetDlgItem(hwnd, panel::kMorphSlider0);
-                        hText = GetDlgItem(hwnd, panel::kMorphEdit0);
-                        break;
-                    case mikudancestudio::mdl::MorphPanel::eye:
-                        hCombo = GetDlgItem(hwnd, panel::kMorphCombo1);
-                        hSpin = GetDlgItem(hwnd, panel::kMorphSlider1);
-                        hText = GetDlgItem(hwnd, panel::kMorphEdit1);
-                        break;
-                    case mikudancestudio::mdl::MorphPanel::mouth:
-                        hCombo = GetDlgItem(hwnd, panel::kMorphCombo2);
-                        hSpin = GetDlgItem(hwnd, panel::kMorphSlider2);
-                        hText = GetDlgItem(hwnd, panel::kMorphEdit2);
-                        break;
-                    case mikudancestudio::mdl::MorphPanel::other:
-                        hCombo = GetDlgItem(hwnd, panel::kMorphCombo3);
-                        hSpin = GetDlgItem(hwnd, panel::kMorphSlider3);
-                        hText = GetDlgItem(hwnd, panel::kMorphEdit3);
-                        break;
-                    // default: original falls through with stale stack
-                    // handles; nullptr here is the safe equivalent.
-                }
-                // Preserve the active morph separately for each panel.
-                const auto panelIndex = static_cast<unsigned>(panel) - 1;
-                mikudancestudio::mdl::Mdl(m)->selectedMorphs[panelIndex] = morphIndex;
-                // sync the combo cursor with the morph name
-                // (CB_GETCOUNT 0x146 / CB_GETLBTEXT 0x148 / CB_SETCURSEL
-                // 0x14E, 0x446EC0-0x446FAE)
-                const LRESULT count = SendMessageA(hCombo, CB_GETCOUNT, 0, 0);
-                char nameBuf[0x64];
-                for (LONG i2 = 0; i2 < count; ++i2) {
-                    SendMessageA(hCombo, CB_GETLBTEXT, i2,
-                                 reinterpret_cast<LPARAM>(nameBuf));
-                    if (MatchText(nameBuf, morph.name) ||
-                        MatchText(nameBuf, morph.nameEn)) {
-                        SendMessageA(hCombo, CB_SETCURSEL, i2, 0);
+                    // via 0x44702D
+                } else {
+                    faceRec.selected = 1;
+                    const std::int32_t morphIndex = faceRec.targetIndex;
+                    auto& morph = mikudancestudio::mdl::Morphs(m)[morphIndex];
+                    const auto panel = morph.panel;
+                    HWND hCombo = nullptr, hSpin = nullptr, hText = nullptr;
+                    switch (panel) {                         // 0x446D99-0x446E77
+                        case mikudancestudio::mdl::MorphPanel::eyebrow:
+                            hCombo = GetDlgItem(hwnd, panel::kMorphCombo0);
+                            hSpin = GetDlgItem(hwnd, panel::kMorphSlider0);
+                            hText = GetDlgItem(hwnd, panel::kMorphEdit0);
+                            break;
+                        case mikudancestudio::mdl::MorphPanel::eye:
+                            hCombo = GetDlgItem(hwnd, panel::kMorphCombo1);
+                            hSpin = GetDlgItem(hwnd, panel::kMorphSlider1);
+                            hText = GetDlgItem(hwnd, panel::kMorphEdit1);
+                            break;
+                        case mikudancestudio::mdl::MorphPanel::mouth:
+                            hCombo = GetDlgItem(hwnd, panel::kMorphCombo2);
+                            hSpin = GetDlgItem(hwnd, panel::kMorphSlider2);
+                            hText = GetDlgItem(hwnd, panel::kMorphEdit2);
+                            break;
+                        case mikudancestudio::mdl::MorphPanel::other:
+                            hCombo = GetDlgItem(hwnd, panel::kMorphCombo3);
+                            hSpin = GetDlgItem(hwnd, panel::kMorphSlider3);
+                            hText = GetDlgItem(hwnd, panel::kMorphEdit3);
+                            break;
+                        // default: original falls through with stale stack
+                        // handles; nullptr here is the safe equivalent.
                     }
+                    // Preserve the active morph separately for each panel.
+                    const auto panelIndex = static_cast<unsigned>(panel) - 1;
+                    mikudancestudio::mdl::Mdl(m)->selectedMorphs[panelIndex] = morphIndex;
+                    // sync the combo cursor with the morph name
+                    // (CB_GETCOUNT 0x146 / CB_GETLBTEXT 0x148 / CB_SETCURSEL
+                    // 0x14E, 0x446EC0-0x446FAE)
+                    const LRESULT count = SendMessageA(hCombo, CB_GETCOUNT, 0, 0);
+                    char nameBuf[0x64];
+                    for (LONG i2 = 0; i2 < count; ++i2) {
+                        SendMessageA(hCombo, CB_GETLBTEXT, i2,
+                                     reinterpret_cast<LPARAM>(nameBuf));
+                        if (MatchText(nameBuf, morph.name) ||
+                            MatchText(nameBuf, morph.nameEn)) {
+                            SendMessageA(hCombo, CB_SETCURSEL, i2, 0);
+                        }
+                    }
+                    // Morph value spin/text sync (0x446FB4-0x447027):
+                    // spin gets (int)(value*100.0), text gets "%5.4f"
+                    const float v = mikudancestudio::mdl::Morphs(m)[
+                        mikudancestudio::mdl::Mdl(m)->selectedMorphs[panelIndex]].value;
+                    SendMessageA(hSpin, TBM_SETPOS, 1,
+                                 static_cast<LPARAM>(static_cast<std::int32_t>(v * 100.0)));
+                    char valBuf[0x64];
+                    sprintf_s(valBuf, 0x64u, "%5.4f", static_cast<double>(v));
+                    SetWindowTextA(hText, valBuf);
                 }
-                // Morph value spin/text sync (0x446FB4-0x447027):
-                // spin gets (int)(value*100.0), text gets "%5.4f"
-                const float v = mikudancestudio::mdl::Morphs(m)[
-                    mikudancestudio::mdl::Mdl(m)->selectedMorphs[panelIndex]].value;
-                SendMessageA(hSpin, TBM_SETPOS, 1,
-                             static_cast<LPARAM>(static_cast<std::int32_t>(v * 100.0)));
-                char valBuf[0x64];
-                sprintf_s(valBuf, 0x64u, "%5.4f", static_cast<double>(v));
-                SetWindowTextA(hText, valBuf);
             }
         }
     }
 
     // loc_447034: row-type dispatch after selection (entry point for
     // the selection paths above)
-    L_rowtype:;
     {
         unsigned char* m = ActiveModel(app);
         const std::int32_t type =

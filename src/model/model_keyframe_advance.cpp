@@ -125,11 +125,16 @@ using kfa::WriteBonePrevVerbatim;
 using kfa::MirrorBackupsToWorking;
 using kfa::MirrorBackupsToCurrent;
 
+// 0x3FF921FB00000000 is (double)3.141592f * 0.5: the x87-era float pi
+// constant 0x40490FD8 promoted to double and halved, which is exactly how
+// the original folded the pi/2 operand.
+constexpr double kPiHalfBits = static_cast<double>(3.141592f) * 0.5;
+static_assert(__builtin_bit_cast(std::uint64_t, kPiHalfBits) ==
+                  0x3FF921FB00000000ULL,
+              "pi/2 double constant bit-exact");
+
 double PiHalfBits() {
-    const std::uint64_t bits = 0x3FF921FB00000000ULL;
-    double d;
-    std::memcpy(&d, &bits, sizeof d);
-    return d;
+    return kPiHalfBits;
 }
 
 // x86 flt_531134 / x64 flt_7FF7CB552C24: both originals clamp the slerp

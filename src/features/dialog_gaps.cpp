@@ -639,38 +639,41 @@ char ModelStandardPoseSetup(unsigned char* model, bool recordEnable,
             ++leg;
             p += 604;
             if (leg >= boneCount)
-                goto scaleDone;
+                break;
         }
-        const float legY = bones[leg].position[1];
-        if ((double)legY != -1.0) {
-            const float scale = mikudancestudio::mdl::Mdl(model)->lightDir[0] / legY;  // 0x4B5928
-            const double scaleD = scale;                         // held st(6)
-            mikudancestudio::mdl::Mdl(model)->lightDir[1] = scale;
-            const float offset =
-                -mikudancestudio::mdl::Mdl(model)->matColumn2[1] / scale;                // 0x4B5954
-            mikudancestudio::mdl::Mdl(model)->lightDir[2] = offset;
-            int ankle = 0;
-            const mikudancestudio::mdl::BoneRecord* q = bones;
-            while (std::memcmp(q, kAnkleL, 7) != 0) {            // 0x4B5940
-                ++ankle;
-                q += 604;
-                if (ankle >= boneCount) {
+        if (leg < boneCount) {
+            const float legY = bones[leg].position[1];
+            if ((double)legY != -1.0) {
+                const float scale = mikudancestudio::mdl::Mdl(model)->lightDir[0] / legY;  // 0x4B5928
+                const double scaleD = scale;                     // held st(6)
+                mikudancestudio::mdl::Mdl(model)->lightDir[1] = scale;
+                const float offset =
+                    -mikudancestudio::mdl::Mdl(model)->matColumn2[1] / scale;                // 0x4B5954
+                mikudancestudio::mdl::Mdl(model)->lightDir[2] = offset;
+                int ankle = 0;
+                const mikudancestudio::mdl::BoneRecord* q = bones;
+                while (std::memcmp(q, kAnkleL, 7) != 0) {        // 0x4B5940
+                    ++ankle;
+                    q += 604;
+                    if (ankle >= boneCount)
+                        break;
+                }
+                if (ankle < boneCount) {
+                    const float ankleY = bones[ankle].position[1];
+                    if ((double)ankleY == -1.0) {
+                        mikudancestudio::mdl::Mdl(model)->legIkXOffset = (float)(80.0 / scaleD);
+                    } else {
+                        mikudancestudio::mdl::Mdl(model)->lightDir[2] =
+                            (float)((double)ankleY / scaleD + (double)offset);
+                        mikudancestudio::mdl::Mdl(model)->legIkXOffset = (float)(80.0 / scaleD);    // 0x4B59B6
+                    }
+                } else {
                     mikudancestudio::mdl::Mdl(model)->legIkXOffset =
                         (float)(80.0 / scaleD);                  // 0x4B5994
-                    goto scaleDone;
                 }
             }
-            const float ankleY = bones[ankle].position[1];
-            if ((double)ankleY == -1.0) {
-                mikudancestudio::mdl::Mdl(model)->legIkXOffset = (float)(80.0 / scaleD);
-                goto scaleDone;
-            }
-            mikudancestudio::mdl::Mdl(model)->lightDir[2] =
-                (float)((double)ankleY / scaleD + (double)offset);
-            mikudancestudio::mdl::Mdl(model)->legIkXOffset = (float)(80.0 / scaleD);    // 0x4B59B6
         }
     }
-scaleDone:
 
     // Mirror/emit the standard bones (0x4B5994..0x4B77C7).  v45..47 are the
     // センター position snapshot reused by the leg-IK "keep pose" fallback;

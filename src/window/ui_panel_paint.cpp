@@ -566,98 +566,91 @@ void PanelPaint(MMDApp* app) {
             mdl::BoneRecord* bones = mdl::Bones(model);
             std::uint32_t* ikLinks = mdl::Mdl(model)->boneKeyIndices;
             std::int32_t* mapIk = app->state.rowHitBone;  // old name kMapIk
-            int head = 0;       // chain-head index (x)
-            int rec = 0;
-            for (;;) {
-                if (static_cast<std::int32_t>(ikList[head].frame) < limit) {
-                    rec = head;
-                    break;
-                }
-            advanceOuter:
-                if (++head >= ikCnt)
-                    goto ikDone;
-            }
-            for (;;) {
-                mdl::BoneKey& key = ikList[rec];
-                const int row = static_cast<std::int32_t>(key.frame) - scroll;
-                if (row >= 0) {
-                    const int link = ikLinks[head];
-                    if (link != 0 ||
-                        head == mdl::Mdl(model)->displayRootBone) {
-                        // visibility flag (+56) maintenance (0x415631..0x4156CB)
-                        if (app->SelectionBoxDragging() != 0 &&
-                            app->TimelineSelectionChanged() == 0 &&
-                            link < 0) {
-                            const int neg = -link;
-                            if (neg < app->TimelineRangeLastBase() &&
-                                row < app->TimelineRangeLastOffset() &&
-                                app->TimelineRangeFirstBase() <= neg &&
-                                app->TimelineRangeFirstOffset() <= row) {
-                                key.allocated =
-                                    app->TimelineRangeApplyEnabled() != 0
-                                        ? 0
-                                        : static_cast<std::uint8_t>(
-                                              !app->CtrlModifierActive());
-                            } else if (!app->ShiftModifierActive()) {
-                                key.allocated = 0;
+            for (int head = 0; head < ikCnt; ++head) {    // chain-head index (x)
+                if (static_cast<std::int32_t>(ikList[head].frame) >= limit)
+                    continue;
+                int rec = head;
+                for (;;) {
+                    mdl::BoneKey& key = ikList[rec];
+                    const int row = static_cast<std::int32_t>(key.frame) - scroll;
+                    if (row >= 0) {
+                        const int link = ikLinks[head];
+                        if (link != 0 ||
+                            head == mdl::Mdl(model)->displayRootBone) {
+                            // visibility flag (+56) maintenance (0x415631..0x4156CB)
+                            if (app->SelectionBoxDragging() != 0 &&
+                                app->TimelineSelectionChanged() == 0 &&
+                                link < 0) {
+                                const int neg = -link;
+                                if (neg < app->TimelineRangeLastBase() &&
+                                    row < app->TimelineRangeLastOffset() &&
+                                    app->TimelineRangeFirstBase() <= neg &&
+                                    app->TimelineRangeFirstOffset() <= row) {
+                                    key.allocated =
+                                        app->TimelineRangeApplyEnabled() != 0
+                                            ? 0
+                                            : static_cast<std::uint8_t>(
+                                                  !app->CtrlModifierActive());
+                                } else if (!app->ShiftModifierActive()) {
+                                    key.allocated = 0;
+                                }
                             }
-                        }
-                        // row drawing (0x4156D1..0x415B98)
-                        const bool mask =
-                            key.physicsDisabled == 0 && bones[head].hasRigidBody != 0;
-                        const int x = kRowH * row + kIconLeft;
-                        if (key.allocated != 0) {
-                            if (link >= 0) {
-                                const int y = kBandH * link + 17;
+                            // row drawing (0x4156D1..0x415B98)
+                            const bool mask =
+                                key.physicsDisabled == 0 && bones[head].hasRigidBody != 0;
+                            const int x = kRowH * row + kIconLeft;
+                            if (key.allocated != 0) {
+                                if (link >= 0) {
+                                    const int y = kBandH * link + 17;
+                                    BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetMaskX,
+                                           mask ? kIcon : 0, SRCAND);
+                                    BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetOnX,
+                                           mask ? kIcon : 0, SRCPAINT);
+                                } else {
+                                    const int y = 17 - kBandH * link;
+                                    BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetMaskX,
+                                           mask ? kIcon : 0, SRCAND);
+                                    BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetNegX, 0,
+                                           SRCPAINT);
+                                    mapIk[200 * row - link] = -1;
+                                }
+                            } else if (link >= 0) {
+                                if (mapIk[200 * row + link] >= 0) {
+                                    const int y = kBandH * link + 17;
+                                    BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetMaskX,
+                                           mask ? kIcon : 0, SRCAND);
+                                    BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetOffX,
+                                           mask ? kIcon : 0, SRCPAINT);
+                                }
+                            } else if (mapIk[200 * row - link] == -1) {
+                                const int y = 17 - kBandH * link;
                                 BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetMaskX,
                                        mask ? kIcon : 0, SRCAND);
-                                BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetOnX,
+                                BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetNegX,
                                        mask ? kIcon : 0, SRCPAINT);
                             } else {
                                 const int y = 17 - kBandH * link;
                                 BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetMaskX,
                                        mask ? kIcon : 0, SRCAND);
-                                BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetNegX, 0,
-                                       SRCPAINT);
-                                mapIk[200 * row - link] = -1;
-                            }
-                        } else if (link >= 0) {
-                            if (mapIk[200 * row + link] >= 0) {
-                                const int y = kBandH * link + 17;
-                                BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetMaskX,
-                                       mask ? kIcon : 0, SRCAND);
-                                BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetOffX,
+                                // 0x415A35 and 0x415A5C feed the common BitBlt call
+                                // with source (11,11) and (11,0), respectively.
+                                BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetAltX,
                                        mask ? kIcon : 0, SRCPAINT);
+                                mapIk[200 * row - link] = -2;
                             }
-                        } else if (mapIk[200 * row - link] == -1) {
-                            const int y = 17 - kBandH * link;
-                            BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetMaskX,
-                                   mask ? kIcon : 0, SRCAND);
-                            BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetNegX,
-                                   mask ? kIcon : 0, SRCPAINT);
-                        } else {
-                            const int y = 17 - kBandH * link;
-                            BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetMaskX,
-                                   mask ? kIcon : 0, SRCAND);
-                            // 0x415A35 and 0x415A5C feed the common BitBlt call
-                            // with source (11,11) and (11,0), respectively.
-                            BitBlt(panel, x, y, kIcon, kIcon, icons, kSheetAltX,
-                                   mask ? kIcon : 0, SRCPAINT);
-                            mapIk[200 * row - link] = -2;
+                            // final map write (LABEL_156, 0x415B98)
+                            if (link >= 0)
+                                mapIk[200 * row + link] = rec != 0 ? rec : -10;
                         }
-                        // final map write (LABEL_156, 0x415B98)
-                        if (link >= 0)
-                            mapIk[200 * row + link] = rec != 0 ? rec : -10;
                     }
+                    const int next = static_cast<int>(key.next);
+                    rec = next;
+                    if (next == 0 ||
+                        static_cast<std::int32_t>(ikList[next].frame) >= limit)
+                        break;
                 }
-                const int next = static_cast<int>(key.next);
-                rec = next;
-                if (next == 0 ||
-                    static_cast<std::int32_t>(ikList[next].frame) >= limit)
-                    goto advanceOuter;
             }
         }
-    ikDone:
         const std::uint32_t a =
             static_cast<std::uint32_t>(mdl::Mdl(model)->maxFrame) + 20;
         const std::uint32_t b =

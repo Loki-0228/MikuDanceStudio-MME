@@ -105,15 +105,13 @@ void FinishAviRecord(MMDApp* app) {  // was Sub464A00
     RefreshMainWindowViewport(app);                                         // 0x464B46
     RefreshAfterFrameApply(app);                            // 0x464B4D
     PostViewRefresh(app);                                   // 0x464B54
-    if (void* com = s.state.captureRenderTarget) {                 // 0x464B69
-        (*reinterpret_cast<void(__stdcall**)(void*)>(
-            *reinterpret_cast<void***>(com) + 8))(com);
-        s.state.captureRenderTarget = nullptr;
+    if (IDirect3DSurface9* com = s.CaptureRenderTarget()) {        // 0x464B69
+        com->Release();
+        s.CaptureRenderTarget() = nullptr;
     }
-    if (void* com = s.state.captureSystemSurface) {                 // 0x464B81
-        (*reinterpret_cast<void(__stdcall**)(void*)>(
-            *reinterpret_cast<void***>(com) + 8))(com);
-        s.state.captureSystemSurface = nullptr;
+    if (IDirect3DSurface9* com = s.CaptureSystemSurface()) {       // 0x464B81
+        com->Release();
+        s.CaptureSystemSurface() = nullptr;
     }
     if (void* buf = s.state.captureReadbackPixels) {                 // 0x464B94
         free(buf);

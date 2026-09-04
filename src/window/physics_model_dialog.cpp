@@ -182,8 +182,12 @@ constexpr int kMaxEditRecords = 100000;    // slots per scratch array
 #else
 constexpr int kMaxEditRecords = 10000;     // x86 original capacity
 #endif
-constexpr float kPiF = 3.141592025756836f; // float-rounded pi (0x40490FDB)
+constexpr float kPiF = 3.1415927f;         // float-rounded pi (0x40490FDB)
+static_assert(__builtin_bit_cast(std::uint32_t, kPiF) == 0x40490FDBu,
+              "float-rounded pi bit-exact");
 constexpr float kPiShort = 3.141592f;      // truncated pi used for deg<->rad
+static_assert(__builtin_bit_cast(std::uint32_t, kPiShort) == 0x40490FD8u,
+              "truncated pi bit-exact");
 
 // ---- JP strings, byte-exact Shift-JIS as in the binary --------------------
 // x64 0x7FF7CB54F2A0 / x86 0x52E724:

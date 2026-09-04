@@ -458,9 +458,15 @@ void BuildToonTransform(MMDApp* app, Matrix* result) {
     Matrix translation;
     Matrix temporary;
     Matrix projected;
-    float rotationAngle = 0.0f;
-    const std::uint32_t rotationAngleBits = 0xBFC90FD8u;  // 0x530E00
-    std::memcpy(&rotationAngle, &rotationAngleBits, sizeof(rotationAngle));
+    // flt_530E00 = -(3.141592f * 0.5f) (pi/2 in the original's float
+    // precision).  C++17 has no std::bit_cast; MSVC's __builtin_bit_cast
+    // is accepted in constant expressions, so the static_assert pins the
+    // literal to the original .rdata bit pattern.
+    constexpr float kRotationAngle = -(3.141592f * 0.5f);
+    static_assert(__builtin_bit_cast(std::uint32_t, kRotationAngle) ==
+                      0xBFC90FD8u,
+                  "flt_530E00 bit-exact");
+    float rotationAngle = kRotationAngle;                 // 0x530E00
     api.rotX(&rotation, rotationAngle);
     api.scaling(&scaling, 0.5f, -0.5f, 1.0f);
     api.translation(&translation, 0.5f, 0.5f, 0.0f);

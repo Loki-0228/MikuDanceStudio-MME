@@ -736,15 +736,16 @@ bool RegisterDisplayKeyFromRecord(unsigned char* model, int frameArg,
                                        chainBone)) != 0) {
                     ++k;
                     e += 21;
-                    if (k >= cnt) goto nextIk;
+                    if (k >= cnt)
+                        break;
                 }
                 // The search cursor advances for strcmp, but the original
                 // value load at 0x49FCA4/0x49FB7A/0x49FF58 re-indexes from
                 // the unmodified a5 base (imul index, 0x15), not from the
                 // already-advanced cursor.
-                ikBase[i] = entries21[21 * k + 20];
+                if (k < cnt)
+                    ikBase[i] = entries21[21 * k + 20];
             }
-        nextIk:;
         }
         const int selCnt = static_cast<int>(mdl::Mdl(m)->boneOrderCount);
         mdl::BoneReference* const pairBase =
@@ -762,16 +763,18 @@ bool RegisterDisplayKeyFromRecord(unsigned char* model, int frameArg,
                                        selBone)) != 0) {
                     ++k;
                     e += 28;
-                    if (k >= cnt2) goto nextSel;
+                    if (k >= cnt2)
+                        break;
                 }
-                // Likewise 0x49FD4D..0x49FD7F and its two sibling paths
-                // derive the payload address from the original a7 base.
-                pairBase[i].modelIndex =
-                    RdI32(entries28 + 28 * k + 20);
-                pairBase[i].boneIndex =
-                    RdI32(entries28 + 28 * k + 24);
+                if (k < cnt2) {
+                    // Likewise 0x49FD4D..0x49FD7F and its two sibling paths
+                    // derive the payload address from the original a7 base.
+                    pairBase[i].modelIndex =
+                        RdI32(entries28 + 28 * k + 20);
+                    pairBase[i].boneIndex =
+                        RdI32(entries28 + 28 * k + 24);
+                }
             }
-        nextSel:;
         }
     };
 

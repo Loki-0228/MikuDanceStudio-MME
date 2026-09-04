@@ -117,7 +117,12 @@ FnQuatRotationAxisLocal LocalQuatRotationAxis() {
 // .rdata float constants (bit-exact; Hex-Rays decimal renderings do not
 // round-trip, e.g. flt_52B738 = 0x40490FD8 prints as "3.141592" but the
 // float nearest 3.141592 is 0x40490FD7):
-constexpr float kPi52B738 = 3.1415925f;     // 0x40490FD8 (0x52B738)
+constexpr float kPi52B738 = 3.141592f;      // 0x40490FD8 (0x52B738)
+// C++17 has no std::bit_cast; MSVC's __builtin_bit_cast is accepted in
+// constant expressions, so the static_assert pins the literal above to
+// the original .rdata bit pattern.
+static_assert(__builtin_bit_cast(std::uint32_t, kPi52B738) == 0x40490FD8u,
+              "flt_52B738 bit-exact");
 constexpr float k35deg5311A4 = 0.61086512f; // 0x3F1C61A8 (0x5311A4)
 constexpr float k30deg53119C = 0.52359867f; // 0x3F060A90 (0x53119C)
 constexpr float kNeg0d7 = -0.69999999f;     // 0xBF333333 (0x531190)
@@ -595,14 +600,11 @@ float* BuildLookAtQuaternion(float out[4], const float quat[4], float ax,
     } else {
         c = n[0] / len;                                            // 0x4A6266
         s = n[2] / len;                                            // 0x4A6270
-        if (mode == 1) {                                           // 0x4A6274
-            const float a = acosf(c);                              // 0x4A6285
-            ang = s < 0.0f ? -a : a;                               // 0x4A629C
-            goto build;   // v15 = 0, v14 = v46 kept
-        }
-        if (mode < 2) goto build;  // mode 0: v15 = 0               // 0x4A6316
     }
-    {
+    if (mode == 1) {                                           // 0x4A6274
+        const float a = acosf(c);                              // 0x4A6285
+        ang = s < 0.0f ? -a : a;   // v15 = 0, v14 = v46 kept
+    } else if (mode >= 2) {        // mode 0: v15 = 0         // 0x4A6316
         // modes 2/3/4/5: two-term angle decomposition with the x87
         // flag-sensitive sign selection (fnstsw parity + C0/C3 tests at
         // 0x4A633F..0x4A6349 map to ordered "< 0" tests; NaN falls to the
@@ -617,7 +619,6 @@ float* BuildLookAtQuaternion(float out[4], const float quat[4], float ax,
             ang = ang0 - r * len;                                  // 0x4A63C9
         }
     }
-build:
     {
         // first 2D rotation from (c, s) (0x4A62AE..)
         d3dx::D3DXMATRIXF& a = m1;  // reused v53

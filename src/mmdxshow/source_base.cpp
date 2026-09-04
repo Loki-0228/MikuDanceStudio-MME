@@ -267,8 +267,8 @@ static HRESULT MMDxShow_NotifyEvent(CBaseFilter* pFilter, LONG lCode, LONG_PTR l
         ? (LONG_PTR)static_cast<IBaseFilter*>(pFilter)
         : lParam2;
     // IMediaEventSink::Notify = vtable slot +0x0C
-    return ((HRESULT (__stdcall *)(IUnknown*, LONG, LONG_PTR, LONG_PTR))
-            (*(void***)pSink)[3])(pSink, lCode, lParam1, p2);
+    return reinterpret_cast<IMediaEventSink*>(pSink)->Notify(
+        lCode, lParam1, p2);
 }
 
 // =============================================================================
@@ -650,15 +650,16 @@ DWORD CAMThread::DoBufferProcessingLoop()
                 return 1;
         }
         IMediaSample* pSample;
-        for (;;) {
-            if (pin.GetDeliveryBuffer(&pSample, NULL, NULL, 0) >= 0) // slot +0x40
-                break;
+        bool requestPending = false;
+        while (pin.GetDeliveryBuffer(&pSample, NULL, NULL, 0) < 0) { // slot +0x40
             MMDXTrace("GetDeliveryBuffer retry hr pending\n");
             Sleep(1);
-            if (MMDxShow_ThreadCheckRequest(this, &cmd))
-                goto pending;
+            if (MMDxShow_ThreadCheckRequest(this, &cmd)) {
+                requestPending = true;
+                break;
+            }
         }
-        {
+        if (!requestPending) {
             const HRESULT hr = FillBuffer(pSample);           // slot +0x08
             if (hr != 0) {
                 pSample->Release();
@@ -675,9 +676,6 @@ DWORD CAMThread::DoBufferProcessingLoop()
             if (hrDeliver != 0)
                 return 0;                                     // 0x100026d8
         }
-        continue;
-pending:
-        (void)0;
     }
 }
 
@@ -775,19 +773,18 @@ STDMETHODIMP CBaseFilter::Pause()
         return S_OK;
     }
     const int cPins = GetPinCount();
-    if (cPins <= 0)
-        goto set_paused;
-    for (int i = 0; i < cPins; ++i) {
-        CBasePin* pPin = GetPin(i);
-        if (P_connected(pPin) != NULL) {
-            const HRESULT hr = pPin->Active();                // slot +0x14
-            if (hr < 0) {
-                LeaveCriticalSection(F_pLock(this));
-                return hr;
+    if (cPins > 0) {
+        for (int i = 0; i < cPins; ++i) {
+            CBasePin* pPin = GetPin(i);
+            if (P_connected(pPin) != NULL) {
+                const HRESULT hr = pPin->Active();                // slot +0x14
+                if (hr < 0) {
+                    LeaveCriticalSection(F_pLock(this));
+                    return hr;
+                }
             }
         }
     }
-set_paused:
     m_State = State_Paused;
     LeaveCriticalSection(F_pLock(this));
     return S_OK;

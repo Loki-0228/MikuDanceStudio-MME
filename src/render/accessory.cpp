@@ -114,8 +114,7 @@ void Identity(Matrix* value) {
 void ReleaseCom(void* object) {
     if (object == nullptr)
         return;
-    using Fn = ULONG(__stdcall*)(void*);
-    reinterpret_cast<Fn>((*reinterpret_cast<void***>(object))[2])(object);
+    reinterpret_cast<IUnknown*>(object)->Release();  // vtable slot 2
 }
 
 // Porting-era trace under MIKUDANCESTUDIO_PMM_TRACE_DIR (CMake option

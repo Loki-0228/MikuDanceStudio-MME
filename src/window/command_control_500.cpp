@@ -493,8 +493,15 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
     case 526:  // 0x480571 (axis 0x2DA8)
     case 527:  // 0x480491 (axis 0x2DA4)
     {
-        const std::size_t lane =
-            (id == 525) ? 0 : (id == 524) ? 1 : (id == 527) ? 2 : 3;
+        // lane 0..3 = the per-axis combo rows 0x2D9C/0x2DA0/0x2DA4/0x2DA8;
+        // 526 (0x2DA8) is the default chain.
+        std::size_t lane = 3;
+        switch (id) {
+        case 525: lane = 0; break;
+        case 524: lane = 1; break;
+        case 527: lane = 2; break;
+        default: break;
+        }
         app->SceneModified() = 1;
         for (std::size_t off = 0;
              off < sizeof(mdl::BoneKey) * mdl::kBoneKeyCapacity;

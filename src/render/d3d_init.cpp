@@ -45,9 +45,7 @@ BOOL CALLBACK EnumMonitorsMax(HMONITOR, HDC, LPRECT rect, LPARAM lParam) {
 void ReleaseCom(void* object) {
     if (object == nullptr)
         return;
-    using Release = ULONG(__stdcall*)(void*);
-    reinterpret_cast<Release>((*reinterpret_cast<void***>(object))[2])(
-        object);
+    reinterpret_cast<IUnknown*>(object)->Release();  // vtable slot 2
 }
 
 // Porting-era error/state dumps under MIKUDANCESTUDIO_STATE_DUMP_DIR /

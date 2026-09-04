@@ -192,8 +192,10 @@ void KinematicSyncPass(MMDApp* app, bool reverse, bool selSkip) {
 void FrameStepBeyondEnd(MMDApp* app) {
     auto& s = *app;
     DShowRecorder* recorder = s.Recorder();
-    unsigned char* rec =
-        static_cast<unsigned char*>(recorder->framePush);
+    IPushSource* push =
+        recorder != nullptr
+            ? static_cast<IPushSource*>(recorder->framePush)
+            : nullptr;
     unsigned char* flagPtr = s.RecordingCompletionFlag();
 
     // The original guards BOTH capture calls with a null test on the
@@ -205,32 +207,31 @@ void FrameStepBeyondEnd(MMDApp* app) {
 #ifdef MIKUDANCESTUDIO_DIAG
         static int capCount = 0;
 #endif
-        if (rec == nullptr)
+        if (push == nullptr)
             return 0;
-        void** vt = *reinterpret_cast<void***>(rec);
         // IPushSource methods are STDMETHODCALLTYPE: `this` is the first
         // stack argument (NOT a cdecl call - the 8-byte cleanup mismatch
         // corrupted the caller's stack).
-        auto fn = reinterpret_cast<long(__stdcall*)(void*, void*)>(vt[4]);
 #ifdef MIKUDANCESTUDIO_DIAG
         if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
             if (++capCount <= 5 || capCount % 60 == 0) {
                 FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
                 if (tf) {
                     fprintf(tf,
-                            "capture#%d rec=%p vt=%p fn=%p flag=%d\n",
-                            capCount, rec, vt, fn, (int)*flagPtr);
+                            "capture#%d push=%p flag=%d\n",
+                            capCount, static_cast<void*>(push),
+                            (int)*flagPtr);
                     fclose(tf);
                 }
             }
         }
 #endif
-        return fn(rec, flagPtr);
+        return push->GetStreamingState(flagPtr);
     };
 
     capture();
     while (*flagPtr == 0) {                                 // 0x46F08C
-        if (rec == nullptr)                                 // 0x46F0A4 jz
+        if (push == nullptr)                                // 0x46F0A4 jz
             break;
         if (capture() == static_cast<long>(0x80004005))     // E_FAIL
             break;                                          // 0x46F0B1

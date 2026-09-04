@@ -186,14 +186,12 @@ void BulletTransformToMatrix(const btTransform& source, Matrix* out) {
     out->m[3][2] = origin.z();
 }
 
-using ComRelease = ULONG(WINAPI*)(void*);
 using BufferPointer = void*(WINAPI*)(void*);
 using MeshDrawSubset = HRESULT(WINAPI*)(void*, DWORD);
 
 void ReleaseCom(void* object) {
     if (object != nullptr)
-        reinterpret_cast<ComRelease>((*reinterpret_cast<void***>(object))[2])(
-            object);
+        reinterpret_cast<IUnknown*>(object)->Release();  // vtable slot 2
 }
 
 void DrawAxisMesh(void* axis, D3DRenderer* sub) {

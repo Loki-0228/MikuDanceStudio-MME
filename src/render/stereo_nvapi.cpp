@@ -15,6 +15,16 @@ namespace {
 
 using QueryInterface = void* (__cdecl*)(std::uint32_t);
 
+// NVAPI interface ids resolved through nvapi_QueryInterface (opaque
+// selectors, kept in hex; names follow NVIDIA's nvapi headers).
+constexpr std::uint32_t kNvapiInitializeId = 0x0150E828u;
+constexpr std::uint32_t kNvapiStereoCreateHandleId = 0xAC7E37F4u;
+constexpr std::uint32_t kNvapiStereoIsActivatedId = 0x1FB0BC30u;
+constexpr std::uint32_t kNvapiStereoActivateId = 0xF6A1AD68u;
+constexpr std::uint32_t kNvapiStereoSetConvergenceId = 0x3DD6B54Bu;
+constexpr std::uint32_t kNvapiStereoCapsId = 0xBE7692ECu;
+constexpr std::uint32_t kNvapiStereoSupportId = 0x239C4545u;
+
 // Mirrors the original globals: hLibModule @0x545940 and the init-time
 // nvapi_QueryInterface pointer @0x545944 established by sub_4C6940.
 HMODULE g_nvapiModule = nullptr;
@@ -35,7 +45,7 @@ int NvapiInitImpl() {                                         // 0x4C6940
     if (g_nvapiQuery != nullptr) {
         using Initialize = int (__cdecl*)();
         auto initialize = reinterpret_cast<Initialize>(
-            g_nvapiQuery(0x0150E828u));
+            g_nvapiQuery(kNvapiInitializeId));
         if (initialize == nullptr || initialize() != 0) {
             g_nvapiQuery = nullptr;
             FreeLibrary(g_nvapiModule);                       // 0x4C69DD
@@ -72,8 +82,8 @@ bool ActivateStereo(D3DRenderer* wrapper) {  // 0x407400
         return false;
     using IsActivated = int (__cdecl*)(void*, std::uint8_t*);
     using Activate = int (__cdecl*)(void*);
-    auto isActivated = Resolve<IsActivated>(0x1FB0BC30u);
-    auto activate = Resolve<Activate>(0xF6A1AD68u);
+    auto isActivated = Resolve<IsActivated>(kNvapiStereoIsActivatedId);
+    auto activate = Resolve<Activate>(kNvapiStereoActivateId);
     std::uint8_t active = 0;
     if (isActivated != nullptr)
         isActivated(handle, &active);
@@ -83,7 +93,7 @@ bool ActivateStereo(D3DRenderer* wrapper) {  // 0x407400
 void SetStereoConvergence(D3DRenderer* wrapper, float value) {  // 0x407450
     void* handle = wrapper->stereoHandle;  // +120020
     using SetConvergence = int (__cdecl*)(void*, float);
-    auto set = Resolve<SetConvergence>(0x3DD6B54Bu);
+    auto set = Resolve<SetConvergence>(kNvapiStereoSetConvergenceId);
     if (handle != nullptr && set != nullptr)
         set(handle, value);
 }
@@ -92,7 +102,7 @@ void SetStereoConvergence(D3DRenderer* wrapper, float value) {  // 0x407450
 
 bool ProbeStereo3D(void* device, void* handleSlot) {  // 0x4CB430 wrapper
     using CreateHandle = int (__cdecl*)(void*, void**);
-    auto create = Resolve<CreateHandle>(0xAC7E37F4u);
+    auto create = Resolve<CreateHandle>(kNvapiStereoCreateHandleId);
     // The original caller clears wrapper+120166 when the NVAPI status is
     // non-zero, so this bool intentionally means "probe failed".
     return create == nullptr || create(device, static_cast<void**>(handleSlot)) != 0;
@@ -109,7 +119,7 @@ int NvapiStereoCaps(int arg) {
         resolved = true;
         QueryInterface query = NvQuery();
         if (query != nullptr)
-            call = reinterpret_cast<Caps>(query(0xBE7692ECu));
+            call = reinterpret_cast<Caps>(query(kNvapiStereoCapsId));
     }
     if (call == nullptr)
         return -3;                                            // 0x4CAF56
@@ -127,7 +137,7 @@ int NvapiStereoSupportGate() {
         resolved = true;
         QueryInterface query = NvQuery();
         if (query != nullptr)
-            call = reinterpret_cast<Gate>(query(0x239C4545u));
+            call = reinterpret_cast<Gate>(query(kNvapiStereoSupportId));
     }
     if (call == nullptr)
         return -3;                                            // 0x4CB256

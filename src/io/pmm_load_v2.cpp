@@ -126,6 +126,16 @@ using namespace pmm_io;
 
 namespace {
 
+// flt_52A1D8 (0x3C3851EC = 0.01125f) - the float the original seeds into
+// A0D2C/physicsInterval (see the reset run below).  C++17 has no
+// std::bit_cast; MSVC's __builtin_bit_cast is accepted in constant
+// expressions, so the static_assert pins the literal to the original
+// .rdata bit pattern.
+constexpr float kPhysicsIntervalDefault = 0.01125f;
+static_assert(
+    __builtin_bit_cast(std::uint32_t, kPhysicsIntervalDefault) == 0x3C3851ECu,
+    "flt_52A1D8 bit-exact");
+
 struct NameMapping {
     char name[256]{};
     std::int32_t mappedIndex = -1;
@@ -412,7 +422,7 @@ static void LoadSceneV2_DisposeAndHeader(PmmV2LoadContext& ctx, int fd) {
     SendMessageA(GetDlgItem(main, panel::kFollowCameraCheckbox), BM_SETCHECK, 0, 0);
 
     s->state.selfShadowMode = 0;                // 0x450161
-    s->state.physicsInterval = 0x3C3851ECu;      // flt_52A1D8
+    s->state.physicsInterval = kPhysicsIntervalDefault;     // flt_52A1D8
 
     // ---- AVI teardown trio (0x45016D..0x4501B5) --------------------------
     if (s->AviFrameReader() != nullptr) {
@@ -2206,16 +2216,15 @@ static void LoadSceneV2_ConfigBlock(PmmV2LoadContext& ctx, int fd) {
             if (s->PictureBackgroundEnabled() != 0) {
                 CheckMenuItem(GetMenu(main), 0xE9, 8);
                 PicBgOverlayRefresh(s);
-                goto label_708;
+            } else {
+                CheckMenuItem(GetMenu(main), 0xE9, 0);
             }
-            CheckMenuItem(GetMenu(main), 0xE9, 0);
         } else {
             Rd(fd, &b, 1);                                      // 0x456F29
             s->PictureBackgroundEnabled() = 0;
             CheckMenuItem(GetMenu(main), 0xE9, 0);
         }
     }
-label_708:
     {
         unsigned char b = 0;
         const HWND owner =

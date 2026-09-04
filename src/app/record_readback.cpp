@@ -108,18 +108,15 @@ inline void TraceRec(const char*, ...) {}
 // 与 dshow_record_graph.cpp / shutdown_cleanup.cpp 相同的 vtable 槽索引
 // 惯用法：槽号是 ABI 无关的（x86 槽距 4 字节、x64 槽距 8 字节），按索引
 // 取就不会把 x86 的字节偏移带进 x64 构建。
-inline void** Vt(void* obj) { return *reinterpret_cast<void***>(obj); }
-
 // The push interface (app+0xA06C0 object, +0x68 field).  IPushSource is
 // an STDMETHODCALLTYPE (stdcall) interface: `this` travels as the first
 // stack argument (the ABI the original binary's push-style call sites
 // use).  A cdecl cast here drifts the stack 8 bytes per call and corrupts
 // the caller's locals.
-long CallStreamingState(unsigned char* push, void* flagPtr) {
+long CallStreamingState(IPushSource* push, void* flagPtr) {
     // GetStreamingState = 槽 4：x64 原版 call [vt+0x20] @0x7FF7CB44B1EF
     // （轮询循环头 0x7FF7CB44B217，返回值与 0x80004005 比较即流结束）。
-    return reinterpret_cast<long(__stdcall*)(void*, void*)>(
-        Vt(push)[4])(push, flagPtr);
+    return push->GetStreamingState(flagPtr);
 }
 
 }  // namespace
@@ -183,8 +180,8 @@ bool RecordingReadbackPass(MMDApp* app) {
         Sleep(atoi(pace));
 #endif
     DShowRecorder* recorder = s.Recorder();
-    unsigned char* push = recorder != nullptr
-        ? static_cast<unsigned char*>(recorder->framePush)
+    IPushSource* push = recorder != nullptr
+        ? static_cast<IPushSource*>(recorder->framePush)
         : nullptr;
     unsigned char* flagPtr = s.RecordingCompletionFlag();
     if (push != nullptr)
@@ -308,8 +305,8 @@ bool RecordingReadbackPass(MMDApp* app) {
     if (push != nullptr) {                                       // 0x46EEB0
         // 帧推送 = 槽 5：x64 原版 call [vt+0x28] @0x7FF7CB44B836，
         // rdx = 像素缓冲（[r12+0xA0298]），返回值不检查。
-        reinterpret_cast<void(__stdcall*)(void*, void*)>(
-            Vt(push)[5])(push, s.CaptureReadbackPixels());
+        push->StartStreaming(
+            reinterpret_cast<DWORD_PTR>(s.CaptureReadbackPixels()));
     }
     (*sysSlot)->UnlockRect();                                    // 0x46EECC
     return true;

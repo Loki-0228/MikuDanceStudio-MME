@@ -106,6 +106,10 @@ float* TextureTableLookupColor(D3DRenderer* wrapper, float* outRgb,
 
 namespace {
 
+// NVAPI interface id resolved through nvapi_QueryInterface (opaque
+// selector, kept in hex).
+constexpr std::uint32_t kNvapiStereoReverseBlitControlId = 0x3CD58F89u;
+
 // VA 0x004CC0F0 - NVAPI stereo call, interface id 0x3CD58F89.
 // __cdecl(void* stereoHandle, unsigned enable) -> NvAPI status.
 // The original consults the init-time nvapi_QueryInterface pointer
@@ -130,7 +134,8 @@ int NvapiStereo3CD58F89(void* stereoHandle, unsigned enable) {
             auto query = reinterpret_cast<QueryInterface>(
                 GetProcAddress(module, "nvapi_QueryInterface"));
             if (query != nullptr)
-                call = reinterpret_cast<StereoCall>(query(0x3CD58F89u));
+                call = reinterpret_cast<StereoCall>(
+                    query(kNvapiStereoReverseBlitControlId));
         }
     }
     if (call == nullptr)

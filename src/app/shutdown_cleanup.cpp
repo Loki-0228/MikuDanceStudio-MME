@@ -61,6 +61,7 @@
 #define NOMINMAX
 #include <Windows.h>
 #include <objbase.h>  // CoUninitialize
+#include <dshow.h>    // IMediaControl/IMediaEvent complete types
 #include <vfw.h>      // AVIFile*/AVIStream*/DrawDib*
 
 #include <cstdint>
@@ -246,6 +247,11 @@ void DisposeAudioContext(WaveAudioContext* audio) {
 // (dword_545948/dword_54594C) are always-null instrumentation in the
 // original and are omitted.
 // =========================================================================//
+
+// NVAPI interface id resolved through nvapi_QueryInterface (opaque
+// selector, kept in hex).
+constexpr std::uint32_t kNvapiStereoDestroyHandleId = 0x3A153134u;
+
 int NvapiStereoDestroyHandle(void* stereoHandle) {
     using QueryInterface = void*(__cdecl*)(std::uint32_t);
     using DestroyHandle = int(__cdecl*)(void*);
@@ -261,7 +267,8 @@ int NvapiStereoDestroyHandle(void* stereoHandle) {
             auto query = reinterpret_cast<QueryInterface>(
                 GetProcAddress(module, "nvapi_QueryInterface"));
             if (query != nullptr)
-                destroy = reinterpret_cast<DestroyHandle>(query(0x3A153134u));
+                destroy = reinterpret_cast<DestroyHandle>(
+                    query(kNvapiStereoDestroyHandleId));
         }
     }
     if (destroy == nullptr)
@@ -337,25 +344,19 @@ void DisposeRenderSubsystem(D3DRenderer* sub) {
 // =========================================================================//
 void TeardownDShowGraph(DShowRecorder* rec) {
     // 0x409327: MMDxShow frame-push interface, vtable slot +24
-    if (void* push = rec->framePush)                          // this[26]
-        reinterpret_cast<void(__stdcall*)(void*)>(Vt(push)[6])(push);
+    if (IPushSource* push = static_cast<IPushSource*>(rec->framePush))  // this[26]
+        push->BeginStreaming();
 
-    void* mediaEvent = rec->mediaEvent;                       // this[23]
+    IMediaEvent* mediaEvent = rec->mediaEvent;                // this[23]
     if (mediaEvent != nullptr) {
         // 0x40936C: GetEvent(&code,&p1,&p2,0) / 0x409386: FreeEventParams
-        using FnGetEvent = void(__stdcall*)(void*, std::int32_t*,
-                                            std::int32_t*, std::int32_t*,
-                                            std::int32_t);
-        using FnFreeEventParams = void(__stdcall*)(void*, std::int32_t,
-                                                   std::int32_t,
-                                                   std::int32_t);
+        long code = 0;
+        LONG_PTR param1 = 0;
+        LONG_PTR param2 = 0;
         char done = 0;
         do {
-            std::int32_t code = 0, param1 = 0, param2 = 0;
-            reinterpret_cast<FnGetEvent>(Vt(mediaEvent)[8])(           // +32
-                mediaEvent, &code, &param1, &param2, 0);
-            reinterpret_cast<FnFreeEventParams>(Vt(mediaEvent)[12])(   // +48
-                mediaEvent, code, param1, param2);
+            mediaEvent->GetEvent(&code, &param1, &param2, 0);          // +32
+            mediaEvent->FreeEventParams(code, param1, param2);         // +48
             if (code > 0 && code <= 3)
                 done = 1;                                      // 0x409395
             MSG msg;                                           // 0x4093A4
@@ -365,9 +366,7 @@ void TeardownDShowGraph(DShowRecorder* rec) {
             }
         } while (!done);
         // 0x4093E5: IMediaControl (this[17]) vtable+36 (Stop)
-        void* mediaControl = rec->mediaControl;
-        reinterpret_cast<void(__stdcall*)(void*)>(
-            Vt(mediaControl)[9])(mediaControl);
+        rec->mediaControl->Stop();
     }
 
     // 0x4093E9..0x4095BC: release run (Release() = vtable+8, then null).

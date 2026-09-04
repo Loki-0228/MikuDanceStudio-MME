@@ -476,10 +476,12 @@ void FrameDriver(MMDApp* app) {
         s.state.depthDeviceEnabled != 0) {                  // 0xA03B8
         // 0xA03D4 = the OpenNI is-tracking callback slot (literal was a
         // +0x80 decimal slip that landed mid-cameraAttachmentBasis)
-        auto cb = s.OpenniTrackingCallback();                // 0xA03D4
+        // ?OpenNIIsTracking@@YGXPA_N@Z - void __stdcall OpenNIIsTracking(bool*)
+        using OpenNIIsTrackingFn = void(__stdcall*)(unsigned char*);
+        auto cb = reinterpret_cast<OpenNIIsTrackingFn>(
+            s.OpenniTrackingCallback());                         // 0xA03D4
         if (cb != nullptr)
-            reinterpret_cast<void (__thiscall*)(void*, unsigned char*)>(cb)(
-                &selActive, &selActive);
+            cb(&selActive);
         // 0x46DCCF..0x46DD61（x64 0x7FF7CB44A34C..0x7FF7CB44A3EC）：原版
         // 泵在探测之后立即做的深度图请求与菜单 0x124 卫生（oni_skeleton_
         // pump.cpp 含地址锚点）。

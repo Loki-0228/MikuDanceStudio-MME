@@ -306,22 +306,31 @@ constexpr std::size_t kModelNames33D8 = 0x33D8;   // enhance-model names, 10 x
                                                   // char[100] (261)
 
 // Bit-exact original constants (see fidelity notes in the header).
-inline double Bits64(std::uint64_t b) {
-    double d;
-    std::memcpy(&d, &b, sizeof d);
-    return d;
-}
-inline float Bits32(std::uint32_t b) {
-    float f;
-    std::memcpy(&f, &b, sizeof f);
-    return f;
-}
-constexpr std::uint64_t kDbl52B768bits = 0x400921FB00000000ull;  // pi (truncated)
-constexpr std::uint64_t kDbl52B760bits = 0x4066800000000000ull;  // 180.0
-constexpr std::uint64_t kDbl52E678bits = 0x400921FC80000000ull;  // (double)(float)pi
-constexpr std::uint32_t kFlt52B740bits = 0x358637BDu;  // ~1e-6 threshold
-constexpr std::uint32_t kFlt52B73Cbits = 0xC0490FD8u;  // -pi float
-constexpr std::uint32_t kFlt52B738bits = 0x40490FD8u;  // +pi float
+// C++17 has no std::bit_cast; MSVC's __builtin_bit_cast is accepted in
+// constant expressions, so the static_asserts pin each literal below to
+// the original .rdata bit pattern.
+constexpr double kDbl52B768 = static_cast<double>(3.141592f);  // pi (truncated)
+static_assert(__builtin_bit_cast(std::uint64_t, kDbl52B768) ==
+                  0x400921FB00000000ull,
+              "dbl_52B768 bit-exact");
+constexpr double kDbl52B760 = 180.0;                           // 180.0
+static_assert(__builtin_bit_cast(std::uint64_t, kDbl52B760) ==
+                  0x4066800000000000ull,
+              "dbl_52B760 bit-exact");
+// 3.141594886779785 is the shortest round-trip decimal for dbl_52E678.
+constexpr double kDbl52E678 = 3.141594886779785;               // (double)(float)pi
+static_assert(__builtin_bit_cast(std::uint64_t, kDbl52E678) ==
+                  0x400921FC80000000ull,
+              "dbl_52E678 bit-exact");
+constexpr float kFlt52B740 = 1e-6f;  // ~1e-6 threshold
+static_assert(__builtin_bit_cast(std::uint32_t, kFlt52B740) == 0x358637BDu,
+              "flt_52B740 bit-exact");
+constexpr float kFlt52B73C = -3.141592f;  // -pi float
+static_assert(__builtin_bit_cast(std::uint32_t, kFlt52B73C) == 0xC0490FD8u,
+              "flt_52B73C bit-exact");
+constexpr float kFlt52B738 = 3.141592f;  // +pi float
+static_assert(__builtin_bit_cast(std::uint32_t, kFlt52B738) == 0x40490FD8u,
+              "flt_52B738 bit-exact");
 
 // 0x529688: swprintf_s format L"\0\0%s%s" - the leading NULs make the
 // original call (which passes NO varargs) write an empty string; the %s
@@ -2716,12 +2725,12 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // shared with the dialog procs in the original.
     // ------------------------------------------------------------------
     case 300: {
-        const double kD1 = Bits64(kDbl52B768bits);  // pi (truncated)
-        const double kD2 = Bits64(kDbl52B760bits);  // 180.0
-        const double kD3 = Bits64(kDbl52E678bits);  // (double)(float)pi
-        const float kPi = Bits32(kFlt52B738bits);   // +pi float
-        const float kNegPi = Bits32(kFlt52B73Cbits);
-        const float kThr = Bits32(kFlt52B740bits);
+        const double kD1 = kDbl52B768;  // pi (truncated)
+        const double kD2 = kDbl52B760;  // 180.0
+        const double kD3 = kDbl52E678;  // (double)(float)pi
+        const float kPi = kFlt52B738;   // +pi float
+        const float kNegPi = kFlt52B73C;
+        const float kThr = kFlt52B740;
         app->state.enterKeyState = 1;
         if (app->state.optflag[0] != 0) {
             // ---- camera path (0x48A2D9..0x48A407) -----------------------

@@ -133,6 +133,15 @@ using namespace pmm_io;
 
 namespace {
 
+// flt_52A1D8 (0x3C3851EC = 0.01125f) - the float the original seeds into
+// A0D2C/physicsInterval at 0x45934D.  C++17 has no std::bit_cast; MSVC's
+// __builtin_bit_cast is accepted in constant expressions, so the
+// static_assert pins the literal to the original .rdata bit pattern.
+constexpr float kPhysicsIntervalDefault = 0.01125f;
+static_assert(
+    __builtin_bit_cast(std::uint32_t, kPhysicsIntervalDefault) == 0x3C3851ECu,
+    "flt_52A1D8 bit-exact");
+
 // Model-relative field access (offsets kept as verified literals).
 inline std::int32_t& M32(unsigned char* m, std::size_t o) {
     return *reinterpret_cast<std::int32_t*>(m + o);
@@ -343,7 +352,7 @@ static void LoadSceneV1_DisposeAndHeader(PmmV1LoadContext& ctx, int fd) {
     CheckMenuItem(GetMenu(main), 0xF7, 0);                       // 0x459316
     SendMessageA(GetDlgItem(main, panel::kFollowCameraCheckbox), BM_SETCHECK, 0, 0);    // 0x45933A
 
-    s->state.physicsInterval = 0x3C3851ECu;       // 0x45934D
+    s->state.physicsInterval = kPhysicsIntervalDefault;           // 0x45934D
     s->state.selfShadowMode = 0;                 // 0x45935C
 
     // ---- AVI teardown trio (0x459369..0x45939D) --------------------------

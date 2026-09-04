@@ -681,7 +681,12 @@ void SkinPmx(unsigned char* model, float edgeDistance, bool opaqueEdge,
     if (vertices == nullptr || bones == nullptr || materials == nullptr)
         return;
 
-    for (std::uint32_t i = 0; i < vertexCount; ++i) {
+    // x64 forks the stride workers through VCOMP90 (_vcomp_for_static_simple_
+    // init/end): the per-vertex loop is the original's default-schedule
+    // parallel region. MSVC /openmp (OpenMP 2.0) only accepts signed loop
+    // indexes, so this is one signed index where the port kept unsigned.
+#pragma omp parallel for
+    for (int i = 0; i < static_cast<int>(vertexCount); ++i) {
         const mdl::PmxVertex& source = vertices[i];
         mdl::SkinnedVertex<AdditionalUvCount>& main = mainVertices[i];
         mdl::EdgeVertex& edge = edgeVertices[i];
