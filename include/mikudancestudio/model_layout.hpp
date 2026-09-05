@@ -60,7 +60,11 @@ struct ModelRecord {
     std::uint32_t pmmScale;  // 1180  (accessory_paste)
     float pmmPosition[3];  // 1184
     RawPad<7424> gap3;  // 1196..8620 (unrecovered)
-    std::uint32_t pmxVertexCount;  // 8620  (model_init)
+    // Misnomer: the 8620 slot is really the Kinect pose-trace buffer pointer
+    // (with the flag byte at 8616; x64 0x21E0/0x21E8).  Always reach it
+    // through mdl::PoseTraceBuffer/PoseTraceFlag (model.hpp) - the typed
+    // u32 view below exists only to keep the generated layout intact.
+    std::uint32_t pmxVertexCount;  // 8620  (misnomer; see model.hpp accessors)
     std::uint8_t pmxTextEncoding;        // 8624  (0 UTF-16; x64 PMX loader)
     std::uint8_t pmxAdditionalUvCount;   // 8625
     std::uint8_t pmxVertexIndexSize;     // 8626

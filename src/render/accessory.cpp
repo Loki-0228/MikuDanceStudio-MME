@@ -975,12 +975,12 @@ void RenderAccessoriesShadow(MMDApp* app) {                     // 0x4C52D0
         device->SetMaterial(&material);
         device->SetTexture(0, nullptr);
         FxBeginPass(effect);
-        auto* materials = static_cast<unsigned char*>(mdl::Accessory(accessory)->materials);
+        auto* materials = static_cast<const D3DMATERIAL9*>(mdl::Accessory(accessory)->materials);
         const DWORD count = mdl::Accessory(accessory)->materialCount;
         mdl::Accessory(accessory)->currentMaterial = -1;
         for (DWORD i = 0; i < count; ++i) {
             ++mdl::Accessory(accessory)->currentMaterial;
-            if (At<float>(materials, 68 * i + 12) != 0.9800000190734863f)
+            if (materials[i].Diffuse.a != 0.9800000190734863f)
                 DrawSubset(accessory, i);
         }
         FxEndPass(effect);

@@ -90,7 +90,7 @@ namespace {
 // ---- 追踪缓冲（0x3B3760 字节，308 字节/样本，dialog_gaps.cpp 分配）-------
 // 指针存模型 +8620（x64 0x21E8），游标为 matMisc（x64 0x3CA0/x86 14584）。
 unsigned char* PoseTraceBuffer(unsigned char* model) {
-    return mdl::At<unsigned char*>(model, 8620);
+    return static_cast<unsigned char*>(mdl::PoseTraceBuffer(model));
 }
 
 // ---- 骨骼名常量（SJIS 字节，.rdata 地址锚点）------------------------------
@@ -466,7 +466,7 @@ bool RegisterKinectPoseCapture(unsigned char* model, unsigned frame) {
 
     // 0x7FF7CB4F3A18..0x7FF7CB4F3A31：释放追踪缓冲、采样计数清零。
     delete[] PoseTraceBuffer(model);
-    mdl::At<unsigned char*>(model, 8620) = nullptr;
+    mdl::PoseTraceBuffer(model) = nullptr;
     mdl::Mdl(model)->matMisc = 0;
     return true;
 }

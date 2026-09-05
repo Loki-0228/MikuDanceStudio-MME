@@ -503,25 +503,23 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
         default: break;
         }
         app->SceneModified() = 1;
-        for (std::size_t off = 0;
-             off < sizeof(mdl::BoneKey) * mdl::kBoneKeyCapacity;
-             off += 0x3C) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* bones =
-                *reinterpret_cast<unsigned char**>(m + 0x26E0);
-            bones[off + 0x38] = 0;
+            mdl::BoneKey* boneKeys = mdl::BoneKeys(m);
+            for (std::size_t i = 0; i < mdl::kBoneKeyCapacity; ++i)
+                boneKeys[i].allocated = 0;
         }
-        for (std::size_t off = 0; off < 0x61A80; off += 0x14) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* morphs =
-                *reinterpret_cast<unsigned char**>(m + 0x26E4);
-            morphs[off + 0x10] = 0;
+            mdl::MorphKey* morphKeys = mdl::MorphKeys(m);
+            for (std::size_t i = 0; i < mdl::kMorphKeyCapacity; ++i)
+                morphKeys[i].allocated = 0;
         }
-        for (std::size_t off = 0; off < 0x6D60; off += 0x1C) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* iks =
-                *reinterpret_cast<unsigned char**>(m + 0x26E8);
-            iks[off + 0x14] = 0;
+            mdl::DisplayKey* displayKeys = mdl::DisplayKeys(m);
+            for (std::size_t i = 0; i < mdl::kDisplayKeyCapacity; ++i)
+                displayKeys[i].allocated = 0;
         }
         unsigned char* m = ActiveModel(app);
         RegisterMorphKeyCurrent(
@@ -529,7 +527,7 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
             mdl::Mdl(m)->selectedMorphs[lane],
             app->state.currentFrame);
         const std::int32_t frames =
-            *reinterpret_cast<std::int32_t*>(ActiveModel(app) + 0x31B0);
+            static_cast<std::int32_t>(mdl::Mdl(ActiveModel(app))->maxFrame);
         if (app->state.lastRegisteredFrame < frames)
             app->state.lastRegisteredFrame = frames;
         PanelPaint(app);

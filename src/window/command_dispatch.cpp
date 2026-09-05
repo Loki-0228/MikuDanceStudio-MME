@@ -232,7 +232,7 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
             for (; slot < kModelSlotCount; ++slot) {
                 unsigned char* model = app->ModelSlot(slot);
                 if (model != nullptr &&
-                    static_cast<int>(model[kModelComboOrder2D7C]) ==
+                    mdl::Mdl(model)->comboSelIndex ==
                         static_cast<int>(sel)) {
                     found = true;
                     break;
@@ -331,7 +331,7 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
             for (; slot < kModelSlotCount; ++slot) {
                 unsigned char* model = app->ModelSlot(slot);
                 if (model != nullptr &&
-                    static_cast<int>(model[kModelComboOrder2D7C]) ==
+                    mdl::Mdl(model)->comboSelIndex ==
                         static_cast<int>(sel)) {
                     found = true;
                     break;

@@ -196,14 +196,14 @@ void ReleaseCom(void* object) {
 
 void DrawAxisMesh(void* axis, D3DRenderer* sub) {
     auto* device = sub->device;
-    const DWORD count = At<DWORD>(axis, 1188);
-    auto* materials = At<unsigned char*>(axis, 4);
-    void* mesh = At<void*>(axis, 0);
+    mdl::AccessoryRecord& gizmo = *mdl::Accessory(axis);
+    const DWORD count = gizmo.materialCount;
+    auto* materials = static_cast<D3DMATERIAL9*>(gizmo.materials);
     for (DWORD i = 0; i < count; ++i) {
-        device->SetMaterial(reinterpret_cast<D3DMATERIAL9*>(materials + 68 * i));
+        device->SetMaterial(&materials[i]);
         device->SetTexture(0, nullptr);
-        reinterpret_cast<MeshDrawSubset>((*reinterpret_cast<void***>(mesh))[3])(
-            mesh, i);
+        reinterpret_cast<MeshDrawSubset>(
+            (*reinterpret_cast<void***>(gizmo.mesh))[3])(gizmo.mesh, i);
     }
 }
 
@@ -253,9 +253,9 @@ void Sub04B0Init(void* object) {
 }
 
 bool InitAxisMesh(MMDApp* app) {
-    void* axis = app->state.axisMeshObject;
-    ReleaseCom(At<void*>(axis, 0));
-    At<void*>(axis, 0) = nullptr;
+    mdl::AccessoryRecord& gizmo = *mdl::Accessory(app->state.axisMeshObject);
+    ReleaseCom(gizmo.mesh);
+    gizmo.mesh = nullptr;
 
     HRSRC resource = FindResourceA(nullptr, MAKEINTRESOURCEA(0x73), "XFILE");
     DWORD size = SizeofResource(nullptr, resource);
@@ -274,11 +274,11 @@ bool InitAxisMesh(MMDApp* app) {
         return false;
     }
 
-    At<void*>(axis, 0) = mesh;
-    At<DWORD>(axis, 1188) = materialCount;
-    unsigned char* materials = static_cast<unsigned char*>(
+    gizmo.mesh = mesh;
+    gizmo.materialCount = materialCount;
+    auto* materials = static_cast<D3DMATERIAL9*>(
         ::operator new(68 * materialCount));
-    At<unsigned char*>(axis, 4) = materials;
+    gizmo.materials = materials;
     if (materials == nullptr)
         return false;
     auto getBufferPointer = reinterpret_cast<BufferPointer>(
@@ -286,7 +286,7 @@ bool InitAxisMesh(MMDApp* app) {
     auto* source = static_cast<unsigned char*>(
         getBufferPointer(materialBuffer));
     for (DWORD i = 0; i < materialCount; ++i)
-        std::memcpy(materials + 68 * i, source + 72 * i, 68);
+        std::memcpy(&materials[i], source + 72 * i, 68);
     ReleaseCom(materialBuffer);
     return true;
 }
@@ -525,7 +525,7 @@ void SetupFrameWorldTransform(MMDApp* app) {
     float focusZ = 0.0f;
     const int targetModel = app->CameraParentModel();
     const int targetBone = app->CameraParentBone();
-    unsigned char* target = nullptr;
+    mdl::BoneRecord* target = nullptr;
     if (app->state.optflag[0] != 0 &&
         targetModel < 0) {
         focusX = app->CameraPositionX();
@@ -534,16 +534,16 @@ void SetupFrameWorldTransform(MMDApp* app) {
     } else if (targetModel >= 0) {
         auto* model = app->ModelSlot(targetModel);
         auto* bones = mikudancestudio::mdl::Bones(model);
-        target = reinterpret_cast<unsigned char*>(&bones[targetBone]);
-        const float x = At<float>(target, 308);
-        const float y = At<float>(target, 312);
-        const float z = At<float>(target, 316);
-        focusX = At<float>(target, 52) * x + At<float>(target, 68) * y +
-                 At<float>(target, 84) * z + At<float>(target, 100);
-        focusY = At<float>(target, 56) * x + At<float>(target, 72) * y +
-                 At<float>(target, 88) * z + At<float>(target, 104);
-        focusZ = At<float>(target, 60) * x + At<float>(target, 76) * y +
-                 At<float>(target, 92) * z + At<float>(target, 108);
+        target = &bones[targetBone];
+        const float x = target->position[0];
+        const float y = target->position[1];
+        const float z = target->position[2];
+        focusX = target->matInit[0] * x + target->matInit[4] * y +
+                 target->matInit[8] * z + target->matInit[12];
+        focusY = target->matInit[1] * x + target->matInit[5] * y +
+                 target->matInit[9] * z + target->matInit[13];
+        focusZ = target->matInit[2] * x + target->matInit[6] * y +
+                 target->matInit[10] * z + target->matInit[14];
         app->ViewOffsetX() = app->CameraPositionX();
         app->ViewOffsetY() = app->CameraPositionY();
         app->CameraDistance() = app->CameraPositionZ();
@@ -560,7 +560,7 @@ void SetupFrameWorldTransform(MMDApp* app) {
         app->state.optflag[0] != 0) {
         if (target != nullptr &&
             app->CameraAttachmentTransformSuppressed() == 0) {
-            std::memcpy(&attachment, BoneMatrix(reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(target)), sizeof(attachment));
+            std::memcpy(&attachment, BoneMatrix(target), sizeof(attachment));
             attachment.m[0][3] = 0.0f;
             attachment.m[1][3] = 0.0f;
             attachment.m[2][3] = 0.0f;

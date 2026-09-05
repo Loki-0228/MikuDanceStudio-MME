@@ -27,6 +27,7 @@
 #include <cstdint>
 
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "ui_controls.inc"
 
@@ -209,8 +210,7 @@ void LocalizeUI(MMDApp* app) {
         for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* slot = s.ModelSlot(i);
             if (slot != nullptr &&
-                *reinterpret_cast<unsigned char*>(
-                    static_cast<unsigned char*>(slot) + 11644) == order) {
+                mikudancestudio::mdl::Mdl(slot)->comboSelIndex == order) {
                 slotIdx = i;
                 break;
             }

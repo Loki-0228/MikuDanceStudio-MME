@@ -551,7 +551,7 @@ void ApplyModelCalculateOrderDialog(MMDApp* app, int count, HWND hDlg) {  // was
         static_cast<std::int32_t*>(app->AccessoryOrderArray());
     for (int i = 1; i < count; ++i) {
         unsigned char* model = app->ModelSlot(order[i]);
-        model[kModelOrder2D7C] = static_cast<unsigned char>(i);
+        mdl::Mdl(model)->comboSelIndex = static_cast<unsigned char>(i);
     }
 }
 // VA 0x00466370 - gravity-setting dialog (266) edit subclass: WM_KEYDOWN +
@@ -694,7 +694,7 @@ void BuildModelOrderArray(MMDApp* app, int count) {  // was Sub41E7B0, VA 0x0041
         for (int i = 0; i < kModelSlotCount; ++i) {
             unsigned char* model = app->ModelSlot(i);
             if (model != nullptr &&
-                static_cast<unsigned char>(model[kModelOrder2D7C]) == ord) {
+                mdl::Mdl(model)->comboSelIndex == ord) {
                 order[ord] = i + 1;
                 break;
             }
@@ -711,7 +711,7 @@ void ApplyModelDisplayOrderDialog(MMDApp* app, int count, HWND hDlg) {  // was S
         static_cast<std::int32_t*>(app->AccessoryOrderArray());
     for (int i = 1; i < count; ++i) {
         unsigned char* model = app->ModelSlot(order[i] - 1);
-        model[kModelOrder2D7C] = static_cast<unsigned char>(i);
+        mdl::Mdl(model)->comboSelIndex = static_cast<unsigned char>(i);
     }
     ApplyModelComboSelection(app);                                       // 0x44D940
 }

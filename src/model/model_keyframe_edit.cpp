@@ -720,8 +720,8 @@ void SyncModelEditControls(unsigned char* model) {  // was Sub4A02C0
         CheckRadioButton(hwnd, 0x1BC, 0x1BD, enabled ? 0x1BC : 0x1BD);
     }
 
-    unsigned char* bones = At<unsigned char*>(model, 0x26C4);
-    if (bones == nullptr)
+    mdl::MorphRecord* morphs = mdl::Morphs(model);
+    if (morphs == nullptr)
         return;
     static constexpr int kSliderIds[4] = {0x1F9, 0x1FE, 0x203, 0x208};
     static constexpr int kEditIds[4] = {0x1FA, 0x1FF, 0x204, 0x209};
@@ -730,8 +730,8 @@ void SyncModelEditControls(unsigned char* model) {  // was Sub4A02C0
         const std::int32_t index = mdl::Mdl(model)->selectedMorphs[lane];
         if (index < 0)
             continue;
-        const float value = At<float>(bones,
-            static_cast<std::size_t>(index) * 0x88 + 0x30);
+        const float value =
+            morphs[static_cast<std::size_t>(index)].value;
         SendMessageA(GetDlgItem(hwnd, kSliderIds[lane]), TBM_SETPOS, TRUE,
                      static_cast<LPARAM>(static_cast<std::int32_t>(value * 100.0f)));
         sprintf_s(text, sizeof(text), "%5.4f", static_cast<double>(value));

@@ -504,7 +504,8 @@ void InitModelOrderDialog(int count, HWND hDlg) {  // was Sub41E810, VA 0x0041E8
         for (int slot = 0; slot < kModelSlotCount; ++slot) {
             unsigned char* model = app->ModelSlot(slot);
             if (model != nullptr &&
-                model[kModelOrder2D7C] == static_cast<unsigned char>(ord)) {
+                mdl::Mdl(model)->comboSelIndex ==
+                    static_cast<unsigned char>(ord)) {
                 order[ord] = slot + 1;
                 break;
             }

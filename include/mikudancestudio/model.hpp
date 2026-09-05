@@ -248,6 +248,20 @@ constexpr std::size_t kPmxMaterialMorphPools = 0x22A0;
 constexpr std::size_t kPmxMaterialMorphPools = 8756;
 #endif
 
+// Kinect standard-pose trace: a recording-enabled flag byte and the
+// 0x3B3760-byte sample buffer pointer (308 bytes per sample), with the
+// rewind cursor living in ModelRecord::matMisc.  The generated layout
+// declares the x86 pointer slot as "pmxVertexCount" - a misnomer: every
+// user treats it as this pointer.  x86 0x21A8/0x21AC; x64 0x21E0/0x21E8
+// (alloc twin 0x7FF7CB4C9A74/0x7FF7CB4C9AA3, trace pump 0x7FF7CB4F23E0).
+#if defined(_M_X64)
+constexpr std::size_t kPoseTraceFlag = 0x21E0;
+constexpr std::size_t kPoseTraceBuffer = 0x21E8;
+#else
+constexpr std::size_t kPoseTraceFlag = 8616;
+constexpr std::size_t kPoseTraceBuffer = 8620;
+#endif
+
 enum class PmxTextBufferSlot : std::size_t {
     japaneseName,
     englishName,
@@ -263,6 +277,14 @@ inline T& At(unsigned char* m, std::size_t off) {
 template <typename T>
 inline const T& At(const unsigned char* m, std::size_t off) {
     return *reinterpret_cast<const T*>(m + off);
+}
+
+inline std::uint8_t& PoseTraceFlag(unsigned char* m) {
+    return At<std::uint8_t>(m, kPoseTraceFlag);
+}
+
+inline void*& PoseTraceBuffer(unsigned char* m) {
+    return At<void*>(m, kPoseTraceBuffer);
 }
 
 // Typed view of the model object: routes table pointers through

@@ -121,12 +121,12 @@ void ModelInitDefaults(unsigned char* m) {                   // 0x4A8DC0
 
     ModelInitMorphSlots(m);                                // 0x4A89B0
 
-    m[8616] = 0;
+    mdl::PoseTraceFlag(m) = 0;
     mikudancestudio::mdl::Mdl(m)->lightDir[0] = -1.0f;
     mikudancestudio::mdl::Mdl(m)->lightDir[1] = 90.0f;
     mikudancestudio::mdl::Mdl(m)->lightDir[2] = 10.0f;
     mdl::Mdl(m)->legIkXOffset = 1.0f;
-    mikudancestudio::mdl::Mdl(m)->pmxVertexCount = 0;
+    mdl::PoseTraceBuffer(m) = nullptr;
     mikudancestudio::mdl::Mdl(m)->matMisc = 0;
 }
 

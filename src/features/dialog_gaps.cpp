@@ -564,9 +564,10 @@ const unsigned char kAnkleL[7] =                                 // 0x5311D8
 // The original writes the trace record slots through this exact expression;
 // the cursor is re-read for every field.
 inline float& TraceSlot(unsigned char* model, std::size_t fieldOffset) {
-    return At<float>(At<unsigned char*>(model, 8620),
-                     308 * (std::size_t)mikudancestudio::mdl::Mdl(model)->matMisc +
-                         fieldOffset);
+    return At<float>(
+        static_cast<unsigned char*>(mikudancestudio::mdl::PoseTraceBuffer(model)),
+        308 * (std::size_t)mikudancestudio::mdl::Mdl(model)->matMisc +
+            fieldOffset);
 }
 
 // Mirror of one standard-bone quat/pos group (record slot offset, source
@@ -579,7 +580,7 @@ void WritePoseGroup(unsigned char* model, mikudancestudio::mdl::BoneRecord* bone
     bone->rotQuat[0] = s1;
     bone->rotQuat[1] = s2;
     bone->rotQuat[2] = s3;
-    if (model[8616] != 0) {
+    if (mikudancestudio::mdl::PoseTraceFlag(model) != 0) {
         TraceSlot(model, slot) = bone->rotQuat[3];
         TraceSlot(model, slot + 4) = bone->rotQuat[0];
         TraceSlot(model, slot + 8) = bone->rotQuat[1];
@@ -592,19 +593,20 @@ void WritePoseGroup(unsigned char* model, mikudancestudio::mdl::BoneRecord* bone
 char ModelStandardPoseSetup(unsigned char* model, bool recordEnable,
                             unsigned char mirrorLeftRight, unsigned char skeletonFlag) {
     char wasRecording = 0;
-    if (model[8616] == 0 && recordEnable) {                      // 0x4B577A
-        model[8616] = 1;
-        if (At<void*>(model, 8620) != nullptr) {
-            free(At<void*>(model, 8620));                        // 0x4B5795
-            At<void*>(model, 8620) = nullptr;
+    if (mikudancestudio::mdl::PoseTraceFlag(model) == 0 && recordEnable) {  // 0x4B577A
+        mikudancestudio::mdl::PoseTraceFlag(model) = 1;
+        if (mikudancestudio::mdl::PoseTraceBuffer(model) != nullptr) {
+            free(mikudancestudio::mdl::PoseTraceBuffer(model));   // 0x4B5795
+            mikudancestudio::mdl::PoseTraceBuffer(model) = nullptr;
         }
-        At<void*>(model, 8620) = ::operator new(0x3B3760);       // 0x4B57B0
+        mikudancestudio::mdl::PoseTraceBuffer(model) =
+            ::operator new(0x3B3760);                             // 0x4B57B0
         mikudancestudio::mdl::Mdl(model)->matMisc = 0;
     }
     if (!recordEnable) {                                         // 0x4B57BE
-        if (model[8616] != 0)
+        if (mikudancestudio::mdl::PoseTraceFlag(model) != 0)
             wasRecording = 1;
-        model[8616] = 0;
+        mikudancestudio::mdl::PoseTraceFlag(model) = 0;
     }
 
     // IK scan (0x4B57DA..0x4B5847): pick up the leg-IK "add" flags that the

@@ -427,18 +427,16 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                                 continue;
                             auto* a = &bones[first];
                             auto* b = &bones[second];
-                            if ((At<std::uint16_t>(a, 500) &
-                                 mdl::kBoneFlagVisible) == 0 ||
-                                (At<std::uint16_t>(b, 500) &
-                                 mdl::kBoneFlagVisible) == 0 ||
-                                At<int>(a, 452) == 393939 ||
-                                At<int>(a, 456) == 393939 ||
-                                At<int>(b, 452) == 393939 ||
-                                At<int>(b, 456) == 393939)
+                            if ((a->flags & mdl::kBoneFlagVisible) == 0 ||
+                                (b->flags & mdl::kBoneFlagVisible) == 0 ||
+                                a->selState == 393939 ||
+                                a->selState2 == 393939 ||
+                                b->selState == 393939 ||
+                                b->selState2 == 393939)
                                 continue;
-                            AppendLine(lines, At<int>(a, 452),
-                                       At<int>(a, 456), At<int>(b, 452),
-                                       At<int>(b, 456), 0xFF000000u);
+                            AppendLine(lines, a->selState,
+                                       a->selState2, b->selState,
+                                       b->selState2, 0xFF000000u);
                             ++boneResult.linePrimitiveCount;
                         }
                     }
@@ -457,12 +455,12 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                             linked < boneCount &&
                             bone->selState != 393939 &&
                             bone->selState2 != 393939 &&
-                            At<int>(&bones[linked], 452) != 393939 &&
-                            At<int>(&bones[linked], 456) != 393939 &&
+                            bones[linked].selState != 393939 &&
+                            bones[linked].selState2 != 393939 &&
                             AppendBoneV(lines, bone->selState,
                                 bone->selState2,
-                                At<int>(&bones[linked], 452),
-                                At<int>(&bones[linked], 456), scale,
+                                bones[linked].selState,
+                                bones[linked].selState2, scale,
                                 0xFFFF3232u)) {
                             boneResult.linePrimitiveCount += 2;
                         }

@@ -132,43 +132,6 @@ namespace mikudancestudio {
 // file-local offset below is a MODEL-object field (not app state),
 // reached through model pointer arithmetic.
 // ---------------------------------------------------------------------------
-constexpr std::size_t kOff31B0 = 0x31B0;    // model frame-count field (0xE3)
-
-// Model-field offsets (model = slot array app+0x780 [byte app+0x910]).
-constexpr std::size_t kModelIx1 = 0x2D7C;       // slot-order index byte
-constexpr std::size_t kModelIx2 = 0x2D7D;       // slot-order index byte
-constexpr std::size_t kModelMorphTbl = 0x26C4;  // morph table, 0x88 stride
-                                                 // (name @ +0, type byte
-                                                 //  @ +0x58, blink value
-                                                 //  @ +0x30)
-constexpr std::size_t kModelIkCnt = 0x2D88;     // IK chain count
-constexpr std::size_t kModelBoneFrames = 0x26BC;  // bone table, 0x25C stride
-                                                 // (parent dword @ +0x30,
-                                                 //  type byte @ +0x1E4)
-constexpr std::size_t kModelFramesBone = 0x26E0; // bone frames, 0x3C stride
-                                                 // (+4/+8 neighbour indices,
-                                                 //  pos @ 0x1C/0x20/0x24,
-                                                 //  quat @ 0x28..0x34,
-                                                 //  used flag @ 0x38)
-constexpr std::size_t kModelFramesMorph = 0x26E4; // morph frames, 0x14 stride
-                                                 // (+4/+8 neighbour indices,
-                                                 //  frame no. float @ 0xC,
-                                                 //  used flag @ 0x10)
-constexpr std::size_t kModelFramesAcc = 0x26E8;  // accessory/camera/light
-                                                 // frames, 0x1C stride
-                                                 // (+4/+8 neighbour indices,
-                                                 //  type byte @ 0xC,
-                                                 //  name-list ptr @ 0x10,
-                                                 //  used flag @ 0x14,
-                                                 //  record-base ptr @ 0x18)
-constexpr std::size_t kModelCamCnt = 0x4CCE8;   // camera record count
-
-// Frame-table byte counts (stride x slot count).
-constexpr std::size_t kBoneFrameBytes =
-    sizeof(mdl::BoneKey) * mdl::kBoneKeyCapacity;  // cap x 0x3C
-constexpr std::size_t kMorphFrameBytes = 0x61A80u;   // 200000 x 0x14
-constexpr std::size_t kAccFrameBytes = 0x6D60u;      // 1000 x 0x1C
-
 // D3D wrapper fields (the 0x1D574 render subsystem object reached via
 // app->Renderer(); layout in d3d_wrapper.hpp): stereoEnabled (+0x1D566,
 // stereo-3D gate byte), maxTextureWidth/maxTextureHeight (+0x1D568/+0x1D56C,
@@ -429,33 +392,30 @@ void PurgeMorphFrames(MMDApp* app, std::uint8_t type) {
         if (morphs[m].type != type) {
             continue;
         }
-        unsigned char* frames = *reinterpret_cast<unsigned char**>(
-            model + kModelFramesMorph);
+        mdl::MorphKey* frames = mdl::MorphKeys(model);
         std::int32_t cur = m;  // chain cursor, starts at the morph itself
-        if (*reinterpret_cast<std::int32_t*>(frames + 0x14 * m + 8) != 0) {
+        if (frames[m].next != 0) {
             for (;;) {
-                *reinterpret_cast<std::int32_t*>(frames + 0x14 * cur + 0) = 0;
-                *reinterpret_cast<std::int32_t*>(frames + 0x14 * cur + 4) = 0;
-                frames[0x14 * cur + 0x10] = 0;
-                *reinterpret_cast<float*>(frames + 0x14 * cur + 0xC) = 0.0f;
-                const std::int32_t next = *reinterpret_cast<std::int32_t*>(
-                    frames + 0x14 * cur + 8);
-                *reinterpret_cast<std::int32_t*>(frames + 0x14 * m + 8) = 0;
+                frames[cur].frame = 0;
+                frames[cur].previous = 0;
+                frames[cur].allocated = 0;
+                frames[cur].value = 0.0f;
+                const std::int32_t next =
+                    static_cast<std::int32_t>(frames[cur].next);
+                frames[m].next = 0;
                 cur = next;
                 model = ActiveModel(app);  // original re-derives per step
-                frames = *reinterpret_cast<unsigned char**>(
-                    model + kModelFramesMorph);
-                if (*reinterpret_cast<std::int32_t*>(
-                        frames + 0x14 * cur + 8) == 0) {
+                frames = mdl::MorphKeys(model);
+                if (frames[cur].next == 0) {
                     break;
                 }
             }
         }
         // the morph's own record is cleared again (loc_488D12 pattern)
-        *reinterpret_cast<std::int32_t*>(frames + 0x14 * m + 0) = 0;
-        *reinterpret_cast<std::int32_t*>(frames + 0x14 * m + 4) = 0;
-        frames[0x14 * m + 0x10] = 0;
-        *reinterpret_cast<float*>(frames + 0x14 * m + 0xC) = 0.0f;
+        frames[m].frame = 0;
+        frames[m].previous = 0;
+        frames[m].allocated = 0;
+        frames[m].value = 0.0f;
     }
 }
 
@@ -1245,23 +1205,23 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         }
         app->state.dialogFlags[4] = 1;
         // clear the used flags of all three frame tables
-        for (std::size_t off = 0; off < kBoneFrameBytes; off += 0x3C) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* f = *reinterpret_cast<unsigned char**>(
-                m + kModelFramesBone);
-            f[off + 0x38] = 0;
+            mdl::BoneKey* f = mdl::BoneKeys(m);
+            for (std::size_t i = 0; i < mdl::kBoneKeyCapacity; ++i)
+                f[i].allocated = 0;
         }
-        for (std::size_t off = 0; off < kMorphFrameBytes; off += 0x14) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* f = *reinterpret_cast<unsigned char**>(
-                m + kModelFramesMorph);
-            f[off + 0x10] = 0;
+            mdl::MorphKey* f = mdl::MorphKeys(m);
+            for (std::size_t i = 0; i < mdl::kMorphKeyCapacity; ++i)
+                f[i].allocated = 0;
         }
-        for (std::size_t off = 0; off < kAccFrameBytes; off += 0x1C) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* f = *reinterpret_cast<unsigned char**>(
-                m + kModelFramesAcc);
-            f[off + 0x14] = 0;
+            mdl::DisplayKey* f = mdl::DisplayKeys(m);
+            for (std::size_t i = 0; i < mdl::kDisplayKeyCapacity; ++i)
+                f[i].allocated = 0;
         }
 
         std::int32_t deleted = 0;  // var_A38
@@ -1273,16 +1233,15 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         for (std::uint16_t b = 0;
              static_cast<std::int32_t>(b) < boneCount; ++b) {
             model = ActiveModel(app);
-            mikudancestudio::mdl::BoneRecord* boneFrames = reinterpret_cast<mikudancestudio::mdl::BoneRecord*>(
-                *reinterpret_cast<unsigned char**>(
-                    model + kModelBoneFrames));
+            mikudancestudio::mdl::BoneRecord* boneFrames =
+                mikudancestudio::mdl::Bones(model);
             const mdl::BoneType type = boneFrames[b].type;
             if (type == mdl::BoneType::InertTip ||
                 type == mdl::BoneType::Effector) {
                 continue;
             }
-            unsigned char* frames = *reinterpret_cast<unsigned char**>(
-                model + kModelFramesBone);
+            unsigned char* frames = reinterpret_cast<unsigned char*>(
+                mikudancestudio::mdl::BoneKeys(model));
             std::int32_t cur = *reinterpret_cast<std::int32_t*>(
                 frames + 0x3C * b + 8);           // chain head
             if (cur == 0) {
@@ -1331,8 +1290,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 }
                 // advance the chain
                 model = ActiveModel(app);
-                frames = *reinterpret_cast<unsigned char**>(
-                    model + kModelFramesBone);
+                frames = reinterpret_cast<unsigned char*>(
+                    mikudancestudio::mdl::BoneKeys(model));
                 cur = *reinterpret_cast<std::int32_t*>(frames + 0x3C * cur + 8);
                 next = *reinterpret_cast<std::int32_t*>(frames + 0x3C * cur + 8);
                 if (next == 0) {
@@ -1348,8 +1307,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         for (std::uint16_t m = 0;
              static_cast<std::int32_t>(m) < morphCount; ++m) {
             model = ActiveModel(app);
-            unsigned char* frames = *reinterpret_cast<unsigned char**>(
-                model + kModelFramesMorph);
+            unsigned char* frames = reinterpret_cast<unsigned char*>(
+                mdl::MorphKeys(model));
             std::int32_t cur = *reinterpret_cast<std::int32_t*>(
                 frames + 0x14 * m + 8);
             if (cur == 0) {
@@ -1374,8 +1333,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                     frames[0x14 * cur + 0x10] = 1;
                 }
                 model = ActiveModel(app);
-                frames = *reinterpret_cast<unsigned char**>(
-                    model + kModelFramesMorph);
+                frames = reinterpret_cast<unsigned char*>(
+                    mdl::MorphKeys(model));
                 cur = *reinterpret_cast<std::int32_t*>(frames + 0x14 * cur + 8);
                 next = *reinterpret_cast<std::int32_t*>(frames + 0x14 * cur + 8);
                 if (next == 0) {
@@ -1385,38 +1344,39 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         }
 
         // ---- accessory / camera / light frames -----------------------
+        // These are the model DisplayKey records (x86 0x1C-stride):
+        // next/previous chain, visible byte, ikStates name list and
+        // selectorStates camera records - accessed through the typed
+        // record so the x64 layout (40-byte stride) stays correct.
         model = ActiveModel(app);
-        unsigned char* frames = *reinterpret_cast<unsigned char**>(
-            model + kModelFramesAcc);
-        std::int32_t cur = *reinterpret_cast<std::int32_t*>(frames + 8);
+        mdl::DisplayKey* frames = mdl::DisplayKeys(model);
+        std::int32_t cur = static_cast<std::int32_t>(frames->next);
         if (cur != 0) {
-            std::int32_t next = *reinterpret_cast<std::int32_t*>(
-                frames + 0x1C * cur + 8);
+            std::int32_t next = static_cast<std::int32_t>(frames[cur].next);
             while (next != 0) {
-                const std::int32_t prev = *reinterpret_cast<std::int32_t*>(
-                    frames + 0x1C * cur + 4);
-                const std::uint8_t typeByte = frames[0x1C * cur + 0xC];
-                const unsigned char* fPrev = frames + 0x1C * prev;
-                const unsigned char* fNext = frames + 0x1C * next;
-                if (fPrev[0xC] == typeByte && fNext[0xC] == typeByte) {
+                const std::int32_t prev =
+                    static_cast<std::int32_t>(frames[cur].previous);
+                const std::uint8_t typeByte = frames[cur].visible;
+                const mdl::DisplayKey& fPrev = frames[prev];
+                const mdl::DisplayKey& fNext = frames[next];
+                if (fPrev.visible == typeByte && fNext.visible == typeByte) {
                     // IK name lists of the neighbours must match byte-exact
                     std::uint8_t nameOk = 1;
-                    const std::int32_t ikCount =
-                        *reinterpret_cast<std::int32_t*>(model + kModelIkCnt);
+                    const std::int32_t ikCount = static_cast<std::int32_t>(
+                        mdl::Mdl(model)->ikChainCount);
                     if (ikCount > 0) {
                         unsigned char* m2 = ActiveModel(app);  // re-derived
-                        unsigned char* f2 = *reinterpret_cast<unsigned char**>(
-                            m2 + kModelFramesAcc);
-                        const std::int32_t p1 = *reinterpret_cast<std::int32_t*>(
-                            f2 + 0x1C * cur + 8);
-                        const char* x1 = *reinterpret_cast<char**>(
-                            f2 + 0x1C * p1 + 0x10);
-                        const std::int32_t p2 = *reinterpret_cast<std::int32_t*>(
-                            f2 + 0x1C * cur + 4);
-                        const char* x2 = *reinterpret_cast<char**>(
-                            f2 + 0x1C * p2 + 0x10);
-                        const char* y = *reinterpret_cast<char**>(
-                            f2 + 0x1C * cur + 0x10);
+                        mdl::DisplayKey* f2 = mdl::DisplayKeys(m2);
+                        const std::int32_t p1 =
+                            static_cast<std::int32_t>(f2[cur].next);
+                        const char* x1 = reinterpret_cast<const char*>(
+                            mdl::IkStates(f2[p1]));
+                        const std::int32_t p2 =
+                            static_cast<std::int32_t>(f2[cur].previous);
+                        const char* x2 = reinterpret_cast<const char*>(
+                            mdl::IkStates(f2[p2]));
+                        const char* y = reinterpret_cast<const char*>(
+                            mdl::IkStates(f2[cur]));
                         for (std::int32_t k = 0; k < ikCount; ++k) {
                             if (x2[k] != y[k] || x1[k] != y[k]) {
                                 nameOk = 0;
@@ -1426,14 +1386,14 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                     }
                     if (nameOk != 0) {
                         // 8-byte camera records must match
-                        const std::int32_t camCount =
-                            *reinterpret_cast<std::int32_t*>(model + kModelCamCnt);
-                        const char* A = *reinterpret_cast<char**>(
-                            frames + 0x1C * cur + 0x18);
-                        const char* E = *reinterpret_cast<char**>(
-                            const_cast<unsigned char*>(fPrev) + 0x18);
-                        const char* B = *reinterpret_cast<char**>(
-                            const_cast<unsigned char*>(fNext) + 0x18);
+                        const std::int32_t camCount = static_cast<std::int32_t>(
+                            mdl::Mdl(model)->boneOrderCount);
+                        const char* A = reinterpret_cast<const char*>(
+                            mdl::SelectorStates(frames[cur]));
+                        const char* E = reinterpret_cast<const char*>(
+                            mdl::SelectorStates(fPrev));
+                        const char* B = reinterpret_cast<const char*>(
+                            mdl::SelectorStates(fNext));
                         bool camOk = true;
                         for (std::int32_t j = 0; j < camCount; ++j) {
                             const char* pA = A + 8 * j;
@@ -1451,16 +1411,15 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                         }
                         if (camOk) {
                             ++deleted;
-                            frames[0x1C * cur + 0x14] = 1;
+                            frames[cur].allocated = 1;
                         }
                     }
                 }
                 // advance the chain
                 model = ActiveModel(app);
-                frames = *reinterpret_cast<unsigned char**>(
-                    model + kModelFramesAcc);
-                cur = *reinterpret_cast<std::int32_t*>(frames + 0x1C * cur + 8);
-                next = *reinterpret_cast<std::int32_t*>(frames + 0x1C * cur + 8);
+                frames = mdl::DisplayKeys(model);
+                cur = static_cast<std::int32_t>(frames[cur].next);
+                next = static_cast<std::int32_t>(frames[cur].next);
             }
         }
 
@@ -1607,8 +1566,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             if (morphs[m].type != 3) {
                 continue;
             }
-            unsigned char* frames = *reinterpret_cast<unsigned char**>(
-                model + kModelFramesMorph);
+            unsigned char* frames = reinterpret_cast<unsigned char*>(
+                mdl::MorphKeys(model));
             std::int32_t cur = *reinterpret_cast<std::int32_t*>(
                 frames + 0x14 * m + 8);  // chain head
             if (cur == 0) {
@@ -1616,8 +1575,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             }
             for (;;) {
                 model = ActiveModel(app);
-                frames = *reinterpret_cast<unsigned char**>(
-                    model + kModelFramesMorph);
+                frames = reinterpret_cast<unsigned char*>(
+                    mdl::MorphKeys(model));
                 const std::int32_t next = *reinterpret_cast<std::int32_t*>(
                     frames + 0x14 * cur + 8);
                 if (next != 0) {
@@ -1765,35 +1724,23 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             }
             if (registerKeys) {
                 model = ActiveModel(app);
-                unsigned char* morphTable =
-                    *reinterpret_cast<unsigned char**>(model + kModelMorphTbl);
-                *reinterpret_cast<float*>(morphTable + 0x88 * blinkMorph + 0x30) =
-                    0.0f;
+                mdl::Morphs(model)[blinkMorph].value = 0.0f;
                 RegisterMorphKeyCurrent(model, blinkMorph, frame);
                 model = ActiveModel(app);
-                morphTable = *reinterpret_cast<unsigned char**>(
-                    model + kModelMorphTbl);
-                *reinterpret_cast<float*>(morphTable + 0x88 * blinkMorph + 0x30) =
-                    1.0f;
+                mdl::Morphs(model)[blinkMorph].value = 1.0f;
                 RegisterMorphKeyCurrent(model, blinkMorph, frame + 2);
                 model = ActiveModel(app);
-                morphTable = *reinterpret_cast<unsigned char**>(
-                    model + kModelMorphTbl);
-                *reinterpret_cast<float*>(morphTable + 0x88 * blinkMorph + 0x30) =
-                    1.0f;
+                mdl::Morphs(model)[blinkMorph].value = 1.0f;
                 RegisterMorphKeyCurrent(model, blinkMorph, frame + 3);
                 model = ActiveModel(app);
-                morphTable = *reinterpret_cast<unsigned char**>(
-                    model + kModelMorphTbl);
-                *reinterpret_cast<float*>(morphTable + 0x88 * blinkMorph + 0x30) =
-                    0.0f;
+                mdl::Morphs(model)[blinkMorph].value = 0.0f;
                 RegisterMorphKeyCurrent(model, blinkMorph, frame + 6);
                 ++count;
             }
         }
         model = ActiveModel(app);
-        const std::int32_t frameCount = *reinterpret_cast<std::int32_t*>(
-            model + kOff31B0);
+        const std::int32_t frameCount =
+            static_cast<std::int32_t>(mdl::Mdl(model)->maxFrame);
         if (app->state.lastRegisteredFrame < frameCount) {
             app->state.lastRegisteredFrame = frameCount;
         }
@@ -1886,23 +1833,23 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 break;
             }
             app->SceneModified() = 1;
-            for (std::size_t off = 0; off < kBoneFrameBytes; off += 0x3C) {
+            {
                 model = ActiveModel(app);
-                unsigned char* f = *reinterpret_cast<unsigned char**>(
-                    model + kModelFramesBone);
-                f[off + 0x38] = 0;
+                mdl::BoneKey* f = mdl::BoneKeys(model);
+                for (std::size_t i = 0; i < mdl::kBoneKeyCapacity; ++i)
+                    f[i].allocated = 0;
             }
-            for (std::size_t off = 0; off < kMorphFrameBytes; off += 0x14) {
+            {
                 model = ActiveModel(app);
-                unsigned char* f = *reinterpret_cast<unsigned char**>(
-                    model + kModelFramesMorph);
-                f[off + 0x10] = 0;
+                mdl::MorphKey* f = mdl::MorphKeys(model);
+                for (std::size_t i = 0; i < mdl::kMorphKeyCapacity; ++i)
+                    f[i].allocated = 0;
             }
-            for (std::size_t off = 0; off < kAccFrameBytes; off += 0x1C) {
+            {
                 model = ActiveModel(app);
-                unsigned char* f = *reinterpret_cast<unsigned char**>(
-                    model + kModelFramesAcc);
-                f[off + 0x14] = 0;
+                mdl::DisplayKey* f = mdl::DisplayKeys(model);
+                for (std::size_t i = 0; i < mdl::kDisplayKeyCapacity; ++i)
+                    f[i].allocated = 0;
             }
             EnableWindow(GetDlgItem(MainHwnd(app), panel::kUndoButton), TRUE);
             EnableWindow(GetDlgItem(MainHwnd(app), panel::kRedoButton), FALSE);
@@ -2064,23 +2011,23 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
             break;
         }
         app->SceneModified() = 1;
-        for (std::size_t off = 0; off < kBoneFrameBytes; off += 0x3C) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* f = *reinterpret_cast<unsigned char**>(
-                m + kModelFramesBone);
-            f[off + 0x38] = 0;
+            mdl::BoneKey* f = mdl::BoneKeys(m);
+            for (std::size_t i = 0; i < mdl::kBoneKeyCapacity; ++i)
+                f[i].allocated = 0;
         }
-        for (std::size_t off = 0; off < kMorphFrameBytes; off += 0x14) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* f = *reinterpret_cast<unsigned char**>(
-                m + kModelFramesMorph);
-            f[off + 0x10] = 0;
+            mdl::MorphKey* f = mdl::MorphKeys(m);
+            for (std::size_t i = 0; i < mdl::kMorphKeyCapacity; ++i)
+                f[i].allocated = 0;
         }
-        for (std::size_t off = 0; off < kAccFrameBytes; off += 0x1C) {
+        {
             unsigned char* m = ActiveModel(app);
-            unsigned char* f = *reinterpret_cast<unsigned char**>(
-                m + kModelFramesAcc);
-            f[off + 0x14] = 0;
+            mdl::DisplayKey* f = mdl::DisplayKeys(m);
+            for (std::size_t i = 0; i < mdl::kDisplayKeyCapacity; ++i)
+                f[i].allocated = 0;
         }
         unsigned char* model = ActiveModel(app);
         const std::int32_t morphCount =
@@ -2091,8 +2038,8 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                 model = ActiveModel(app);
                 RegisterMorphKeyCurrent(model, m, app->state.currentFrame);
                 model = ActiveModel(app);
-                const std::int32_t frameCount = *reinterpret_cast<std::int32_t*>(
-                    model + kOff31B0);
+                const std::int32_t frameCount =
+                    static_cast<std::int32_t>(mdl::Mdl(model)->maxFrame);
                 if (app->state.lastRegisteredFrame < frameCount) {
                     app->state.lastRegisteredFrame = frameCount;
                 }

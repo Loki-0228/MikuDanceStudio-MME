@@ -1692,18 +1692,15 @@ static void LoadSceneV1_ReadGatedTail(PmmV1LoadContext& ctx, int fd) {
                                                         reinterpret_cast<
                                                             LPARAM>(
                                                             lbText));
-                                                    unsigned char* entry =
-                                                        MP(slots[sel0],
-                                                           0x26BC) +
-                                                        0x25C *
-                                                            static_cast<
-                                                                std::size_t>(
+                                                    mdl::BoneRecord*
+                                                        entry =
+                                                        mdl::Bones(slots[sel0]) +
+                                                        static_cast<
+                                                            std::size_t>(
                                                                 sel1);
                                                     if (strcmp(
                                                             lbText,
-                                                            reinterpret_cast<
-                                                                char*>(
-                                                                    entry)) ==
+                                                            entry->name) ==
                                                         0)
                                                         SendMessageA(
                                                             GetDlgItem(
@@ -1782,8 +1779,9 @@ static void LoadSceneV1_ReadGatedTail(PmmV1LoadContext& ctx, int fd) {
                                                     if (slots[i] !=
                                                         nullptr)
                                                         Rd(fd,
-                                                           slots[i] +
-                                                               0x2D7D,
+                                                           &mdl::Mdl(
+                                                               slots[i])
+                                                                ->comboSelIndex2,
                                                            1);  // 0x45E0FE
                                             }
                                         }
@@ -1878,13 +1876,13 @@ static void LoadSceneV1_SuccessTail(PmmV1LoadContext& ctx) {
         if (cur == 0) continue;
         std::int32_t prev = 0;
         for (;;) {
-            if (static_cast<std::int32_t>(keys[cur].previous) != prev) {
-                // The original passes four varargs to a five-placeholder
-                // format; the fifth reads stack garbage.  Reproduced.
-                sprintf_s(text, 0x100, kJpChainFmtDisp,
-                          reinterpret_cast<char*>(m + 0x2248),
-                          keys[prev].frame, keys[prev].frame,
-                          keys[prev].frame);
+                if (static_cast<std::int32_t>(keys[cur].previous) != prev) {
+                    // The original passes four varargs to a five-placeholder
+                    // format; the fifth reads stack garbage.  Reproduced.
+                    sprintf_s(text, 0x100, kJpChainFmtDisp,
+                              mdl::Mdl(m)->name,
+                              keys[prev].frame, keys[prev].frame,
+                              keys[prev].frame);
                 MessageBoxA(main, text, kJpChainCapPhys, 0);
                 keys[prev].next = 0;
                 break;
@@ -1915,10 +1913,10 @@ static void LoadSceneV1_SuccessTail(PmmV1LoadContext& ctx) {
             for (;;) {
                 if (static_cast<std::int32_t>(keys[cur].previous) != prev) {
                     unsigned char* frameEntry =
-                        MP(m, 0x26BC) +
-                        static_cast<std::size_t>(b) * 0x25C;
+                        mdl::BoneBytes(mdl::Bones(m),
+                                       static_cast<std::size_t>(b));
                     sprintf_s(text, 0x100, kJpChainFmtPhys,
-                              reinterpret_cast<char*>(m + 0x2248),
+                              mdl::Mdl(m)->name,
                               reinterpret_cast<char*>(frameEntry),
                               keys[prev].frame,
                               keys[prev].frame);

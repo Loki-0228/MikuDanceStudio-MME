@@ -2618,7 +2618,7 @@ static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
     // 槽查找环：x64 0x7FF7CB460A73 mov r13d,0FFh（界 255）
     for (std::int32_t i = 0; i < kModelSlotCount; ++i) {
         unsigned char* m = app->ModelSlot(i);
-        if (m != nullptr && static_cast<int>(m[kModelSelId2D7C]) == sel) {
+        if (m != nullptr && mdl::Mdl(m)->comboSelIndex == sel) {
             found = i;
             break;
         }
@@ -2656,8 +2656,8 @@ static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
         EnableWindow(GetDlgItem(hwnd, panel::kMainComboModel), TRUE);
         EnableWindow(GetDlgItem(hwnd, panel::kPlayButton), TRUE);
     }
-    const std::int32_t oldSel = model[kModelSelId2D7C];
-    const std::int32_t oldIdx = model[kModelSelId2D7D];
+    const std::int32_t oldSel = record.comboSelIndex;
+    const std::int32_t oldIdx = record.comboSelIndex2;
     if (model != nullptr) {
         DeleteModel(model, 1);  // model dispose (thiscall)
     }
@@ -2699,11 +2699,11 @@ static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
         }
         EnableMenuItem(GetMenu(hwnd), 0x120, 0);
         EnableMenuItem(GetMenu(hwnd), 0x121, 0);
-        if (static_cast<int>(m[kModelSelId2D7C]) > oldSel) {
-            --m[kModelSelId2D7C];
+        if (mdl::Mdl(m)->comboSelIndex > oldSel) {
+            --mdl::Mdl(m)->comboSelIndex;
         }
-        if (static_cast<int>(m[kModelSelId2D7D]) > oldIdx) {
-            --m[kModelSelId2D7D];
+        if (mdl::Mdl(m)->comboSelIndex2 > oldIdx) {
+            --mdl::Mdl(m)->comboSelIndex2;
         }
         // bone parent table 0x4CCE4 (0x14 stride) - entries pointing at
         // the deleted slot index are severed
@@ -3013,8 +3013,9 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 439 (0x0047F3AF): checkbox 0x1B7 -> model byte 0x2D8D (1/0).
     // ------------------------------------------------------------------
     case 439: {
-        ActiveModel(app)[kModelBoneFlag2D8D] =
-            IsDlgButtonChecked(hwnd, panel::kModelVisibleCheckbox) == 1 ? 1 : 0;
+        mdl::Mdl(ActiveModel(app))->loadComplete =
+            IsDlgButtonChecked(hwnd, panel::kModelVisibleCheckbox) == 1 ? 1
+                                                                        : 0;
         break;
     }
 

@@ -98,11 +98,8 @@ void HandleBoneSlider(MMDApp* app, HWND hwnd, int sliderId,
     // Gate (0x44AF11): proceed iff (physics == 2 || boneIdx > 0) &&
     // boneIdx >= 0 - the original ORs the physics byte with a positive
     // index; only a negative index unconditionally skips.
-    constexpr std::size_t kModelPhysicsMode = 0x38FE;  // model+14590
     if (boneIdx < 0 ||
-        (boneIdx <= 0 &&
-         *reinterpret_cast<std::uint8_t*>(
-              model + kModelPhysicsMode) != 2)) {
+        (boneIdx <= 0 && mdl::Mdl(model)->physicsMode != 2)) {
         return;
     }
 
@@ -111,11 +108,10 @@ void HandleBoneSlider(MMDApp* app, HWND hwnd, int sliderId,
     const double scaled = static_cast<double>(pos) / 100.0;
 
     model = app->SelectedModel();
-    unsigned char* records = *reinterpret_cast<unsigned char**>(model + 0x26C4);
+    mdl::MorphRecord* records = mdl::Morphs(model);
     if (records != nullptr) {
         const std::int32_t idx = mdl::Mdl(model)->selectedMorphs[lane];
-        *reinterpret_cast<float*>(
-            records + 136 * static_cast<std::size_t>(idx) + 48) =
+        records[static_cast<std::size_t>(idx)].value =
             static_cast<float>(scaled);
     }
 

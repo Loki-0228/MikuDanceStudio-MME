@@ -138,36 +138,27 @@ bool IsSelectedRoot(unsigned char* model, int index, bool excludeSelected) {
     if (excludeSelected && index == mikudancestudio::mdl::Mdl(model)->selectedBone)
         return false;
     auto* bones = mikudancestudio::mdl::Bones(model);
-    unsigned char* bone = mikudancestudio::mdl::BoneBytes(bones, index);
-    const mdl::BoneType type = static_cast<mdl::BoneType>(bone[484]);
-    if (type != mdl::BoneType::Move && type != mdl::BoneType::Ik)
+    const mdl::BoneRecord& bone = bones[index];
+    if (bone.type != mdl::BoneType::Move && bone.type != mdl::BoneType::Ik)
         return false;
-    const int parent = mdl::At<std::int32_t>(bone, 48);
+    const int parent = bone.parent;
     return parent == -1 || selected[parent] == 0;
 }
 
-void TransformBoneVector(const unsigned char* bone, std::size_t matrix,
+void TransformBoneVector(const mdl::BoneRecord& bone, const float matrix[16],
                          const float in[3], float out[3]) {
-    out[0] = mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 0) * in[0] +
-             mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 16) * in[1] +
-             mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 32) * in[2];
-    out[1] = mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 4) * in[0] +
-             mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 20) * in[1] +
-             mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 36) * in[2];
-    out[2] = mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 8) * in[0] +
-             mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 24) * in[1] +
-             mdl::At<float>(const_cast<unsigned char*>(bone), matrix + 40) * in[2];
+    out[0] = matrix[0] * in[0] + matrix[4] * in[1] + matrix[8] * in[2];
+    out[1] = matrix[1] * in[0] + matrix[5] * in[1] + matrix[9] * in[2];
+    out[2] = matrix[2] * in[0] + matrix[6] * in[1] + matrix[10] * in[2];
 }
 
-void BoneWorldPoint(const unsigned char* bone, float out[3]) {
-    const float rest[3] = {
-        mdl::At<float>(const_cast<unsigned char*>(bone), 308),
-        mdl::At<float>(const_cast<unsigned char*>(bone), 312),
-        mdl::At<float>(const_cast<unsigned char*>(bone), 316)};
-    TransformBoneVector(bone, 52, rest, out);
-    out[0] += mdl::At<float>(const_cast<unsigned char*>(bone), 100);
-    out[1] += mdl::At<float>(const_cast<unsigned char*>(bone), 104);
-    out[2] += mdl::At<float>(const_cast<unsigned char*>(bone), 108);
+void BoneWorldPoint(const mdl::BoneRecord& bone, float out[3]) {
+    const float rest[3] = {bone.position[0], bone.position[1],
+                           bone.position[2]};
+    TransformBoneVector(bone, bone.matInit, rest, out);
+    out[0] += bone.matInit[12];
+    out[1] += bone.matInit[13];
+    out[2] += bone.matInit[14];
 }
 
 void ApplySelectedRootTranslation(unsigned char* model, const float delta[3]) {
@@ -179,12 +170,12 @@ void ApplySelectedRootTranslation(unsigned char* model, const float delta[3]) {
     for (int i = 0; i < count; ++i) {
         if (!IsSelectedRoot(model, i, false))
             continue;
-        unsigned char* bone = mikudancestudio::mdl::BoneBytes(bones, i);
+        mdl::BoneRecord& bone = bones[i];
         float localDelta[3]{};
-        TransformBoneVector(bone, 180, delta, localDelta);
-        mdl::At<float>(bone, 320) += localDelta[0];
-        mdl::At<float>(bone, 324) += localDelta[1];
-        mdl::At<float>(bone, 328) += localDelta[2];
+        TransformBoneVector(bone, bone.matWorld, delta, localDelta);
+        bone.trans[0] += localDelta[0];
+        bone.trans[1] += localDelta[1];
+        bone.trans[2] += localDelta[2];
         if (dirty != nullptr)
             dirty[i] = 1;
     }
@@ -335,7 +326,7 @@ void ApplyLocalAxisBoneMove(MMDApp* app, unsigned char* model, int mode) {
     auto* bones = mikudancestudio::mdl::Bones(model);
     if (bones == nullptr)
         return;
-    unsigned char* selected = mikudancestudio::mdl::BoneBytes(bones, selectedIndex);
+    mdl::BoneRecord& selected = bones[selectedIndex];
 
     double step = 0.05000000074505806;
     if (app->ShiftModifierActive())
@@ -356,7 +347,7 @@ void ApplyLocalAxisBoneMove(MMDApp* app, unsigned char* model, int mode) {
             basis[axis * 4 + 0] * delta[axis],
             basis[axis * 4 + 1] * delta[axis],
             basis[axis * 4 + 2] * delta[axis]};
-        TransformBoneVector(selected, 52, local, delta);
+        TransformBoneVector(selected, selected.matInit, local, delta);
     }
     ApplySelectedRootTranslation(model, delta);
 }
@@ -378,18 +369,17 @@ void BoneLocalAxes(MMDApp* app, float out[16]) {
     if (model == nullptr || mikudancestudio::mdl::Mdl(model)->selectedBone < 0)
         return;
     auto* bones = mikudancestudio::mdl::Bones(model);
-    unsigned char* bone =
-        mikudancestudio::mdl::BoneBytes(bones,
-                                mikudancestudio::mdl::Mdl(model)->selectedBone);
+    const mdl::BoneRecord& bone =
+        bones[mikudancestudio::mdl::Mdl(model)->selectedBone];
 
-    const bool hasAxes = !(mdl::At<float>(bone, 520) == 0.0f &&
-                           mdl::At<float>(bone, 524) == 0.0f &&
-                           mdl::At<float>(bone, 528) == 0.0f);
+    const bool hasAxes = !(bone.localAxes[0] == 0.0f &&
+                           bone.localAxes[1] == 0.0f &&
+                           bone.localAxes[2] == 0.0f);
     if (hasAxes && mdl::Mdl(model)->physicsMode == 2) {
-        float a[3] = {mdl::At<float>(bone, 520), mdl::At<float>(bone, 524),
-                      mdl::At<float>(bone, 528)};
-        float b[3] = {mdl::At<float>(bone, 532), mdl::At<float>(bone, 536),
-                      mdl::At<float>(bone, 540)};
+        float a[3] = {bone.localAxes[0], bone.localAxes[1],
+                      bone.localAxes[2]};
+        float b[3] = {bone.localAxes[3], bone.localAxes[4],
+                      bone.localAxes[5]};
         Vec3Normalize(a);
         Vec3Normalize(b);
         float c[3] = {b[1] * a[2] - b[2] * a[1],
@@ -413,7 +403,7 @@ void BoneLocalAxes(MMDApp* app, float out[16]) {
         out[9] = e[1];
         out[10] = e[2];
     } else {
-        const char* name = reinterpret_cast<const char*>(bone);
+        const char* name = bone.name;
         if (std::memcmp(name, kNameR1, 7) == 0 ||
             std::memcmp(name, kNameR2, 7) == 0 ||
             std::memcmp(name, kNameR3, 5) == 0 ||
@@ -421,11 +411,9 @@ void BoneLocalAxes(MMDApp* app, float out[16]) {
             std::memcmp(name, kNameL2, 7) == 0 ||
             std::memcmp(name, kNameL3, 5) == 0 ||
             std::strstr(name, kNeedleStrstr) != nullptr) {
-            const int p = mdl::At<std::int32_t>(bone, 460);
-            const float dx = mdl::At<float>(mdl::BoneBytes(bones, p), 308) -
-                             mdl::At<float>(bone, 308);
-            const float dy = mdl::At<float>(mdl::BoneBytes(bones, p), 312) -
-                             mdl::At<float>(bone, 312);
+            const mdl::BoneRecord& p = bones[bone.tailBone];
+            const float dx = p.position[0] - bone.position[0];
+            const float dy = p.position[1] - bone.position[1];
             const float len = std::sqrt(dx * dx + dy * dy);
             out[0] = dx / len;
             out[1] = dy / len;
@@ -462,11 +450,8 @@ void BoneEditModes(MMDApp* app) {
         return;
     }
     auto* bones = mikudancestudio::mdl::Bones(model);
-    unsigned char* bone = mikudancestudio::mdl::BoneBytes(bones, sel);
+    mdl::BoneRecord& bone = bones[sel];
 
-    const auto M = [bone](std::size_t off) -> float& {
-        return mdl::At<float>(bone, off);
-    };
     const bool selA = app->state.shiftModifierState == 3;  // coarse selector
     const bool selB = app->state.ctrlModifierState == 3;   // fine selector
     const auto scaleOf = [&](float base) -> float {
@@ -479,6 +464,8 @@ void BoneEditModes(MMDApp* app) {
 
     float ang = 0.0f;
     float axis[3] = {0.0f, 0.0f, 0.0f};
+    const float* matInit = bone.matInit;
+    const float* matWorld = bone.matWorld;
 
     if (mode == 1) {
         const float base = static_cast<float>(
@@ -490,9 +477,9 @@ void BoneEditModes(MMDApp* app) {
         const float ax = static_cast<float>(std::cos(aX));
         const float ay = static_cast<float>(std::sin(aY) * std::sin(aX));
         const float az = static_cast<float>(std::cos(aY) * std::sin(aX));
-        axis[0] = M(0xB8) * ax + M(0xB4) * ay + M(0xBC) * az;
-        axis[1] = M(0xCC) * az + M(0xC4) * ay + M(0xC8) * ax;
-        axis[2] = M(0xDC) * az + M(0xD8) * ax + M(0xD4) * ay;
+        axis[0] = matWorld[1] * ax + matWorld[0] * ay + matWorld[2] * az;
+        axis[1] = matWorld[6] * az + matWorld[4] * ay + matWorld[5] * ax;
+        axis[2] = matWorld[10] * az + matWorld[9] * ax + matWorld[8] * ay;
     } else if (mode == 2) {
         const float base = static_cast<float>(
             static_cast<double>(app->state.previousMouseY -
@@ -502,9 +489,9 @@ void BoneEditModes(MMDApp* app) {
         const double aY = -static_cast<double>(app->CameraRotation()[1]);
         const float ax = static_cast<float>(std::cos(aX));
         const float az = static_cast<float>(std::sin(aY));
-        axis[0] = M(0xB4) * ax + M(0xBC) * az;
-        axis[1] = M(0xC4) * ax + M(0xCC) * az;
-        axis[2] = M(0xD4) * ax + M(0xDC) * az;
+        axis[0] = matWorld[0] * ax + matWorld[2] * az;
+        axis[1] = matWorld[4] * ax + matWorld[6] * az;
+        axis[2] = matWorld[8] * ax + matWorld[10] * az;
     } else if (mode == 3) {
         const double angCurRad = std::atan2(
             static_cast<double>(app->state.mouseX - app->state.dragOriginX),
@@ -526,9 +513,9 @@ void BoneEditModes(MMDApp* app) {
         const float ax = -static_cast<float>(std::sin(aX));
         const float ay = static_cast<float>(std::sin(aY) * std::cos(aX));
         const float az = static_cast<float>(std::cos(aY) * std::cos(aX));
-        axis[0] = M(0xB8) * ax + M(0xB4) * ay + M(0xBC) * az;
-        axis[1] = M(0xCC) * az + M(0xC4) * ay + M(0xC8) * ax;
-        axis[2] = M(0xDC) * az + M(0xD8) * ax + M(0xD4) * ay;
+        axis[0] = matWorld[1] * ax + matWorld[0] * ay + matWorld[2] * az;
+        axis[1] = matWorld[6] * az + matWorld[4] * ay + matWorld[5] * ax;
+        axis[2] = matWorld[10] * az + matWorld[9] * ax + matWorld[8] * ay;
     } else {
         // modes 4/5/6 - local axes
         const float base = static_cast<float>(
@@ -538,10 +525,10 @@ void BoneEditModes(MMDApp* app) {
         // "direct" mode selector 0x9EDB4 (physicsEditorJointPage; the pre-promotion call
         // read offset 650076, an unpinned typo of the pinned 650676)
         if (app->state.physicsEditorJointPage == 1) {
-            const std::size_t o = static_cast<std::size_t>(mode - 4) * 4;
-            axis[0] = M(0xB4 + o);
-            axis[1] = M(0xC4 + o);
-            axis[2] = M(0xD4 + o);
+            const std::size_t k = static_cast<std::size_t>(mode - 4);
+            axis[0] = matWorld[k];
+            axis[1] = matWorld[4 + k];
+            axis[2] = matWorld[8 + k];
         } else {
             float basis[16];
             BoneLocalAxes(app, basis);
@@ -549,35 +536,31 @@ void BoneEditModes(MMDApp* app) {
             const float mx = basis[r];
             const float my = basis[r + 1];
             const float mz = basis[r + 2];
-            const float mid0 = M(0x54) * mz + M(0x34) * mx + M(0x44) * my;
-            const float mid1 = M(0x58) * mz + M(0x38) * mx + M(0x48) * my;
-            const float mid2 = M(0x5C) * mz + M(0x4C) * my + M(0x3C) * mx;
-            axis[0] = M(0xB8) * mid1 + M(0xB4) * mid0 + M(0xBC) * mid2;
-            axis[1] = M(0xCC) * mid2 + M(0xC4) * mid0 + M(0xC8) * mid1;
-            axis[2] = mid2 * M(0xDC) + M(0xD8) * mid1 + M(0xD4) * mid0;
+            const float mid0 = matInit[8] * mz + matInit[0] * mx + matInit[4] * my;
+            const float mid1 = matInit[9] * mz + matInit[1] * mx + matInit[5] * my;
+            const float mid2 = matInit[10] * mz + matInit[6] * my + matInit[2] * mx;
+            axis[0] = matWorld[1] * mid1 + matWorld[0] * mid0 + matWorld[2] * mid2;
+            axis[1] = matWorld[6] * mid2 + matWorld[4] * mid0 + matWorld[5] * mid1;
+            axis[2] = mid2 * matWorld[10] + matWorld[9] * mid1 + matWorld[8] * mid0;
             Vec3Normalize(axis);
         }
     }
 
     {
         // ---- bone edit ------------------------------------------------------
-        if ((mdl::At<std::uint32_t>(bone, 500) &
-             mdl::kBoneFlagFixedAxis) == mdl::kBoneFlagFixedAxis &&
-            (static_cast<mdl::BoneType>(bone[484]) ==
-                 mdl::BoneType::UnderIk ||
-             static_cast<mdl::BoneType>(bone[484]) ==
-                 mdl::BoneType::FixedAxis)) {
+        if ((bone.flags & mdl::kBoneFlagFixedAxis) ==
+                mdl::kBoneFlagFixedAxis &&
+            (bone.type == mdl::BoneType::UnderIk ||
+             bone.type == mdl::BoneType::FixedAxis)) {
             if (mdl::Mdl(model)->physicsMode == 2) {
-                axis[0] = mdl::At<float>(bone, 0x1FC);
-                axis[1] = mdl::At<float>(bone, 0x200);
-                axis[2] = mdl::At<float>(bone, 0x204);
+                axis[0] = bone.axis[0];
+                axis[1] = bone.axis[1];
+                axis[2] = bone.axis[2];
             } else {
-                unsigned char* p =
-                    mdl::BoneBytes(bones,
-                        mdl::At<std::int32_t>(bone, 0x1CC));
-                axis[0] = mdl::At<float>(p, 0x134) - M(0x134);
-                axis[1] = mdl::At<float>(p, 0x138) - M(0x138);
-                axis[2] = mdl::At<float>(p, 0x13C) - M(0x13C);
+                const mdl::BoneRecord& p = bones[bone.tailBone];
+                axis[0] = p.position[0] - bone.position[0];
+                axis[1] = p.position[1] - bone.position[1];
+                axis[2] = p.position[2] - bone.position[2];
                 Vec3Normalize(axis);
             }
         }
@@ -594,8 +577,8 @@ void BoneEditModes(MMDApp* app) {
                        OriginalSinTimes(ang, axis[2]),
                        OriginalCos(ang)};
         float out[4];
-        QuatMultiply(out, reinterpret_cast<float*>(bone + 0x14C), dq);
-        std::memcpy(bone + 0x14C, out, sizeof(out));
+        QuatMultiply(out, bone.rotQuat, dq);
+        std::memcpy(bone.rotQuat, out, sizeof(out));
 
         // child-bone propagation loop (0x476E42..0x477257, lifted from
         // disassembly): every type-1/2 bone of the marked wave whose
@@ -608,7 +591,7 @@ void BoneEditModes(MMDApp* app) {
             const float invq[4] = {-dq[0], -dq[1], -dq[2], dq[3]};
             const int n = mikudancestudio::mdl::Mdl(model)->boneCount;
             for (int i = 0; i < n; ++i) {
-                unsigned char* ch = mdl::BoneBytes(bones, i);
+                mdl::BoneRecord& ch = bones[i];
                 if (!IsSelectedRoot(model, i, true))
                     continue;
                 if (dirty != nullptr)
@@ -621,13 +604,12 @@ void BoneEditModes(MMDApp* app) {
                 float r1[4], r2[4];
                 QuatMultiply(r1, invq, off);         // 0x4770A6
                 QuatMultiply(r2, r1, dq);            // 0x4770FB sandwich
-                mdl::At<float>(ch, 320) += r2[0] - off[0];
-                mdl::At<float>(ch, 324) += r2[1] - off[1];
-                mdl::At<float>(ch, 328) += r2[2] - off[2];
-                float cq[4], oq[4];
-                std::memcpy(cq, ch + 0x14C, sizeof(cq));
-                QuatMultiply(oq, cq, dq);            // 0x4771EB
-                std::memcpy(ch + 0x14C, oq, sizeof(oq));
+                ch.trans[0] += r2[0] - off[0];
+                ch.trans[1] += r2[1] - off[1];
+                ch.trans[2] += r2[2] - off[2];
+                float oq[4];
+                QuatMultiply(oq, ch.rotQuat, dq);    // 0x4771EB
+                std::memcpy(ch.rotQuat, oq, sizeof(oq));
             }
         }
         return;

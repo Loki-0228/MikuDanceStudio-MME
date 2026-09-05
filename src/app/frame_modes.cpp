@@ -318,15 +318,13 @@ unsigned char* ActiveBoneModel(MMDApp* app) {
     return app->ModelSlot(app->state.slotIdx);
 }
 
-bool BoneCanBePicked(MMDApp* app, const unsigned char* bone) {
-    if ((mdl::At<std::uint32_t>(const_cast<unsigned char*>(bone), 500) &
-         mdl::kBoneFlagVisible) == 0)
+bool BoneCanBePicked(MMDApp* app, const mdl::BoneRecord& bone) {
+    if ((bone.flags & mdl::kBoneFlagVisible) == 0)
         return false;
-    const mdl::BoneType type =
-        static_cast<mdl::BoneType>(bone[484]);
+    const mdl::BoneType type = bone.type;
     const int physicsMode = app->PlaybackPhysicsMode();
     if (physicsMode == 2 && type != mdl::BoneType::RotateMove &&
-        bone[493] == 0)
+        bone.physicsDisabled == 0)
         return false;
     if (physicsMode == 1 && type != mdl::BoneType::RotateMove)
         return false;
@@ -349,11 +347,11 @@ void PickBoneAtCursor(MMDApp* app) {
     int candidate = -1;
     bool changed = false;
     for (int i = 0; i < count; ++i) {
-        unsigned char* bone = mikudancestudio::mdl::BoneBytes(bones, i);
+        const mdl::BoneRecord& bone = bones[i];
         if (!BoneCanBePicked(app, bone))
             continue;
-        const int dx = mdl::At<std::int32_t>(bone, 452) - x;
-        const int dy = mdl::At<std::int32_t>(bone, 456) - y;
+        const int dx = bone.selState - x;
+        const int dy = bone.selState2 - y;
         if (dx * dx + dy * dy >= 64)
             continue;
         if (additive) {
@@ -402,14 +400,13 @@ void UpdateBoneBoxSelection(MMDApp* app) {
     const bool additive = app->ShiftModifierActive();
     bool changed = false;
     for (int i = 0; i < count; ++i) {
-        unsigned char* bone = mikudancestudio::mdl::BoneBytes(bones, i);
-        const mdl::BoneType type =
-            static_cast<mdl::BoneType>(bone[484]);
+        const mdl::BoneRecord& bone = bones[i];
+        const mdl::BoneType type = bone.type;
         const bool eligible =
             type <= mdl::BoneType::Effector ||
             type == mdl::BoneType::FixedAxis;
-        const int x = mdl::At<std::int32_t>(bone, 452);
-        const int y = mdl::At<std::int32_t>(bone, 456);
+        const int x = bone.selState;
+        const int y = bone.selState2;
         const bool inside = eligible && x > left && x < right &&
                             y > top && y < bottom;
         const std::uint8_t next = inside ? 1 : (additive ? selected[i] : 0);
@@ -795,24 +792,29 @@ void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode) {
 
     auto modeOrigin = [&](int modeValue, d3dx::D3DXMATRIXF* out) {
         if (modeValue == 1) {                                  // 0x41AD79
-            unsigned char* rec = mikudancestudio::mdl::BoneBytes(
-                bones, *reinterpret_cast<std::int32_t*>(model + 0x4CCEC));
-            const float tx = -*reinterpret_cast<float*>(rec + 100);
-            const float ty = -*reinterpret_cast<float*>(rec + 104);
-            const float tz = -*reinterpret_cast<float*>(rec + 108);
+            const mdl::BoneRecord& rec =
+                bones[mdl::Mdl(model)->centerBone];
+            const float tx = -rec.matInit[12];
+            const float ty = -rec.matInit[13];
+            const float tz = -rec.matInit[14];
             api.translation(out, tx, ty, tz);
         } else if (modeValue == 2) {                           // 0x41ADC6
             std::int32_t idx = mikudancestudio::mdl::Mdl(model)->selectedBone;
             if (idx < 0)
                 idx = 0;
-            const float* f = reinterpret_cast<const float*>(
-                mikudancestudio::mdl::BoneBytes(bones, idx));
-            const float z = f[15] * f[77] + f[19] * f[78] +
-                             f[23] * f[79] + f[27];
-            const float y = f[14] * f[77] + f[18] * f[78] +
-                             f[22] * f[79] + f[26];
-            const float x = f[13] * f[77] + f[17] * f[78] +
-                             f[21] * f[79] + f[25];
+            const mdl::BoneRecord& rec = bones[idx];
+            const float z = rec.matInit[2] * rec.position[0] +
+                            rec.matInit[6] * rec.position[1] +
+                            rec.matInit[10] * rec.position[2] +
+                            rec.matInit[14];
+            const float y = rec.matInit[1] * rec.position[0] +
+                            rec.matInit[5] * rec.position[1] +
+                            rec.matInit[9] * rec.position[2] +
+                            rec.matInit[13];
+            const float x = rec.matInit[0] * rec.position[0] +
+                            rec.matInit[4] * rec.position[1] +
+                            rec.matInit[8] * rec.position[2] +
+                            rec.matInit[12];
             api.translation(out, -x, -y, -z);
         } else {
             api.translation(out, 0.0f, 0.0f, 0.0f);

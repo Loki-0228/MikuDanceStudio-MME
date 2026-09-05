@@ -310,7 +310,8 @@ bool RegisterPhysicsPoseChain(unsigned char* m, int boneIdx, int srcIdx,
     if (mikudancestudio::mdl::Mdl(m)->matMisc == 0) return true;          // 0x4A4B22
 
     std::uint32_t frame = startFrame;                             // v19
-    const float* p = reinterpret_cast<const float*>(RdPtr(reinterpret_cast<unsigned char*>(&mikudancestudio::mdl::Mdl(m)->pmxVertexCount))) +
+    const float* p = static_cast<const float*>(
+                          mikudancestudio::mdl::PoseTraceBuffer(m)) +
                      srcIdx;                                      // i = 4*srcIdx+8
     unsigned int iter = 0;                                        // v22
     for (;;) {
@@ -395,9 +396,9 @@ void RegisterPhysicsPose(unsigned char* m, std::uint32_t frame) {
     for (int i = 0; i < 1000; ++i) masterKeys[i].allocated = 0;
 
     const auto cleanup = [&]() {                                   // 0x4A60BF
-        if (RdPtr(reinterpret_cast<unsigned char*>(&mikudancestudio::mdl::Mdl(m)->pmxVertexCount)) != nullptr) {
-            free(RdPtr(reinterpret_cast<unsigned char*>(&mikudancestudio::mdl::Mdl(m)->pmxVertexCount)));
-            *reinterpret_cast<void**>(m + 8620) = nullptr;
+        if (mikudancestudio::mdl::PoseTraceBuffer(m) != nullptr) {
+            free(mikudancestudio::mdl::PoseTraceBuffer(m));
+            mikudancestudio::mdl::PoseTraceBuffer(m) = nullptr;
         }
         Wr32(m + 14584, 0);
     };
