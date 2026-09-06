@@ -19,6 +19,7 @@
 #include <cwchar>
 #include <new>
 
+#include "fx_slots.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
@@ -29,7 +30,7 @@
 namespace mikudancestudio {
 void RefreshRequest(int area);
 void PostLanguageSweep2(MMDApp* app);  // VA 0x0040D070, was declared here as
-                                       // Sub40D070 (real body: ui_view_refresh.cpp)
+                                       // 0x40D070 (real body: ui_view_refresh.cpp)
 
 namespace {
 
@@ -53,57 +54,9 @@ T& At(void* base, std::size_t offset) {
     return *reinterpret_cast<T*>(static_cast<unsigned char*>(base) + offset);
 }
 
-template <typename Fn>
-Fn FxMethod(void* effect, std::size_t byteOffset) {
-    return reinterpret_cast<Fn>((*reinterpret_cast<void***>(effect))[
-        byteOffset / sizeof(void*)]);
-}
-
-void FxTechnique(void* effect, const char* name) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*);
-    FxMethod<Fn>(effect, 232)(effect, name);
-}
-
-void FxInt(void* effect, const char* name, int value) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*, int);
-    FxMethod<Fn>(effect, 88)(effect, name, value);
-}
-
-void FxFloat4(void* effect, const char* name, const float value[4]) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*, const float*, UINT);
-    FxMethod<Fn>(effect, 128)(effect, name, value, 4);
-}
-
-void FxMatrix(void* effect, const char* name, const Matrix* value) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*, const Matrix*);
-    FxMethod<Fn>(effect, 152)(effect, name, value);
-}
-
-void FxMatrixTranspose(void* effect, const char* name, const Matrix* value) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*, const Matrix*);
-    FxMethod<Fn>(effect, 156)(effect, name, value);
-}
-
-void FxBegin(void* effect) {
-    using Fn = HRESULT(__stdcall*)(void*, UINT*, DWORD);
-    UINT passes = 0;
-    FxMethod<Fn>(effect, 252)(effect, &passes, 0);
-}
-
-void FxBeginPass(void* effect) {
-    using Fn = HRESULT(__stdcall*)(void*, UINT);
-    FxMethod<Fn>(effect, 256)(effect, 0);
-}
-
-void FxEndPass(void* effect) {
-    using Fn = HRESULT(__stdcall*)(void*);
-    FxMethod<Fn>(effect, 264)(effect);
-}
-
-void FxEnd(void* effect) {
-    using Fn = HRESULT(__stdcall*)(void*);
-    FxMethod<Fn>(effect, 268)(effect);
-}
+// Effect calls go through the shared slot-numbered helpers in
+// fx_slots.hpp; the old byte-offset spells (232/88/128/152/156/252/256/
+// 264/268) were x86-only and silently landed on halved slots on x64.
 
 void Identity(Matrix* value) {
     std::memset(value, 0, sizeof(*value));
@@ -379,30 +332,30 @@ void SelectEffectTechnique(void* accessory, D3DRenderer* sub,
     device->SetTexture(2, nullptr);
     if (type == 3) {
         device->SetTexture(1, screenTexture);
-        FxTechnique(effect, "DiffuseBSTextureTec");
+        fx::SetTechnique(effect, "DiffuseBSTextureTec");
         return;
     }
     IDirect3DTexture9* firstTexture = CachedTexture(sub, first);
     if (firstTexture == nullptr) {
-        FxTechnique(effect, "DiffuseBufferShadowTec");
+        fx::SetTechnique(effect, "DiffuseBufferShadowTec");
         return;
     }
     device->SetTexture(1, firstTexture);
     if (type == 1 || type == 2) {
-        FxTechnique(effect, "DiffuseBSSphiaTec");
-        FxInt(effect, "spadd", type == 2);
+        fx::SetTechnique(effect, "DiffuseBSSphiaTec");
+        fx::SetBool(effect, "spadd", type == 2);
         return;
     }
     if (type == 4 || type == 5) {
         IDirect3DTexture9* secondTexture = CachedTexture(sub, second);
         if (secondTexture != nullptr) {
             device->SetTexture(2, secondTexture);
-            FxTechnique(effect, "DiffuseBSSphiaTexTec");
-            FxInt(effect, "spadd", type == 5);
+            fx::SetTechnique(effect, "DiffuseBSSphiaTexTec");
+            fx::SetBool(effect, "spadd", type == 5);
             return;
         }
     }
-    FxTechnique(effect, "DiffuseBSTextureTec");
+    fx::SetTechnique(effect, "DiffuseBSTextureTec");
 }
 
 bool ExtractXTexture(const wchar_t* xFile, int material, char out[256]) {
@@ -507,7 +460,7 @@ void ShowCannotFindXfile(MMDApp* app) {
 
 // VA 0x004C4700 - moved out of the anonymous namespace so the PMM loaders
 // (0x459221 / 0x4541D9) and the shutdown chain (0x462F9C / 0x46324D) bind to
-// this one definition instead of the old no-op stub (was Sub4C4700).
+// this one definition instead of the old no-op stub.
 void DisposeAccessory(void* accessory) {
     if (accessory == nullptr)
         return;
@@ -684,7 +637,7 @@ void SetEditFloat(HWND hwnd, int id, const char* format, float value) {
 }
 
 
-void DeleteAccessory(mdl::AccessoryRecord* accessory,  // was Sub40A6F0
+void DeleteAccessory(mdl::AccessoryRecord* accessory,
                      int releaseObject) {                              // 0x40A6F0
     DisposeAccessory(accessory);
     if ((releaseObject & 1) != 0)
@@ -722,7 +675,7 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
     if (accessory == nullptr)
         return;
     std::memset(accessory, 0, sizeof(mdl::AccessoryRecord));
-    Sub04B0Init(accessory);
+    InitAccessoryRecord(accessory);
     app->AccessorySlot(slot) = static_cast<mdl::AccessoryRecord*>(accessory);
     if (!LoadAccessoryObject(app, accessory, path)) {
         const bool english = app->state.englishUI != 0;
@@ -788,7 +741,7 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
     PostLanguageSweep2(app);
 }
 
-// was Sub413CB0, VA 0x00413CB0 - register the accessory's current state at
+// VA 0x00413CB0 - register the accessory's current state at
 // one frame into its 10000-record key list (visible/shadow/parent fields +
 // pos/rot/scale/opacity), the same walk/overwrite/splice insert as the
 // other registrars.
@@ -967,14 +920,14 @@ void RenderAccessoriesShadow(MMDApp* app) {                     // 0x4C52D0
         d3dx::Get().multiply(
             &light, &world,
             reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
-        FxMatrix(effect, "matLightViewProj", &light);
-        FxMatrix(effect, "matWorldViewProj", &light);
+        fx::SetMatrix(effect, "matLightViewProj", &light);
+        fx::SetMatrix(effect, "matWorldViewProj", &light);
         D3DMATERIAL9 material{};
         material.Diffuse.a = 1.0f;
         material.Specular.a = 1.0f;
         device->SetMaterial(&material);
         device->SetTexture(0, nullptr);
-        FxBeginPass(effect);
+        fx::BeginPass(effect);
         auto* materials = static_cast<const D3DMATERIAL9*>(mdl::Accessory(accessory)->materials);
         const DWORD count = mdl::Accessory(accessory)->materialCount;
         mdl::Accessory(accessory)->currentMaterial = -1;
@@ -983,7 +936,7 @@ void RenderAccessoriesShadow(MMDApp* app) {                     // 0x4C52D0
             if (materials[i].Diffuse.a != 0.9800000190734863f)
                 DrawSubset(accessory, i);
         }
-        FxEndPass(effect);
+        fx::EndPass(effect);
         mdl::Accessory(accessory)->currentMaterial = -1;
     }
 }
@@ -1031,19 +984,24 @@ void RenderAccessoriesEffectRange(MMDApp* app, int firstOrder,
         d3dx::Get().multiply(
             &value, &world,
             reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
-        FxMatrix(effect, "matLightViewProj", &value);
+        fx::SetMatrix(effect, "matLightViewProj", &value);
         d3dx::Get().multiply(
             &value, &world,
             reinterpret_cast<const Matrix*>(&app->WorldViewProjection()));
-        FxMatrix(effect, "matWorldViewProj", &value);
-        FxMatrix(effect, "matWorld", &world);
+        fx::SetMatrix(effect, "matWorldViewProj", &value);
+        fx::SetMatrix(effect, "matWorld", &world);
         Matrix inverseScale;
         const float inv = 1.0f / (mdl::Accessory(accessory)->scale * 10.0f);
         d3dx::Get().scaling(&inverseScale, inv, inv, inv);
-        FxMatrixTranspose(effect, "matRotate", &inverseScale);
         d3dx::Get().multiply(&value, &inverseScale, &world);
+        // x64 0x7FF7CB4FE29F: "matRotate" goes through slot 39, GetMatrix -
+        // the original reads the parameter (set from ViewRotationTransform
+        // by the effect pass head, model_renderers.cpp 0x7FF7CB4C22FD)
+        // back into the buffer between the two multiplies; it is not a
+        // transpose write (SetMatrixTranspose is the untouched slot 44).
+        fx::GetMatrix(effect, "matRotate", &inverseScale);
         d3dx::Get().multiply(&value, &value, &inverseScale);
-        FxMatrix(effect, "matWRotate", &value);
+        fx::SetMatrix(effect, "matWRotate", &value);
         device->SetRenderState(D3DRS_DESTBLEND,
             mdl::Accessory(accessory)->additiveBlend != 0
                 ? D3DBLEND_ONE : D3DBLEND_INVSRCALPHA);
@@ -1076,16 +1034,16 @@ void RenderAccessoriesEffectRange(MMDApp* app, int firstOrder,
                 material->Diffuse.r * light[9],
                 material->Diffuse.g * light[10],
                 material->Diffuse.b * light[11], 1.0f};
-            FxFloat4(effect, "EgColor", edge);
-            FxFloat4(effect, "SpcColor", specular);
-            FxFloat4(effect, "DifColor", diffuse);
+            fx::SetFloatArray(effect, "EgColor", edge, 4);
+            fx::SetFloatArray(effect, "SpcColor", specular, 4);
+            fx::SetFloatArray(effect, "DifColor", diffuse, 4);
             SelectEffectTechnique(accessory, sub, device, effect, i,
                 AccessoryScreenTexture(app));
-            FxBegin(effect);
-            FxBeginPass(effect);
+            fx::Begin(effect);
+            fx::BeginPass(effect);
             DrawSubset(accessory, i);
-            FxEndPass(effect);
-            FxEnd(effect);
+            fx::EndPass(effect);
+            fx::End(effect);
         }
         mdl::Accessory(accessory)->currentMaterial = -1;
         device->SetVertexShader(nullptr);

@@ -90,6 +90,10 @@ void SaveVpdFile(const wchar_t* path) {
     if (model == nullptr) return;
 
     FILE* fp = nullptr;
+    // Original never checks the _wfopen_s result: on failure it runs
+    // straight into fprintf(NULL, ...) (x64 0x7FF7CB48B73C open ->
+    // 0x7FF7CB48B74E first fprintf) and crashes.  Port hardening: return
+    // silently. (documented deviation)
     if (_wfopen_s(&fp, path, kModeWrite) != 0 || fp == nullptr) return;
 
     std::fprintf(fp, "%s", kHdr);
@@ -187,7 +191,11 @@ void LoadVpdFile(const wchar_t* path) {
 
         std::fgets(line, 0x100, fp);                    // "BoneN{name"
         const char* brace = std::strstr(line, kBrace);
-        if (brace == nullptr) continue;                 // original reads on
+        // Original has no NULL check here: it calls
+        // sprintf_s(name, 0x100, v18 + 1) (x64 0x7FF7CB48BDC5) with the
+        // format pointer at (char*)1 and crashes when the brace is missing.
+        // Port hardening: skip the record. (documented deviation)
+        if (brace == nullptr) continue;
         sprintf_s(name, 0x100, "%s", brace + 1);
         if (char* nl = strchr(name, 10)) *nl = 0;  // 0x507670 strchr
 

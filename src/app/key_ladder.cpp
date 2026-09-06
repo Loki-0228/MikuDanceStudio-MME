@@ -2,8 +2,8 @@
 // VA 0x0046FF35..0x004739E2 - ConsumeLetterHotkeys  (main-pump letter ladder)
 // ===========================================================================
 // The main pump (sub_46B090, x64 twin sub_7FF7CB4474F0) polls the keyboard
-// at 0x46FF02 (frame_modes.cpp MouseInteractionBegin / model_query_gaps.cpp
-// Sub42D3A0) and then walks a consumption ladder that checks each letter's
+// at 0x46FF02 (frame_modes.cpp MouseInteractionBegin / model_query_helpers.cpp
+// 0x42D3A0) and then walks a consumption ladder that checks each letter's
 // pressed-this-frame cell in MMDAppState::dialogFlags (values: 0 idle,
 // 1 pressed, 2 released, 3 held; only ==1 is consumed here) and dispatches
 // the equivalent of a menu command.  This port runs the ladder from
@@ -30,7 +30,7 @@
 // is gated on slot 7 - i.e. on the G key, exactly as MMD 9.32 documents
 // (G: go to frame, Shift+G: self-shadow map, Ctrl+G: the "fine shadow
 // mode" notice; S: select unregistered bones, Ctrl+S: save + beep).
-// The poll tables (frame_modes.cpp / model_query_gaps.cpp kLetterKeys)
+// The poll tables (frame_modes.cpp / model_query_helpers.cpp kLetterKeys)
 // carry the same binary pairing after the 2026-09 s/g transpose fix.
 //
 // The non-letter segments that surround the ladder in the pump are ported
@@ -64,8 +64,8 @@ namespace mikudancestudio {
 void FineShadowModeNotice(MMDApp* app);
 
 // ui_frame_step.cpp - frame-apply chain; declared locally like
-// command_control_500.cpp does (not in ported_funcs.hpp).
-void RefreshAfterFrameApply(MMDApp* app);                 // VA 0x432FA0, was Sub432FA0
+// command_frame_register.cpp does (not in ported_funcs.hpp).
+void RefreshAfterFrameApply(MMDApp* app);                 // VA 0x432FA0
 
 // pump_navigation.cpp - arrow-key navigation and numpad presets, called
 // from the ladder at their binary positions (see the call sites below).

@@ -30,11 +30,11 @@
 //  13. free the seven config pointers +656400/+656408/+656368/+656376/
 //      +656424/+656384/+656416
 //  14. DeleteDC on +736/+724/+744 (no null guards)
-//  15. Sub048 physics wrapper (+650672): DisposePhysicsWorld (0x4030F0)
+//  15. 0x048 physics wrapper (+650672): DisposePhysicsWorld (0x4030F0)
 //      then free; AxisMeshObject (+650656): DisposeAccessory then free;
-//      Sub06C recorder (+657088): TeardownDShowGraphCoUninit (0x4096C0)
-//      then free; Sub025C audio ctx (+204): DisposeAudioContext
-//      (0x4C2C40) then free; Sub1D574 render wrapper (+657092):
+//      0x06C recorder (+657088): TeardownDShowGraphCoUninit (0x4096C0)
+//      then free; 0x025C audio ctx (+204): DisposeAudioContext
+//      (0x4C2C40) then free; 0x1D574 render wrapper (+657092):
 //      DisposeRenderSubsystem (0x406BE0) then free
 //  16. tail: nullsub_1(this + 652088) - empty function at 0x4D5AE0, no-op
 //
@@ -279,14 +279,14 @@ int NvapiStereoDestroyHandle(void* stereoHandle) {
 // ===========================================================================
 // VA 0x00406BE0 - DisposeRenderSubsystem  (original: sub_406BE0, __thiscall)
 // ===========================================================================
-// this = the 0x1D574 render/locale wrapper at app+0xA06C4 (kPtrSub1d574),
+// this = the 0x1D574 render/locale wrapper at app+0xA06C4,
 // restored as D3DRenderer (d3d_wrapper.hpp).  Member names below carry the
 // original x86 offsets:
 //   * Release() run over the interface slots effect(+120160), shadowSurface
 //     (+120144), hdrTexture(+120136), spriteTexture(+120140),
 //     shadowDepthSurface(+120148), depthStencilSurface(+120124),
 //     backbufferSurface(+120120), captureSurface(+120116), lineVertexBuffer(+120052),
-//     device(+120032), d3d9(+120028) - the same slots Sub1D574Init seeds;
+//     device(+120032), d3d9(+120028) - the same slots the render-wrapper init function seeds;
 //   * the 10000-entry resource pool at +4 (12-byte entries): free the
 //     heapBuffer (+4) member, Release() the comObject (+8) member;
 //   * if stereo was activated (byte +120166, probed by 0x406E18..0x406E42),

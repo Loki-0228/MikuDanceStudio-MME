@@ -69,7 +69,7 @@
 //        BM_SETCHECK(0x19C,0), ApplyCameraReferenceModeChange(app, old
 //        0x340) unless 0x2F8; unchecked: 0x340=0,
 //        ApplyCameraReferenceModeChange(app, old)              0x47FA92-0x47FAE2
-//   532  button 0x214: Sub441070(app)                          0x48BC87-0x48BC8C
+//   532  button 0x214: 0x441070(app)                          0x48BC87-0x48BC8C
 //   533  button 0x215: sub_4414C0(app)                         0x48BC91-0x48BC96
 //   534  no target - empty
 //   535  display-mode checkbox 0x217: BM_GETCHECK(0x217); checked: 0x9ED98=1,
@@ -168,14 +168,14 @@ void SelectionReeval(MMDApp* app);                              // VA 0x00430510
 void RefreshLightPanel(MMDApp* app);                                    // VA 0x00411070 (ui_frame_refresh.cpp)
 void RefreshSelfShadowPanel(MMDApp* app);                                    // VA 0x00411B90 (ui_frame_refresh.cpp)
 void ApplyGravityTrack(MMDApp* app);                             // VA 0x00412330 (was
-                                                                  //  Sub412330; track_apply.cpp)
+                                                                  //  0x412330; track_apply.cpp)
 void ApplyAccessoryTrack(MMDApp* app, int slot);                  // VA 0x00413120 (was
-                                                                  //  Sub413120; accessory_paste.cpp)
+                                                                  //  0x413120; accessory_paste.cpp)
 void SyncAccessoryEditPanel(MMDApp* app);                                    // VA 0x004134E0 (ui_frame_refresh.cpp)
-void ReloadModels(MMDApp* app);                    // VA 0x0042E640 (timeline_advance.cpp), was Sub42E640
+void ReloadModels(MMDApp* app);                    // VA 0x0042E640 (timeline_advance.cpp)
 
 // ---- not-yet-ported original call targets: declarations only; the stub
-//      bodies are consolidated in src/unported/stubs.cpp (finishing phase)
+//      bodies are consolidated in src/app/late_ports.cpp (finishing phase)
 // ---------------------------------------------------------------------------
 // VA 0x004414C0 - timeline "previous registration" jump (thiscall, app).
 void JumpPrevKeyframe(MMDApp* app);
@@ -185,21 +185,21 @@ void ApplyModelComboSelection(MMDApp* app);
 //                 called by case 532 at 0x48BC87 - distinct from sub_411070).
 void JumpNextKeyframe(MMDApp* app);
 // VA 0x0041ACD0 - camera-reference switch re-anchor (thiscall(app, old mode
-//                 byte); was Sub41ACD0).
+//                 byte); ).
 void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode);
 // VA 0x0042D6E0 - bone-edit undo snapshot push (thiscall, this = app; was
-//                 Sub42D6E0).
+//                 0x42D6E0).
 void PushBoneEditUndo(MMDApp* app);
 // VA 0x004C2080 - frame keyframe-register (thiscall on the model, frame,
-//                 3rd arg = app+0xA0CC4; was Sub4C2080).
+//                 3rd arg = app+0xA0CC4; ).
 void RegisterSelectedBoneKeys(unsigned char* model, int frame, int mode);
 // VA 0x0049EEE0 - bone-frame register (thiscall on the model: bone index,
 //                 frame).
 void RegisterMorphKeyCurrent(unsigned char* model, int idx, int frame);
 // VA 0x00432FA0 - frame-apply refresh chain (thiscall, this = app).
-void RefreshAfterFrameApply(MMDApp* app);  // was Sub432FA0 (ui_frame_step.cpp)
+void RefreshAfterFrameApply(MMDApp* app);  //  (ui_frame_step.cpp)
 // VA 0x00411DF0 - frame-scroll apply (thiscall(app, frame 0x980)).
-void RegisterSelfShadowState(MMDApp* app, int frame);  // was Sub411DF0
+void RegisterSelfShadowState(MMDApp* app, int frame);
                                                        // (ui_frame_refresh.cpp)
 
 namespace {

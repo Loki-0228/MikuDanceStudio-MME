@@ -72,14 +72,14 @@
 namespace mikudancestudio {
 
 // Global-track register backends, defined with these signatures in
-// command_control_400.cpp / ui_frame_refresh.cpp / command_view_menu.cpp
+// command_frame_edit.cpp / ui_frame_refresh.cpp / command_view_menu.cpp
 // (not yet registered in ported_funcs.hpp; declared locally like
 // key_ladder.cpp does for its cross-TU callees).
-void RegisterCameraState(MMDApp* app, int frame);    // VA 0x00410560, was Sub410560
-void RegisterLightState(MMDApp* app, int frame);     // VA 0x00411630, was Sub411630
-void RegisterSelfShadowState(MMDApp* app, int frame);  // VA 0x00411DF0, was Sub411DF0
+void RegisterCameraState(MMDApp* app, int frame);    // VA 0x00410560
+void RegisterLightState(MMDApp* app, int frame);     // VA 0x00411630
+void RegisterSelfShadowState(MMDApp* app, int frame);  // VA 0x00411DF0
                                                      // (ui_frame_refresh.cpp)
-void RegisterGravityKeyCurrent(MMDApp* app, std::int32_t frame);  // VA 0x00412B20, was Sub412B20
+void RegisterGravityKeyCurrent(MMDApp* app, std::int32_t frame);  // VA 0x00412B20
 
 namespace {
 

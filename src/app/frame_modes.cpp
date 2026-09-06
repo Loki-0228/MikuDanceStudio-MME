@@ -596,8 +596,8 @@ void MouseInteractionEnd(MMDApp* app) {
 // value into the "%3.4f" display figure (best evidence: PI/180 divisor)
 double g_Scale52E9F0 = 0.20000000298023224; // VA 0x0052E9F0
 double g_Scale52E8C8 = 0.019999999552965164;// VA 0x0052E8C8
-double g_ConvA52B760 = 180.0;               // VA 0x0052B760
-double g_ConvB52B768 = 3.141592025756836;   // VA 0x0052B768
+double g_AngleDegreesScale = 180.0;               // VA 0x0052B760
+double g_AnglePiTruncated = 3.141592025756836;   // VA 0x0052B768
 
 // ---- light/camera/registry chains (raw listing 10776..11260) --------------
 // Common shape per axis mode (selector A=this+0x24==3, B=this+0xC0==3):
@@ -705,7 +705,7 @@ void ModeAngleAdjust(MMDApp* app, int axis) {
             char buf[0x100];
             sprintf_s(buf, 0x100, "%3.4f",
                       *reinterpret_cast<float*>(slot + kSlotOff[axis]) /
-                          g_ConvB52B768 * g_ConvA52B760);
+                          g_AnglePiTruncated * g_AngleDegreesScale);
             EchoEdit(app, kEdit[axis], buf);
         }
     } else {
@@ -748,7 +748,7 @@ void ModePhysicsBody(MMDApp* app, int) {
 
 // ---------------------------------------------------------------------------
 // VA 0x0041ACD0 - ApplyCameraReferenceModeChange(app, oldMode) (was
-// Sub41ACD0): camera-reference switch re-anchor
+// 0x41ACD0): camera-reference switch re-anchor
 // (command dispatch 0x47FA60/0x47FA88, control 0x213 family).  When the mode
 // byte at +0x340 (kByte340) changes, the accessory ground position stored at
 // app+0x308/+0x30C/+0xA08DC is re-anchored: both the OLD mode (the `mode`

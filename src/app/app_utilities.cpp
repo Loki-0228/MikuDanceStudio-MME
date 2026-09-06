@@ -24,7 +24,7 @@
 //     line VB/IB, drops the ground-quad VB at app+651560 and the Japanese
 //     message variant - keep both until callers are rewired.
 //   * JumpNextKeyframe / JumpPrevKeyframe are the REAL bodies behind the
-//     no-op stubs Sub441070 / Sub4414C0 in src/unported/stubs.cpp; the
+//     no-op stubs 0x441070 / 0x4414C0 in src/app/late_ports.cpp; the
 //     stub symbols still exist, so these live under new names.
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
@@ -46,7 +46,7 @@ namespace mikudancestudio {
 // Already-ported callees (real bodies; PostViewRefresh is declared in
 // ported_funcs.hpp, RefreshAfterFrameApply lives in
 // src/window/ui_frame_step.cpp).
-void RefreshAfterFrameApply(MMDApp* app);   // VA 0x00432FA0, was Sub432FA0
+void RefreshAfterFrameApply(MMDApp* app);   // VA 0x00432FA0
                                             // frame-apply refresh chain
 
 namespace {
@@ -141,9 +141,9 @@ float AngleCosF(float v) {  // 0x40A6D0
 //      (blue 0xFF000001 Z-, red X+, green Y+, gray +50/-50 stubs) then 10
 //      iterations x 8 grid verts (x = i*5 .. i*-5, plane y=0.1, +/-50,
 //      gray 0xFFB4B4B4).  A previous VB at +768 is released first.
-//   2. line IB @app+772 (kDword304): 90 sequential WORD indices (180
+//   2. line IB @app+772 (kLineIndexBufferSlot): 90 sequential WORD indices (180
 //      bytes, D3DFMT_INDEX16=101, MANAGED).
-//   3. ground VB @app+651560 (kDword9F128): 6 verts (96 bytes) forming the
+//   3. ground VB @app+651560 (kGroundVertexBufferSlot): 6 verts (96 bytes) forming the
 //      100x100 white quad at y=0 - creation/lock results unchecked, just
 //      like the original.
 // Every checked failure raises MessageBoxA(app+657080, EN-or-JP text,
@@ -247,7 +247,7 @@ bool MakeLineGeometry(MMDApp* app) {  // 0x40AF40
 // Down test is (GetKeyState(vk) & 0x80) == 0x80 (low-byte bit 7, exactly
 // as assembled: `and al, 80h / cmp al, 80h`).  Every 0->1 and 1/3->2
 // transition additionally arms the generic input flag at +658796
-// (kDwordA0D6C).
+// (kGenericInputFlagSlot).
 // ===========================================================================
 void UpdateKeyEdgeState(MMDApp* app, int nVirtKey,
                         std::uint32_t* state) {  // 0x40E3D0

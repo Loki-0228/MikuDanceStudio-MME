@@ -1,17 +1,17 @@
 // ===========================================================================
 // Gap ports: wave-context reset, physics-pose key registration and the
 // standard-skeleton base-quaternion initializer
-//   VA 0x004C2430 - ClearWaveContextFields (was Sub4C2430)
+//   VA 0x004C2430 - ClearWaveContextFields
 //                              wave/timeline 0x25C-context field clear
-//   VA 0x004A4A50 - RegisterPhysicsPoseChain (was Sub4A4A50)
+//   VA 0x004A4A50 - RegisterPhysicsPoseChain
 //                              physics-pose key registrar (per-bone chain,
 //                              model+14584 consecutive frames)
-//   VA 0x004A5690 - RegisterPhysicsPose (was Sub4A5690)
+//   VA 0x004A5690 - RegisterPhysicsPose
 //                              "register physics pose" driver (undo snapshot
 //                              + standard-bone probes -> RegisterPhysicsPoseChain)
-//   VA 0x004A60F0 - BuildLookAtQuaternion (was Sub4A60F0)
+//   VA 0x004A60F0 - BuildLookAtQuaternion
 //                              look-at quaternion builder (__stdcall)
-//   VA 0x004A6520 - InitStandardSkeletonQuats (was Sub4A6520)
+//   VA 0x004A6520 - InitStandardSkeletonQuats
 //                              standard-skeleton base quaternion setup
 // ===========================================================================
 // Scope note: the other VAs handed out with this batch were adjudicated as
@@ -117,11 +117,11 @@ FnQuatRotationAxisLocal LocalQuatRotationAxis() {
 // .rdata float constants (bit-exact; Hex-Rays decimal renderings do not
 // round-trip, e.g. flt_52B738 = 0x40490FD8 prints as "3.141592" but the
 // float nearest 3.141592 is 0x40490FD7):
-constexpr float kPi52B738 = 3.141592f;      // 0x40490FD8 (0x52B738)
+constexpr float kPiFloat = 3.141592f;      // 0x40490FD8 (0x52B738)
 // C++17 has no std::bit_cast; MSVC's __builtin_bit_cast is accepted in
 // constant expressions, so the static_assert pins the literal above to
 // the original .rdata bit pattern.
-static_assert(__builtin_bit_cast(std::uint32_t, kPi52B738) == 0x40490FD8u,
+static_assert(__builtin_bit_cast(std::uint32_t, kPiFloat) == 0x40490FD8u,
               "flt_52B738 bit-exact");
 constexpr float k35deg5311A4 = 0.61086512f; // 0x3F1C61A8 (0x5311A4)
 constexpr float k30deg53119C = 0.52359867f; // 0x3F060A90 (0x53119C)
@@ -251,7 +251,7 @@ int FindBoneByName(unsigned char* m, const void* name, std::size_t cb) {
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// VA 0x004C2430 - ClearWaveContextFields(this) (was Sub4C2430): clear five fields of the 0x25C wave/
+// VA 0x004C2430 - ClearWaveContextFields(this): clear five fields of the 0x25C wave/
 // timeline context object.  Called from the WinMain init path 0x47A5B0
 // (0x47A665) right after the zeroing ctor 0x4C2450; the array pointers are
 // nulled WITHOUT freeing (leak-preserving, matching the original).
@@ -269,7 +269,7 @@ void* ClearWaveContextFields(void* obj) {
 
 // ---------------------------------------------------------------------------
 // VA 0x004A4A50 - RegisterPhysicsPoseChain(model, boneIdx, srcIdx, mode,
-// startFrame) (was Sub4A4A50).
+// startFrame).
 // Physics-pose key registrar: walks the per-bone sorted chain of 60-byte
 // records from record `boneIdx` and registers model+14584 consecutive
 // frames (startFrame, startFrame+1, ...), sourcing each frame's pose from
@@ -376,7 +376,7 @@ bool RegisterPhysicsPoseChain(unsigned char* m, int boneIdx, int srcIdx,
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004A5690 - RegisterPhysicsPose(model, frame) (was Sub4A5690): the
+// VA 0x004A5690 - RegisterPhysicsPose(model, frame): the
 // "register physics-driven
 // pose" driver.  Clears every mark byte in the three key arrays, snapshots
 // the current pose into the undo ring (slot = model+12724, 30-deep), then
@@ -555,7 +555,7 @@ void RegisterPhysicsPose(unsigned char* m, std::uint32_t frame) {
 
 // ---------------------------------------------------------------------------
 // VA 0x004A60F0 - BuildLookAtQuaternion(out, quat, ax, ay, az, bx, by, bz,
-// mode) (was Sub4A60F0):
+// mode):
 // look-at quaternion builder.  Rotates the (b - a) direction by
 // inverse(quat) * RotY(pi), normalizes it (mode 5 zeroes Y first), then
 // constructs a yaw/roll rotation for the chosen axis mode (0..5) and
@@ -579,7 +579,7 @@ float* BuildLookAtQuaternion(float out[4], const float quat[4], float ax,
     d3dx::D3DXMATRIXF m1;
     d3->matrixRotationQuaternion(&m1, qInv);                       // 0x4A611B
     d3dx::D3DXMATRIXF m2;
-    d3->rotY(&m2, kPi52B738);                                      // 0x4A612F
+    d3->rotY(&m2, kPiFloat);                                      // 0x4A612F
     d3dx::D3DXMATRIXF m3;
     d3->multiply(&m3, &m1, &m2);                                   // 0x4A6146
 
@@ -667,7 +667,7 @@ float* BuildLookAtQuaternion(float out[4], const float quat[4], float ax,
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004A6520 - InitStandardSkeletonQuats(model, flag) (was Sub4A6520):
+// VA 0x004A6520 - InitStandardSkeletonQuats(model, flag):
 // standard-skeleton base-quaternion
 // initializer.  Using the standard-bone probe positions cached at
 // model+14284..14568 (-999.0 = absent), builds the rest orientation

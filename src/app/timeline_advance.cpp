@@ -177,7 +177,7 @@ void CopyLightKey(MMDApp* app, const mdl::LightKey& key, bool apply) {
 
 }  // namespace
 
-// VA 0x0042E640 (was Sub42E640) - seek/evaluate the global camera key list.
+// VA 0x0042E640 - seek/evaluate the global camera key list.
 // This is the
 // state-producing core shared by frame stepping, delete/paste refresh and the
 // camera register button.  The original function also echoes every value to

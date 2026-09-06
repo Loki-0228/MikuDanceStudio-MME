@@ -98,7 +98,7 @@ constexpr UINT kD3dxDefault = 0xFFFFFFFFu;
 //     will report failure.
 // Returns 1 when every non-default name resolved.
 // ===========================================================================
-int CollectToonFileNames(HWND hDlg) {  // was Sub41EA20, VA 0x0041EA20
+int CollectToonFileNames(HWND hDlg) {  // VA 0x0041EA20
     MMDApp* app = g_Block;
     mdl::ModelRecord& model = *mdl::Mdl(app->SelectedModel());
     D3DRenderer* renderer = app->Renderer();
@@ -175,7 +175,7 @@ int CollectToonFileNames(HWND hDlg) {  // was Sub41EA20, VA 0x0041EA20
 // Quirk kept verbatim: before writing vertices, every morph-0 entry
 // OVERWRITES (not adds to) the raw vertex position with its offset.
 // ===========================================================================
-void SaveEnhancedModel(MMDApp* app, const wchar_t* path) {  // was Sub41EC10, 0x41EC10
+void SaveEnhancedModel(MMDApp* app, const wchar_t* path) {  // 0x41EC10
     mdl::ModelRecord& model = *mdl::Mdl(app->SelectedModel());
     D3DRenderer* renderer = app->Renderer();
 
@@ -418,7 +418,7 @@ void SaveEnhancedModel(MMDApp* app, const wchar_t* path) {  // was Sub41EC10, 0x
 }
 
 // ===========================================================================
-// 0x4A4850 (x64 sub_7FF7CB4F2240) - SetModelColor (was Sub4A4850):
+// 0x4A4850 (x64 sub_7FF7CB4F2240) - SetModelColor:
 // set model colour (ground-shadow tint sweep; called from pmm_load_v1/v2
 // and the menu-286 colour picker).  Skips models whose physicsMode byte is
 // 2, then locks the 16-byte-stride secondary vertex buffer (FVF 0x42:
@@ -455,7 +455,7 @@ void SetModelColor(MMDApp* modelPtr, int r, int g, int b) {
 }
 
 // ---- not-yet-ported original call targets with NO stub elsewhere -------
-// (was Sub439E40/43A650/43B720/43BB30 - now InsertBoneCameraFrameLine /
+// (/43A650/43B720/43BB30 - now InsertBoneCameraFrameLine /
 //  DeleteBoneCameraFrameLine / InsertFacialLightFrameLine /
 //  DeleteFacialLightFrameLine, the four frame-line edit commands in
 //  src/window/frame_line_edit.cpp; declared in ported_funcs.hpp.)
@@ -804,7 +804,7 @@ constexpr MenuBlock kMenus[] = {
 
 }  // namespace
 
-void RefreshMenuLanguage(MMDApp* app) {  // was Sub40B5A0, VA 0x0040B5A0
+void RefreshMenuLanguage(MMDApp* app) {  // VA 0x0040B5A0
     HWND hwnd = app->state.hwnd;
     HMENU menu = GetMenu(hwnd);
     MENUITEMINFOA mii;
@@ -853,7 +853,7 @@ void RefreshMenuLanguage(MMDApp* app) {  // was Sub40B5A0, VA 0x0040B5A0
 // VA 0x0042AE20 - path copy: real port moved to src/media/media_load.cpp.
 
 // ===========================================================================
-// 0x4076E0 (x64 sub_7FF7CB428F30) - ReloadTextureCache (was Sub4076E0):
+// 0x4076E0 (x64 sub_7FF7CB428F30) - ReloadTextureCache:
 // renderer refresh after the toon reload (menu 278, thiscall on the
 // renderer object).  Walks the shared 10000-entry texture cache and
 // reloads every named entry from disk via D3DXCreateTextureFromFileExW

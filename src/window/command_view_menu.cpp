@@ -55,7 +55,7 @@
 //                          return; 0x48=1, 0xBC=1; CreateDialogParamA
 //                          (0x2AC EN / 0x2AB JP, sub_465020) at app+0xA0B74
 //   263 107  0x0048AA6F    "save enhanced model": SetCurrentDirectoryW(exe),
-//                          swprintf_s(kFmt529688), OPENFILENAMEW (lStruct
+//                          swprintf_s(kEmptyPathFormat), OPENFILENAMEW (lStruct
 //                          0x4C, filter "Polygon Model files(*.pmd)" /
 //                          "*.pmd" / "All Files(*.*)", nFilterIndex 1,
 //                          Flags 6, defext "pmd", title "save enhanced
@@ -98,7 +98,7 @@
 //   275 113  0x0048DE30    0x38=1, 0xBC=1; modal dialog 0x32D EN / 0x32C JP
 //                          (sub_461CE0) - no close handling (always return)
 //   276 114  0x0048AFA4    "render to picture file": SetCurrentDirectoryW,
-//                          swprintf_s(kFmt529688), OPENFILENAMEW ("All
+//                          swprintf_s(kEmptyPathFormat), OPENFILENAMEW ("All
 //                          picture format" / JP 0x52F218, defext "bmp",
 //                          title "render to picture file" / JP 0x52F1D0,
 //                          initial dir DirUser / "UserFile" on menu 0x12D);
@@ -241,6 +241,9 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/physics_scene.hpp"
+
+#include "btBulletDynamicsCommon.h"
 
 #include "dialog_scaffold.hpp"
 
@@ -248,40 +251,40 @@ namespace mikudancestudio {
 
 // Gravity keyframe registrar, defined below at mikudancestudio scope (the
 // pump's Enter register-frame block in pump_edit_keys.cpp also calls it).
-void RegisterGravityKeyCurrent(MMDApp* app, std::int32_t frame);  // VA 0x00412B20, was Sub412B20
+void RegisterGravityKeyCurrent(MMDApp* app, std::int32_t frame);  // VA 0x00412B20
 
 // ---- dialog helpers moved to dedicated TUs (original VAs kept) ----------
 // physics-model editor (menu 262, dialog 0x2AC): physics_model_dialog.cpp
-void AddRigidBody(HWND hDlg);                    // was Sub45F480, VA 0x0045F480
-LRESULT CALLBACK PhysicsEditSubclassProc(HWND, UINT, WPARAM, LPARAM);  // was Sub41EC50, VA 0x0041EC50
-void InitPhysicsModelDialog(HWND hDlg);          // was Sub45F670, VA 0x0045F670
-void CollectBodyEdits(MMDApp* app);              // was Sub41FF30, VA 0x0041FF30
-void CollectJointEdits(MMDApp* app);             // was Sub4204F0, VA 0x004204F0
-void AddJoint(HWND hDlg);                        // was Sub43CA50, VA 0x0043CA50
-void ApplyBodyRecordToEdits(HWND hDlg, int idx);  // was Sub43CCD0, VA 0x0043CCD0
-void ApplyJointRecordToEdits(HWND hDlg, int idx);  // was Sub4214A0, VA 0x004214A0
-void FlipPhysicsDialogPage(HWND hDlg, int flag);  // was Sub421C20, VA 0x00421C20
-void UpdateShapeControls(HWND hDlg, int mode, int idx);  // was Sub421CE0, VA 0x00421CE0
-void CommitPhysicsEdits(HWND hDlg);              // was Sub4220F0, VA 0x004220F0
-void PickPivotBone(HWND hDlg);                   // was Sub420DC0, VA 0x00420DC0
-INT_PTR CALLBACK PhysicsModelDlgProc(HWND, UINT, WPARAM, LPARAM);  // was Sub465020, VA 0x00465020
+void AddRigidBody(HWND hDlg);                    // VA 0x0045F480
+LRESULT CALLBACK PhysicsEditSubclassProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0041EC50
+void InitPhysicsModelDialog(HWND hDlg);          // VA 0x0045F670
+void CollectBodyEdits(MMDApp* app);              // VA 0x0041FF30
+void CollectJointEdits(MMDApp* app);             // VA 0x004204F0
+void AddJoint(HWND hDlg);                        // VA 0x0043CA50
+void ApplyBodyRecordToEdits(HWND hDlg, int idx);  // VA 0x0043CCD0
+void ApplyJointRecordToEdits(HWND hDlg, int idx);  // VA 0x004214A0
+void FlipPhysicsDialogPage(HWND hDlg, int flag);  // VA 0x00421C20
+void UpdateShapeControls(HWND hDlg, int mode, int idx);  // VA 0x00421CE0
+void CommitPhysicsEdits(HWND hDlg);              // VA 0x004220F0
+void PickPivotBone(HWND hDlg);                   // VA 0x00420DC0
+INT_PTR CALLBACK PhysicsModelDlgProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x00465020
 // model-edge / English-name dialog (menu 259): model_edge_dialog.cpp
-void InitModelEdgeDialog(HWND hDlg);             // was Sub43C430, VA 0x0043C430
-void ApplyModelEdgeDialog(HWND hDlg);            // was Sub45F240, VA 0x0045F240
-void SelectModelEdgeBone(HWND hDlg);             // was Sub45F050, VA 0x0045F050
-void SelectModelEdgeMorph(HWND hDlg);            // was Sub45EF10, VA 0x0045EF10
-void SelectModelEdgeGroup(HWND hDlg);             // was Sub45EDC0, VA 0x0045EDC0
-void CollectEnglishNameEdit(MMDApp* app, HWND hEdit, int idx);  // was Sub43BED0, VA 0x0043BED0 (collector)
+void InitModelEdgeDialog(HWND hDlg);             // VA 0x0043C430
+void ApplyModelEdgeDialog(HWND hDlg);            // VA 0x0045F240
+void SelectModelEdgeBone(HWND hDlg);             // VA 0x0045F050
+void SelectModelEdgeMorph(HWND hDlg);            // VA 0x0045EF10
+void SelectModelEdgeGroup(HWND hDlg);             // VA 0x0045EDC0
+void CollectEnglishNameEdit(MMDApp* app, HWND hEdit, int idx);  // VA 0x0043BED0 (collector)
 // enhance-model IO (toon collect / save model): enhance_model_io.cpp
-int CollectToonFileNames(HWND hDlg);             // was Sub41EA20, VA 0x0041EA20
+int CollectToonFileNames(HWND hDlg);             // VA 0x0041EA20
 // (SaveEnhancedModel / SetModelColor declared in ported_funcs.hpp; RefreshMenuLanguage below)
-void RefreshMenuLanguage(MMDApp* app);           // was Sub40B5A0, VA 0x0040B5A0
+void RefreshMenuLanguage(MMDApp* app);           // VA 0x0040B5A0
 // misc dialog bodies: misc_dialogs.cpp
-void ApplyCameraFrameScaleAdd(MMDApp* app, HWND hDlg);  // was Sub43E000, VA 0x0043E000
-void ApplyMorphScaleAdd(MMDApp* app, HWND hDlg);  // was Sub43E680, VA 0x0043E680
-void InitModelOrderDialog(int count, HWND hDlg);  // was Sub41E810, VA 0x0041E810
-void InitGravityDialog(HWND hDlg);               // was Sub423160, VA 0x00423160
-void ApplyPhysicsOnOff(int on);                  // was Sub4403C0, VA 0x004403C0
+void ApplyCameraFrameScaleAdd(MMDApp* app, HWND hDlg);  // VA 0x0043E000
+void ApplyMorphScaleAdd(MMDApp* app, HWND hDlg);  // VA 0x0043E680
+void InitModelOrderDialog(int count, HWND hDlg);  // VA 0x0041E810
+void InitGravityDialog(HWND hDlg);               // VA 0x00423160
+void ApplyPhysicsOnOff(int on);                  // VA 0x004403C0
 
 // Defined in stubs.cpp - declared here (before the anonymous namespace) so
 // the dialog procs inside it can call it.
@@ -309,33 +312,33 @@ constexpr std::size_t kModelNames33D8 = 0x33D8;   // enhance-model names, 10 x
 // C++17 has no std::bit_cast; MSVC's __builtin_bit_cast is accepted in
 // constant expressions, so the static_asserts pin each literal below to
 // the original .rdata bit pattern.
-constexpr double kDbl52B768 = static_cast<double>(3.141592f);  // pi (truncated)
-static_assert(__builtin_bit_cast(std::uint64_t, kDbl52B768) ==
+constexpr double kPiTruncatedDouble = static_cast<double>(3.141592f);  // pi (truncated)
+static_assert(__builtin_bit_cast(std::uint64_t, kPiTruncatedDouble) ==
                   0x400921FB00000000ull,
               "dbl_52B768 bit-exact");
-constexpr double kDbl52B760 = 180.0;                           // 180.0
-static_assert(__builtin_bit_cast(std::uint64_t, kDbl52B760) ==
+constexpr double kDegreesScale = 180.0;                           // 180.0
+static_assert(__builtin_bit_cast(std::uint64_t, kDegreesScale) ==
                   0x4066800000000000ull,
               "dbl_52B760 bit-exact");
 // 3.141594886779785 is the shortest round-trip decimal for dbl_52E678.
-constexpr double kDbl52E678 = 3.141594886779785;               // (double)(float)pi
-static_assert(__builtin_bit_cast(std::uint64_t, kDbl52E678) ==
+constexpr double kPiWidenedFloat = 3.141594886779785;               // (double)(float)pi
+static_assert(__builtin_bit_cast(std::uint64_t, kPiWidenedFloat) ==
                   0x400921FC80000000ull,
               "dbl_52E678 bit-exact");
-constexpr float kFlt52B740 = 1e-6f;  // ~1e-6 threshold
-static_assert(__builtin_bit_cast(std::uint32_t, kFlt52B740) == 0x358637BDu,
+constexpr float kAngleEpsilon = 1e-6f;  // ~1e-6 threshold
+static_assert(__builtin_bit_cast(std::uint32_t, kAngleEpsilon) == 0x358637BDu,
               "flt_52B740 bit-exact");
-constexpr float kFlt52B73C = -3.141592f;  // -pi float
-static_assert(__builtin_bit_cast(std::uint32_t, kFlt52B73C) == 0xC0490FD8u,
+constexpr float kNegativePiFloat = -3.141592f;  // -pi float
+static_assert(__builtin_bit_cast(std::uint32_t, kNegativePiFloat) == 0xC0490FD8u,
               "flt_52B73C bit-exact");
-constexpr float kFlt52B738 = 3.141592f;  // +pi float
-static_assert(__builtin_bit_cast(std::uint32_t, kFlt52B738) == 0x40490FD8u,
+constexpr float kPiFloat = 3.141592f;  // +pi float
+static_assert(__builtin_bit_cast(std::uint32_t, kPiFloat) == 0x40490FD8u,
               "flt_52B738 bit-exact");
 
 // 0x529688: swprintf_s format L"\0\0%s%s" - the leading NULs make the
 // original call (which passes NO varargs) write an empty string; the %s
 // slots are never consumed.  Kept byte-identical (same idiom as
-// command_control_450.cpp case 472).
+// command_panel_toggles.cpp case 472).
 
 // Active model = slot array at app+0x780 indexed by byte app+0x910.
 static unsigned char* ActiveModel(MMDApp* app) {
@@ -450,14 +453,14 @@ static const wchar_t kTitleOpenJp[] =
 //  src/model/model_frame_seek.cpp.)
 
 // Forward declarations (bodies below / later in this TU).
-void SetEdgeThickness(MMDApp* app, float thickness);      // VA 0x0041E980, was Sub41E980
-void SetGravityChannel(MMDApp* app, int channel, float value);  // VA 0x0045FD80, was Sub45FD80
+void SetEdgeThickness(MMDApp* app, float thickness);      // VA 0x0041E980
+void SetGravityChannel(MMDApp* app, int channel, float value);  // VA 0x0045FD80
 // VA 0x0042E270 - edit-646 (0x286) subclass of the edge-thickness dialog
 // (253): on WM_KEYDOWN+VK_RETURN it reads the edit text, applies it through
 // the thickness setter (0x41E980) and parks the percent value on trackbar
 // 647 (TBM_SETPOS, dbl 0x52B8E0 = 100.0); anything else goes to the saved
 // original procedure (app+0xA0B48, captured when case 253 subclasses).
-LRESULT CALLBACK EdgeThicknessEditSubclassProc(  // was Sub42E270, VA 0x0042E270
+LRESULT CALLBACK EdgeThicknessEditSubclassProc(  // VA 0x0042E270
     HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     if (msg == WM_KEYDOWN && wParam == VK_RETURN) {  // 0x100 / 0x0D
@@ -480,7 +483,7 @@ LRESULT CALLBACK EdgeThicknessEditSubclassProc(  // was Sub42E270, VA 0x0042E270
 // constant 1.0, model mode the active model's thickness float (+0x31C0).
 // (Template caption "thickness of edge line" / エッジ太さ設定, scale 0..2 -
 // model+0x31C0 is the per-model edge thickness, not a FPS.)
-float GetEdgeThickness(MMDApp* app) {  // was Sub41E950, VA 0x0041E950
+float GetEdgeThickness(MMDApp* app) {  // VA 0x0041E950
     if (app->state.optflag[0] != 0)
         return 1.0f;
     unsigned char* model = app->SelectedModel();
@@ -489,7 +492,7 @@ float GetEdgeThickness(MMDApp* app) {  // was Sub41E950, VA 0x0041E950
 // VA 0x0041E980 - edge-thickness setter (model mode only): marks the
 // in-dialog and dirty flags, then stores into the active model's thickness
 // float (+0x31C0).
-void SetEdgeThickness(MMDApp* app, float thickness) {  // was Sub41E980, VA 0x0041E980
+void SetEdgeThickness(MMDApp* app, float thickness) {  // VA 0x0041E980
     if (app->state.optflag[0] != 0)
         return;
     app->state.messageSeen = 1;
@@ -499,7 +502,7 @@ void SetEdgeThickness(MMDApp* app, float thickness) {  // was Sub41E980, VA 0x00
 }
 // VA 0x0041E9C0 - enhance-model dialog init: mirrors the ten 100-byte SJIS
 // name slots of the active model (+0x33D8) into edits 709..718.
-void FillEnhanceModelNameEdits(MMDApp* app, HWND hDlg) {  // was Sub41E9C0, VA 0x0041E9C0
+void FillEnhanceModelNameEdits(MMDApp* app, HWND hDlg) {  // VA 0x0041E9C0
     unsigned char* model = app->SelectedModel();
     for (int i = 0; i < 10; ++i)
         SendMessageA(GetDlgItem(hDlg, panel::kToon01Edit + i), EM_REPLACESEL, 0,
@@ -511,7 +514,7 @@ void FillEnhanceModelNameEdits(MMDApp* app, HWND hDlg) {  // was Sub41E9C0, VA 0
 // edge collector (0x43BED0) with 0/1/2/3 for edits 0x29B/0x2A0/0x2A4/
 // 0x2A8 (edit 0x2A0 additionally runs the language sweep 0x42F1E0);
 // everything else goes to the saved original proc (app+0xA0B54).
-LRESULT CALLBACK ModelEdgeEditSubclassProc(  // was Sub45ECC0, VA 0x0045ECC0
+LRESULT CALLBACK ModelEdgeEditSubclassProc(  // VA 0x0045ECC0
     HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     if (msg == WM_KEYDOWN && wParam == VK_RETURN) {
@@ -545,7 +548,7 @@ LRESULT CALLBACK ModelEdgeEditSubclassProc(  // was Sub45ECC0, VA 0x0045ECC0
 // Two quirks kept as-is from the original: element [0] is never written
 // (values start at 1), and the 0x780 slot array is indexed with the stored
 // slotIndex+1 value verbatim (no -1), i.e. it addresses slot+1.
-void ApplyModelCalculateOrderDialog(MMDApp* app, int count, HWND hDlg) {  // was Sub41E910, VA 0x0041E910
+void ApplyModelCalculateOrderDialog(MMDApp* app, int count, HWND hDlg) {  // VA 0x0041E910
     (void)hDlg;  // the original's second pushed argument is never read
     std::int32_t* order =
         static_cast<std::int32_t*>(app->AccessoryOrderArray());
@@ -559,7 +562,7 @@ void ApplyModelCalculateOrderDialog(MMDApp* app, int count, HWND hDlg) {  // was
 // it through 0x45FD80 with channel 0..4; edits 710..712 additionally park
 // the percent value on their trackbars 637..639 (TBM_SETPOS, dbl 0x52B8E0
 // = 100.0); everything else goes to the saved proc (app+0xA0CD0).
-LRESULT CALLBACK GravitySettingEditSubclassProc(  // was Sub466370, VA 0x00466370
+LRESULT CALLBACK GravitySettingEditSubclassProc(  // VA 0x00466370
     HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     MMDApp* app = g_Block;
     if (msg == WM_KEYDOWN && wParam == VK_RETURN) {
@@ -589,7 +592,7 @@ LRESULT CALLBACK GravitySettingEditSubclassProc(  // was Sub466370, VA 0x0046637
 // slot 0x34/4 = 13).  An all-zero direction gets Y nudged to
 // flt 0x529624 = 0.1f first.  Channel 4 stores (int)value into app+0x9EDC8.
 // Ends with RefreshRequest(-4) on every path.
-void SetGravityChannel(MMDApp* app, int channel, float value) {  // was Sub45FD80, VA 0x0045FD80
+void SetGravityChannel(MMDApp* app, int channel, float value) {  // VA 0x0045FD80
     switch (channel) {
     case 0:
         app->state.gravityMagnitude = value;
@@ -642,14 +645,9 @@ void SetGravityChannel(MMDApp* app, int channel, float value) {  // was Sub45FD8
     float vec[4] = {static_cast<float>(dir[0] * mag * 10.0),
                     static_cast<float>(dir[1] * mag * 10.0),
                     static_cast<float>(dir[2] * mag * 10.0), 0.0f};
-    PhysicsScene* physicsScene = app->Physics();
-    if (physicsScene != nullptr) {
-        void* world = physicsScene->world;   // scene slot 0x40
-        if (world != nullptr) {
-            using SetGravity = void(__thiscall*)(void*, const float*);
-            auto* vt = *reinterpret_cast<void***>(world);
-            reinterpret_cast<SetGravity>(vt[0x34 / 4])(world, vec);
-        }
+    if (PhysicsScene* physicsScene = app->Physics()) {
+        if (btDiscreteDynamicsWorld* world = physicsScene->world)
+            world->setGravity(btVector3(vec[0], vec[1], vec[2]));
     }
     RefreshRequest(-4);                                     // 0x440AC0
 }
@@ -658,7 +656,7 @@ void SetGravityChannel(MMDApp* app, int channel, float value) {  // was Sub45FD8
 // light 0x378 +0x24, self-shadow 0x37C +0x14, gravity 0x380 +0x21) and of
 // all 255 accessory tracks (0x384 blobs, +0x18, 0x3C stride), rebuild via
 // 0x412B20 at the current frame, then RefreshRequest(-4) + PanelPaint.
-void ApplyGravitySettingDialog(MMDApp* app) {  // was Sub460080, VA 0x00460080
+void ApplyGravitySettingDialog(MMDApp* app) {  // VA 0x00460080
     app->SceneModified() = 1;
     mdl::CameraKey* camera = app->CameraKeys();
     mdl::LightKey* light = app->LightKeys();
@@ -684,7 +682,7 @@ void ApplyGravitySettingDialog(MMDApp* app) {  // was Sub460080, VA 0x00460080
 // VA 0x0041E7B0 - order-array builder: for order = 1..count-1 scan the 100
 // model slots for the model whose order byte (+0x2D7C) equals `order` and
 // store slotIndex+1 into the array at app+0xA0B1C.
-void BuildModelOrderArray(MMDApp* app, int count) {  // was Sub41E7B0, VA 0x0041E7B0
+void BuildModelOrderArray(MMDApp* app, int count) {  // VA 0x0041E7B0
     std::int32_t* order =
         static_cast<std::int32_t*>(app->AccessoryOrderArray());
     for (int ord = 1; ord < count; ++ord) {
@@ -705,7 +703,7 @@ void BuildModelOrderArray(MMDApp* app, int count) {  // was Sub41E7B0, VA 0x0041
 // i = 1..count-1 store i into model+0x2D7C.  The original addresses the
 // slot via base 0x77C (= 0x780 - 4), cancelling the +1 stored by 0x41E7B0;
 // the second argument (dialog) is never read.
-void ApplyModelDisplayOrderDialog(MMDApp* app, int count, HWND hDlg) {  // was Sub45EC80, VA 0x0045EC80
+void ApplyModelDisplayOrderDialog(MMDApp* app, int count, HWND hDlg) {  // VA 0x0045EC80
     (void)hDlg;
     std::int32_t* order =
         static_cast<std::int32_t*>(app->AccessoryOrderArray());
@@ -743,7 +741,7 @@ int g_displayOrderDialogCount = 0;    // was g_dword545938, VA 0x00545938 -
 // No free slot raises the "You cannot regist over %dpoint." box
 // (limit 10000, EN/JP by englishUI) and returns without registering.
 // 0x460080 (ApplyGravitySettingDialog above) calls this at the current frame.
-void RegisterGravityKeyCurrent(MMDApp* app, std::int32_t frame) {  // VA 0x00412B20, was Sub412B20
+void RegisterGravityKeyCurrent(MMDApp* app, std::int32_t frame) {  // VA 0x00412B20
     // JP overflow strings (0x52B918 / 0x52B908, SJIS byte-exact - the
     // same pair key_registrars.cpp uses for the model-track registrars)
     static const char kJpOverflow[] =
@@ -882,7 +880,7 @@ static const char kMsgFineShadowJp[] =
 // Reference: MikuMikuDance.exe sub_44D3F0.
 // ===========================================================================
 INT_PTR CALLBACK BoneFrameMultiplyDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                          LPARAM lParam) {  // was Sub44D3F0, VA 0x0044D3F0
+                                          LPARAM lParam) {  // VA 0x0044D3F0
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
@@ -920,7 +918,7 @@ INT_PTR CALLBACK BoneFrameMultiplyDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_44D510.
 // ===========================================================================
 INT_PTR CALLBACK FacialMultiplyDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                       LPARAM lParam) {  // was Sub44D510, VA 0x0044D510
+                                       LPARAM lParam) {  // VA 0x0044D510
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
@@ -957,7 +955,7 @@ INT_PTR CALLBACK FacialMultiplyDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_44C7F0.
 // ===========================================================================
 INT_PTR CALLBACK EdgeThicknessDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                      LPARAM lParam) {  // was Sub44C7F0, VA 0x0044C7F0
+                                      LPARAM lParam) {  // VA 0x0044C7F0
     (void)lParam;
     MMDApp* app = g_Block;
     switch (msg) {
@@ -1015,7 +1013,7 @@ INT_PTR CALLBACK EdgeThicknessDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_43C9A0.
 // ===========================================================================
 INT_PTR CALLBACK EnhanceModelDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                     LPARAM lParam) {  // was Sub43C9A0, VA 0x0043C9A0
+                                     LPARAM lParam) {  // VA 0x0043C9A0
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         MMDApp* app = g_Block;
@@ -1055,7 +1053,7 @@ INT_PTR CALLBACK EnhanceModelDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_464BD0.
 // ===========================================================================
 INT_PTR CALLBACK ModelEdgeDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                  LPARAM lParam) {  // was Sub464BD0, VA 0x00464BD0
+                                  LPARAM lParam) {  // VA 0x00464BD0
     MMDApp* app = g_Block;
     const HWND hCtrl = reinterpret_cast<HWND>(lParam);
     if (msg == WM_INITDIALOG) {
@@ -1194,7 +1192,7 @@ INT_PTR CALLBACK ModelEdgeDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_42E370.
 // ===========================================================================
 INT_PTR CALLBACK ModelCalculateOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                            LPARAM lParam) {  // was Sub42E370, VA 0x0042E370
+                                            LPARAM lParam) {  // VA 0x0042E370
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
@@ -1287,7 +1285,7 @@ INT_PTR CALLBACK ModelCalculateOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_479E90.
 // ===========================================================================
 INT_PTR CALLBACK GravitySettingDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                       LPARAM lParam) {  // was Sub479E90, VA 0x00479E90
+                                       LPARAM lParam) {  // VA 0x00479E90
     MMDApp* app = g_Block;
     const HWND hCtrl = reinterpret_cast<HWND>(lParam);
     if (msg == WM_INITDIALOG) {
@@ -1395,7 +1393,7 @@ INT_PTR CALLBACK GravitySettingDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_461CE0.
 // ===========================================================================
 INT_PTR CALLBACK PhysicsOnOffFrameDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                          LPARAM lParam) {  // was Sub461CE0, VA 0x00461CE0
+                                          LPARAM lParam) {  // VA 0x00461CE0
     (void)lParam;
     if (msg == WM_INITDIALOG) {
         SendMessageA(GetDlgItem(hDlg, panel::kBoneNameCombo), CB_RESETCONTENT, 0, 0);
@@ -1442,7 +1440,7 @@ INT_PTR CALLBACK PhysicsOnOffFrameDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_40FBC0.
 // ===========================================================================
 INT_PTR CALLBACK CameraNumericInputDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                           LPARAM lParam) {  // was Sub40FBC0, VA 0x0040FBC0
+                                           LPARAM lParam) {  // VA 0x0040FBC0
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
@@ -1484,7 +1482,7 @@ INT_PTR CALLBACK CameraNumericInputDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // Reference: MikuMikuDance.exe sub_40F860.
 // ===========================================================================
 INT_PTR CALLBACK BoneNumericInputDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                         LPARAM lParam) {  // was Sub40F860, VA 0x0040F860
+                                         LPARAM lParam) {  // VA 0x0040F860
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
@@ -1532,7 +1530,7 @@ INT_PTR CALLBACK BoneNumericInputDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // disassembly; Hex-Rays fails on this routine).
 // ===========================================================================
 INT_PTR CALLBACK ModelDisplayOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                          LPARAM lParam) {  // was Sub4641F0, VA 0x004641F0
+                                          LPARAM lParam) {  // VA 0x004641F0
     (void)lParam;
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
@@ -2725,12 +2723,12 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
     // shared with the dialog procs in the original.
     // ------------------------------------------------------------------
     case 300: {
-        const double kD1 = kDbl52B768;  // pi (truncated)
-        const double kD2 = kDbl52B760;  // 180.0
-        const double kD3 = kDbl52E678;  // (double)(float)pi
-        const float kPi = kFlt52B738;   // +pi float
-        const float kNegPi = kFlt52B73C;
-        const float kThr = kFlt52B740;
+        const double kD1 = kPiTruncatedDouble;  // pi (truncated)
+        const double kD2 = kDegreesScale;  // 180.0
+        const double kD3 = kPiWidenedFloat;  // (double)(float)pi
+        const float kPi = kPiFloat;   // +pi float
+        const float kNegPi = kNegativePiFloat;
+        const float kThr = kAngleEpsilon;
         app->state.enterKeyState = 1;
         if (app->state.optflag[0] != 0) {
             // ---- camera path (0x48A2D9..0x48A407) -----------------------

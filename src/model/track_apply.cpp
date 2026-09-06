@@ -1,7 +1,7 @@
 // ===========================================================================
-// VA 0x00412330 - ApplyGravityTrack (was Sub412330)  (0x7F1 bytes)  gravity-track apply + physics
+// VA 0x00412330 - ApplyGravityTrack  (0x7F1 bytes)  gravity-track apply + physics
 //                                    dialog (hwnd @ app+0xA0CCC) refresh
-// VA 0x00413120 - ApplyAccessoryTrack (was Sub413120)  (0x3B5 bytes)  accessory key-track apply
+// VA 0x00413120 - ApplyAccessoryTrack  (0x3B5 bytes)  accessory key-track apply
 // ===========================================================================
 // ApplyGravityTrack (called after VMD load, frame seek, physics-dialog edits and
 // PMM load): walks the physical-gravity track at app+0x380 (36B records
@@ -93,7 +93,7 @@ void RefreshPhysicsDialog(MMDApp* app) {
 }  // namespace
 
 // ---- VA 0x00412330 --------------------------------------------------------
-void ApplyGravityTrack(MMDApp* app) {  // was Sub412330, VA 0x00412330
+void ApplyGravityTrack(MMDApp* app) {  // VA 0x00412330
     const std::uint32_t frame = app->state.currentFrame;
     mdl::GravityKey* const track = app->GravityKeys();
     if (track == nullptr) return;   // guard: 0x466D20 allocates the track

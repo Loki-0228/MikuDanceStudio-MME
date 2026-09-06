@@ -18,7 +18,7 @@
 //
 // sub_463640 dispatches per control id (argument = the edit's HWND):
 //   417  frame number  - atol -> app+0x980; >0x80000000 resets to 0/"0";
-//        Sub432FA0 + PostViewRefresh tail
+//        0x432FA0 + PostViewRefresh tail
 //   461-466  center/rotation mirrors - parsed value scaled into the work
 //        record (647588..96 / 647540..48) and echoed into the paired
 //        trackbar (455..460) via TBM_SETPOS; RefreshRequest(-2) tail
@@ -70,7 +70,7 @@ namespace mikudancestudio {
 // Dependencies still stubbed (stubs.cpp): RefreshAfterFrameApply frame-apply
 // refresh chain (real body: ui_frame_step.cpp), PushBoneEditUndo bone-edit
 // keyframe register.
-void RefreshAfterFrameApply(MMDApp* app);          // VA 0x00432FA0, was Sub432FA0
+void RefreshAfterFrameApply(MMDApp* app);          // VA 0x00432FA0
 void PushBoneEditUndo(MMDApp* app);                       // VA 0x0042D6E0
 void RefreshRequest(int area);                     // VA 0x00440AC0 (ui_refresh)
 
@@ -117,7 +117,7 @@ void ComposeEulerToBone(MMDApp* app, unsigned char* model, int sel) {
 // ---------------------------------------------------------------------------
 // VA 0x0044BEF0 - per-edit tail; owns ids 544..550 (see file header).
 // ---------------------------------------------------------------------------
-void CommitEditControlTail(MMDApp* app, HWND edit) {  // was Sub44BEF0
+void CommitEditControlTail(MMDApp* app, HWND edit) {
     HWND base = app->FloatingWindow();
     if (base == nullptr)
         base = app->MainWindow();
@@ -291,7 +291,7 @@ void CommitEditControlTail(MMDApp* app, HWND edit) {  // was Sub44BEF0
 // ---------------------------------------------------------------------------
 // VA 0x00463640 - edit commit (see file header for the per-id behaviour).
 // ---------------------------------------------------------------------------
-void CommitEditControl(MMDApp* app, HWND edit) {  // was Sub463640
+void CommitEditControl(MMDApp* app, HWND edit) {
     auto& s = *app;
     const HWND main = s.MainWindow();
     s.state.enterKeyState = 1;    // 0x463672 dword store

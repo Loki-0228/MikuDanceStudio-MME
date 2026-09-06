@@ -1,19 +1,19 @@
 // ===========================================================================
 // Accessory-frame paste/refresh helpers ("paste to difference flame",
 // menu 0xFA) and the shared array constructor.
-//   VA 0x00401150  ConstructArrayElements (was Sub401150)  array ctor (call
+//   VA 0x00401150  ConstructArrayElements  array ctor (call
 //                            a ctor over count elements)
 //   VA 0x00413120  ApplyAccessoryTrack  seek an accessory's key track and push the
 //                            interpolated state into the accessory object
-//   VA 0x00414110  PasteAccessoryKeyRecord (was Sub414110)  paste one 0x34-byte
+//   VA 0x00414110  PasteAccessoryKeyRecord  paste one 0x34-byte
 //                            accessory key record into the frame-sorted 60B key list
 // ===========================================================================
 // Accessory key lists: (app+0x384)[slot] points at 10000 records of 0x3C
 // bytes - +0 frame, +4 prev, +8 next; a non-head slot with frame == 0 is
 // free.  The accessory object lives at (app+0x9DD70)[slot]; its display
-// state starts at +0x210.  PasteAccessoryKeyRecord (was Sub414110) mirrors
+// state starts at +0x210.  PasteAccessoryKeyRecord mirrors
 // the ported global-table inserter InsertGlobalFrame
-// (command_control_400.cpp): walk to the first
+// (command_frame_edit.cpp): walk to the first
 // record with frame >= target, overwrite on exact hit, splice before it
 // otherwise, or append after the last record when the walk ran off the
 // end; the free-slot scan starts at index 1 and a full table raises the
@@ -44,7 +44,7 @@ const T& At(const unsigned char* p, std::size_t offset) {
 }
 
 // JP overflow strings 0x52B918 / 0x52B908, Shift-JIS byte-exact (same
-// resources as the global-track registrar in command_control_400.cpp).
+// resources as the global-track registrar in command_frame_edit.cpp).
 const char kJpOverflow[] =
     "\x93\x6f\x98\x5e\x83\x7c\x83\x43\x83\x93\x83\x67"
     "\x90\x94\x82\xaa%d\x8c\xc2\x82\xf0\x89\x7a\x82\xa6"
@@ -120,7 +120,7 @@ float UnsignedFrameDelta(std::uint32_t a, std::uint32_t b) {
 // from the last element down to the first (the original's counting loop).
 // The ctor receives the element address (original passes it in ECX; the
 // ported no-op 0x4C46F0 takes it as a plain pointer argument).
-// was Sub401150
+// 
 void* ConstructArrayElements(void* block, std::uint32_t elementSize,
                              std::uint32_t count, void* ctor) {
     const auto fn = reinterpret_cast<void (*)(void*)>(ctor);
@@ -133,7 +133,7 @@ void* ConstructArrayElements(void* block, std::uint32_t elementSize,
 }
 
 // ---- VA 0x00413120: accessory track seek / object state push ---------------
-void ApplyAccessoryTrack(MMDApp* app, int slot) {  // was Sub413120, VA 0x00413120
+void ApplyAccessoryTrack(MMDApp* app, int slot) {  // VA 0x00413120
     if (app == nullptr || slot < 0 || slot >= 255)
         return;
     const std::uint32_t cur =
@@ -209,7 +209,7 @@ void ApplyAccessoryTrack(MMDApp* app, int slot) {  // was Sub413120, VA 0x004131
 // targets the currently selected accessory slot (app+0x9E170) instead of
 // the record's own slot byte.  Returns 0 when the table is full (the
 // replay loop in the 0xFA handler stops); 1 otherwise.
-// was Sub414110
+// 
 int PasteAccessoryKeyRecord(MMDApp* app, void* recData, int useSelectedSlot) {
     const auto& src =
         *static_cast<const mdl::AccessoryClipboardKey*>(recData);

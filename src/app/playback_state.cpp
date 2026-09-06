@@ -21,7 +21,7 @@
 
 namespace mikudancestudio {
 
-void SyncModelEditControls(unsigned char* model);  // VA 0x004A02C0, was Sub4A02C0
+void SyncModelEditControls(unsigned char* model);  // VA 0x004A02C0
 void ApplyAccessoryTrack(MMDApp* app, int index);  // VA 0x00413120
 void ApplyGravityTrack(MMDApp* app);  // VA 0x00412330
 
@@ -339,7 +339,7 @@ void UpdateBoneFrames(MMDApp* app) {
     PostLanguageSweep2(app);
 }
 
-void StopPlayback(MMDApp* app) {  // was Sub4341E0
+void StopPlayback(MMDApp* app) {
 #ifdef MIKUDANCESTUDIO_DIAG
     if (getenv("MIKUDANCESTUDIO_TRACE_REC")) {
         FILE* tf = fopen(getenv("MIKUDANCESTUDIO_TRACE_REC"), "a");
@@ -356,7 +356,7 @@ void StopPlayback(MMDApp* app) {  // was Sub4341E0
     HWND overlay = app->FloatingWindow();
     EnableRange(overlay != nullptr ? overlay : hwnd, 536, 550, TRUE);
 
-    // snapshot bytes saved at playback start (command_control_400.cpp):
+    // snapshot bytes saved at playback start (command_frame_edit.cpp):
     // [0]=497 [1]=498 [2]=421 [3]=422 [4]=431 [5]=400 [6]=401
     EnableWindow(GetDlgItem(hwnd, panel::kBonePasteButton),
                  app->state.playbackEnabledSnapshot[0]);

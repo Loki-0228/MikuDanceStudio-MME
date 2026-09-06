@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include "fx_slots.hpp"
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
@@ -231,57 +232,9 @@ inline void DumpMaterialState(MMDApp*, IDirect3DDevice9*, unsigned char*,
 inline void EndMaterialStateCapture() {}
 #endif
 
-template <typename Fn>
-Fn FxMethod(void* effect, std::size_t byteOffset) {
-    return reinterpret_cast<Fn>((*reinterpret_cast<void***>(effect))[
-        byteOffset / sizeof(void*)]);
-}
-
-HRESULT FxSetTechnique(void* effect, const char* name) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*);
-    return FxMethod<Fn>(effect, 232)(effect, name);
-}
-
-HRESULT FxSetInt(void* effect, const char* name, int value) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*, int);
-    return FxMethod<Fn>(effect, 88)(effect, name, value);
-}
-
-HRESULT FxSetFloatArray(void* effect, const char* name, const float* values,
-                        UINT count) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*, const float*, UINT);
-    return FxMethod<Fn>(effect, 128)(effect, name, values, count);
-}
-
-HRESULT FxSetMatrix(void* effect, const char* name, const Matrix* value) {
-    using Fn = HRESULT(__stdcall*)(void*, const char*, const Matrix*);
-    return FxMethod<Fn>(effect, 152)(effect, name, value);
-}
-
-HRESULT FxBegin(void* effect, UINT* passes) {
-    using Fn = HRESULT(__stdcall*)(void*, UINT*, DWORD);
-    return FxMethod<Fn>(effect, 252)(effect, passes, 0);
-}
-
-HRESULT FxBeginPass(void* effect, UINT pass) {
-    using Fn = HRESULT(__stdcall*)(void*, UINT);
-    return FxMethod<Fn>(effect, 256)(effect, pass);
-}
-
-HRESULT FxCommit(void* effect) {
-    using Fn = HRESULT(__stdcall*)(void*);
-    return FxMethod<Fn>(effect, 260)(effect);
-}
-
-HRESULT FxEndPass(void* effect) {
-    using Fn = HRESULT(__stdcall*)(void*);
-    return FxMethod<Fn>(effect, 264)(effect);
-}
-
-HRESULT FxEnd(void* effect) {
-    using Fn = HRESULT(__stdcall*)(void*);
-    return FxMethod<Fn>(effect, 268)(effect);
-}
+// Effect calls go through the shared slot-numbered helpers in
+// fx_slots.hpp; the old byte-offset spells (232/88/128/152/252/256/264/268)
+// were x86-only and silently landed on halved slots on x64.
 
 void Identity(Matrix* out) {
     std::memset(out, 0, sizeof(*out));
@@ -382,7 +335,7 @@ bool HasSuffix(const wchar_t* value, const wchar_t* lower,
                const wchar_t* upper);
 
 void Cross3(float out[3], const float left[3], const float right[3]) {
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_M_IX86)
     // 0x491BB0..0x491C1A / 0x491C31..0x491C8D keep each
     // multiply-subtract in the x87 register stack until the float store.
     // A double-based equivalent differs by a few ULP after normalization.
@@ -680,7 +633,7 @@ void SetEffectColor(void* effect, const char* name, const float source[4]) {
     float value[4] = {source[0], source[1], source[2], source[3]};
     for (float& channel : value)
         channel = std::min(channel, 1.0f);
-    FxSetFloatArray(effect, name, value, 4);
+    fx::SetFloatArray(effect, name, value, 4);
 }
 
 void SelectPmxTechnique(D3DRenderer* sub, IDirect3DDevice9* device,
@@ -701,15 +654,15 @@ void SelectPmxTechnique(D3DRenderer* sub, IDirect3DDevice9* device,
         if (sphereTexture != nullptr) {
             device->SetTexture(2, sphereTexture);
             if (sphereMode == 1 || sphereMode == 2) {
-                FxSetTechnique(effect, "BShadowSphiaTextureTec");
-                FxSetInt(effect, "spadd", sphereMode == 2);
+                fx::SetTechnique(effect, "BShadowSphiaTextureTec");
+                fx::SetBool(effect, "spadd", sphereMode == 2);
             } else if (sphereMode == 3) {
-                FxSetTechnique(effect, "BShadowTextureTexCd2Tec");
+                fx::SetTechnique(effect, "BShadowTextureTexCd2Tec");
             } else {
-                FxSetTechnique(effect, "BShadowTextureTec");
+                fx::SetTechnique(effect, "BShadowTextureTec");
             }
         } else {
-            FxSetTechnique(effect, "BShadowTextureTec");
+            fx::SetTechnique(effect, "BShadowTextureTec");
         }
         return;
     }
@@ -719,17 +672,17 @@ void SelectPmxTechnique(D3DRenderer* sub, IDirect3DDevice9* device,
             ? FindCachedTexture(sub, spherePath)
             : nullptr;
     if (sphereTexture == nullptr) {
-        FxSetTechnique(effect, "BufferShadowTec");
+        fx::SetTechnique(effect, "BufferShadowTec");
         return;
     }
     device->SetTexture(1, sphereTexture);
     if (sphereMode == 1 || sphereMode == 2) {
-        FxSetTechnique(effect, "BShadowSphiaTec");
-        FxSetInt(effect, "spadd", sphereMode == 2);
+        fx::SetTechnique(effect, "BShadowSphiaTec");
+        fx::SetBool(effect, "spadd", sphereMode == 2);
     } else if (sphereMode == 3) {
-        FxSetTechnique(effect, "BShadowTexCd2Tec");
+        fx::SetTechnique(effect, "BShadowTexCd2Tec");
     } else {
-        FxSetTechnique(effect, "BufferShadowTec");
+        fx::SetTechnique(effect, "BufferShadowTec");
     }
 }
 
@@ -741,7 +694,7 @@ void SelectPmdTechnique(D3DRenderer* sub, IDirect3DDevice9* device,
     if (mainPath[0] == L'\0') {
         device->SetTexture(1, nullptr);
         device->SetTexture(2, nullptr);
-        FxSetTechnique(effect, "BufferShadowTec");
+        fx::SetTechnique(effect, "BufferShadowTec");
         return;
     }
 
@@ -751,11 +704,11 @@ void SelectPmdTechnique(D3DRenderer* sub, IDirect3DDevice9* device,
         device->SetTexture(1, sphereTexture);
         device->SetTexture(2, nullptr);
         if (sphereTexture != nullptr) {
-            FxSetTechnique(effect, "BShadowSphiaTec");
-            FxSetInt(effect, "spadd",
+            fx::SetTechnique(effect, "BShadowSphiaTec");
+            fx::SetBool(effect, "spadd",
                      HasSuffix(mainPath, L".spa", L".SPA") ? 1 : 0);
         } else {
-            FxSetTechnique(effect, "BufferShadowTec");
+            fx::SetTechnique(effect, "BufferShadowTec");
         }
         return;
     }
@@ -764,18 +717,18 @@ void SelectPmdTechnique(D3DRenderer* sub, IDirect3DDevice9* device,
     device->SetTexture(1, mainTexture);
     device->SetTexture(2, nullptr);
     if (mainTexture == nullptr) {
-        FxSetTechnique(effect, "BufferShadowTec");
+        fx::SetTechnique(effect, "BufferShadowTec");
         return;
     }
     IDirect3DTexture9* sphereTexture = spherePath[0] != L'\0'
         ? FindCachedTexture(sub, spherePath) : nullptr;
     if (sphereTexture != nullptr) {
         device->SetTexture(2, sphereTexture);
-        FxSetTechnique(effect, "BShadowSphiaTextureTec");
-        FxSetInt(effect, "spadd",
+        fx::SetTechnique(effect, "BShadowSphiaTextureTec");
+        fx::SetBool(effect, "spadd",
                  HasSuffix(spherePath, L".spa", L".SPA") ? 1 : 0);
     } else {
-        FxSetTechnique(effect, "BShadowTextureTec");
+        fx::SetTechnique(effect, "BShadowTextureTec");
     }
 }
 
@@ -846,7 +799,7 @@ void ConfigureEffectMaterial(MMDApp* app, D3DRenderer* sub,
             toon[i] = toon[i] * mul.toonTint[i] + add.toonTint[i];
         toon[3] = add.toonTint[3] + mul.toonTint[3];
     }
-    FxSetFloatArray(effect, "ToonColor", toon, 4);
+    fx::SetFloatArray(effect, "ToonColor", toon, 4);
 
     const D3DCOLORVALUE& lightSpecular = app->SceneLight().Specular;
     float litSpecular[4] = {
@@ -854,7 +807,7 @@ void ConfigureEffectMaterial(MMDApp* app, D3DRenderer* sub,
         specular[2] * lightSpecular.b, record.specularPower};
     if (litSpecular[3] == 0.0f)
         litSpecular[3] = 0.1f;
-    FxSetFloatArray(effect, "SpcColor", litSpecular, 4);
+    fx::SetFloatArray(effect, "SpcColor", litSpecular, 4);
 
     const float one[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     const float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -863,20 +816,20 @@ void ConfigureEffectMaterial(MMDApp* app, D3DRenderer* sub,
             mdl::MaterialMorphAdd(model)[materialIndex].channels;
         const mdl::MaterialMorphChannels& mul =
             mdl::MaterialMorphMul(model)[materialIndex].channels;
-        FxSetFloatArray(effect, "TexCAdd",
+        fx::SetFloatArray(effect, "TexCAdd",
                         add.textureTint, 4);
-        FxSetFloatArray(effect, "TexCMul",
+        fx::SetFloatArray(effect, "TexCMul",
                         mul.textureTint, 4);
-        FxSetFloatArray(effect, "SphCAdd",
+        fx::SetFloatArray(effect, "SphCAdd",
                         add.sphereTint, 4);
-        FxSetFloatArray(effect, "SphCMul",
+        fx::SetFloatArray(effect, "SphCMul",
                         mul.sphereTint, 4);
         SelectPmxTechnique(sub, device, effect, material);
     } else {
-        FxSetFloatArray(effect, "TexCAdd", zero, 4);
-        FxSetFloatArray(effect, "TexCMul", one, 4);
-        FxSetFloatArray(effect, "SphCAdd", zero, 4);
-        FxSetFloatArray(effect, "SphCMul", one, 4);
+        fx::SetFloatArray(effect, "TexCAdd", zero, 4);
+        fx::SetFloatArray(effect, "TexCMul", one, 4);
+        fx::SetFloatArray(effect, "SphCAdd", zero, 4);
+        fx::SetFloatArray(effect, "SphCMul", one, 4);
         SelectPmdTechnique(sub, device, effect, material);
     }
 }
@@ -1004,10 +957,10 @@ void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
                         record.doubleSided == 0 ? D3DCULL_CCW
                                                 : D3DCULL_NONE);
                     // 0x492954: BeginPass(effect, 0) per material; the
-                    // enclosing FxBegin was issued by RenderShadowMap
-                    // before the model loop (its FxEnd closes it).
+                    // enclosing fx::Begin was issued by RenderShadowMap
+                    // before the model loop (its fx::End closes it).
                     if (effectPass && effect != nullptr)
-                        FxBeginPass(effect, 0);
+                        fx::BeginPass(effect, 0);
                 } else {
                     device->SetMaterial(&d3dMaterial);
                 }
@@ -1024,12 +977,12 @@ void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
                     ConfigureEffectMaterial(app, sub, device, effect,
                                             model, material, i);
                     UINT passes = 0;
-                    FxBegin(effect, &passes);
+                    fx::Begin(effect, &passes);
                     device->SetTexture(0,
                         mdl::Mdl(model)->physicsMode == 2 && (record.flags & 8) == 0
                             ? sub->spriteTexture
                             : sub->hdrTexture);
-                    FxBeginPass(effect, 0);
+                    fx::BeginPass(effect, 0);
                 }
                 device->SetFVF(fvf);
                 device->SetStreamSource(0, vertices, 0, stride);
@@ -1038,9 +991,9 @@ void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
                                              state.vertexCount, firstIndex,
                                              indexCount / 3);
                 if (effectPass && effect != nullptr) {
-                    FxEndPass(effect);
+                    fx::EndPass(effect);
                     if (!shadowOnly) {
-                        FxEnd(effect);
+                        fx::End(effect);
                         if (mdl::Mdl(model)->physicsMode == 2 && (record.flags & 1) != 0)
                             device->SetRenderState(D3DRS_CULLMODE,
                                                    D3DCULL_CCW);
@@ -1091,9 +1044,9 @@ void DrawModelEdgeGeometry(MMDApp* app, unsigned char* model,
             draw = false;
         if (draw) {
             if (effectEdge && pmx && sub->postProcessEnabled != 0) {
-                FxEndPass(effect);
-                FxSetFloatArray(effect, "EgColor", record.edgeColor, 4);
-                FxBeginPass(effect, 0);
+                fx::EndPass(effect);
+                fx::SetFloatArray(effect, "EgColor", record.edgeColor, 4);
+                fx::BeginPass(effect, 0);
             }
             device->SetFVF(66);
             device->SetStreamSource(0, vb, 0, 16);
@@ -1188,7 +1141,7 @@ void RestoreModelMaterialPass(MMDApp* app, D3DRenderer* sub,
     // Fixed-frame restore, x64 sub_7FF7CB4BFB20 @0x7FF7CB4C07B0..0x7FF7CB4C0875
     // (FILLMODE -> stencil trio -> CULLMODE -> ZFUNC; port collapses the
     // FILLMODE/stencil order).  The effect frame no longer routes through
-    // here: sub_7FF7CB4C1E60 defers CULLMODE/ZFUNC past the FxSet block and
+    // here: sub_7FF7CB4C1E60 defers CULLMODE/ZFUNC past the fx::Set block and
     // adds ALPHABLENDENABLE, so RenderModelsEffect spells its restore inline.
     SetProjectedStencil(sub, device, false);
     device->SetRenderState(D3DRS_FILLMODE,
@@ -1206,8 +1159,8 @@ void DrawModelOutlines(MMDApp* app, bool effectEdge) {
     if (effectEdge) {
         if (effect == nullptr)
             return;
-        FxSetTechnique(effect, "ColorRenderTec");
-        FxBegin(effect, &passes);
+        fx::SetTechnique(effect, "ColorRenderTec");
+        fx::Begin(effect, &passes);
     }
     // x64 inlines this walk into both callers with 0xFF bounds: fixed pass
     // sub_7FF7CB4BFB20+0x4C09E0 (cmp edi,0FFh @0x4C0A74 / cmp r8d,0FFh
@@ -1245,16 +1198,16 @@ void DrawModelOutlines(MMDApp* app, bool effectEdge) {
                 app->ModelOutlineColorRed() * (1.0f / 256.0f),
                 app->ModelOutlineColorGreen() * (1.0f / 256.0f),
                 app->ModelOutlineColorBlue() * (1.0f / 256.0f), 1.0f};
-            FxSetFloatArray(effect, "EgColor", edge, 4);
-            FxBeginPass(effect, 0);
+            fx::SetFloatArray(effect, "EgColor", edge, 4);
+            fx::BeginPass(effect, 0);
         }
         DrawModelEdgeGeometry(app, model, false, effectEdge);
         if (effectEdge)
-            FxEndPass(effect);
+            fx::EndPass(effect);
         app->ActiveRenderObject() = nullptr;
     }
     if (effectEdge) {
-        FxEnd(effect);
+        fx::End(effect);
         device->SetVertexShader(nullptr);
         device->SetPixelShader(nullptr);
     }
@@ -1457,7 +1410,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     // app+0x9F310, ZENABLE(7) off/on around the quad), AVI quad
     // 0x7FF7CB4C200C..0x7FF7CB4C20DC (gate app+0x13EC == 1), then the ground
     // 0x7FF7CB4C20E2..0x7FF7CB4C2133 (gate app+0x355).  Only afterwards come
-    // the LightDir/Place/matrix FxSets (0x7FF7CB4C2193..0x7FF7CB4C22FD) and
+    // the LightDir/Place/matrix fx::Sets (0x7FF7CB4C2193..0x7FF7CB4C22FD) and
     // the ALPHABLENDENABLE/FILLMODE/LIGHTING triple
     // (0x7FF7CB4C231D..0x7FF7CB4C236C) - the same quads -> ground -> RS(8)
     // shape the fixed frame gained in the FILLMODE round, so wireframe mode
@@ -1478,13 +1431,13 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     float place[4] = {};
     d3dx::Get().inverse(&inverse, nullptr, &frame);
     d3dx::Get().vec3Transform(place, target, &inverse);
-    FxSetFloatArray(effect, "LightDir", light, 4);
-    FxSetFloatArray(effect, "Place", place, 4);
-    FxSetMatrix(effect, "matWorldViewProj",
+    fx::SetFloatArray(effect, "LightDir", light, 4);
+    fx::SetFloatArray(effect, "Place", place, 4);
+    fx::SetMatrix(effect, "matWorldViewProj",
                 reinterpret_cast<const Matrix*>(&app->WorldViewProjection()));
-    FxSetMatrix(effect, "matLightViewProj",
+    fx::SetMatrix(effect, "matLightViewProj",
                 reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
-    FxSetMatrix(effect, "matRotate",
+    fx::SetMatrix(effect, "matRotate",
                 reinterpret_cast<const Matrix*>(&app->ViewRotationTransform()));
     device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     device->SetRenderState(D3DRS_FILLMODE,
@@ -1514,11 +1467,11 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
                                               : D3DFILL_WIREFRAME);
     device->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
     device->SetTexture(0, sub->hdrTexture);
-    FxSetMatrix(effect, "matWorldViewProj",
+    fx::SetMatrix(effect, "matWorldViewProj",
                 reinterpret_cast<const Matrix*>(&app->WorldViewProjection()));
-    FxSetMatrix(effect, "matLightViewProj",
+    fx::SetMatrix(effect, "matLightViewProj",
                 reinterpret_cast<const Matrix*>(&app->LightViewProjection()));
-    FxSetInt(effect, "transp", app->state.characterTransparentMode != 0);
+    fx::SetBool(effect, "transp", app->state.characterTransparentMode != 0);
     device->SetRenderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
     device->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
     device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
@@ -1546,7 +1499,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
             break;
         }
     }
-    FxSetInt(effect, "transp", 0);
+    fx::SetBool(effect, "transp", 0);
     // x64 sub_7FF7CB4C1E60 @0x7FF7CB4C3711: ALPHABLENDENABLE=TRUE is set
     // before the wireframe gate, so blending stays on when the edge pass
     // is skipped.  The gate jumps straight to the restore sequence
@@ -1624,7 +1577,7 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
     device->GetViewport(&oldViewport);
     device->GetTransform(D3DTS_PROJECTION,
                          reinterpret_cast<D3DMATRIX*>(&projection));
-    FxSetTechnique(effect, "ZValuePlotTec");
+    fx::SetTechnique(effect, "ZValuePlotTec");
     device->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
     device->SetTextureStageState(2, D3DTSS_TEXCOORDINDEX, 2);
     device->SetRenderTarget(0, surface);
@@ -1676,7 +1629,7 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
         else
             scale = base * 3.0f;
     }
-    FxSetInt(effect, "parthf", part);
+    fx::SetBool(effect, "parthf", part);
 
     Matrix shadowProjection{};
     shadowProjection.m[0][0] = scale;
@@ -1724,7 +1677,7 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
 
     UINT passes = 0;
     app->ActiveRenderPass() = AccessoryRenderPass::ModelEffect;
-    if (SUCCEEDED(FxBegin(effect, &passes))) {
+    if (SUCCEEDED(fx::Begin(effect, &passes))) {
         // x64 sub_7FF7CB4C1030 order inside the Begin/End block: the
         // accessory shadow casters come first (0x7FF7CB4C1992..0x7FF7CB4C1BD4,
         // sub_7FF7CB4FDCB0 per slot), then matLightViewProj is set
@@ -1735,12 +1688,12 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
         // do/while over app+0xBE8, mov r13d,0FFh @0x4C198C / dec r13/jnz,
         // toonFlag read at model+0x3B68).
         RenderAccessoriesShadow(app);
-        FxSetMatrix(effect, "matLightViewProj", &shadowMatrix);
+        fx::SetMatrix(effect, "matLightViewProj", &shadowMatrix);
         Matrix wvp;
         Multiply(&worldView, reinterpret_cast<const Matrix*>(frameMatrix), &view);
         Multiply(&wvp, &worldView, &projection);
         std::memcpy(&app->WorldViewProjection(), &wvp, sizeof(wvp));
-        FxSetMatrix(effect, "matWorldViewProj", &wvp);
+        fx::SetMatrix(effect, "matWorldViewProj", &wvp);
         for (int slot = 0; slot < kModelSlotCount; ++slot) {
             auto* model = app->ModelSlot(slot);
             if (model == nullptr || mdl::Mdl(model)->toonFlag == 0)
@@ -1749,7 +1702,7 @@ void RenderShadowMap(MMDApp* app, const float frameMatrix[16]) {   // 0x426CD0
             DrawModelMaterials(app, model, true, true);
             app->ActiveRenderObject() = nullptr;
         }
-        FxEnd(effect);
+        fx::End(effect);
     }
     app->ActiveRenderPass() = AccessoryRenderPass::None;
     device->SetVertexShader(nullptr);

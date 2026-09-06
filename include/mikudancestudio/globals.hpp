@@ -41,10 +41,11 @@ extern float g_FrameScale;
 // keeps it in one stack slot of sub_46B090).
 extern float g_CatchupDtBudget;
 
-// VA 0x0052B760 / 0x0052B768 - exact double registry-echo conversion pair
-// used by the frame-driver edit boxes: value / PI * 180.
-extern double g_ConvA52B760;
-extern double g_ConvB52B768;
+// Angle-unit conversion pair used by the frame-driver edit boxes:
+// an entered value is converted with degrees = value / PI * 180
+// (the pi factor is the original's truncated double, not true pi).
+extern double g_AngleDegreesScale;
+extern double g_AnglePiTruncated;
 
 // VA 0x0052B8F0 - mode-3 view-plane rotation scale (atan2 result multiplier).
 // Runtime-initialized in the original; port keeps 0.01f (best evidence from

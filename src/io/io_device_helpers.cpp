@@ -1,5 +1,5 @@
 // ===========================================================================
-// io_gaps.cpp - assorted gap functions from the 0x403030..0x409700 window
+// io_device_helpers.cpp - assorted gap functions from the 0x403030..0x409700 window
 // ===========================================================================
 // Covers the remaining "io cluster" virtual addresses not yet represented
 // anywhere in the port:

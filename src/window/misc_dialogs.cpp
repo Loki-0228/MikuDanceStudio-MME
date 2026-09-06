@@ -378,7 +378,7 @@ void MorphPanelRefresh(unsigned char* model) {  // x64 0x7FF7CB4ED750
 // prefill).  Tail: camera seek (x64 sub_7FF7CB479C30 == the ported 0x42E640
 // ReloadModels), PostViewRefresh, dirty 0xA0B0D = 1.
 // =========================================================================//
-void ApplyCameraFrameScaleAdd(MMDApp* app, HWND hDlg) {  // was Sub43E000, VA 0x0043E000
+void ApplyCameraFrameScaleAdd(MMDApp* app, HWND hDlg) {  // VA 0x0043E000
     float scale[8];
     float add[8];
     char buf[20];
@@ -437,7 +437,7 @@ void ApplyCameraFrameScaleAdd(MMDApp* app, HWND hDlg) {  // was Sub43E000, VA 0x
 // playbackPhysicsMode) (x64 sub_7FF7CB4EBD90), facial/IK panel refresh
 // (x64 sub_7FF7CB4ED750), dirty 0xA0B0D = 1.
 // =========================================================================//
-void ApplyMorphScaleAdd(MMDApp* app, HWND hDlg) {  // was Sub43E680, VA 0x0043E680
+void ApplyMorphScaleAdd(MMDApp* app, HWND hDlg) {  // VA 0x0043E680
     unsigned char* modelBytes = app->ModelSlot(app->state.slotIdx);
     if (modelBytes == nullptr)
         return;
@@ -479,7 +479,7 @@ void ApplyMorphScaleAdd(MMDApp* app, HWND hDlg) {  // was Sub43E680, VA 0x0043E6
 //      the model whose combo order byte (+0x2D7C) equals `order` and store
 //      slotIndex+1 (the +1 quirk ApplyModelCalculateOrderDialog relies on).
 // =========================================================================//
-void InitModelOrderDialog(int count, HWND hDlg) {  // was Sub41E810, VA 0x0041E810
+void InitModelOrderDialog(int count, HWND hDlg) {  // VA 0x0041E810
     MMDApp* app = g_Block;
     constexpr std::size_t kModelOrder2D7C = 0x2D7C;  // combo order byte
     // value-init: element 0 stays untouched by the fill below, and the OK
@@ -523,7 +523,7 @@ void InitModelOrderDialog(int count, HWND hDlg) {  // was Sub41E810, VA 0x0041E8
 // dword (0x9EDCC) into edit 713; checkbox 731 mirrors the noise-mode byte
 // 0xA0CD4 and gates edit 713 through EnableWindow.
 // =========================================================================//
-void InitGravityDialog(HWND hDlg) {  // was Sub423160, VA 0x00423160
+void InitGravityDialog(HWND hDlg) {  // VA 0x00423160
     MMDApp* app = g_Block;
     char buf[0x100];
     sprintf_s(buf, 0x100, "%3.2f",
@@ -581,7 +581,7 @@ void InitGravityDialog(HWND hDlg) {  // was Sub423160, VA 0x00423160
 //   * tail: PanelPaint + model frame seek SeekModelFrame(model, currentFrame,
 //     playbackPhysicsMode).
 // =========================================================================//
-void ApplyPhysicsOnOff(int on) {  // was Sub4403C0, VA 0x004403C0
+void ApplyPhysicsOnOff(int on) {  // VA 0x004403C0
     MMDApp* app = g_Block;
     unsigned char* modelBytes = app->ModelSlot(app->state.slotIdx);
     if (modelBytes == nullptr)

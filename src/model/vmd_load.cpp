@@ -51,7 +51,7 @@
 // physics mode) - the frame-seek ported in model_frame_seek.cpp.
 //
 // The register chain now calls the real (app, rec) overloads of
-// 0x410AA0 / 0x411900 / 0x4120B0 defined in src/window/command_control_400.cpp
+// 0x410AA0 / 0x411900 / 0x4120B0 defined in src/window/command_frame_edit.cpp
 // (the by-value stack records of the original are passed as pointers -
 // documented stub-era deviation absorbed by those ports).  The remaining
 // registrar family (0x49D880, 0x49F190, 0x49F8C0, 0x4A49A0, 0x4A4A00) is
@@ -81,7 +81,7 @@
 #include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
-// loader-tail helpers defined in src/unported/stubs.cpp (window-session
+// loader-tail helpers defined in src/app/late_ports.cpp (window-session
 // convention: local declarations for stubbed targets)
 void SelectionReeval(MMDApp* app);                   // 0x430510
 void RefreshLightPanel(MMDApp* app);                         // 0x411070
@@ -133,7 +133,7 @@ const char kJpModelMismatch[] =  // 0x52CB48 "... %s ..."
 }  // namespace
 
 // ---- VA 0x00434B60 --------------------------------------------------------
-int LoadVmdMotion(MMDApp* app, const char* fileName) {  // was Sub434B60, VA 0x00434B60
+int LoadVmdMotion(MMDApp* app, const char* fileName) {  // VA 0x00434B60
     auto& s = *app;
     unsigned char* const model = app->SelectedModel();
 

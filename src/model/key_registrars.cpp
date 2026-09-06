@@ -34,15 +34,15 @@
 //       "You cannot regist over %d point" box (EN/JP by model+12740) and
 //       returns 0; model+12720 max-frame bump (exact/insert paths bump
 //       the RAW frameOffset - an original quirk kept).
-//     - AppendBoneKeyToUndo (0x49D410; was Sub49D410 - undo-slot
+//     - AppendBoneKeyToUndo (0x49D410;  - undo-slot
 //       bookkeeping, deduped by the model keyVisitMap) fires per touched
 //       record.
 //
-//   RegisterMorphKeyFromRecord (was Sub49F190) (model, rec, frameOffset)
+//   RegisterMorphKeyFromRecord (model, rec, frameOffset)
 //     morph keys - same walk/insert over the 20-byte records; value at
 //     rec+36, mark +16; cap 20000.
 //
-//   RegisterDisplayKeyFromRecord (was Sub49F8C0) (model, frame, view, cnt,
+//   RegisterDisplayKeyFromRecord (model, frame, view, cnt,
 //             entries21, cnt2, entries28, frameOffset)   IK/display keys
 //     into the 28-byte master records (single chain from record 0): +12
 //     view byte, mark +20, cap 1000.  entries21 = {20-byte name, flag}
@@ -57,7 +57,7 @@
 //   ResetMorphKeyCursor(model)  reseeds model+8768 to the morph count and skips
 //     occupied 20-byte records (cap 20000).
 //
-//   MarkKeyTrackRangeByName (was Sub4A27F0) (model, from, to, name)
+//   MarkKeyTrackRangeByName (model, from, to, name)
 //     name-based key-track frame mark:
 //     resolves the scope text of the frame-range editor (command 415:
 //     the 0x1B2 text / the "Sel Bone" and "Sel facial" per-item loops)
@@ -200,7 +200,7 @@ int FindMirroredBone(unsigned char* model, const unsigned char* rec) {
     return -1;
 }
 
-// Name probes of Sub4A27F0 (SJIS byte-exact, compare lengths as in the
+// Name probes of 0x4A27F0 (SJIS byte-exact, compare lengths as in the
 // binary, NUL included; x86 0x531120 / 0x531118 = x64 0x552048 /
 // 0x5524D8).
 const unsigned char kJpDispIkOp[] =   // 表示･IK･外親 (13)
@@ -209,7 +209,7 @@ const unsigned char kJpDispIkOp[] =   // 表示･IK･外親 (13)
 const unsigned char kJpBone01[] =     // ﾎﾞｰﾝ01 (7)
     {0xCE, 0xDE, 0xB0, 0xDD, 0x30, 0x31, 0x00};
 
-// Track walk + mark shared by every branch of Sub4A27F0: `root` is the
+// Track walk + mark shared by every branch of 0x4A27F0: `root` is the
 // track's head record (record i of the bone/morph arrays, 0 for the
 // display array).  Advance while frame < from (a chain that ends before
 // `from` marks nothing - 0x4A2B15/0x4A2955/0x4A28B5), then set the mark
@@ -273,7 +273,7 @@ int ResetMorphKeyCursor(unsigned char* model) {
 }
 
 // ---- VA 0x0049EEE0 --------------------------------------------------------
-// RegisterMorphKeyCurrent (was Sub49EEE0): register the current weight of
+// RegisterMorphKeyCurrent: register the current weight of
 // one morph at an absolute frame.  Unlike the VMD/paste registrar below,
 // this function takes a morph index directly and reads its live value from
 // model+0x26C4[index].weight (+0x30).
@@ -341,7 +341,7 @@ void RegisterMorphKeyCurrent(unsigned char* model, int morph, int frameArg) {
     fill(fresh);
 }
 
-// ---- VA 0x0049D880 (was Sub49D880) -----------------------------------------
+// ---- VA 0x0049D880 -----------------------------------------
 bool RegisterBoneKey(unsigned char* model, unsigned char* rec, int frameOffset,
                      unsigned char useSelected) {
     unsigned char* const m = model;
@@ -492,7 +492,7 @@ bool RegisterBoneKey(unsigned char* model, unsigned char* rec, int frameOffset,
     return true;
 }
 
-// ---- VA 0x0049E310 (was Sub49E310) -----------------------------------------
+// ---- VA 0x0049E310 -----------------------------------------
 // Register a left/right-reflected bone key. This is frame-edit command 422
 // ("reverse paste"), not a delete routine.
 bool RegisterMirroredBoneKey(unsigned char* model, unsigned char* rec,
@@ -620,7 +620,7 @@ bool RegisterMirroredBoneKey(unsigned char* model, unsigned char* rec,
 }
 
 // ---- VA 0x0049F190 --------------------------------------------------------
-// was Sub49F190 - name-matched morph registrar over a parsed 0x28 record.
+//  - name-matched morph registrar over a parsed 0x28 record.
 bool RegisterMorphKeyFromRecord(unsigned char* model, const unsigned char* rec,
                                 int frameOffset) {
     unsigned char* const m = model;
@@ -704,7 +704,7 @@ bool RegisterMorphKeyFromRecord(unsigned char* model, const unsigned char* rec,
 }
 
 // ---- VA 0x0049F8C0 --------------------------------------------------------
-// was Sub49F8C0 - display/IK registrar over parsed 21-/28-byte entries.
+//  - display/IK registrar over parsed 21-/28-byte entries.
 bool RegisterDisplayKeyFromRecord(unsigned char* model, int frameArg,
                                   unsigned char view, int cnt,
                                   const unsigned char* entries21, int cnt2,
@@ -846,7 +846,7 @@ bool RegisterDisplayKeyFromRecord(unsigned char* model, int frameArg,
 }
 
 // ---- VA 0x0049F480 --------------------------------------------------------
-// RegisterDisplayKeyCurrent (was Sub49F480): register the model-wide
+// RegisterDisplayKeyCurrent: register the model-wide
 // display/IK/relationship state at one frame.  The record owns two arrays
 // allocated by ModelInitDefaults: one byte per IK chain at +16 and one
 // {dword,dword} pair per relationship at +24.
@@ -916,7 +916,7 @@ void RegisterDisplayKeyCurrent(unsigned char* model, int frameArg) {
         mdl::Mdl(m)->maxFrame = frame;
 }
 
-// ---- VA 0x004A27F0 (was Sub4A27F0) ----------------------------------------
+// ---- VA 0x004A27F0 ----------------------------------------
 // Name-based key-track frame marker (x64 sub_7FF7CB4EFED0).  See the file
 // header for the resolution chain.  Walks are unsigned frame compares over
 // the per-track next-linked chains, exactly like the registrar family

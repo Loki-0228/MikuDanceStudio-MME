@@ -53,7 +53,7 @@ namespace mikudancestudio {
 
 void TimelineDrawTicks(int frameOffset, int width) {
     // param mapping (original __thiscall sub_4C2A00(HDC* this, int x, char* ho)):
-    //   this -> g_Block->state.audioContext    (Sub025C wave/timeline subsystem)
+    //   this -> g_Block->state.audioContext    (0x025C wave/timeline subsystem)
     //   x    -> frameOffset (current frame)
     //   ho   -> strip width (sidebar width)
     MMDApp* app = g_Block;
@@ -116,7 +116,7 @@ void TimelineDrawTicks(int frameOffset, int width) {
 // Original signature: int __thiscall sub_4C2B80(_DWORD* this, int a2)
 //   ECX (this) = app+0xCC (the 0x25C wave/timeline subsystem).
 //   a2         = caller-supplied position in 1/100 units (callers pass
-//                app+672804, kDwordVal672804; the placeholder name is
+//                app+672804, kFrameNormalizationSlot; the placeholder name is
 //                "frame").
 //
 // Formula (exact):
@@ -142,7 +142,7 @@ void TimelineDrawTicks(int frameOffset, int width) {
 // =========================================================================//
 void SetFrameNormalized(int frame) {
     // param mapping (original __thiscall sub_4C2B80(_DWORD* this, int a2)):
-    //   this -> g_Block->state.audioContext    (Sub025C wave/timeline subsystem)
+    //   this -> g_Block->state.audioContext    (0x025C wave/timeline subsystem)
     //   a2   -> frame (position in 1/100 units)
     MMDApp* app = g_Block;
     WaveAudioContext* audio = app->Audio();

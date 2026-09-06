@@ -229,7 +229,7 @@ void AttachToBone(MMDApp* app, Matrix* world, int boneIndex) {
 
 }  // namespace
 
-void Sub04B0Init(void* object) {
+void InitAccessoryRecord(void* object) {
     mdl::AccessoryRecord& accessory = *mdl::Accessory(object);
     accessory.mesh = nullptr;
     accessory.materials = nullptr;
@@ -326,7 +326,7 @@ void DrawPhysicsCollisionDebug(PhysicsScene* scene) {
 
 // Physics-editor scratch-array capacity (must track the dialog's own
 // kMaxEditRecords: x86 original 10,000 slots, x64 recompile 100,000).
-#if defined(_M_X64) || defined(__x86_64__)
+#if defined(_M_X64)
 constexpr int kDebugRecordCapacity = 100000;
 #else
 constexpr int kDebugRecordCapacity = 10000;

@@ -177,7 +177,7 @@ void ClearCameraKeyRecord(mdl::CameraKey& key) {
 
 }  // namespace
 
-// ---- VA 0x00439E40 (was Sub439E40): insert frame line (bone / camera) ----
+// ---- VA 0x00439E40: insert frame line (bone / camera) ----
 void InsertBoneCameraFrameLine(MMDApp* app) {
     const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
@@ -246,7 +246,7 @@ void InsertBoneCameraFrameLine(MMDApp* app) {
     app->SceneModified() = 1;
 }
 
-// ---- VA 0x0043A650 (was Sub43A650): delete frame line (bone / camera) ----
+// ---- VA 0x0043A650: delete frame line (bone / camera) ----
 void DeleteBoneCameraFrameLine(MMDApp* app) {
     const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
@@ -395,7 +395,7 @@ void DeleteBoneCameraFrameLine(MMDApp* app) {
     app->SceneModified() = 1;
 }
 
-// ---- VA 0x0043B720 (was Sub43B720): insert frame line (facial / light) ---
+// ---- VA 0x0043B720: insert frame line (facial / light) ---
 void InsertFacialLightFrameLine(MMDApp* app) {
     const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 
@@ -440,7 +440,7 @@ void InsertFacialLightFrameLine(MMDApp* app) {
     app->SceneModified() = 1;
 }
 
-// ---- VA 0x0043BB30 (was Sub43BB30): delete frame line (facial / light) ---
+// ---- VA 0x0043BB30: delete frame line (facial / light) ---
 void DeleteFacialLightFrameLine(MMDApp* app) {
     const std::uint32_t cur = static_cast<std::uint32_t>(app->CurrentFrame());
 

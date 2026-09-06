@@ -7,7 +7,7 @@
 // Both functions are app methods (thiscall, this = Block) reached from the
 // canvas-size dialog (menu 0xD4), the picture renderer (0x114 / case 276),
 // the AVI record starters (0x45E820/0x464760 via the 9E428 gate) and the
-// per-frame render chain.  The former Sub4168D0/Sub417130 forwarding twins
+// per-frame render chain.  The former 0x4168D0/0x417130 forwarding twins
 // that used to live at the bottom of this file were removed; every call
 // site in this tree now uses the semantic names directly.
 //
@@ -367,7 +367,7 @@ void PicBgOverlayRefresh(MMDApp* app) {
          s.PictureWidth(), s.PictureHeight()});
 }
 
-// (The former Sub4168D0/Sub417130 forwarding twins were removed; every
+// (The former 0x4168D0/0x417130 forwarding twins were removed; every
 //  call site now uses AviBgOverlayRefresh/PicBgOverlayRefresh directly.
 //  The real bodies above are the parallel-port winner - full VFW decode
 //  chain; the background_plane.cpp twin was removed.)

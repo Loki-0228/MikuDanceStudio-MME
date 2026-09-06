@@ -1426,10 +1426,10 @@ HRESULT CBasePin::DecideAllocator(IMemInputPin* pPin, IMemAllocator** ppAlloc)
 {
     *ppAlloc = NULL;                                          // *a3 = 0
     ALLOCATOR_PROPERTIES props = { 0, 0, 0, 0 };              // zeroed stack block
-    // old ActiveMovie IMemInputPin::GetBufferRequirements = vtable +0x14
-    // (dropped from modern SDK headers; raw dispatch kept bit-faithful)
-    ((void (__stdcall *)(IMemInputPin*, ALLOCATOR_PROPERTIES*))
-        (*(void***)pPin)[5])(pPin, &props);
+    // Buffer-requirements query, vtable +0x14.  The old ActiveMovie SDK named
+    // this slot GetBufferRequirements; today's strmif.h declares the same
+    // slot as IMemInputPin::GetAllocatorRequirements.
+    pPin->GetAllocatorRequirements(&props);
     // 0x100031dc: v7 (the ALLOCATOR_PROPERTIES dword at +8 == cbAlign)
     // defaults to 1 when the peer reports none.  A cbAlign of 0 handed to
     // the system CMemAllocator::SetProperties is rejected with

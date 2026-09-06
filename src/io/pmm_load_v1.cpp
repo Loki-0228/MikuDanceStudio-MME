@@ -1029,7 +1029,7 @@ static bool LoadSceneV1_AccessoryBlock(PmmV1LoadContext& ctx, int fd) {
         if (acc != nullptr) IdentityCtor(acc);                      // 0x45B88E
         accs[accSlot] = acc;
         std::memset(accs[accSlot], 0, sizeof(mdl::AccessoryRecord));
-        Sub04B0Init(accs[accSlot]);                              // 0x45B8D6
+        InitAccessoryRecord(accs[accSlot]);                              // 0x45B8D6
         Rd(fd, accName, 100);                                    // 0x45B8EA
         Rd(fd, mbPath, 0x100);                                   // 0x45B901
         ResolveAnsiUserFile(reinterpret_cast<unsigned char*>(wrap),

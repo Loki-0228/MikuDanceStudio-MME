@@ -242,7 +242,7 @@ void BindSelectedCompressor(DShowRecorder* rec) {
 
 // ===========================================================================
 // VA 0x00408F20 - FillCodecCombo: codec combo fill
-// (was Sub408F20; original: sub_408F20, method of the recorder object)
+// (; original: sub_408F20, method of the recorder object)
 // ===========================================================================
 // Clears the combo (CB_RESETCONTENT), walks the video-compressor category,
 // BindToStorage -> IPropertyBag -> Read(L"FriendlyName"), converts the BSTR
@@ -315,7 +315,7 @@ int FillCodecCombo(DShowRecorder* /*rec*/, HWND hCombo, char english) {
 
 // ===========================================================================
 // VA 0x00409730 - RebindCodecOnComboChange: codec bind on combo change
-// (was Sub409730; original: sub_409730, __thiscall)
+// (; original: sub_409730, __thiscall)
 // ===========================================================================
 // sel = new combo row.  Tears down [0]/[11]/[1]/[8]/[4]/[3], rebuilds a bare
 // graph + MMDxShow source, seeds the source with a 10x10 ARGB config, then
@@ -428,7 +428,7 @@ void RebindCodecOnComboChange(DShowRecorder* rec, int sel, HWND hButton,
 
 // ===========================================================================
 // VA 0x004092A0 - ShowCodecConfigDialog: codec config dialog + state capture
-// (was Sub4092A0; original: sub_4092A0, __thiscall)
+// (; original: sub_4092A0, __thiscall)
 // ===========================================================================
 // Frees the previous state blob, shows the codec's own config dialog
 // (ShowDialog(1, hDlg)), then queries the driver for its settings blob via
@@ -460,7 +460,7 @@ void ShowCodecConfigDialog(DShowRecorder* rec, HWND hDlg) {
 
 // ===========================================================================
 // VA 0x00409A80 - BuildRecordingGraph: the recording graph builder
-// (was Sub409A80; original: sub_409A80, __thiscall)
+// (; original: sub_409A80, __thiscall)
 // ===========================================================================
 // Full build order (each failure shows its EN/JP "DirectShow" MessageBox,
 // tears the graph down through 0x409320 and returns false):

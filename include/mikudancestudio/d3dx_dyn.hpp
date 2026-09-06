@@ -18,6 +18,66 @@ namespace mikudancestudio::d3dx {
 
 struct D3DXMATRIXF { float m[4][4]; };
 
+// ---------------------------------------------------------------------------
+// Minimal COM mirror of ID3DXBaseEffect (the d3dx9 effect object).  The
+// DirectX SDK headers are deliberately not a build dependency, so the slots
+// called through the effect are declared here in the true d3dx9effect.h
+// order.  The positions agree with every effect call site in the original
+// binaries (SetInt@26, SetFloatArray@32, SetMatrix@38, SetTechnique@58,
+// Begin@63).  Parameters this project passes carry their real types; the
+// not-yet-called slots keep their declared position with size-compatible
+// placeholder parameter types - widen them to the real descriptor structs
+// when a call site needs them.  Slots past SetInt follow d3dx9effect.h
+// (GetInt, float/vector/matrix setters, SetTechnique, Begin/EndPass,
+// OnLostDevice, ...).
+// ---------------------------------------------------------------------------
+struct Effect : public IUnknown {
+    virtual HRESULT __stdcall GetDesc(void* desc) = 0;                       // 3  D3DXEFFECT_DESC
+    virtual HRESULT __stdcall GetParameterDesc(const char* parameter,
+                                               void* desc) = 0;              // 4  D3DXPARAMETER_DESC
+    virtual HRESULT __stdcall GetTechniqueDesc(const char* technique,
+                                               void* desc) = 0;              // 5  D3DXTECHNIQUE_DESC
+    virtual HRESULT __stdcall GetPassDesc(const char* pass,
+                                          void* desc) = 0;                   // 6  D3DXPASS_DESC
+    virtual HRESULT __stdcall GetFunctionDesc(const char* function,
+                                              void* desc) = 0;               // 7  D3DXFUNCTION_DESC
+    virtual const char* __stdcall GetParameter(const char* object,
+                                               UINT index) = 0;              // 8
+    virtual const char* __stdcall GetParameterByName(const char* object,
+                                                     const char* name) = 0;  // 9
+    virtual const char* __stdcall GetParameterBySemantic(
+        const char* object, const char* semantic) = 0;                       // 10
+    virtual const char* __stdcall GetParameterElement(const char* array,
+                                                      UINT index) = 0;       // 11
+    virtual const char* __stdcall GetTechnique(UINT index) = 0;              // 12
+    virtual const char* __stdcall GetTechniqueByName(
+        const char* name) = 0;                                               // 13
+    virtual const char* __stdcall GetPass(const char* technique,
+                                          UINT index) = 0;                   // 14
+    virtual const char* __stdcall GetPassByName(const char* technique,
+                                                const char* name) = 0;       // 15
+    virtual const char* __stdcall GetFunction(UINT index) = 0;               // 16
+    virtual const char* __stdcall GetFunctionByName(const char* name) = 0;   // 17
+    virtual const char* __stdcall GetAnnotation(const char* object,
+                                                UINT index) = 0;             // 18
+    virtual const char* __stdcall GetAnnotationByName(const char* object,
+                                                      const char* name) = 0; // 19
+    virtual HRESULT __stdcall SetValue(const char* parameter,
+                                       const void* data, UINT bytes) = 0;    // 20
+    virtual HRESULT __stdcall GetValue(const char* parameter, void* data,
+                                       UINT bytes) = 0;                      // 21
+    virtual HRESULT __stdcall SetBool(const char* parameter,
+                                      BOOL value) = 0;                       // 22
+    virtual HRESULT __stdcall GetBool(const char* parameter,
+                                      BOOL* value) = 0;                      // 23
+    virtual HRESULT __stdcall SetBoolArray(const char* parameter,
+                                           const BOOL* values,
+                                           UINT count) = 0;                  // 24
+    virtual HRESULT __stdcall GetBoolArray(const char* parameter,
+                                           BOOL* values, UINT count) = 0;    // 25
+    virtual HRESULT __stdcall SetInt(const char* parameter, INT value) = 0;  // 26
+};
+
 using FnCreateTexInMemEx = HRESULT(WINAPI*)(
     IDirect3DDevice9*, LPCVOID, UINT, UINT, UINT, UINT, DWORD, D3DFORMAT,
     D3DPOOL, DWORD, DWORD, D3DCOLOR, void*, void*, IDirect3DTexture9**);

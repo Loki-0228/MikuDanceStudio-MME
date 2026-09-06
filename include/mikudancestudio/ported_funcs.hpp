@@ -2,8 +2,8 @@
 // MikuDanceStudio - cross-module declarations for ported original functions
 // ===========================================================================
 // Every declaration carries the original virtual address.  Functions whose
-// bodies have not been ported yet live in src/unported/stubs.cpp (or
-// src/window/wndproc_stubs.cpp) and are tracked in docs/PORTING_STATUS.md.
+// bodies have not been ported yet live in src/app/late_ports.cpp (or
+// src/window/wndproc_aux_windows.cpp) and are tracked in docs/PORTING_STATUS.md.
 // ===========================================================================
 #pragma once
 
@@ -52,9 +52,9 @@ wchar_t* ExtractDirFromPath(wchar_t* destination, const wchar_t* fullPath);
 
 // ---- subsystem init targets (bodies pending; offsets in offsets.hpp) -----
 void RendererInit(D3DRenderer* renderer);  // VA 0x00406D40 (locale/font)
-void Sub025CInit(void* sub);               // VA 0x004C2450
-void Sub06CInit(DShowRecorder* recorder);  // VA 0x00408EA0
-void Sub04B0Init(void* sub);               // VA 0x004C4760
+void InitAudioContext(void* sub);               // VA 0x004C2450
+void InitDShowRecorder(DShowRecorder* recorder);  // VA 0x00408EA0
+void InitAccessoryRecord(void* sub);               // VA 0x004C4760
 bool InitAxisMesh(MMDApp* app);             // VA 0x004C5150
 bool MakeLineGeometry(MMDApp* app);          // VA 0x0040AF40 (was InitGridGeometry;
                                              // full body incl. ground-quad VB + JP msg)
@@ -77,7 +77,7 @@ bool ModelLoadPMD(unsigned char* model, HWND hwnd, const wchar_t* path,
                   std::uint8_t a7, PhysicsScene* a8,
                   PathResolutionWorkspace& paths);    // VA 0x004BF3E0
 // a6 = message-box gate (constant 1 at 0x460430), a7 = EnglishUI flag
-// (stored to model+12740), a8 = Sub048 pointer *(app+0x9EDB0), typed as
+// (stored to model+12740), a8 = 0x048 pointer *(app+0x9EDB0), typed as
 // PhysicsScene* (stored to model+60 - the physics scene wrapper).  Full
 // arg map in pmd_load.cpp header.
 bool LoadPMX(unsigned char* model, D3DRenderer* sub,
@@ -96,22 +96,22 @@ void PlaybackCatchup(MMDApp* app, unsigned char selActive);
                                 // FrameDriver playback section 0x46EEE0..
 void PlaybackPoseAdvance(MMDApp* app, int advance);  // VA 0x004175A0
 void InitModelTrackCursors(unsigned char* model, float cursor,
-                           int physicsMode);  // was Sub4A2CD0, VA 0x004A2CD0
+                           int physicsMode);  // VA 0x004A2CD0
 void AdvanceModelKeyframes(unsigned char* model, float cursor,
-                           int physicsMode);  // was Sub4A31D0, VA 0x004A31D0
+                           int physicsMode);  // VA 0x004A31D0
 float BoneEase(unsigned char* model, int channel, int keyIdx,
-               float t);  // was Sub4A05A0, VA 0x004A05A0 (VMD easing)
+               float t);  // VA 0x004A05A0 (VMD easing)
 void NotifyBonePhysicsMode(unsigned char* model, int boneIdx,
-                           unsigned char mode);  // was Sub499B50, VA 0x00499B50
+                           unsigned char mode);  // VA 0x00499B50
 int SeekModelFrame(unsigned char* model, int frame,
-                  int physicsMode);  // was Sub4B4260, VA 0x004B4260 (frame seek)
-void FinishAviRecord(MMDApp* app);  // was Sub464A00, VA 0x00464A00
+                  int physicsMode);  // VA 0x004B4260 (frame seek)
+void FinishAviRecord(MMDApp* app);  // VA 0x00464A00
                                   // (recording-end epilogue; full port)
-void StopPlayback(MMDApp* app);  // was Sub4341E0, VA 0x004341E0
+void StopPlayback(MMDApp* app);  // VA 0x004341E0
                                 // (playback-end UI restore; full port)
 void CloseDataFile(void* file);                       // VA 0x004C2680 (ui_refresh.cpp)
 // WAV open/play chain of the 0x25C audio context (src/media/wave_audio.cpp).
-// WaveStartPlayback supersedes the old void Sub4C2760(void*) stub decl
+// WaveStartPlayback supersedes the old void 0x4C2760(void*) stub decl
 // (that stub body has since been deleted from stubs.cpp).
 void WaveCtxReset(void* obj);                         // VA 0x004C2660
 void WaveFindDataChunk(void* obj, FILE* stream);      // VA 0x004C26F0
@@ -123,17 +123,17 @@ bool WaveLoadFile(void* obj, const wchar_t* path,
                   PathResolutionWorkspace& paths);    // VA 0x004C2F70
 void SetFrameNormalized(int v);                       // VA 0x004C2B80 (ui_timeline_gfx.cpp)
 void TimelineDrawTicks(int frameOffset, int width);  // VA 0x004C2A00 (ui_timeline_gfx.cpp)
-void WaveSeekAndFeed(void* obj, double seconds);  // was Sub4C34A0, VA 0x004C34A0
+void WaveSeekAndFeed(void* obj, double seconds);  // VA 0x004C34A0
 
 // ---- edit-commit chain (ui_edit_commit.cpp) -------------------------------
-void CommitEditControl(MMDApp* app, HWND edit);      // was Sub463640, VA 0x00463640
-void CommitEditControlTail(MMDApp* app, HWND edit);  // was Sub44BEF0, VA 0x0044BEF0
+void CommitEditControl(MMDApp* app, HWND edit);      // VA 0x00463640
+void CommitEditControlTail(MMDApp* app, HWND edit);  // VA 0x0044BEF0
 void InstallControlSubclasses(MMDApp* app, HWND hwnd);  // 0x466D20 chains
 void InstallControlSubclass(MMDApp* app, HWND control, int id);
 
 // ---- dialog procs (dialog_procs.cpp) --------------------------------------
-INT_PTR CALLBACK FrameRangeDlgProc(HWND, UINT, WPARAM, LPARAM);  // was Sub44C5D0, VA 0x0044C5D0
-INT_PTR CALLBACK SelectNavDlgProc(HWND, UINT, WPARAM, LPARAM);  // was Sub47A3F0, VA 0x0047A3F0
+INT_PTR CALLBACK FrameRangeDlgProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0044C5D0
+INT_PTR CALLBACK SelectNavDlgProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0047A3F0
 void SetPhysicsMode(unsigned char* model, int a2,
                     unsigned char* const* modelSlots,
                     int a4);                          // VA 0x004A9220
@@ -183,9 +183,9 @@ void FillPanelBottom(HDC, int x, int y, int w, int h,
                      std::uint32_t color, std::uint32_t edge,
                      int flag);                               // VA 0x40DF10 (stub)
 void PostModelReload2(MMDApp*);                       // VA 0x0040D940 (ported)
-void RebuildModelModePanel(MMDApp*);     // was Sub44D610, VA 0x0044D610
-void RebuildCameraModePanel(MMDApp*);    // was Sub44D780, VA 0x0044D780
-void ApplyModelComboSelection(MMDApp*);  // was Sub44D940, VA 0x0044D940
+void RebuildModelModePanel(MMDApp*);     // VA 0x0044D610
+void RebuildCameraModePanel(MMDApp*);    // VA 0x0044D780
+void ApplyModelComboSelection(MMDApp*);  // VA 0x0044D940
 
 // ---- window procedures ----------------------------------------------------
 LRESULT CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x004C3A10 (ported)
@@ -196,8 +196,8 @@ LRESULT CALLBACK MicWndProc(HWND, UINT, WPARAM, LPARAM);   // VA 0x00466A10
 void CommandDispatch(HWND ctrl, WPARAM wParam);              // VA 0x0047E8A0 (68KB)
 void SaveFlagSubsystem(MMDApp*);                            // VA 0x00461FA0
 void HandleWindowSize(MMDApp*);                             // VA 0x00443300
-void RefreshMainWindowViewport(MMDApp*);      // was Sub42C810, VA 0x0042C810
-void RefreshSeparateWindowViewport(MMDApp*);  // was Sub4290F0, VA 0x004290F0
+void RefreshMainWindowViewport(MMDApp*);      // VA 0x0042C810
+void RefreshSeparateWindowViewport(MMDApp*);  // VA 0x004290F0
 void HandleWindowPaint(MMDApp*);                            // VA 0x0047C0A0
 LRESULT HandleNotify(HWND, UINT, WPARAM, LPARAM);           // VA 0x004398B0
 void HandlePaletteChanged(HDC);                             // VA 0x0042CEB0
@@ -207,13 +207,13 @@ void HandleDropFiles(HDROP);                                // VA 0x00461300
 // ---- render-output chain (0xD4 / 0x114 / 0xDF; bodies in
 //      src/render/bg_overlay.cpp, src/render/device_reset.cpp,
 //      src/app/avi_record_start.cpp, src/app/dshow_record_graph.cpp) ------
-void AviBgOverlayRefresh(MMDApp*);            // VA 0x004168D0 (was Sub4168D0)
-void PicBgOverlayRefresh(MMDApp*);            // VA 0x00417130 (was Sub417130)
-void StartAviRecordWindow(MMDApp*);           // VA 0x0045E820 (stub twin Sub45E820)
-void StartAviRecordFullscreen(MMDApp*);       // VA 0x00464760 (stub twin Sub464760)
-void ApplyFullscreenWindowState(MMDApp*);  // was Sub4629D0, VA 0x004629D0
+void AviBgOverlayRefresh(MMDApp*);            // VA 0x004168D0
+void PicBgOverlayRefresh(MMDApp*);            // VA 0x00417130
+void StartAviRecordWindow(MMDApp*);           // VA 0x0045E820 (stub twin 0x45E820)
+void StartAviRecordFullscreen(MMDApp*);       // VA 0x00464760 (stub twin 0x464760)
+void ApplyFullscreenWindowState(MMDApp*);  // VA 0x004629D0
                                           // (fullscreen enter/restore window mgr)
-void KickRecordPhysics(MMDApp*);  // was Sub401BD0, VA 0x00401BD0 physics kick
+void KickRecordPhysics(MMDApp*);  // VA 0x00401BD0 physics kick
 void HandleTimer100(MMDApp*);                               // VA 0x00429770
 void HandleHScroll(LPARAM lParam, WPARAM wParam);   // VA 0x0044AEE0
 void HandleVScroll(LPARAM lParam, WPARAM wParam);   // VA 0x0044BB30
@@ -251,11 +251,11 @@ void ModeCameraAdjust(MMDApp*, int part);         // modes 13..15
 void ModeAngleAdjust(MMDApp*, int part);          // modes 16..18
 void BoneLocalAxes(MMDApp*, float out[16]);       // VA 0x0040E670
 void BoneEditModes(MMDApp*);                      // VA 0x475A6E..0x4786FA
-void PushBoneEditUndo(MMDApp*);                    // VA 0x0042D6E0, was Sub42D6E0
+void PushBoneEditUndo(MMDApp*);                    // VA 0x0042D6E0
 void RefreshRequest(int area);                    // VA 0x00440AC0
 void TimelineAdvance(MMDApp*);                    // VA 0x00460130
 void ReloadModels(MMDApp*);                       // VA 0x0042E640
-void PostModelReload(MMDApp*);                    // VA 0x0041A650 (Sub41A650 was an
+void PostModelReload(MMDApp*);                    // VA 0x0041A650 (0x41A650 was an
                                                   //  alias of this - decl removed)
 void SelectionReeval(MMDApp*);                    // VA 0x00430510
 void PostDeviceReset(MMDApp*);                    // VA 0x00440DB0
@@ -310,37 +310,37 @@ void LoadWaveFile(MMDApp* app);                   // VA 0x00418500 (real)
 void SaveSceneFile(MMDApp* app);                  // VA 0x0041B080 (src/io/pmm_save.cpp)
 void PathToProjectDir(wchar_t* destination, const wchar_t* source);  // VA 0x00408870
 void LoadSceneV2(MMDApp* app, int fd);             // VA 0x00450000 (v2 loader body,
-                                                  //  phase 1), was Sub450000
+                                                  //  phase 1)
 void LoadSceneV1(MMDApp* app, int fd);            // VA 0x0045916D..0x45E7F7 (v1
                                                   //  loader body inside sub_458F80)
 void LoadVmdFile(const wchar_t* path);            // wide-path wrapper of
                                                   //  LoadVmdMotion (VA 0x00434B60)
-int LoadVmdMotion(MMDApp* app, const char* fileName);  // VA 0x00434B60, was Sub434B60
+int LoadVmdMotion(MMDApp* app, const char* fileName);  // VA 0x00434B60
 void PanelPaint(MMDApp* app);                     // VA 0x00414610 (ui_panel_paint.cpp)
-int ResetMorphKeyCursor(unsigned char* model);    // VA 0x004A49A0, was Sub4A49A0
+int ResetMorphKeyCursor(unsigned char* model);    // VA 0x004A49A0
 bool RegisterBoneKey(unsigned char* model, unsigned char* rec,
                      int frameOffset, unsigned char useSelected);  // 0x0049D880,
-                                                  // was Sub49D880 (VMD/paste buffer)
+                                                  //  (VMD/paste buffer)
 bool RegisterMirroredBoneKey(unsigned char* model, unsigned char* rec,
-                             int frameOffset);    // 0x0049E310, was Sub49E310
-void ResetBoneKeyCursor(unsigned char* model);    // VA 0x004A4940, was Sub4A4940
+                             int frameOffset);    // 0x0049E310
+void ResetBoneKeyCursor(unsigned char* model);    // VA 0x004A4940
 void AppendBoneKeyToUndo(unsigned char* model, int index);  // VA 0x0049D410, was
-                                                  // Sub49D410
+                                                  // 0x49D410
 // VA 0x0049D4D0 - auto-smoothed interpolation rebuild (model_keyframe_edit).
 void RebuildBoneKeyInterpolation(unsigned char* model, int index, int lane);
-                                                  // was Sub49D4D0
+
 int RegisterBonePoseAtFrame(unsigned char* model, int boneIdx,
                             std::uint32_t frame, int mode);  // VA 0x004B38A0,
-                                                  // was Sub4B38A0
+
 void RegisterSelectedBoneKeys(unsigned char* model, int frame, int mode);
-                                                  // VA 0x004C2080, was Sub4C2080
-void ResetDisplayKeyCursor(unsigned char* model); // VA 0x004A4A00, was Sub4A4A00
+                                                  // VA 0x004C2080
+void ResetDisplayKeyCursor(unsigned char* model); // VA 0x004A4A00
 void DeleteMarkedModelKeys(unsigned char* model, int frame);
-                                                  // VA 0x004A09E0, was Sub4A09E0
+                                                  // VA 0x004A09E0
 void UndoModelEdit(unsigned char* model, std::int32_t* frame);
-                                                  // VA 0x004A1870, was Sub4A1870
+                                                  // VA 0x004A1870
 void RedoModelEdit(unsigned char* model, std::int32_t* frame);
-                                                  // VA 0x004A2490, was Sub4A2490
+                                                  // VA 0x004A2490
 // Exact 0x43F15E..0x43F60D inline block used by the frame-range scaler:
 // convert the deletion snapshot to type 4, then open the paired type-2
 // reinsertion snapshot with room for three 64-byte bone-key records per key.
@@ -348,26 +348,26 @@ void BeginRangeScaleBoneUndo(unsigned char* model, int frame,
                              int transformedKeyCount);
 // Global-track key registrars (0x410AA0 camera / 0x411900 light /
 // 0x4120B0 self-shadow / 0x412DF0 gravity): real bodies in
-// src/window/command_control_400.cpp (sorted 10000-record list insert;
+// src/window/command_frame_edit.cpp (sorted 10000-record list insert;
 // the original passes the key record by value on the stack - the port
 // takes (app, rec) with the same record layouts, a stub-era deviation
 // absorbed by those ports).
 // overflowAdvertised: 满表报错框里印的 point 数。粘贴路径（本函数 x64 原型
-// Sub410AA0）打 10000；相机实况注册器（Sub410560/x64 0x7FF7CB47B18D）打
+// 0x410AA0）打 10000；相机实况注册器（0x410560/x64 0x7FF7CB47B18D）打
 // 600000 —— 原版两处不一致，故做成参数。
 int RegisterCameraKey(MMDApp* app, const void* rec,
-                      int overflowAdvertised = 10000);    // VA 0x00410AA0, was Sub410AA0
-int RegisterLightKey(MMDApp* app, const void* rec);       // VA 0x00411900, was Sub411900
-int RegisterSelfShadowKey(MMDApp* app, const void* rec);  // VA 0x004120B0, was Sub4120B0
-int RegisterGravityKey(MMDApp* app, const void* rec);     // VA 0x00412DF0, was Sub412DF0
+                      int overflowAdvertised = 10000);    // VA 0x00410AA0
+int RegisterLightKey(MMDApp* app, const void* rec);       // VA 0x00411900
+int RegisterSelfShadowKey(MMDApp* app, const void* rec);  // VA 0x004120B0
+int RegisterGravityKey(MMDApp* app, const void* rec);     // VA 0x00412DF0
 // Track appliers (src/model/track_apply.cpp)
-void ApplyGravityTrack(MMDApp* app);                // VA 0x00412330, was Sub412330
-void ApplyAccessoryTrack(MMDApp* app, int slot);    // VA 0x00413120, was Sub413120
+void ApplyGravityTrack(MMDApp* app);                // VA 0x00412330
+void ApplyAccessoryTrack(MMDApp* app, int slot);    // VA 0x00413120
 
 // ---- v2 loader dependencies (0x00450000 phase 2; bodies in stubs.cpp) -----
-void ClearTimelineAndCurveDCs(MMDApp* app);   // was Sub40AE00, VA 0x0040AE00
-void RefillBoneRegisterCombo(MMDApp* app, int slot);  // was Sub410040, VA 0x00410040
-// (was Sub4C4700, VA 0x004C4700 - accessory-track dtor; the real port is
+void ClearTimelineAndCurveDCs(MMDApp* app);   // VA 0x0040AE00
+void RefillBoneRegisterCombo(MMDApp* app, int slot);  // VA 0x00410040
+// (VA 0x004C4700 - accessory-track dtor; the real port is
 //  DisposeAccessory in src/render/accessory.cpp, the decl had zero callers
 //  and was removed.)
 INT_PTR CALLBACK DialogFuncStub(HWND hwnd, UINT msg, WPARAM wp,
@@ -375,62 +375,62 @@ INT_PTR CALLBACK DialogFuncStub(HWND hwnd, UINT msg, WPARAM wp,
                                                //  migration dialog proc)
 
 // ---- v2 loader misc dependencies (decls; bodies elsewhere) ----------------
-void IdentityCtor(void* obj);                    // was Sub4C46F0, VA 0x004C46F0
+void IdentityCtor(void* obj);                    // VA 0x004C46F0
                                                 // (original: identity ctor
                                                 //  `return this;`; callers
                                                 //  ignore the result, so the
                                                 //  empty body is faithful)
 bool LoadAccessoryObject(MMDApp* app, void* accessory,
                          const wchar_t* path);               // VA 0x004C5F40
-void SyncAccessoryEditPanel(MMDApp* app);        // was Sub4134E0, VA 0x004134E0
-// (was Sub4168D0/Sub417130 - the 0x4168D0/0x417130 bg-overlay refresh twins
+void SyncAccessoryEditPanel(MMDApp* app);        // VA 0x004134E0
+// (/0x417130 - the 0x4168D0/0x417130 bg-overlay refresh twins
 //  unified into AviBgOverlayRefresh/PicBgOverlayRefresh declared above.)
-// (was Sub4337A0, VA 0x004337A0 - superseded by LoadBackgroundPicture below;
+// (VA 0x004337A0 - superseded by LoadBackgroundPicture below;
 //  the stub decl had zero callers and was removed.)
-void RefreshSelfShadowPanel(MMDApp* app);        // was Sub411B90, VA 0x00411B90
-void RefreshLightPanel(MMDApp* app);             // was Sub411070, VA 0x00411070
+void RefreshSelfShadowPanel(MMDApp* app);        // VA 0x00411B90
+void RefreshLightPanel(MMDApp* app);             // VA 0x00411070
 void TraceSceneLightState(MMDApp* app, const char* stage);
-void RelayoutSidebarControls(MMDApp* app);       // was Sub442EB0, VA 0x00442EB0
-void SetModelColor(MMDApp* model, int r, int g, int b);  // was Sub4A4850, VA 0x004A4850
-void SeekSelectedModelToCurrentFrame(MMDApp* app);  // was Sub4220C0,
+void RelayoutSidebarControls(MMDApp* app);       // VA 0x00442EB0
+void SetModelColor(MMDApp* model, int r, int g, int b);  // VA 0x004A4850
+void SeekSelectedModelToCurrentFrame(MMDApp* app);  // ,
                                                    // VA 0x004220C0 (model_frame_seek.cpp)
-void SaveEnhancedModel(MMDApp* app, const wchar_t* path);  // was Sub41EC10,
+void SaveEnhancedModel(MMDApp* app, const wchar_t* path);  // ,
                                                    // VA 0x0041EC10 (enhance_model_io.cpp)
-void ReloadTextureCache(void* renderer);        // was Sub4076E0, VA 0x004076E0
+void ReloadTextureCache(void* renderer);        // VA 0x004076E0
                                                 // (enhance_model_io.cpp)
 bool RegisterMorphKeyFromRecord(unsigned char* model, const unsigned char rec[40],
-                                int frameOffset);  // was Sub49F190, VA 0x0049F190
-void RegisterMorphKeyCurrent(unsigned char* model, int morph, int frame);  // was Sub49EEE0, 0x0049EEE0
+                                int frameOffset);  // VA 0x0049F190
+void RegisterMorphKeyCurrent(unsigned char* model, int morph, int frame);  // 0x0049EEE0
 bool RegisterDisplayKeyFromRecord(unsigned char* model, int frame,
                                   unsigned char view, int ikCount,
                                   const unsigned char* ikEntries, int selCount,
                                   const unsigned char* selEntries,
-                                  int frameOffset);  // was Sub49F8C0, 0x0049F8C0
-void RegisterDisplayKeyCurrent(unsigned char* model, int frame);  // was Sub49F480, 0x0049F480
-void RegisterAccessoryKey(MMDApp* app, int frame, int slot);  // was Sub413CB0, 0x00413CB0
-void DeleteMarkedKeyframes(MMDApp* app);         // was Sub4316B0, VA 0x004316B0
+                                  int frameOffset);  // 0x0049F8C0
+void RegisterDisplayKeyCurrent(unsigned char* model, int frame);  // 0x0049F480
+void RegisterAccessoryKey(MMDApp* app, int frame, int slot);  // 0x00413CB0
+void DeleteMarkedKeyframes(MMDApp* app);         // VA 0x004316B0
 void SaveVmdFile(const wchar_t* path);            // VA 0x00419370 (src/io/vmd_save.cpp)
 void LoadAviFile(MMDApp* app);                    // VA 0x00433250 (real, src/media/media_load.cpp)
 void LoadBackgroundPicture(MMDApp* app);          // VA 0x004337A0 (real; the
-                                                  //  was-Sub4337A0 stub decl
+                                                  //  was-0x4337A0 stub decl
                                                   //  above was superseded and
                                                   //  removed)
 void CopyPathW(wchar_t* dest, const wchar_t* src);  // VA 0x0042AE40 (real; the
-                                                    //  Sub42AE40 stub decl in
+                                                    //  0x42AE40 stub decl in
                                                     //  stubs.cpp is unreferenced)
-void CopyDirPathW(wchar_t* dest, const wchar_t* src);  // was Sub42AE20, VA 0x0042AE20
+void CopyDirPathW(wchar_t* dest, const wchar_t* src);  // VA 0x0042AE20
                                                        // (real; wcscpy_s with
                                                        //  the 1000-wchar
                                                        //  directory buffers)
 void SelectFrameGroup(MMDApp*, int group);        // 0xD9/0xDA/0xDC target
 // ---- frame-line edit commands (src/window/frame_line_edit.cpp) -----------
-void InsertBoneCameraFrameLine(MMDApp* app);  // was Sub439E40, VA 0x00439E40
+void InsertBoneCameraFrameLine(MMDApp* app);  // VA 0x00439E40
                                              //  insert frame line (bone/cam)
-void DeleteBoneCameraFrameLine(MMDApp* app);  // was Sub43A650, VA 0x0043A650
+void DeleteBoneCameraFrameLine(MMDApp* app);  // VA 0x0043A650
                                              //  delete frame line (bone/cam)
-void InsertFacialLightFrameLine(MMDApp* app); // was Sub43B720, VA 0x0043B720
+void InsertFacialLightFrameLine(MMDApp* app); // VA 0x0043B720
                                              //  insert frame line (facial/light)
-void DeleteFacialLightFrameLine(MMDApp* app); // was Sub43BB30, VA 0x0043BB30
+void DeleteFacialLightFrameLine(MMDApp* app); // VA 0x0043BB30
                                              //  delete frame line (facial/light)
 
 // ---- DxOpenNI / Kinect loader (src/app/oni_kinect.cpp) ------------------
@@ -448,10 +448,10 @@ bool RegisterKinectPoseCapture(unsigned char* model, unsigned frame);  // sub_7F
 bool RegisterTraceBoneKey(unsigned char* model, unsigned boneIdx,      // sub_7FF7CB4F23E0
                           int slot, int mode, unsigned frame);
 // ---- VSQ loader / auto lipsync (src/io/vsq_load.cpp) --------------------
-void LoadVsqFile(MMDApp* app, const wchar_t* path);  // was Sub435FE0, VA 0x00435FE0
-// big-endian readers used by the SMF walkers (src/model/model_query_gaps.cpp)
-int ReadBeWord(int fh, int* outVal, int nbytes);      // was Sub41A1A0, VA 0x0041A1A0
-int ReadFixedString(int fh, char* out, int len);      // was Sub41A1F0, VA 0x0041A1F0
+void LoadVsqFile(MMDApp* app, const wchar_t* path);  // VA 0x00435FE0
+// big-endian readers used by the SMF walkers (src/model/model_query_helpers.cpp)
+int ReadBeWord(int fh, int* outVal, int nbytes);      // VA 0x0041A1A0
+int ReadFixedString(int fh, char* out, int len);      // VA 0x0041A1F0
 // (supersedes the LoadOniPlugin stand-in name used by earlier call sites)
 void ShowWin32ErrorMessage(MMDApp* app, const char* context,
                            DWORD messageId);          // VA 0x0040E440

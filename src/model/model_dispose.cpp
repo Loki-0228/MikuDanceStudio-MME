@@ -265,7 +265,7 @@ void ModelDispose(unsigned char* m) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x0040A710 - DeleteModel (was Sub40A710)(model, freeFlag): the
+// VA 0x0040A710 - DeleteModel(model, freeFlag): the
 // dispose-and-maybe-free wrapper used by the model-delete command
 // (0x47FEF1).  Returns the model pointer in the original; no caller reads
 // it, kept void.

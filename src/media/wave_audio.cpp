@@ -53,7 +53,7 @@
 //             stopFlag/failureCount = 0, SetFilePointer(fileHandle,
 //             dataOffset + (int)(avg*t) - (int)(avg*t)%nBlockAlign,
 //             FILE_BEGIN), _beginthread(WaveFeedThread, 0, this) -> +0x234.
-//   0x4C3530  WaveRestartAt(this, double t) (was Sub4C3530) - KillTimer(hwnd, 100),
+//   0x4C3530  WaveRestartAt(this, double t) - KillTimer(hwnd, 100),
 //             CloseDataFile, WaveStartPlayback, buffer->SetVolume(ctx+0x258)
 //             [IDirectSoundBuffer vtable slot 15; the 2026-09 audit note
 //             "SetCurrentPosition" was wrong - confirmed against both the
@@ -61,9 +61,9 @@
 //             WaveSeekAndFeed(this, t), SetTimer(hwnd, 100, 33 ms, null).
 // x64 twins (behavior basis): 0x7FF7CB4FAD40 / 0x7FF7CB4FAB80 /
 // 0x7FF7CB4FAC20.  Call sites (already wired): WaveSeekAndFeed from
-// src/app/playback_catchup.cpp and src/window/command_control_400.cpp
+// src/app/playback_catchup.cpp and src/window/command_frame_edit.cpp
 // (x86 0x46F383 / 0x4876CA, time = the +0x9E654 start-seconds float);
-// WaveRestartAt (was Sub4C3530) from ui_frame_step.cpp StepFrame (covers x86
+// WaveRestartAt from ui_frame_step.cpp StepFrame (covers x86
 // 0x431296/0x431666),
 // ui_editor_click.cpp (0x44A834) and ui_mouse_misc.cpp (0x44AEA8).
 // =========================================================================//

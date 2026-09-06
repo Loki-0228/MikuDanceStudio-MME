@@ -14,8 +14,8 @@
 //   677 0x2A5 combo display-group list      680 0x2A8 edit  group EN name
 //   0x29E/0x29F, 0x2A2/0x2A3, 0x2A6/0x2A7 next/prev buttons of the combos.
 //
-// The dialog procedure ModelEdgeDlgProc (was Sub464BD0) and the edit
-// subclass ModelEdgeEditSubclassProc (was Sub45ECC0) live in
+// The dialog procedure ModelEdgeDlgProc and the edit
+// subclass ModelEdgeEditSubclassProc live in
 // command_view_menu.cpp; the subclass commits an edit on Enter through the
 // collector CollectEnglishNameEdit below.  Every function keeps its original x86 VA.
 // =========================================================================//
@@ -122,7 +122,7 @@ void RefreshNameEdit(HWND edit, const char* text) {
 // function for its subclass call sites; this body is the real port used by
 // the dialog helpers in this file.
 // =========================================================================//
-void CollectEnglishNameEdit(MMDApp* app, HWND hEdit, int idx) {  // was Sub43BED0, VA 0x0043BED0
+void CollectEnglishNameEdit(MMDApp* app, HWND hEdit, int idx) {  // VA 0x0043BED0
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
     char text[256];
 
@@ -237,7 +237,7 @@ void CollectEnglishNameEdit(MMDApp* app, HWND hEdit, int idx) {  // was Sub43BED
 // marked selected (selectedBone = 0).  Finishes with the panel sweep and
 // zeroes the three combo cursors.
 // =========================================================================//
-void InitModelEdgeDialog(HWND hDlg) {  // was Sub43C430, VA 0x0043C430
+void InitModelEdgeDialog(HWND hDlg) {  // VA 0x0043C430
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
     mdl::BoneRecord* bones = model->boneTable;
@@ -344,7 +344,7 @@ void InitModelEdgeDialog(HWND hDlg) {  // was Sub43C430, VA 0x0043C430
 // original repeats both loops) and finishes with the panel sweep, the panel
 // rebuild PostLoadInit and the second-stage sweep.
 // =========================================================================//
-void ApplyModelEdgeDialog(HWND hDlg) {  // was Sub45F240, VA 0x0045F240
+void ApplyModelEdgeDialog(HWND hDlg) {  // VA 0x0045F240
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
     char text[256];
@@ -393,7 +393,7 @@ void ApplyModelEdgeDialog(HWND hDlg) {  // was Sub45F240, VA 0x0045F240
 // selected bone (selectedBone = -1).  Panel sweep, then the bone-name edit
 // is refreshed from bones[cursor].nameEn and focused.
 // =========================================================================//
-void SelectModelEdgeBone(HWND hDlg) {  // was Sub45F050, VA 0x0045F050
+void SelectModelEdgeBone(HWND hDlg) {  // VA 0x0045F050
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
 
@@ -430,7 +430,7 @@ void SelectModelEdgeBone(HWND hDlg) {  // was Sub45F050, VA 0x0045F050
 // the panel sweep and PostLoadInit), stores the new selection as cursor 1
 // and refreshes the morph-name edit from morphs[cursor+1].nameEn.
 // =========================================================================//
-void SelectModelEdgeMorph(HWND hDlg) {  // was Sub45EF10, VA 0x0045EF10
+void SelectModelEdgeMorph(HWND hDlg) {  // VA 0x0045EF10
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
     if (model->facialFrameCount == 0)
@@ -455,7 +455,7 @@ void SelectModelEdgeMorph(HWND hDlg) {  // was Sub45EF10, VA 0x0045EF10
 // stores the new selection as cursor 2, runs the panel sweep and refreshes
 // the group-name edit from the newly selected group slot.
 // =========================================================================//
-void SelectModelEdgeGroup(HWND hDlg) {  // was Sub45EDC0, VA 0x0045EDC0
+void SelectModelEdgeGroup(HWND hDlg) {  // VA 0x0045EDC0
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
 

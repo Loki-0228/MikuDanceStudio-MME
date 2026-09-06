@@ -1410,7 +1410,7 @@ public:
         return reinterpret_cast<DShowRecorder*&>(state.recorder);
     }
     // AccessoryRecord slot that carries the coordinate-axis gizmo X-file
-    // mesh (was sub04b0 / Sub04B0(); 0x4B0 obj, freed via DisposeAccessory).
+    // mesh (was sub04b0 / 0x04B0(); 0x4B0 obj, freed via DisposeAccessory).
     void*& AxisMeshObject()        { return state.axisMeshObject; }
     // Physics scene wrapper ("0x48 object"), allocated in
     // InitMainWindowAndD3D, filled by SceneConstruct; see physics_scene.hpp.

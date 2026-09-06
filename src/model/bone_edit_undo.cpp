@@ -1,4 +1,4 @@
-// Bone-edit undo snapshot (original VA 0x0042D6E0; was Sub42D6E0).
+// Bone-edit undo snapshot (original VA 0x0042D6E0; ).
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
@@ -13,7 +13,7 @@
 
 namespace mikudancestudio {
 
-void PushBoneEditUndo(MMDApp* app) {  // was Sub42D6E0, VA 0x0042D6E0
+void PushBoneEditUndo(MMDApp* app) {  // VA 0x0042D6E0
     if (app == nullptr)
         return;
     const unsigned modelSlot = app->state.slotIdx;

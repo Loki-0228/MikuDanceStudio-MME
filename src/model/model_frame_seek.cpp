@@ -85,7 +85,7 @@ const float kQuatClamp = 0.999999f;
 }  // namespace
 
 // ---- VA 0x004B4260 --------------------------------------------------------
-int SeekModelFrame(unsigned char* model, int frameArg, int physicsMode) {  // was Sub4B4260
+int SeekModelFrame(unsigned char* model, int frameArg, int physicsMode) {
     unsigned char* const m = model;
     const std::uint32_t frameU32 = static_cast<std::uint32_t>(frameArg);
     int result = 0;
@@ -489,7 +489,7 @@ int SeekModelFrame(unsigned char* model, int frameArg, int physicsMode) {  // wa
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004220C0 - was Sub4220C0.  SeekSelectedModelToCurrentFrame(app):
+// VA 0x004220C0 - .  SeekSelectedModelToCurrentFrame(app):
 // seek the selected model to the current frame and set the re-eval byte.
 // Model slot = app+0x780[byte 0x910], frame = app+0x980, third arg
 // app+0xA0CC4 (same convention as the 30 other SeekModelFrame call

@@ -1,5 +1,5 @@
 // ===========================================================================
-// model_query_gaps.cpp - model queries / facial-panel / edit-target glue
+// model_query_helpers.cpp - model queries / facial-panel / edit-target glue
 // ===========================================================================
 // Ports the remaining small model-side helpers of the 0x410000..0x440000
 // band that had no body yet.  All __thiscall members below take the MMDApp
@@ -7,14 +7,14 @@
 // `mov ecx, ebx` immediately before the 0x42D3A0 call at 0x46FF02).
 //
 // Shared field map used here (decimal offsets as in the decompiles):
-//   app+2320    kByteSlotidx  - active model-slot order index
+//   app+2320    kActiveSlotIndex  - active model-slot order index
 //   app+1920    ModelSlots()  - slot -> model pointer array
-//   app+646512  kBufBuf9ddx   - the 255-entry display-object array (0x9DD70)
+//   app+646512  kDisplayObjectArray   - the 255-entry display-object array (0x9DD70)
 //   app+645704  DisplayObjectListScrollPosition() - object-list scroll position
-//   app+647536  kByte9e170    - selected display-object slot
+//   app+647536  kSelectedDisplaySlot    - selected display-object slot
 //   app+656356..656359 (0xA03E4..0xA03E7) - edit-branch mode flags
-//   app+658796  kDwordMsgseen - "message seen" latch (key edge detector)
-//   app+657080  kPtrHwnd      - main window HWND
+//   app+658796  kMessageSeenLatch - "message seen" latch (key edge detector)
+//   app+657080  kMainWindowHandle      - main window HWND
 //   model+9916  bone records (604 B)          model+11652 bone count
 //   model+9936  morph name table (101 B/rec, flag at +100)
 //   model+9940  morph table entry count (byte)
@@ -102,7 +102,7 @@ inline void KeyEdgeScan(MMDApp* app, int vk, std::uint32_t* cell) {
 }  // namespace
 
 // ===========================================================================
-// VA 0x0041A1A0 - ReadBeWord (was Sub41A1A0)  (__stdcall, no `this`)
+// VA 0x0041A1A0 - ReadBeWord  (__stdcall, no `this`)
 // ===========================================================================
 // Reads `nbytes` single bytes from `fh` and accumulates them big-endian
 // (v = byte + (v << 8), 0x41A1C9) into *outVal; nbytes <= 0 just stores 0.
@@ -131,7 +131,7 @@ int ReadBeWord(int fh, int* outVal, int nbytes) {
 }
 
 // ===========================================================================
-// VA 0x0041A1F0 - ReadFixedString (was Sub41A1F0)  (__stdcall, no `this`)
+// VA 0x0041A1F0 - ReadFixedString  (__stdcall, no `this`)
 // ===========================================================================
 // Reads `len` bytes one at a time into a 1000-byte scratch buffer,
 // NUL-terminates and sprintf_s("%s")-copies into `out` (capacity 0x3E8).
@@ -161,7 +161,7 @@ int ReadFixedString(int fh, char* out, int len) {
 // identical because each scan writes only its own cell plus the
 // idempotent messageSeen latch.  Called once per frame from 0x46FF02.
 // =========================================================================//
-void PollKeyboardStates(MMDApp* app) {  // was Sub42D3A0
+void PollKeyboardStates(MMDApp* app) {
     struct KeyCell { int vk; std::int32_t MMDAppState::* cell; };
     static constexpr KeyCell kNamedCells[] = {
         // 0x42D3AA..0x42D428 and the 0x42D5D6..0x42D6B6 non-numpad entries
@@ -232,7 +232,7 @@ void PollKeyboardStates(MMDApp* app) {  // was Sub42D3A0
 // bone or negative.  (The original's return value is the
 // low byte of a pointer - junk every caller ignores.)
 // =========================================================================//
-void ScrollDisplayBoneIntoView(MMDApp* app, int boneIdx) {  // was Sub41A280
+void ScrollDisplayBoneIntoView(MMDApp* app, int boneIdx) {
     unsigned char* m = SlotModel(app);                          // 0x41A28E
     const auto* record = mdl::Mdl(m);
     if (record->displayRootBone == static_cast<std::uint32_t>(boneIdx) ||
@@ -301,7 +301,7 @@ void ScrollDisplayBoneIntoView(MMDApp* app, int boneIdx) {  // was Sub41A280
 // the display-list auto-scroll (0x41A280) and the label/view refresh pair
 // (0x42F1E0 / 0x40D070).  (Original returned the trailing BOOL; unused.)
 // =========================================================================//
-void SelectDisplayBone(MMDApp* app, int boneIdx) {  // was Sub438CD0
+void SelectDisplayBone(MMDApp* app, int boneIdx) {
     unsigned char* m = SlotModel(app);
     auto* record = mdl::Mdl(m);
     record->selectedBone = boneIdx;                             // 0x438CE5
@@ -330,7 +330,7 @@ void SelectDisplayBone(MMDApp* app, int boneIdx) {  // was Sub438CD0
 //   * no match anywhere -> keep scanning later records for the current
 //     morph (outer loop at LABEL_34)
 // =========================================================================//
-void SelectPreviousDisplayBone(MMDApp* app) {  // was Sub438D60
+void SelectPreviousDisplayBone(MMDApp* app) {
     unsigned char* m = SlotModel(app);
     const auto* record = mdl::Mdl(m);
     const int cur = record->selectedBone;                       // 0x438D71
@@ -395,7 +395,7 @@ void SelectPreviousDisplayBone(MMDApp* app) {  // was Sub438D60
 //     and its FIRST record (0x4390D5 / 0x43914D); g is clamped by the
 //     entry count at model+9940 (loop exits at LABEL_41 when exhausted)
 // =========================================================================//
-void SelectNextDisplayBone(MMDApp* app) {  // was Sub438F50
+void SelectNextDisplayBone(MMDApp* app) {
     unsigned char* m = SlotModel(app);
     const auto* record = mdl::Mdl(m);
     const int cur = record->selectedBone;                       // 0x438F64
@@ -468,7 +468,7 @@ void SelectNextDisplayBone(MMDApp* app) {  // was Sub438F50
 // at app+645704 and the (clientHeight-452)/14 row budget.  (Original
 // returned a junk LRESULT; unused by all callers.)
 // =========================================================================//
-void ScrollModelListIntoView(MMDApp* app, unsigned char slotIdx) {  // was Sub41A460
+void ScrollModelListIntoView(MMDApp* app, unsigned char slotIdx) {
     unsigned char* m = DisplayObjectAt(app, slotIdx);           // 0x41A46B
     if (m == nullptr)
         return;
@@ -514,7 +514,7 @@ inline void SelectDisplayObject(MMDApp* app, int idx) {         // 0x43974F
     app->SelectedObjectSlot() = static_cast<unsigned char>(idx); // 0x43975D
     const WPARAM wp = DisplayOrder(object);                      // 0x439771
     SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_SETCURSEL, wp, 0);
-    SyncAccessoryEditPanel(app);  // was Sub4134E0              // 0x43978C
+    SyncAccessoryEditPanel(app);  //               // 0x43978C
     ScrollModelListIntoView(app, app->SelectedObjectSlot());
     PostLanguageSweep(app);                                     // 0x4397A2
     PostLanguageSweep2(app);
@@ -534,7 +534,7 @@ inline void SelectDisplayObject(MMDApp* app, int idx) {         // 0x43974F
 // accessory mode (656359=1); a missing current model resets to the bone
 // mode (656356=1).
 // =========================================================================//
-void SelectPrevEditTarget(MMDApp* app) {  // was Sub4391D0
+void SelectPrevEditTarget(MMDApp* app) {
     if (app->GlobalTrackSelected(GlobalTimelineTrack::Camera) != 0) {
         ClearAllDisplayObjectFlags(app);
         app->SelectGlobalTimelineTrack(GlobalTimelineTrack::Camera);
@@ -608,7 +608,7 @@ void SelectPrevEditTarget(MMDApp* app) {  // was Sub4391D0
 //   frame (model+1181)+1, re-showing the CURRENT model when that frame
 //   does not exist (0x43985A).
 // =========================================================================//
-void SelectNextEditTarget(MMDApp* app) {  // was Sub439520
+void SelectNextEditTarget(MMDApp* app) {
     if (app->GlobalTrackSelected(GlobalTimelineTrack::Camera) != 0) {
         ClearAllDisplayObjectFlags(app);
         app->SelectGlobalTimelineTrack(GlobalTimelineTrack::Light);

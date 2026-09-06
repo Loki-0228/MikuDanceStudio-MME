@@ -199,7 +199,7 @@ static const char kCaptionDelAccessoryJp[] =
 // original call (which passes NO varargs) write an empty string; the %s
 // slots are never consumed.  Kept byte-identical; the two dummy args below
 // are never read (only silence the compiler's format-string warning).
-static const wchar_t kFmt529688[] = L"\x0\x0%s%s";
+static const wchar_t kEmptyPathFormat[] = L"\x0\x0%s%s";
 
 // 0x52D948: JP open-filter for accessories (double-NUL terminated):
 // "読込可能ファイル(*.x,*.vac)"
@@ -210,9 +210,11 @@ static const wchar_t kFilterAccJp[] =
 // 0x52DC84: JP dialog title "ファイルを開く"
 static const wchar_t kTitleOpenJp[] = L"\x30D5\x30A1\x30A4\x30EB\x3092\x958B\x304F";
 
-// strstr needles of case 498: 0x530BF8 = "\x89\x45", 0x530BFC = "ボーン削除".
-static const char kNeedle530BF8[] = "\x89\x45";
-static const char kNeedle530BFC[] =
+// strstr needles of case 498, matched against bone names:
+//   kBoneNameNeedleRight = Shift-JIS 右 ("right"),
+//   kBoneNameNeedleModelDelete = Shift-JIS モデル削除 ("model delete").
+static const char kBoneNameNeedleRight[] = "\x89\x45";
+static const char kBoneNameNeedleModelDelete[] =
     "\x83\x82\x83\x66\x83\x8B\x8D\xED\x8F\x9C";
 
 // ---------------------------------------------------------------------------
@@ -233,14 +235,14 @@ void PushBoneEditUndo(MMDApp* app);                       // VA 0x0042D6E0
 void RebuildCameraModePanel(MMDApp* app);                       // VA 0x0044D780
 void SyncAccessoryEditPanel(MMDApp* app);                       // VA 0x004134E0
 void RegisterAccessoryKey(MMDApp* app, int frame, int slot);   // VA 0x00413CB0
-void RegisterCameraState(MMDApp* app, int frame);  // VA 0x00410560, was Sub410560
-void RegisterLightState(MMDApp* app, int frame);   // VA 0x00411630, was Sub411630
+void RegisterCameraState(MMDApp* app, int frame);  // VA 0x00410560
+void RegisterLightState(MMDApp* app, int frame);   // VA 0x00411630
 void CommitEditControl(MMDApp* app, HWND hwnd);            // VA 0x00463640
-void DeleteAccessory(mdl::AccessoryRecord* accessory, int flag);  // VA 0x0040A6F0, was Sub40A6F0
+void DeleteAccessory(mdl::AccessoryRecord* accessory, int flag);  // VA 0x0040A6F0
 void IdentityCtor(void* obj);                         // VA 0x004C46F0 (ctor)
 void* ConstructArrayElements(void* block, std::uint32_t elementSize,
                              std::uint32_t count,
-                             void* ctor);  // VA 0x00401150, was Sub401150
+                             void* ctor);  // VA 0x00401150
 
 void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                    std::uint16_t notify) {
@@ -335,7 +337,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         // 0.602f is bit-exact with the x64 immediate 0x3F1A1CAC
         // (0x7FF7CB46A492..0x7FF7CB46A4BC, written to all three light
         // channels and copied into Specular); same constant as the
-        // light-key default in command_control_400.cpp ResetLightRecord.
+        // light-key default in command_frame_edit.cpp ResetLightRecord.
         const float col = 0.602f;  // flt_52C9A4
         app->LightColor()[0] = col;
         app->LightColor()[1] = col;
@@ -397,7 +399,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     case 472: {
         SetCurrentDirectoryW(app->ExeDir());  // 0xA06CE
         wchar_t fileBuf[0x100];
-        swprintf_s(fileBuf, 0x100, kFmt529688, L"", L"");
+        swprintf_s(fileBuf, 0x100, kEmptyPathFormat, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = sizeof(ofn);
@@ -1092,13 +1094,13 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                 continue;  // no exact-name bone: record skipped
             }
             std::int32_t target = -1;
-            const char* tag1 = strstr(bones[k1].name, kNeedle530BFC);
+            const char* tag1 = strstr(bones[k1].name, kBoneNameNeedleModelDelete);
             if (tag1 != nullptr) {
                 // k1 carries the "ボーン削除" tag: find the "\x89\x45"-tagged
                 // bone whose suffix matches the tag suffix
                 const char* suffix = tag1 + 2;
                 for (std::int32_t k = 0; k < nBones; ++k) {
-                    const char* q = strstr(bones[k].name, kNeedle530BF8);
+                    const char* q = strstr(bones[k].name, kBoneNameNeedleRight);
                     if (q != nullptr && strcmp(q + 2, suffix) == 0) {
                         target = k;
                         break;
@@ -1109,11 +1111,11 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                 // second search: needle from frames+j (raw byte offset, as
                 // in the original) against the "ボーン削除" tag
                 const char* suffix = strstr(
-                    reinterpret_cast<const char*>(bones) + j, kNeedle530BF8);
+                    reinterpret_cast<const char*>(bones) + j, kBoneNameNeedleRight);
                 if (suffix != nullptr) {
                     suffix += 2;
                     for (std::int32_t k = 0; k < nBones; ++k) {
-                        const char* q = strstr(bones[k].name, kNeedle530BFC);
+                        const char* q = strstr(bones[k].name, kBoneNameNeedleModelDelete);
                         if (q != nullptr && strcmp(q + 2, suffix) == 0) {
                             target = k;
                             break;

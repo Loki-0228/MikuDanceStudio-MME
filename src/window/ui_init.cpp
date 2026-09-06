@@ -155,7 +155,7 @@ static bool InitTimelineAudio(MMDApp* app, HWND hwnd, HDC timeline,
     return true;
 }
 
-// VA 0x0040AE00 - was Sub40AE00.  Blank the timeline strip and the
+// VA 0x0040AE00 - .  Blank the timeline strip and the
 // interpolation-curve box: white rectangles over both GDI surfaces (the
 // timeline spans the backbuffer width at 49 px, the curve is 127x127) plus
 // the black centre line at timeline y=25.
@@ -217,7 +217,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 
     // Physics scene construction (original call site 0x00466D78, directly
     // after the D3D bootstrap): gizmo buffers + the Bullet world and its
-    // static ground body inside the Sub048 wrapper.
+    // static ground body inside the 0x048 wrapper.
     if (!SceneConstruct(app->Physics(), app->Renderer()))
         return false;
 
@@ -320,7 +320,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 
     // 0x4672C2..0x4672E4: initialize the ruler/curve caches, then bind the
     // ruler HDC to the wave/timeline object while DirectSound is initialized.
-    ClearTimelineAndCurveDCs(app);  // was Sub40AE00, 0x40AE00
+    ClearTimelineAndCurveDCs(app);  // 0x40AE00
     s.DirectSoundAvailable() = static_cast<std::uint8_t>(
         InitTimelineAudio(app, hwnd, s.TimelineDC(),
                           app->EnglishUI() != 0));
@@ -706,7 +706,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x00410040 - was Sub410040.  RefillBoneRegisterCombo(app, slot):
+// VA 0x00410040 - .  RefillBoneRegisterCombo(app, slot):
 // bone-register combo (control 450) refill.  CB_RESETCONTENT, then for the
 // model in slot app+0x780[slot] every bone whose type byte (+484) is < 7
 // or == 8 is appended (CB_ADDSTRING) with the English (+20) or Japanese

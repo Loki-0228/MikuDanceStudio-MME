@@ -893,7 +893,7 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         // than 0.5; an exactly-0.5 timer does not fire.
         s.state.gravityNoiseTimer = s.state.gravityNoiseTimer + s.DeltaTime();
         if (s.state.gravityNoiseTimer > 0.5f) {                          // flt_52960C
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_M_IX86)
             // x87 transcription of 0x46F5BA..0x46F66E: every intermediate
             // stays extended; strength is stored to a FLOAT slot at
             // 0x46F5DF and reloaded for each component multiply.

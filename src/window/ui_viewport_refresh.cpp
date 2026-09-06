@@ -53,7 +53,7 @@ void WriteQuad(IDirect3DVertexBuffer9* buffer, float left, float top,
 
 }  // namespace
 
-void RefreshMainWindowViewport(MMDApp* app) {  // was Sub42C810
+void RefreshMainWindowViewport(MMDApp* app) {
     auto& s = *app;
     RECT& view = s.ViewportRect();                     // 0xA0D40
     const HWND hwnd = app->MainWindow();
@@ -161,7 +161,7 @@ void RefreshMainWindowViewport(MMDApp* app) {  // was Sub42C810
               0.625f, 0.9375f);
 }
 
-void RefreshSeparateWindowViewport(MMDApp* app) {  // was Sub4290F0, 0x4290F0..0x42976B
+void RefreshSeparateWindowViewport(MMDApp* app) {  // 0x4290F0..0x42976B
     auto& s = *app;
     RECT& view = s.ViewportRect();
     const int renderWidth = s.RenderWidth();

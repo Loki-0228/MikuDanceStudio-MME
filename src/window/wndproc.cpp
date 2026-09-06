@@ -21,7 +21,10 @@
 //                     at 1500 ms intervals
 //   WM_H/VSCROLL   -> sub_44AEE0 / sub_44BB30 [stubbed]
 //   WM_CTLCOLORSTATIC(0x138) -> sub_40E0E0 [stubbed]
-//   WM_MOUSE*      -> capture handling + sub_446A70/44A9A0/44AAA0/4632F0
+//   WM_MOUSE*      -> capture handling + sub_446A70/44A9A0/44AAA0; the
+//                     panel-activation sub_4632F0 rides WM_RBUTTONDBLCLK
+//                     (x64 0x7FF7CB4FC2C9 case 518), NOT WM_MOUSEACTIVATE
+//                     (0x21 falls through to DefWindowProc)
 //   WM_MOUSEWHEEL  -> sub_44BD70 [stubbed]
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
@@ -239,7 +242,11 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
     case WM_MBUTTONUP:
         ReleaseCapture();
         return 0;
-    case WM_MOUSEACTIVATE:
+    case WM_RBUTTONDBLCLK:
+        // x64 sub_7FF7CB4FBBF0 jumptable case 518 @0x7FF7CB4FC2C9: call
+        // sub_7FF7CB45DCD0 (0x4632F0 twin), then the common epilogue
+        // (xor eax,eax / return 0).  WM_MOUSEACTIVATE (0x21) is NOT a case
+        // in either window procedure - default branch -> DefWindowProc.
         HandleMouseActivate(app);                                 // 0x4632F0
         return 0;
     case WM_MOUSEWHEEL:

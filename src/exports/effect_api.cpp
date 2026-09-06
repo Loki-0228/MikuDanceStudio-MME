@@ -7,7 +7,7 @@
 // the 0x42A0D0..0x42AE10 model-query family (verified on the live
 // disassembly of 0x4C3590..0x4C3A10).
 //
-// GetPmdNum (0x42A110) is the canonical full port in src/unported/stubs.cpp;
+// GetPmdNum (0x42A110) is the canonical full port in src/app/late_ports.cpp;
 // the former file-local CountModels twin was removed and its callers
 // (ExpGetPmdNum + the two ordering helpers) now forward to GetPmdNum.
 //
@@ -64,7 +64,7 @@
 #include "mikudancestudio/model.hpp"
 
 // VA 0x00407910 - wide -> Shift-JIS; real body in src/window/ui_dropfiles.cpp.
-// VA 0x0042A110 - model-slot count; real body in src/unported/stubs.cpp.
+// VA 0x0042A110 - model-slot count; real body in src/app/late_ports.cpp.
 namespace mikudancestudio {
 void WideToSjisPath(char* dst, const wchar_t* src, rsize_t size);
 int GetPmdNum(MMDApp* app);

@@ -47,19 +47,19 @@ namespace mikudancestudio {
 // the original (caller loads ECX from the Block global), so the HWND-only
 // stub signatures were missing the MMDApp* first parameter.  The bodies are
 // ported in dialog_select_ops.cpp with these corrected signatures.
-void InitSelectNavDialog(MMDApp* app, HWND hDlg);    // was Sub466630, VA 0x00466630
-void SyncSelectAttachCombo(MMDApp* app, HWND hDlg);  // was Sub461C20, VA 0x00461C20
-void ResetModelSelection(MMDApp* app);               // was Sub4256C0, VA 0x004256C0
-void ApplyBoneAttach(MMDApp* app, HWND hDlg);        // was Sub43D610, VA 0x0043D610
-void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection);  // was Sub43D2E0, VA 0x0043D2E0
-void CommitTargetBonePick(MMDApp* app, HWND hDlg);   // was Sub43D560, VA 0x0043D560
-void ApplyFrameRangeScale(HWND hDlg);                // VA 0x0043E970, was Sub43E970
+void InitSelectNavDialog(MMDApp* app, HWND hDlg);    // VA 0x00466630
+void SyncSelectAttachCombo(MMDApp* app, HWND hDlg);  // VA 0x00461C20
+void ResetModelSelection(MMDApp* app);               // VA 0x004256C0
+void ApplyBoneAttach(MMDApp* app, HWND hDlg);        // VA 0x0043D610
+void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection);  // VA 0x0043D2E0
+void CommitTargetBonePick(MMDApp* app, HWND hDlg);   // VA 0x0043D560
+void ApplyFrameRangeScale(HWND hDlg);                // VA 0x0043E970
                                                    // (frame_range_apply.cpp)
 
 // ===========================================================================
 // VA 0x0044C5D0 - FrameRangeDlgProc
 // ===========================================================================
-INT_PTR CALLBACK FrameRangeDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {  // was Sub44C5D0
+INT_PTR CALLBACK FrameRangeDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     char text[256];
 
@@ -107,7 +107,7 @@ INT_PTR CALLBACK FrameRangeDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lP
 // ===========================================================================
 // VA 0x0047A3F0 - SelectNavDlgProc
 // ===========================================================================
-INT_PTR CALLBACK SelectNavDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {  // was Sub47A3F0
+INT_PTR CALLBACK SelectNavDlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
     if (Msg == WM_INITDIALOG) {                     // 0x47A3F9
         InitSelectNavDialog(g_Block, hDlg);                   // 0x00466630 list fill
         return 0;

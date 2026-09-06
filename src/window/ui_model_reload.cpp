@@ -205,7 +205,7 @@ void PostModelReload(MMDApp* app) {  // 0x41A650
                              referenceTranslation.m[3][2];
 }
 
-// (Sub41A650 was a local alias wrapper of PostModelReload above - removed;
+// (0x41A650 was a local alias wrapper of PostModelReload above - removed;
 //  callers now use the PostModelReload name directly.)
 
 void PostModelReload2(MMDApp* app) {  // 0x40D940
@@ -305,7 +305,7 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     ShowWindow(GetDlgItem(viewportWindow, panel::kReadoutDistEdit), SW_HIDE);
 }
 
-void RebuildModelModePanel(MMDApp* app) {  // was Sub44D610, 0x44D610
+void RebuildModelModePanel(MMDApp* app) {  // 0x44D610
     app->state.optflag[0] = 0;
     HWND combo = MainControl(app, 433);
     SendMessageA(combo, CB_DELETESTRING, 5, 0);
@@ -360,7 +360,7 @@ void RebuildModelModePanel(MMDApp* app) {  // was Sub44D610, 0x44D610
     }
 }
 
-void RebuildCameraModePanel(MMDApp* app) {  // was Sub44D780, 0x44D780
+void RebuildCameraModePanel(MMDApp* app) {  // 0x44D780
     // Rebuild the camera-mode transform combo exactly as the original does.
     // Item four is the model-mode "all" entry; the three camera entries are
     // appended in its place.
@@ -406,7 +406,7 @@ void RebuildCameraModePanel(MMDApp* app) {  // was Sub44D780, 0x44D780
     basis[15] = 1.0f;
 }
 
-void ApplyModelComboSelection(MMDApp* app) {  // was Sub44D940, 0x44D940
+void ApplyModelComboSelection(MMDApp* app) {  // 0x44D940
     HWND hwnd = static_cast<HWND>(app->Hwnd());
     const int selection = static_cast<int>(
         SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_GETCURSEL, 0, 0));

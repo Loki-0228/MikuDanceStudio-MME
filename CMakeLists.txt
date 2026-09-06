@@ -59,14 +59,14 @@ add_library(mikudancestudio_core STATIC
     src/main/charset_conv.cpp
     src/math/quat_to_mat3x4.cpp
     src/math/color_lerp.cpp
-    src/math/kernel_gaps.cpp
+    src/math/math_kernel_ledger.cpp
     src/window/path_utils.cpp
     src/window/window_init.cpp
     src/window/ui_init.cpp
     src/window/ui_font.cpp
     src/window/wndproc.cpp
     src/window/localize_ui.cpp
-    src/window/wndproc_stubs.cpp
+    src/window/wndproc_aux_windows.cpp
     src/window/command_dispatch.cpp
     src/window/frame_line_edit.cpp
     src/window/accessory_paste.cpp
@@ -115,7 +115,7 @@ add_library(mikudancestudio_core STATIC
     src/model/model_skinning.cpp
     src/model/pmx_load.cpp
     src/model/add_model.cpp
-    src/model/model_query_gaps.cpp
+    src/model/model_query_helpers.cpp
     src/model/model_dispose.cpp
     src/model/bone_sort.cpp
     src/model/post_load_init.cpp
@@ -128,10 +128,10 @@ add_library(mikudancestudio_core STATIC
     src/window/dialog_procs.cpp
     src/window/frame_range_apply.cpp
     src/io/pmm_save.cpp
-    src/io/io_gaps.cpp
+    src/io/io_device_helpers.cpp
     src/io/vpd_file.cpp
     src/io/vmd_save.cpp
-    src/io/pmm_load_shell.cpp
+    src/io/pmm_load_dispatch.cpp
     src/io/pmm_load_v2.cpp
     src/io/pmm_load_v1.cpp
     src/window/ui_scroll_mouse.cpp
@@ -153,7 +153,7 @@ add_library(mikudancestudio_core STATIC
     src/app/subsystem_init.cpp
     src/app/reset_app_state.cpp
     src/app/scene_ownership.cpp
-    src/app/app_gap_bodies.cpp
+    src/app/app_utilities.cpp
     src/app/shutdown_cleanup.cpp
     src/app/oni_kinect.cpp
     src/app/oni_skeleton_pump.cpp
@@ -169,17 +169,17 @@ add_library(mikudancestudio_core STATIC
     src/window/model_edge_dialog.cpp
     src/window/enhance_model_io.cpp
     src/window/misc_dialogs.cpp
-    src/window/command_control_400.cpp
-    src/window/command_control_450.cpp
-    src/window/command_control_500.cpp
-    src/features/dialog_gaps.cpp
-    src/features/query_audio_gaps.cpp
-    src/features/subsystem_gaps.cpp
+    src/window/command_frame_edit.cpp
+    src/window/command_panel_toggles.cpp
+    src/window/command_frame_register.cpp
+    src/features/dialog_helpers.cpp
+    src/features/audio_pose_helpers.cpp
+    src/features/subsystem_ledger.cpp
     src/render/draw_glyph.cpp
     src/render/toon_textures.cpp
     src/render/scene_font.cpp
     src/exports/effect_api.cpp
-    src/unported/stubs.cpp
+    src/app/late_ports.cpp
 )
 
 target_include_directories(mikudancestudio_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
