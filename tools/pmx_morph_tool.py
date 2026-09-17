@@ -739,7 +739,7 @@ def format_report(model_path: Path, model: PmxModel, mmap: MorphMap,
         if stats.get("frame_missing"):
             lines.append("! 映射表指定的表示枠不存在，新表情未加入表示枠（不影响动作驱动）")
         lines.append("")
-    lines.append("提示：生成结果只写新文件，原始 PMX 不会被修改；形状变化版 PMX 请另行处理。")
+    lines.append("提示：生成结果只写新文件，原始 PMX 不会被修改；")
     return "\n".join(lines)
 
 
