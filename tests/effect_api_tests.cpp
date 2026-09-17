@@ -2,6 +2,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/scene_ownership.hpp"
 #include "btBulletDynamicsCommon.h"
 
 #include <cstdio>
@@ -20,6 +21,37 @@ char* ExpGetAcsFilename(int);
 }
 
 namespace {
+bool effectEnabled = true;
+bool englishMenu = true;
+
+HMENU MakeEffectPopup(bool english) {
+    HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING, 40005, L"Effect Mapping");
+    AppendMenuW(menu, MF_STRING | MF_CHECKED, english ? 40020 : 40006, L"Enable Effect");
+    AppendMenuW(menu, MF_STRING | MF_CHECKED, 40001, L"Auto Reload");
+    return menu;
+}
+
+LRESULT CALLBACK FakeEffectWindow(HWND hwnd, UINT message, WPARAM wp, LPARAM lp) {
+    if (message == WM_COMMAND) {
+        HMENU root = GetMenu(hwnd);
+        HMENU popup = GetSubMenu(root, 0);
+        if (LOWORD(wp) == 40006) {
+            effectEnabled = (GetMenuState(popup, 40006, MF_BYCOMMAND) & MF_CHECKED) == 0;
+            CheckMenuItem(popup, 40006, effectEnabled ? MF_CHECKED : MF_UNCHECKED);
+            return 0;
+        }
+        if (LOWORD(wp) == 260) {
+            RemoveMenu(root, 0, MF_BYPOSITION);
+            DestroyMenu(popup);
+            englishMenu = !englishMenu;
+            AppendMenuW(root, MF_POPUP, reinterpret_cast<UINT_PTR>(MakeEffectPopup(englishMenu)), L"MMEffect");
+            return 0;
+        }
+    }
+    return DefWindowProcW(hwnd, message, wp, lp);
+}
+
 void Check(bool condition, const char* description) {
     if (!condition) {
         std::fprintf(stderr, "FAIL: %s\n", description);
@@ -33,6 +65,54 @@ int main() {
     auto app = std::make_unique<MMDApp>();
     std::memset(&app->state, 0, sizeof(app->state));
     g_Block = app.get();
+    app->WindowLayoutReady() = 1;
+    app->state.fpsOverlayFrameCount = 17;
+    {
+        ScopedSceneMutation load(*app);
+        Check(app->SceneMutationInProgress(), "Loading suspends scene access");
+        app->WindowLayoutReady() = 1; // A nested WM_SIZE must not reopen rendering.
+        FrameDriver(app.get()); // Renderer/scene are deliberately uninitialized.
+        {
+            ScopedSceneMutation reset(*app);
+            Check(app->SceneMutationInProgress(), "Nested abort/reset remains guarded");
+        }
+        FrameDriver(app.get());
+        Check(app->SceneMutationInProgress() && app->state.fpsOverlayFrameCount == 17,
+              "Partial scenes are not rendered after nested reset or resize");
+    }
+    Check(!app->SceneMutationInProgress() && app->WindowLayoutReady() == 1,
+          "Scene access and previous layout gate restored on scope exit");
+    // Exercise native command routing and popup recreation without loading a
+    // third-party DLL: the fake follows MME's resource IDs and switch handler.
+    WNDCLASSW wc{};
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = L"EffectMenuRegression";
+    wc.lpfnWndProc = FakeEffectWindow;
+    Check(RegisterClassW(&wc) != 0, "Register menu test window");
+    HWND window = CreateWindowW(wc.lpszClassName, L"", WS_OVERLAPPEDWINDOW,
+        0, 0, 400, 300, nullptr, nullptr, wc.hInstance, nullptr);
+    Check(window != nullptr, "Create menu test window");
+    HMENU menu = CreateMenu();
+    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(MakeEffectPopup(true)), L"MMEffect");
+    SetMenu(window, menu);
+    app->state.hwnd = window;
+    InstallEffectMenuCompatibility(app.get());
+    InstallEffectMenuCompatibility(app.get()); // Installing twice must not chain twice.
+    Check(GetMenuState(menu, 40020, MF_BYCOMMAND) == UINT(-1) &&
+          (GetMenuState(menu, 40006, MF_BYCOMMAND) & MF_CHECKED) != 0,
+          "English enable item uses the native switch command");
+    SendMessageW(window, WM_COMMAND, 40006, 0);
+    Check(!effectEnabled, "Menu command disables the engine");
+    for (int i = 0; i < 3; ++i) {
+        SendMessageW(window, WM_COMMAND, 260, 0);
+        Check(GetMenuState(menu, 40006, MF_BYCOMMAND) == MF_UNCHECKED && !effectEnabled,
+              "Language recreation preserves disabled state and command ID");
+    }
+    SendMessageW(window, WM_COMMAND, 40006, 0);
+    Check(effectEnabled, "Menu command re-enables after language changes");
+    SendMessageW(window, WM_COMMAND, 260, 0);
+    Check((GetMenuState(menu, 40006, MF_BYCOMMAND) & MF_CHECKED) != 0 && effectEnabled,
+          "Language recreation preserves enabled state");
     auto model = std::make_unique<mdl::ModelRecord>();
     auto replacement = std::make_unique<mdl::ModelRecord>();
     auto accessory = std::make_unique<mdl::AccessoryRecord>();
@@ -90,6 +170,31 @@ int main() {
               wcscmp(decoded, replacement->path) == 0, "CP932 path remains compatible");
     Check(ExpGetPmdFilename(1) == nullptr && ExpGetAcsFilename(1) == nullptr,
           "Missing filenames remain null");
+
+    // Language changes must touch the named UI flag, not x86 offset 12740
+    // (which is inside boneListRowType on x64), and use ABI-correct names.
+    app->AccessorySlot(7) = nullptr;
+    app->state.optflag[0] = 1;
+    HWND combo = CreateWindowA("COMBOBOX", "", WS_CHILD | CBS_DROPDOWNLIST,
+        0, 0, 200, 100, window, reinterpret_cast<HMENU>(436), wc.hInstance, nullptr);
+    Check(combo != nullptr, "Create model selector");
+    strcpy_s(replacement->name, "JP model");
+    strcpy_s(replacement->nameEn, "EN model");
+    std::memset(replacement->boneListRowType, 0x5A, sizeof(replacement->boneListRowType));
+    for (int language : {1, 2, 0}) {
+        app->state.englishUI = static_cast<unsigned char>(language);
+        LocalizeUI(app.get());
+        Check(replacement->physicsFlags == (language == 1), "Model UI language flag");
+        for (auto type : replacement->boneListRowType)
+            Check(type == 0x5A, "Language change preserves model row metadata");
+        char name[64]{};
+        SendMessageA(combo, CB_GETLBTEXT, 1, reinterpret_cast<LPARAM>(name));
+        Check(strcmp(name, language == 1 ? "EN model" : "JP model") == 0,
+              "Model selector reads the correct name on both ABIs");
+    }
+    DestroyWindow(window);
+    app->state.hwnd = nullptr;
+    UnregisterClassW(wc.lpszClassName, wc.hInstance);
     _free_locale(renderer->localeTable[0]);
     app->ModelSlot(3) = nullptr;
     app->AccessorySlot(7) = nullptr;
@@ -115,5 +220,5 @@ int main() {
     ShutdownCleanup(app.get());
     Check(app->Physics() == nullptr, "Physics world teardown completes");
     g_Block = nullptr;
-    std::puts("PASS effect IDs, order lifecycle, slot reuse, filenames, and physics teardown");
+    std::puts("PASS effect menu, language, scene mutation, IDs, order lifecycle, filenames, and teardown");
 }

@@ -389,6 +389,7 @@ void RenderFrameScene(MMDApp* app) {
     BeginEffectObjectRegistration();
     if (FAILED(device->BeginScene()))
         return;
+    InstallEffectMenuCompatibility(app);
 
     const bool effectRenderer = UseEffectModelRenderer(app);
     if (effectRenderer)

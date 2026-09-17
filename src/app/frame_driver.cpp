@@ -347,6 +347,8 @@ void TimelineAdvance(MMDApp* app) {
 }
 
 void FrameDriver(MMDApp* app) {
+    if (app->SceneMutationInProgress())
+        return;
 #ifdef MIKUDANCESTUDIO_DIAG
     // DIAGNOSTIC ONLY: append a tick per pass to prove liveness of the
     // frame driver in real-time runs (stderr is unavailable in the GUI

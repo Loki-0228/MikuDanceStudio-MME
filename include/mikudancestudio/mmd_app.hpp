@@ -183,6 +183,8 @@ public:
     // like the original's `this-><field>`.
     MMDAppState state;
 
+    bool SceneMutationInProgress() const { return m_sceneMutationDepth != 0; }
+
     LetterHotkeyState& LetterHotkeys() { return m_letterHotkeys; }
 
     // Frame-range output dialog HWND (x86 blob slot 0xA0B50).
@@ -1452,6 +1454,8 @@ public:
 
 
 private:
+    friend class ScopedSceneMutation;
+    unsigned int m_sceneMutationDepth = 0;
 
     LetterHotkeyState m_letterHotkeys;
 

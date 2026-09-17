@@ -45,6 +45,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/effect_api.hpp"
 #include "mikudancestudio/runtime_log.hpp"
+#include "mikudancestudio/scene_ownership.hpp"
 
 namespace mikudancestudio {
 
@@ -106,6 +107,7 @@ void FontSubInit(MMDApp* app, const wchar_t* directory) {
 void LoadSceneFile() {
 
     MMDApp* app = g_Block;
+    ScopedSceneMutation mutation(*app);
     runtime_log::WritePath("LOAD_SCENE", app->EnvFileName());
     char box[0x100];
 

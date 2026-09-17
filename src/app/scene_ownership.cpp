@@ -35,6 +35,21 @@ inline void TraceAccessoryRelease(int, const char*, const void*) {}
 
 }  // namespace
 
+ScopedSceneMutation::ScopedSceneMutation(MMDApp& app)
+    : app_(app), previousLayoutReady_(app.WindowLayoutReady()) {
+    ++app_.m_sceneMutationDepth;
+    app_.WindowLayoutReady() = 0;
+}
+
+ScopedSceneMutation::~ScopedSceneMutation() {
+    app_.WindowLayoutReady() = previousLayoutReady_;
+    if (--app_.m_sceneMutationDepth == 0) {
+        app_.state.messageSeen = 1;
+        if (app_.MainWindow() != nullptr)
+            InvalidateRect(app_.MainWindow(), nullptr, FALSE);
+    }
+}
+
 void ReleaseSceneModels(MMDApp& app) {
     // x64 teardown sub_7FF7CB42BD40+0x42C130: 255-count do/while over the
     // model slots (app+0xBE8), each entry through sub_7FF7CB4C8D50

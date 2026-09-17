@@ -2,6 +2,11 @@
 
 namespace mikudancestudio {
 
+class MMDApp;
+
+// Repair the legacy MME English menu and preserve its switch across languages.
+void InstallEffectMenuCompatibility(MMDApp* app);
+
 // MME rebuilds its object/order table inside IDirect3DDevice9::BeginScene.
 void BeginEffectObjectRegistration();
 

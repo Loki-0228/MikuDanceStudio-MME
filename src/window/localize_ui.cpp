@@ -172,9 +172,7 @@ void LocalizeUI(MMDApp* app) {
     for (int i = 0; i < kModelSlotCount; ++i) {
         unsigned char* slot = s.ModelSlot(i);
         if (slot != nullptr)
-            *reinterpret_cast<unsigned char*>(
-                static_cast<unsigned char*>(slot) + 12740) =
-                static_cast<unsigned char>(english);
+            mdl::Mdl(slot)->physicsFlags = static_cast<unsigned char>(english);
     }
     if (s.Audio() != nullptr)
         s.Audio()->englishUI = static_cast<unsigned char>(english);
@@ -261,7 +259,7 @@ void LocalizeUI(MMDApp* app) {
             continue;
         unsigned char* slot = s.ModelSlot(slotIdx);
         LPARAM name = reinterpret_cast<LPARAM>(
-            english ? slot + 8826 : slot + 8776);
+            english ? mdl::Mdl(slot)->nameEn : mdl::Mdl(slot)->name);
         SendMessageA(combo436, CB_ADDSTRING, 0, name);
         SendMessageA(combo474, CB_ADDSTRING, 0, name);
         SendMessageA(combo449, CB_ADDSTRING, 0, name);

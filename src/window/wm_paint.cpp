@@ -50,7 +50,7 @@ void HandleWindowPaint(MMDApp* app) {
     HWND hwnd = static_cast<HWND>(app->Hwnd());
     PAINTSTRUCT ps;
 
-    if (app->FullscreenMode() != 0) {
+    if (app->FullscreenMode() != 0 || app->SceneMutationInProgress()) {
         BeginPaint(hwnd, &ps);
         EndPaint(hwnd, &ps);
         return;

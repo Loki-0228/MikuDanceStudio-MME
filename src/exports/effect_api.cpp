@@ -54,6 +54,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <commctrl.h>
 
 #include <cmath>
 #include <cstring>
@@ -143,6 +144,60 @@ int CountAcs(MMDApp* app) {
 // without per-object effect state.
 std::uint8_t g_modelOrderSeen[mikudancestudio::kModelSlotCount] = {0};
 std::uint8_t g_accessoryOrderSeen[0xFF] = {0};
+
+constexpr UINT kEffectEnable = 40006;
+constexpr UINT kEffectEnableEnglish = 40020;
+constexpr UINT_PTR kEffectMenuSubclass = 0x4D4D45;
+
+HMENU EffectMenu(HWND window) {
+    HMENU menu = GetMenu(window);
+    for (int i = 0; i < GetMenuItemCount(menu); ++i) {
+        HMENU popup = GetSubMenu(menu, i);
+        if (GetMenuState(popup, 40005, MF_BYCOMMAND) != UINT(-1) &&
+            GetMenuState(popup, 40001, MF_BYCOMMAND) != UINT(-1) &&
+            (GetMenuState(popup, kEffectEnable, MF_BYCOMMAND) != UINT(-1) ||
+             GetMenuState(popup, kEffectEnableEnglish, MF_BYCOMMAND) != UINT(-1)))
+            return popup;
+    }
+    return nullptr;
+}
+
+void RepairEffectMenu(HMENU menu) {
+    // The shipped MME English resource (107) uses 40020, but its WndProc
+    // and Ctrl+Shift+E hook both dispatch 40006, as does Japanese resource
+    // 101. Fix the live menu only; the DLL and its effect engine stay intact.
+    if (menu != nullptr &&
+        GetMenuState(menu, kEffectEnable, MF_BYCOMMAND) == UINT(-1) &&
+        GetMenuState(menu, kEffectEnableEnglish, MF_BYCOMMAND) != UINT(-1)) {
+        MENUITEMINFOW item{};
+        item.cbSize = sizeof(item);
+        item.fMask = MIIM_ID;
+        item.wID = kEffectEnable;
+        SetMenuItemInfoW(menu, kEffectEnableEnglish, FALSE, &item);
+    }
+}
+
+LRESULT CALLBACK EffectMenuProc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp,
+                               UINT_PTR id, DWORD_PTR) {
+    // MME recreates its popup before forwarding the language command to
+    // the host, restoring the resource's default check mark even when the
+    // engine is disabled. Save the actual check before that recreation.
+    const bool languageChange = message == WM_COMMAND && LOWORD(wp) == 260;
+    UINT enabled = UINT(-1);
+    if (languageChange)
+        enabled = GetMenuState(EffectMenu(hwnd), kEffectEnable, MF_BYCOMMAND);
+    if (message == WM_NCDESTROY)
+        RemoveWindowSubclass(hwnd, EffectMenuProc, id);
+    const LRESULT result = DefSubclassProc(hwnd, message, wp, lp);
+    if (languageChange) {
+        HMENU menu = EffectMenu(hwnd);
+        RepairEffectMenu(menu);
+        if (menu != nullptr && enabled != UINT(-1))
+            CheckMenuItem(menu, kEffectEnable, MF_BYCOMMAND | (enabled & MF_CHECKED));
+        DrawMenuBar(hwnd);
+    }
+    return result;
+}
 
 // ---- D3DX wrappers with local fallbacks (d3dx9_32.dll may be absent) ------
 void Identity(mikudancestudio::d3dx::D3DXMATRIXF* m) {
@@ -244,6 +299,18 @@ float* AccWorldMatrix(const mikudancestudio::mdl::AccessoryRecord& acc, float* d
 }  // namespace
 
 namespace mikudancestudio {
+
+void InstallEffectMenuCompatibility(MMDApp* app) {
+    HWND hwnd = app->MainWindow();
+    DWORD_PTR reference = 0;
+    if (GetWindowSubclass(hwnd, EffectMenuProc, kEffectMenuSubclass, &reference))
+        return;
+    HMENU menu = EffectMenu(hwnd);
+    if (menu != nullptr) {
+        RepairEffectMenu(menu);
+        SetWindowSubclass(hwnd, EffectMenuProc, kEffectMenuSubclass, 0);
+    }
+}
 
 void BeginEffectObjectRegistration() {
     // Ordinals can be reused after deletion, Skip, or a new project load.

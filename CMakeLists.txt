@@ -269,6 +269,8 @@ if (CMAKE_SIZEOF_VOID_P EQUAL 8)
                       DEPENDS ${MIKUDANCESTUDIO_D3DX_IMPLIB})
     target_compile_definitions(mikudancestudio_core
                                PUBLIC MIKUDANCESTUDIO_D3DX_STATIC_IMPORTS=1)
+    target_link_libraries(mikudancestudio_core PUBLIC ${MIKUDANCESTUDIO_D3DX_IMPLIB})
+    add_dependencies(mikudancestudio_core mikudancestudio_d3dx_imports)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -296,6 +298,8 @@ if (MIKUDANCESTUDIO_BUILD_INPUT_TESTS)
     #   cmake --build build --config Release --target keyboard_input_tests
     add_executable(keyboard_input_tests EXCLUDE_FROM_ALL tests/keyboard_input_tests.cpp)
     target_link_libraries(keyboard_input_tests PRIVATE mikudancestudio_core winmm dsound)
+    set_target_properties(keyboard_input_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
     add_test(NAME keyboard_input_regressions COMMAND keyboard_input_tests)
 endif()
 
@@ -304,10 +308,6 @@ if (MIKUDANCESTUDIO_BUILD_EFFECT_TESTS)
     enable_testing()
     add_executable(effect_api_tests EXCLUDE_FROM_ALL tests/effect_api_tests.cpp)
     target_link_libraries(effect_api_tests PRIVATE mikudancestudio_core winmm dsound)
-    if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-        target_link_libraries(effect_api_tests PRIVATE ${MIKUDANCESTUDIO_D3DX_IMPLIB})
-        add_dependencies(effect_api_tests mikudancestudio_d3dx_imports)
-    endif()
     # Keep the test away from any user-installed d3d9/MME proxy in Release.
     set_target_properties(effect_api_tests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
@@ -341,12 +341,8 @@ target_link_libraries(MikuDanceStudio PRIVATE
     user32
 )
 
-# The d3dx9_43 import stubs must land in the EXECUTABLE's import table - that
-# is the table MME patches (see the import-library block above).
-if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-    target_link_libraries(MikuDanceStudio PRIVATE ${MIKUDANCESTUDIO_D3DX_IMPLIB})
-    add_dependencies(MikuDanceStudio mikudancestudio_d3dx_imports)
-endif()
+# The core's PUBLIC d3dx9_43 import dependency lands in each consuming
+# executable's IAT, including the host table patched by MME.
 
 # gen_resources.res re-embeds the original .rsrc byte-exact; link.exe accepts
 # .res directly as an input file (CMake itself would classify it as <None>).
