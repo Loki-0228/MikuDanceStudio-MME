@@ -180,6 +180,7 @@ int main() {
     Check(combo != nullptr, "Create model selector");
     strcpy_s(replacement->name, "JP model");
     strcpy_s(replacement->nameEn, "EN model");
+    wcscpy_s(replacement->path, L"C:\\模型\\洛天依.pmx");
     std::memset(replacement->boneListRowType, 0x5A, sizeof(replacement->boneListRowType));
     for (int language : {1, 2, 0}) {
         app->state.englishUI = static_cast<unsigned char>(language);
@@ -187,10 +188,10 @@ int main() {
         Check(replacement->physicsFlags == (language == 1), "Model UI language flag");
         for (auto type : replacement->boneListRowType)
             Check(type == 0x5A, "Language change preserves model row metadata");
-        char name[64]{};
-        SendMessageA(combo, CB_GETLBTEXT, 1, reinterpret_cast<LPARAM>(name));
-        Check(strcmp(name, language == 1 ? "EN model" : "JP model") == 0,
-              "Model selector reads the correct name on both ABIs");
+        wchar_t name[64]{};
+        SendMessageW(combo, CB_GETLBTEXT, 1, reinterpret_cast<LPARAM>(name));
+        Check(wcscmp(name, L"洛天依.pmx") == 0,
+              "Model selector preserves the Unicode source filename in every language");
     }
     DestroyWindow(window);
     app->state.hwnd = nullptr;

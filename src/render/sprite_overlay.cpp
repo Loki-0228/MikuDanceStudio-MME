@@ -12,6 +12,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/bone_projection.hpp"
 #include "vb_dump.hpp"
 
 namespace mikudancestudio {
@@ -79,13 +80,18 @@ ClipPoint TransformPoint(const ClipPoint& p, const D3DMATRIX& m) {
     };
 }
 
-bool ProjectBonePoint(mikudancestudio::mdl::BoneRecord* bone, std::size_t pointOffset,
+}  // namespace
+
+bool ProjectBonePoint(const mdl::BoneRecord& bone, BoneOverlayPoint pointKind,
                       const D3DMATRIX& world, const D3DMATRIX& view,
                       const D3DMATRIX& projection, const RECT& viewport,
                       int* screenX, int* screenY, float* clipW) {
     const auto& boneMatrix =
-        *reinterpret_cast<const D3DMATRIX*>(bone->matInit);
-    const float* point = reinterpret_cast<const float*>(bone + pointOffset);
+        *reinterpret_cast<const D3DMATRIX*>(bone.matInit);
+    // Byte offsets from the x86 layout are not BoneRecord indices, and the
+    // fields move on x64. Keep both accesses tied to their named ABI fields.
+    const float* point = pointKind == BoneOverlayPoint::Origin
+        ? bone.position : bone.tailOffset;
     ClipPoint p = TransformPoint(point[0], point[1], point[2], boneMatrix);
     p = TransformPoint(p, world);
     p = TransformPoint(p, view);
@@ -104,6 +110,8 @@ bool ProjectBonePoint(mikudancestudio::mdl::BoneRecord* bone, std::size_t pointO
                                 p.y / p.w * height * 0.5);
     return true;
 }
+
+namespace {
 
 __declspec(noinline) float BoneVCoordinate(int numerator, int origin,
                                            float lengthValue, float scale) {
@@ -289,7 +297,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                  ++index) {
                 auto* bone = &bones[index];
                 float w = 0.0f;
-                ProjectBonePoint(bone, 308, world, viewMatrix, projection,
+                ProjectBonePoint(*bone, BoneOverlayPoint::Origin, world, viewMatrix, projection,
                                  view, &bone->selState,
                                  &bone->selState2, &w);
                 if (index == selected) {
@@ -300,7 +308,7 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                 if (mdl::Mdl(model)->physicsMode == 2 &&
                     (bone->flags & mdl::kBoneFlagTailIsBone) == 0) {
                     float secondaryW = 0.0f;
-                    ProjectBonePoint(bone, 464, world, viewMatrix, projection,
+                    ProjectBonePoint(*bone, BoneOverlayPoint::Tail, world, viewMatrix, projection,
                                      view, &bone->tailScreenX,
                                      &bone->tailScreenY, &secondaryW);
                 }

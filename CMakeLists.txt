@@ -315,6 +315,11 @@ if (MIKUDANCESTUDIO_BUILD_EFFECT_TESTS)
     set_target_properties(effect_api_tests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
     add_test(NAME effect_api_regressions COMMAND effect_api_tests)
+    add_executable(bone_projection_tests EXCLUDE_FROM_ALL tests/bone_projection_tests.cpp)
+    target_link_libraries(bone_projection_tests PRIVATE mikudancestudio_core winmm dsound)
+    set_target_properties(bone_projection_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
+    add_test(NAME bone_projection_regressions COMMAND bone_projection_tests)
 endif()
 
 option(MIKUDANCESTUDIO_BUILD_ENCODING_TESTS "Build filename encoding regression tests" OFF)
