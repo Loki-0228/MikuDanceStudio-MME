@@ -2784,10 +2784,10 @@ static void Cmd400_AccessoryEditDialog(MMDApp* app, HWND hwnd) {
     app->state.enterKeyState = 1;
     app->state.accessoryEditDialogOpen = 1;
     const std::intptr_t result =
-        DialogBoxParamA(static_cast<HINSTANCE>(app->HInstance()),
+        DialogBoxParamW(static_cast<HINSTANCE>(app->HInstance()),
                         app->state.englishUI != 0
-                            ? reinterpret_cast<LPCSTR>(0x329)
-                            : reinterpret_cast<LPCSTR>(0x328),
+                            ? MAKEINTRESOURCEW(0x329)
+                            : MAKEINTRESOURCEW(0x328),
                         hwnd, &SelectNavDlgProc, 0);
     if (result == 2) {
         return;  // was: break (switch exit)

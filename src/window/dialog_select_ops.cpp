@@ -126,6 +126,14 @@ LPARAM StrParam(const void* s) {
     return reinterpret_cast<LPARAM>(const_cast<void*>(s));
 }
 
+// Model/bone names and the JP literals are CP932, independent of the
+// Windows ANSI code page.  Decode before sending text to Unicode controls.
+void AddSelectNavString(HWND combo, const char* text) {
+    wchar_t wide[256];
+    if (MultiByteToWideChar(932, 0, text, -1, wide, 256) > 0)
+        SendMessageW(combo, CB_ADDSTRING, 0, StrParam(wide));
+}
+
 }  // namespace
 
 // ===========================================================================
@@ -153,9 +161,7 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466
     const HWND combo673 = GetDlgItem(hDlg, panel::kMorphNameCombo);                    // 0x466733
     SendMessageA(combo669, CB_RESETCONTENT, 0, 0);        // 0x466737
     SendMessageA(combo673, CB_RESETCONTENT, 0, 0);                            // 0x466747
-    SendMessageA(combo669, CB_ADDSTRING, 0,               // 0x46675E
-                 English(app) ? StrParam("root")          // 0x52E7E4
-                              : StrParam(kJpRoot));      // 0x52D354
+    AddSelectNavString(combo669, English(app) ? "root" : kJpRoot); // 0x46675E
 
     int selItem = 0;                                                 // 0x46676B
     int item = 1;                                                    // 0x466773
@@ -165,7 +171,7 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466
             const int boneIdx = records[item].boneIndex;             // 0x46679D
             const char* name =
                 English(app) ? bones[boneIdx].nameEn : bones[boneIdx].name;
-            SendMessageA(combo669, CB_ADDSTRING, 0, StrParam(name));        // 0x4667C1
+            AddSelectNavString(combo669, name);                      // 0x4667C1
             if (mdl::Mdl(model)->selectedBone == boneIdx)  // 0x4667F1
                 selItem = item;
             ++item;
@@ -179,11 +185,11 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466
         SendMessageA(combo669, CB_SETCURSEL, selItem, 0);                   // 0x466826
 
     if (English(app)) {                                              // 0x46683A
-        SendMessageA(combo673, CB_ADDSTRING, 0, StrParam("non"));     // 0x52D38C (sic)
-        SendMessageA(combo673, CB_ADDSTRING, 0, StrParam("ground"));   // 0x52D2A4
+        AddSelectNavString(combo673, "non");                        // 0x52D38C (sic)
+        AddSelectNavString(combo673, "ground");                     // 0x52D2A4
     } else {
-        SendMessageA(combo673, CB_ADDSTRING, 0, StrParam(kJpNone));    // 0x52E7DC
-        SendMessageA(combo673, CB_ADDSTRING, 0, StrParam(kJpGround));  // 0x52E7D4
+        AddSelectNavString(combo673, kJpNone);                       // 0x52E7DC
+        AddSelectNavString(combo673, kJpGround);                     // 0x52E7D4
     }
 
     // Fill combo 673 item 2.. with the loaded models in display order,
@@ -223,9 +229,9 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466
             English(app) ? mrec->nameEn : mrec->name;  // x64 0x22F2 / 0x22C0
         if (slot == app->SelectedModelSlot()) {                      // 0x46692A
             sprintf_s(Buffer, 0x100, "(%s)", name);                  // 0x466951
-            SendMessageA(combo673, CB_ADDSTRING, 0, StrParam(Buffer));
+            AddSelectNavString(combo673, Buffer);
         } else {
-            SendMessageA(combo673, CB_ADDSTRING, 0, StrParam(name));
+            AddSelectNavString(combo673, name);
         }
         order[nOrder++] = slot;                                      // 0x4669CA
     }
@@ -284,7 +290,7 @@ void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection) {  // was 
         // LABEL_5: empty target-bone list                          // 0x43D36D
         rec->targetBoneIndex = 0;
         SendMessageA(combo677, CB_RESETCONTENT, 0, 0);
-        SendMessageA(combo677, CB_ADDSTRING, 0, StrParam("------"));        // 0x52C0E8
+        AddSelectNavString(combo677, "------");                      // 0x52C0E8
         SendMessageA(combo677, CB_SETCURSEL, 0, 0);
         RefreshSelectNavDisplay(app, hDlg);                                        // 0x43D394
         return;
@@ -321,7 +327,7 @@ void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection) {  // was 
         if (type < mdl::BoneType::InertTip ||
             type == mdl::BoneType::FixedAxis) {
             const char* name = English(app) ? bones[i].nameEn : bones[i].name;
-            SendMessageA(combo677, CB_ADDSTRING, 0, StrParam(name));        // 0x43D4AC
+            AddSelectNavString(combo677, name);                      // 0x43D4AC
             boneIds[n++] = i;                                        // 0x43D4BC
         }
     }
