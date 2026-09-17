@@ -73,7 +73,7 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
                      app->Physics(),                      // a8: -> m+60 scene
                      app->PathWorkspace())) {       // 0x4BF3E0
         app->SceneModified() = 1;
-        const auto name = text_encoding::ModelName(*mdl::Mdl(model), app->EnglishUI() == 1);
+        const auto name = text_encoding::ModelLabel(*mdl::Mdl(model), app->EnglishUI() == 1);
         mdl::Mdl(model)->comboSelIndex = static_cast<std::uint8_t>(SendMessageW(
             GetDlgItem(hwnd, panel::kMainComboModel), CB_ADDSTRING, 0,
             reinterpret_cast<LPARAM>(name.c_str())));

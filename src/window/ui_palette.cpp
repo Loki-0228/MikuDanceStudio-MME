@@ -291,7 +291,7 @@ void HandlePaletteChanged2(HDC hdc) {
     if (app->state.optflag[0] != 0) {   // 0x2F8: camera/light mode
         if (app->EnglishUI() != 0) {                             // 0xA0B4C
             if (playing) {
-                    DrawUiGlyph(app, "Playing", hdc, 20, xBase + 10, hideTop - 22,
+                    DrawUiGlyph(app, "Playing", hdc, 20, xBase + 10, hideTop - 25,
                           0xFF, 0xFF, 0xFF, 1);                  // 0x42C287
             } else {
                 // Accessory slot array this+0x9DD70 [byte this+0x9E170].
@@ -299,12 +299,12 @@ void HandlePaletteChanged2(HDC hdc) {
                     app->AccessorySlot(app->SelectedAccessorySlot());
                 if (acc == nullptr) {
                     DrawUiGlyph(app, "camera light accessary", hdc, 20,
-                              xBase + 10, hideTop - 22, 0xFF, 0xFF, 0xFF, 1);  // 0x42C316
+                              xBase + 10, hideTop - 25, 0xFF, 0xFF, 0xFF, 1);  // 0x42C316
                 } else {
                     const auto name = text_encoding::Display(acc->name);
                     const std::wstring label = (app->EnglishUI() == 2
                         ? L"相机 / 照明 / 配件 / " : L"camera light accessory / ") + name;
-                    DrawWideUiGlyph(label.c_str(), hdc, 20, xBase + 10, hideTop - 22,
+                    DrawWideUiGlyph(label.c_str(), hdc, 20, xBase + 10, hideTop - 25,
                                     0xFF, 0xFF, 0xFF, 1);
                     // 0x42C2EB
                 }
@@ -335,7 +335,7 @@ void HandlePaletteChanged2(HDC hdc) {
     } else {                                                     // bone mode
         if (app->EnglishUI() != 0) {
             if (playing) {
-                DrawUiGlyph(app, "Playing", hdc, 20, xBase + 10, hideTop - 22,
+                DrawUiGlyph(app, "Playing", hdc, 20, xBase + 10, hideTop - 25,
                           0xFF, 0xFF, 0xFF, 1);                  // 0x42C492
             } else {
                 unsigned char* model = app->SelectedModel();
@@ -343,7 +343,7 @@ void HandlePaletteChanged2(HDC hdc) {
                     const mikudancestudio::mdl::ModelRecord& record =
                         *mikudancestudio::mdl::Mdl(model);
                     const std::int32_t boneIdx = record.selectedBone;
-                    auto label = text_encoding::ModelName(record, app->EnglishUI() == 1);
+                    auto label = text_encoding::ModelLabel(record, app->EnglishUI() == 1);
                     if (boneIdx >= 0) {
                         const auto& bone = record.boneTable[boneIdx];
                         std::wstring boneName;
@@ -351,7 +351,7 @@ void HandlePaletteChanged2(HDC hdc) {
                         label += L" : " + boneName;
                     }
                     const int width = DrawWideUiGlyph(label.c_str(), hdc, 20,
-                                                       xBase + 10, hideTop - 22,
+                                                       xBase + 10, hideTop - 25,
                                                        0xFF, 0xFF, 0xFF, 1);
                     // Trace-mode line pair: byte 0x9ED98 & (slot==0xA0430)
                     // & (0xA0430 >= 0).
@@ -364,14 +364,14 @@ void HandlePaletteChanged2(HDC hdc) {
                     if (traceActive) {
                         if (app->state.viewDirty != 0) {  // 0xA05D1
                             DrawUiGlyph(app, "camera bone trace mode (release trace button)",
-                                      hdc, 16, xBase + width + 30, hideTop - 22,
+                                      hdc, 16, xBase + width + 30, hideTop - 25,
                                       0xFF, 0xFF, 0xFF, 1);      // 0x42C5A7
                             DrawUiGlyph(app, "camera bone trace mode (release trace button)",
-                                      hdc, 16, xBase + width + 29, hideTop - 23,
+                                      hdc, 16, xBase + width + 29, hideTop - 26,
                                       0xFF, 0x32, 0x32, 1);      // 0x42C5CE
                         } else {
                             DrawUiGlyph(app, "camera bone trace mode",
-                                      hdc, 16, xBase + width + 30, hideTop - 22,
+                                      hdc, 16, xBase + width + 30, hideTop - 25,
                                       0xFF, 0xFF, 0xFF, 1);      // 0x42C5E9
                         }
                     }
@@ -384,14 +384,14 @@ void HandlePaletteChanged2(HDC hdc) {
             return;
         }
         if (playing) {
-            DrawGlyph(app, kS52C6DC, hdc, 20, xBase + 10, hideTop - 22,
+            DrawGlyph(app, kS52C6DC, hdc, 20, xBase + 10, hideTop - 25,
                       0xFF, 0xFF, 0xFF, 1);                      // 0x42C645
         } else {
             unsigned char* model = app->SelectedModel();
             if (model != nullptr) {                              // 0x42C660
                 const mikudancestudio::mdl::ModelRecord& record =
                     *mikudancestudio::mdl::Mdl(model);
-                const auto label = text_encoding::ModelName(record, false);
+                const auto label = text_encoding::ModelLabel(record, false);
                 const int width = DrawWideUiGlyph(label.c_str(), hdc, 16,
                                                    xBase + 10, hideTop - 20,
                                                    0xFF, 0xFF, 0xFF, 1);

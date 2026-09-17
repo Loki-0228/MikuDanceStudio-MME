@@ -1316,7 +1316,7 @@ static bool LoadSceneV2_ModelBlock(PmmV2LoadContext& ctx, int fd,
                     }  // firstPass guard
 
                     // structure-difference gate (0x4519AF..0x451A44)
-                    const auto label = text_encoding::ModelName(*mdl::Mdl(model), s->EnglishUI() == 1);
+                    const auto label = text_encoding::ModelLabel(*mdl::Mdl(model), s->EnglishUI() == 1);
                     const auto prompt = L"Model structure differs from PMM / 模型结构与工程不同： " + label;
                     text_encoding::EncodeDisplay(s->state.statusText, sizeof s->state.statusText, prompt.c_str());
                     if (workspace.morphsMatch != 0 && workspace.displaysMatch != 0) break;
@@ -1610,7 +1610,7 @@ static void LoadSceneV2_ResetCombos(PmmV2LoadContext& ctx) {
         // normally start at one because combo item zero is camera mode, so
         // breaking here discarded every loaded model at the very first pass.
         if (found >= kModelSlotCount) continue;
-        const auto name = text_encoding::ModelName(*mdl::Mdl(slots[found]), s->EnglishUI() == 1);
+        const auto name = text_encoding::ModelLabel(*mdl::Mdl(slots[found]), s->EnglishUI() == 1);
         SendMessageW(GetDlgItem(main, panel::kMainComboModel), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(name.c_str()));
         SendMessageW(GetDlgItem(main, panel::kMainComboGround), CB_ADDSTRING, 0,

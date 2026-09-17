@@ -102,6 +102,14 @@ std::wstring LegacyFilename(const char* text, const wchar_t* resolvedPath) {
     return Display(text);
 }
 
+std::wstring ModelLabel(const mdl::ModelRecord& model, bool english) {
+    const wchar_t* filename = model.path;
+    for (const wchar_t* p = filename; *p; ++p)
+        if (*p == L'\\' || *p == L'/') filename = p + 1;
+    if (*filename) return filename;
+    return ModelName(model, english);
+}
+
 std::wstring ModelName(const mdl::ModelRecord& model, bool english) {
     const auto* wide = model.pmxTextBuffers[english ? 1 : 0];
     if (wide) return wide; // PMX already supplies Unicode, never round-trip it through SJIS.

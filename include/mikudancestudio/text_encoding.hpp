@@ -15,4 +15,6 @@ std::wstring Display(const char* text);
 std::wstring LegacyFilename(const char* text, const wchar_t* resolvedPath);
 bool HasUtf8Bom(const char* text);
 std::wstring ModelName(const mdl::ModelRecord& model, bool english);
+// UI identity comes from the resolved source file, not language-specific metadata.
+std::wstring ModelLabel(const mdl::ModelRecord& model, bool english);
 }
