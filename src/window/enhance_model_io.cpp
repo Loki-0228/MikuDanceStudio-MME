@@ -33,6 +33,7 @@
 #include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/model_alpha_pass.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -951,6 +952,7 @@ void ReloadTextureCache(void* rendererArg) {
         }
         unsigned char* rgb =
             reinterpret_cast<unsigned char*>(&entry.tag);
+        rgb[3] = kTextureAlphaKnown | kTextureUsesAlpha;
         if (!haveD3dx) {
             rgb[0] = rgb[1] = rgb[2] = 0;
             continue;
@@ -979,17 +981,7 @@ void ReloadTextureCache(void* rendererArg) {
             rgb[0] = rgb[1] = rgb[2] = 0;
             continue;
         }
-        D3DLOCKED_RECT rect;
-        if (texture != nullptr &&
-            SUCCEEDED(texture->LockRect(0, &rect, nullptr, 0))) {
-            const unsigned char* row =
-                static_cast<const unsigned char*>(rect.pBits) +
-                rect.Pitch * (info.Height ? info.Height - 1 : 0);
-            rgb[2] = row[0];  // blue
-            rgb[1] = row[1];  // green
-            rgb[0] = row[2];  // red
-            texture->UnlockRect(0);
-        }
+        CacheTextureColorAndAlpha(texture, rgb);
     }
 }
 

@@ -231,7 +231,9 @@ void SyncMorphRow(MMDApp* app, HWND hwnd, std::size_t lane, int comboId,
                      (cur == count - 1) ? 0 : cur + 1, 0);
     }
     const mdl::ModelRecord* model = mdl::Mdl(ActiveModel(app));
+    if (!model || !model->morphs || lane >= 4) return;
     const std::int32_t idx = model->selectedMorphs[lane];
+    if (idx < 0 || static_cast<std::uint32_t>(idx) >= model->morphCount) return;
     const float v = model->morphs[idx].value;
     SendMessageA(GetDlgItem(hwnd, spinId), TBM_SETPOS, 1,
                  static_cast<LPARAM>(static_cast<std::int32_t>(v * 100.0)));
@@ -242,14 +244,15 @@ void SyncMorphRow(MMDApp* app, HWND hwnd, std::size_t lane, int comboId,
 
 // Morph-selection step for the four facial-panel combo rows (prev at
 // 0x48C735, next at 0x48C941; the remaining rows repeat the same logic).
-// It wraps at morphCount, skips morphs outside panel 1 and bails after a full
+// It wraps at morphCount, skips morphs outside the row's panel and bails after a full
 // circle, matching the original saved-index comparison.
 void MorphStep(MMDApp* app, HWND hwnd, std::size_t lane, int comboId,
                int spinId, int textId, bool next) {
     unsigned char* model = ActiveModel(app);
     mdl::ModelRecord* modelRecord = mdl::Mdl(model);
+    if (!modelRecord || lane >= 4) return;
     std::int32_t idx = modelRecord->selectedMorphs[lane];
-    if (idx < 0)
+    if (idx < 0 || static_cast<std::uint32_t>(idx) >= modelRecord->morphCount)
         return;
     if (modelRecord->physicsMode != 2 && idx == 0)
         return;
@@ -274,7 +277,7 @@ void MorphStep(MMDApp* app, HWND hwnd, std::size_t lane, int comboId,
         idx = mdl::Mdl(m)->selectedMorphs[lane];
         if (idx == orig)
             return;
-        if (mdl::Mdl(m)->morphs[idx].panel == mdl::MorphPanel::eyebrow)
+        if (mdl::Mdl(m)->morphs[idx].panel == static_cast<mdl::MorphPanel>(lane + 1))
             break;
     }
     SyncMorphRow(app, hwnd, lane, comboId, spinId, textId, next);

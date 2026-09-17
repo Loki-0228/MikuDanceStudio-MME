@@ -160,6 +160,7 @@ int LoadVmdMotion(MMDApp* app, const char* fileName) {  // was Sub434B60, VA 0x0
 
     // header + model name (the name read overwrites the header buffer)
     _read(fileHandle, text, 30);
+    text[30] = 0;
     int ver = 0;
     unsigned int flavor = 0;
     int nameLen;
@@ -176,6 +177,7 @@ int LoadVmdMotion(MMDApp* app, const char* fileName) {  // was Sub434B60, VA 0x0
         return 0;
     }
     _read(fileHandle, text, nameLen);
+    text[nameLen] = 0;
 
     if (s.state.optflag[0] != 0) {
         // ==== camera / light / self-shadow motion =========================
@@ -390,6 +392,7 @@ int LoadVmdMotion(MMDApp* app, const char* fileName) {  // was Sub434B60, VA 0x0
     unsigned char boneOk = 1;
     for (unsigned int k = 0; k < boneKeyCount; ++k) {
         _read(fileHandle, text, 15);
+        text[15] = 0;
         if (char* nl = std::strchr(text, 10)) *nl = 0;
         strcpy_s(reinterpret_cast<char*>(rec), 30, text);
         _read(fileHandle, rec + 32, 4);   // frame

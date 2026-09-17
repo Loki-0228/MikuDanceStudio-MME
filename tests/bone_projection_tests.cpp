@@ -54,6 +54,29 @@ int main() {
     Check(!ProjectBonePoint(*bone, BoneOverlayPoint::Origin, identity, identity,
                             behind, viewport, &x, &y, &w), "behind-camera bone rejected");
     Check(x == 393939 && y == 393939, "hidden bone retains selection sentinel");
+
+    mdl::BoneRecord linkedBones[2]{};
+    linkedBones[0].flags = mdl::kBoneFlagTailIsBone;
+    linkedBones[0].tailBone = 1;
+    linkedBones[1].selState = 640;
+    linkedBones[1].selState2 = 360;
+    // These occupy the former hardcoded +452/+456 locations on x64.
+    linkedBones[1].ikWorkingQuat[2] = 0.25f;
+    linkedBones[1].ikWorkingQuat[3] = 1.0f;
+    Check(BoneOverlayEndpoint(linkedBones, 2, linkedBones[0], true, &x, &y),
+          "PMX linked tail resolved");
+    Check(x == 640 && y == 360, "linked tail uses target screen coordinates, not quaternion bytes");
+    linkedBones[0].flags = 0;
+    linkedBones[0].tailScreenX = 700;
+    linkedBones[0].tailScreenY = 450;
+    Check(BoneOverlayEndpoint(linkedBones, 2, linkedBones[0], true, &x, &y) &&
+          x == 700 && y == 450, "PMX offset tail retains its separately projected endpoint");
+    Check(BoneOverlayEndpoint(linkedBones, 2, linkedBones[0], false, &x, &y) &&
+          x == 640 && y == 360, "PMD tail still uses linked bone despite absent PMX flag");
+    linkedBones[0].tailBone = 2;
+    linkedBones[0].flags = mdl::kBoneFlagTailIsBone;
+    Check(!BoneOverlayEndpoint(linkedBones, 2, linkedBones[0], true, &x, &y) &&
+          x == 393939 && y == 393939, "out-of-range tail rejected");
     bone->~BoneRecord();
     VirtualFree(memory, 0, MEM_RELEASE);
     std::puts("Bone projection regressions passed");

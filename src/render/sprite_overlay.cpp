@@ -50,11 +50,6 @@ struct BoneOverlayResult {
 
 static_assert(sizeof(BoneOverlayResult) == 20);
 
-template <typename T>
-T& At(void* base, std::size_t offset) {
-    return *reinterpret_cast<T*>(static_cast<unsigned char*>(base) + offset);
-}
-
 struct ClipPoint {
     float x;
     float y;
@@ -108,6 +103,24 @@ bool ProjectBonePoint(const mdl::BoneRecord& bone, BoneOverlayPoint pointKind,
                                 (viewport.left + viewport.right) / 2);
     *screenY = static_cast<int>((viewport.top + viewport.bottom) / 2 -
                                 p.y / p.w * height * 0.5);
+    return true;
+}
+
+bool BoneOverlayEndpoint(const mdl::BoneRecord* bones, int boneCount,
+                         const mdl::BoneRecord& bone, bool pmx,
+                         int* screenX, int* screenY) {
+    *screenX = *screenY = 393939;
+    if (pmx && (bone.flags & mdl::kBoneFlagTailIsBone) == 0) {
+        *screenX = bone.tailScreenX;
+        *screenY = bone.tailScreenY;
+        return true;
+    }
+    const int linked = bone.tailBone;
+    if (bones == nullptr || linked <= 0 || linked >= boneCount)
+        return false;
+    // x86 +452/+456 are quaternion components on x64, not screen positions.
+    *screenX = bones[linked].selState;
+    *screenY = bones[linked].selState2;
     return true;
 }
 
@@ -333,30 +346,14 @@ void PrepareFrameSpriteOverlay(MMDApp* app) {
                             (physMode == 2 && bone->hasRigidBody &&
                              bone->physicsDisabled == 0);
                     };
-                    const auto endpoint = [&](mikudancestudio::mdl::BoneRecord* bone,
-                                              int* x, int* y) -> bool {
-                        const std::uint16_t flags =
-                            bone->flags;
-                        if (mdl::Mdl(model)->physicsMode == 2 &&
-                            (flags & mdl::kBoneFlagTailIsBone) == 0) {
-                            *x = bone->tailScreenX;
-                            *y = bone->tailScreenY;
-                            return true;
-                        }
-                        const int linked = bone->tailBone;
-                        if (linked <= 0 || linked >= boneCount)
-                            return false;
-                        *x = At<int>(&bones[linked], 452);
-                        *y = At<int>(&bones[linked], 456);
-                        return true;
-                    };
                     const auto emitBone = [&](mikudancestudio::mdl::BoneRecord* bone,
                                               D3DCOLOR color) -> bool {
                         int endX = 393939;
                         int endY = 393939;
                         if (bone->selState == 393939 ||
                             bone->selState2 == 393939 ||
-                            !endpoint(bone, &endX, &endY) ||
+                            !BoneOverlayEndpoint(bones, boneCount, *bone,
+                                mdl::Mdl(model)->physicsMode == 2, &endX, &endY) ||
                             endX == 393939 || endY == 393939)
                             return false;
                         return AppendBoneV(lines, bone->selState,

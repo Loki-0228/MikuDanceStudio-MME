@@ -121,4 +121,15 @@ std::wstring ModelName(const mdl::ModelRecord& model, bool english) {
     if (Decode(narrow, 932, result)) return result;
     return Display(narrow);
 }
+
+std::wstring MorphName(const mdl::MorphRecord& morph, bool english) {
+    const wchar_t* wide = english ? morph.enText : morph.jpText;
+    if (wide && *wide) return wide;
+    if (morph.jpText && *morph.jpText) return morph.jpText;
+    const char* narrow = english && morph.nameEn[0] ? morph.nameEn : morph.name;
+    // PMD/VMD names are CP932, independent of the Windows/UI language.
+    std::wstring result;
+    Decode(narrow, 932, result);
+    return result;
+}
 }

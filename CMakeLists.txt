@@ -320,6 +320,12 @@ if (MIKUDANCESTUDIO_BUILD_EFFECT_TESTS)
     set_target_properties(bone_projection_tests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
     add_test(NAME bone_projection_regressions COMMAND bone_projection_tests)
+    add_executable(model_alpha_tests EXCLUDE_FROM_ALL tests/model_alpha_tests.cpp)
+    target_include_directories(model_alpha_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(model_alpha_tests PRIVATE d3d9 user32)
+    set_target_properties(model_alpha_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
+    add_test(NAME model_alpha_regressions COMMAND model_alpha_tests)
 endif()
 
 option(MIKUDANCESTUDIO_BUILD_ENCODING_TESTS "Build filename encoding regression tests" OFF)
@@ -330,6 +336,11 @@ if (MIKUDANCESTUDIO_BUILD_ENCODING_TESTS)
     set_target_properties(filename_encoding_tests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
     add_test(NAME filename_encoding_regressions COMMAND filename_encoding_tests)
+    add_executable(morph_import_tests EXCLUDE_FROM_ALL tests/morph_import_tests.cpp)
+    target_link_libraries(morph_import_tests PRIVATE mikudancestudio_core winmm dsound)
+    set_target_properties(morph_import_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
+    add_test(NAME morph_import_regressions COMMAND morph_import_tests)
 endif()
 
 # ---------------------------------------------------------------------------

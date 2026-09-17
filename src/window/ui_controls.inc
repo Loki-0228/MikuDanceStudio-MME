@@ -126,22 +126,22 @@ inline constexpr ControlSpec kControls[] = {
   {502, L"BUTTON", nullptr, L"\xff0d" /*0x52D4CC*/, nullptr, 0x40000000, 0x0, {1, 12}, {0, 24}, 60, 18, true},  // line 4920
   {529, L"BUTTON", nullptr, L"\xff0b" /*0x52D4D0*/, nullptr, 0x40000000, 0x0, {1, 12}, {0, 24}, 60, 18, true},  // line 4945
   {528, L"BUTTON", nullptr, L"\xff0d" /*0x52D4CC*/, nullptr, 0x40000000, 0x0, {1, 12}, {0, 24}, 60, 18, true},  // line 4970
-  {509, nullptr, "COMBOBOX", nullptr, "" /*0x529679*/, 0x40200003, 0x0, {0, 144}, {0, 120}, 80, 100, false},  // line 4994
+  {509, L"COMBOBOX", nullptr, L"", nullptr /*0x529679*/, 0x40200003, 0x0, {0, 144}, {0, 120}, 80, 100, true},  // line 4994
   {510, nullptr, "msctls_trackbar32", nullptr, "" /*0x529679*/, 0x40000000, 0x0, {0, 204}, {0, 60}, 94, 18, false},  // line 5018
   {511, nullptr, "EDIT", nullptr, "" /*0x529679*/, 0x40000081, 0x20000, {0, 10}, {0, 196}, 50, 14, false},  // line 5055
   {512, nullptr, "BUTTON", nullptr, "<<" /*0x52E7FC*/, 0x40000000, 0x0, {0, 206}, {0, 105}, 16, 16, false},  // line 5086
   {513, nullptr, "BUTTON", nullptr, ">>" /*0x52E7F8*/, 0x40000000, 0x0, {0, 206}, {0, 105}, 16, 16, false},  // line 5109
-  {504, nullptr, "COMBOBOX", nullptr, "" /*0x529679*/, 0x40200003, 0x0, {0, 144}, {0, 120}, 80, 100, false},  // line 5133
+  {504, L"COMBOBOX", nullptr, L"", nullptr /*0x529679*/, 0x40200003, 0x0, {0, 144}, {0, 120}, 80, 100, true},  // line 5133
   {505, nullptr, "msctls_trackbar32", nullptr, "" /*0x529679*/, 0x40000000, 0x0, {0, 204}, {0, 125}, 94, 18, false},  // line 5157
   {506, nullptr, "EDIT", nullptr, "" /*0x529679*/, 0x40000081, 0x20000, {0, 10}, {0, 196}, 50, 14, false},  // line 5194
   {507, nullptr, "BUTTON", nullptr, "<<" /*0x52E7FC*/, 0x40000000, 0x0, {0, 206}, {0, 105}, 16, 16, false},  // line 5225
   {508, nullptr, "BUTTON", nullptr, ">>" /*0x52E7F8*/, 0x40000000, 0x0, {0, 206}, {0, 105}, 16, 16, false},  // line 5249
-  {514, nullptr, "COMBOBOX", nullptr, "" /*0x529679*/, 0x40200003, 0x0, {0, 144}, {0, 120}, 80, 100, false},  // line 5273
+  {514, L"COMBOBOX", nullptr, L"", nullptr /*0x529679*/, 0x40200003, 0x0, {0, 144}, {0, 120}, 80, 100, true},  // line 5273
   {515, nullptr, "msctls_trackbar32", nullptr, "" /*0x529679*/, 0x40000000, 0x0, {0, 306}, {0, 60}, 94, 18, false},  // line 5297
   {516, nullptr, "EDIT", nullptr, "" /*0x529679*/, 0x40000081, 0x20000, {0, 10}, {0, 196}, 50, 14, false},  // line 5334
   {517, nullptr, "BUTTON", nullptr, "<<" /*0x52E7FC*/, 0x40000000, 0x0, {0, 206}, {0, 105}, 16, 16, false},  // line 5365
   {518, nullptr, "BUTTON", nullptr, ">>" /*0x52E7F8*/, 0x40000000, 0x0, {0, 206}, {0, 105}, 16, 16, false},  // line 5389
-  {519, nullptr, "COMBOBOX", nullptr, "" /*0x529679*/, 0x40200003, 0x0, {0, 144}, {0, 120}, 80, 100, false},  // line 5413
+  {519, L"COMBOBOX", nullptr, L"", nullptr /*0x529679*/, 0x40200003, 0x0, {0, 144}, {0, 120}, 80, 100, true},  // line 5413
   {520, nullptr, "msctls_trackbar32", nullptr, "" /*0x529679*/, 0x40000000, 0x0, {0, 306}, {0, 60}, 94, 18, false},  // line 5437
   {521, nullptr, "EDIT", nullptr, "" /*0x529679*/, 0x40000081, 0x20000, {0, 10}, {0, 196}, 50, 14, false},  // line 5474
   {522, nullptr, "BUTTON", nullptr, "<<" /*0x52E7FC*/, 0x40000000, 0x0, {0, 206}, {0, 105}, 16, 16, false},  // line 5505

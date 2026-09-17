@@ -41,6 +41,7 @@
 #include <cstring>
 
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/text_encoding.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -74,63 +75,36 @@ HWND Dlg(unsigned char* m, int id) {
 // One morph-category group (see header comment).
 void RefreshMorphGroup(unsigned char* m, mdl::MorphPanel panel, int comboId,
                        int sliderId, int editId, std::size_t selector) {
-    HWND main = *reinterpret_cast<HWND*>(m);
     HWND combo = Dlg(m, comboId);
-    SendMessage(combo, CB_RESETCONTENT, 0, 0);
-    mdl::ModelRecord* model = mdl::Mdl(m);
-    const int n = static_cast<int>(model->morphCount);
-    mdl::MorphRecord* morphs = model->morphs;
-    const bool useEnglishNames = model->physicsFlags != 0;
-    if (n > 0) {
-        for (int i = 0; i < n; ++i) {
-            const mdl::MorphRecord& morph = morphs[i];
-            if (morph.panel == panel)
-                SendMessageA(combo, CB_ADDSTRING, 0,
-                             reinterpret_cast<LPARAM>(
-                                 useEnglishNames ? morph.nameEn : morph.name));
-        }
+    SendMessageW(combo, CB_RESETCONTENT, 0, 0);
+    auto* model = mdl::Mdl(m);
+    int first = -1;
+    int selectedRow = -1;
+    for (std::uint32_t i = 0; model->morphs != nullptr && i < model->morphCount; ++i) {
+        const auto& morph = model->morphs[i];
+        if (morph.panel != panel) continue;
+        const auto name = text_encoding::MorphName(morph, model->physicsFlags != 0);
+        const LRESULT row = SendMessageW(combo, CB_ADDSTRING, 0,
+                                         reinterpret_cast<LPARAM>(name.c_str()));
+        if (row == CB_ERR || row == CB_ERRSPACE) continue;
+        SendMessageW(combo, CB_SETITEMDATA, row, i);
+        if (first < 0) first = static_cast<int>(i);
+        if (model->selectedMorphs[selector] == static_cast<int>(i))
+            selectedRow = static_cast<int>(row);
     }
-    if (morphs != nullptr) {
-        const char* text;
-        char buf[256];
-        const std::int32_t sel = model->selectedMorphs[selector];
-        if (sel < 0) {
-            SendMessage(Dlg(m, sliderId), TBM_SETPOS, TRUE, 0);
-            text = "0.0000";
-        } else {
-            const float val = morphs[sel].value;
-            SendMessage(Dlg(m, sliderId), TBM_SETPOS, TRUE,
-                        static_cast<LPARAM>(val * 100.0f));
-            sprintf_s(buf, 0x100, "%5.4f", val);
-            text = buf;
-        }
-        SetWindowTextA(Dlg(m, editId), text);
+    // Reject stale selections after a model reload before reading their value.
+    if (selectedRow < 0) {
+        model->selectedMorphs[selector] = first;
+        selectedRow = first < 0 ? -1 : 0;
     }
-    if (model->selectedMorphs[selector] != -1) {
-        const std::int32_t sel = model->selectedMorphs[selector];
-        if (n > 0) {
-            int catIdx = 0;
-            for (int i = 0; i < n; ++i) {
-                if (morphs[i].panel == panel) {
-                    if (i == sel) {
-                        SendMessageA(combo, CB_SETCURSEL, catIdx, 0);
-                        return;
-                    }
-                    ++catIdx;
-                }
-            }
-        }
-        return;
-    }
-    SendMessageA(combo, CB_SETCURSEL, 0, 0);
-    if (n > 0) {
-        for (int i = 0; i < n; ++i) {
-            if (morphs[i].panel == panel) {
-                model->selectedMorphs[selector] = i;
-                return;
-            }
-        }
-    }
+    SendMessageW(combo, CB_SETCURSEL, selectedRow, 0);
+    const int selected = model->selectedMorphs[selector];
+    const float value = selected >= 0 ? model->morphs[selected].value : 0.0f;
+    SendMessageW(Dlg(m, sliderId), TBM_SETPOS, TRUE,
+                 static_cast<LPARAM>(value * 100.0f));
+    char text[64];
+    sprintf_s(text, "%5.4f", value);
+    SetWindowTextA(Dlg(m, editId), text);
 }
 
 }  // namespace

@@ -763,12 +763,8 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
                     // (CB_GETCOUNT 0x146 / CB_GETLBTEXT 0x148 / CB_SETCURSEL
                     // 0x14E, 0x446EC0-0x446FAE)
                     const LRESULT count = SendMessageA(hCombo, CB_GETCOUNT, 0, 0);
-                    char nameBuf[0x64];
                     for (LONG i2 = 0; i2 < count; ++i2) {
-                        SendMessageA(hCombo, CB_GETLBTEXT, i2,
-                                     reinterpret_cast<LPARAM>(nameBuf));
-                        if (MatchText(nameBuf, morph.name) ||
-                            MatchText(nameBuf, morph.nameEn)) {
+                        if (SendMessageW(hCombo, CB_GETITEMDATA, i2, 0) == morphIndex) {
                             SendMessageA(hCombo, CB_SETCURSEL, i2, 0);
                         }
                     }

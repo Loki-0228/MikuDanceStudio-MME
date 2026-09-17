@@ -42,6 +42,7 @@
 
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/d3d_wrapper.hpp"
+#include "mikudancestudio/model_alpha_pass.hpp"
 #include "mikudancestudio/path_workspace.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/text_encoding.hpp"
@@ -255,16 +256,7 @@ int LoadTextureShared(unsigned char* sub, wchar_t* path) {     // 0x407490
     *entryName = static_cast<wchar_t*>(malloc(2 * plen));
     wcscpy_s(*entryName, plen, path);
 
-    D3DLOCKED_RECT lr;
-    if (SUCCEEDED((*entryTex)->LockRect(0, &lr, nullptr, 0))) {
-        const unsigned char* px =
-            static_cast<const unsigned char*>(lr.pBits) +
-            lr.Pitch * (info.Height ? info.Height - 1 : 0);
-        tagBytes[2] = px[0];  // blue
-        tagBytes[1] = px[1];  // green
-        tagBytes[0] = px[2];  // red
-        (*entryTex)->UnlockRect(0);
-    }
+    CacheTextureColorAndAlpha(*entryTex, tagBytes);
     return 1;
 }
 

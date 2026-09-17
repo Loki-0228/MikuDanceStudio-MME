@@ -105,9 +105,9 @@ std::int32_t FindBoneByName(unsigned char* model, const char* text) {
 }
 
 // Shared body of the four facial morph-row combos 0x1F8/0x1FD/0x202/0x207
-// (0x48ea48 / 0x48ec56 / 0x48ee66 / 0x48f066): the combo text is matched
-// against the morph table (model+0x26C4, 0x88 stride, EN name +0x14 / JP
-// +0x0, current value float +0x30) and the index stored into
+// (0x48ea48 / 0x48ec56 / 0x48ee66 / 0x48f066): each Unicode combo item
+// carries its morph index, independent of translated or duplicate names.
+// The selected item's index is stored into
 // selectedMorphs[lane] (0x2D9C+4*lane); the row slider receives
 // TBM_SETPOS (int)(v*100) and the edit the "%5.4f" echo.  Every
 // display-frame row (model+0x26DC, 0x2E stride) then gets its selected byte
@@ -116,27 +116,13 @@ std::int32_t FindBoneByName(unsigned char* model, const char* text) {
 void MorphRowSelect(MMDApp* app, HWND hwnd, HWND combo, std::size_t lane,
                     int spinId, int textId) {
     char text[0x100];
-    const LRESULT sel =
-        SendMessageA(combo, CB_GETCURSEL, 0, 0);
-    SendMessageA(combo, CB_GETLBTEXT, sel,
-                 reinterpret_cast<LPARAM>(text));
+    const LRESULT sel = SendMessageW(combo, CB_GETCURSEL, 0, 0);
+    if (sel == CB_ERR || app->SelectedModel() == nullptr) return;
     const mdl::ModelRecord* record = mdl::Mdl(app->SelectedModel());
-    if (static_cast<std::int32_t>(record->morphCount) <= 0) {
-        return;
-    }
-    const mdl::MorphRecord* morphs = record->morphs;
-    std::int32_t index = -1;
-    for (std::uint32_t i = 0; i < record->morphCount; ++i) {
-        if (strcmp(morphs[i].nameEn, text) == 0 ||
-            strcmp(morphs[i].name, text) == 0) {
-            index = static_cast<std::int32_t>(i);
-            break;
-        }
-    }
-    if (index < 0) {
-        return;
-    }
-    mdl::Mdl(app->SelectedModel())->selectedMorphs[lane] = index;
+    const LRESULT index = SendMessageW(combo, CB_GETITEMDATA, sel, 0);
+    if (record->morphs == nullptr || index < 0 ||
+        static_cast<std::uint64_t>(index) >= record->morphCount) return;
+    mdl::Mdl(app->SelectedModel())->selectedMorphs[lane] = static_cast<std::int32_t>(index);
     const float v = record->morphs[index].value;
     SendMessageA(GetDlgItem(hwnd, spinId), TBM_SETPOS, 1,
                  static_cast<LPARAM>(

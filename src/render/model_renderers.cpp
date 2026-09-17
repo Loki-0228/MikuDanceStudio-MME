@@ -11,10 +11,13 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 
 #include "mikudancestudio/d3dx_effect.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/model_alpha_pass.hpp"
+#include "mikudancestudio/transparent_triangles.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -285,6 +288,83 @@ void CachedTextureColor(D3DRenderer* sub, const wchar_t* path, float out[4]) {
             return;
         }
     }
+}
+
+bool CachedTextureUsesAlpha(D3DRenderer* sub, const wchar_t* path) {
+    if (path == nullptr || path[0] == L'\0')
+        return false;
+    for (const auto& entry : sub->resourcePool) {
+        const auto* name = static_cast<const wchar_t*>(entry.heapBuffer);
+        if (name == nullptr)
+            return false;
+        if (wcscmp(name, path) == 0) {
+            const auto flags = reinterpret_cast<const unsigned char*>(&entry.tag)[3];
+            return (flags & kTextureAlphaKnown) == 0 || (flags & kTextureUsesAlpha) != 0;
+        }
+    }
+    return false;
+}
+
+bool ModelMaterialUsesAlpha(D3DRenderer* sub, const mdl::ModelRecord& state,
+                            const mdl::ModelMaterialRecord& material) {
+    return state.postLoadFlag2 != 0 || state.displayState != 0 ||
+        material.diffuse[3] < 1.0f ||
+        CachedTextureUsesAlpha(sub, material.texturePath) ||
+        ((state.physicsMode != 2 || material.sphereMode != 0) &&
+            CachedTextureUsesAlpha(sub, material.spherePath));
+}
+
+void SortTransparentModelMaterials(D3DRenderer* sub, unsigned char* model,
+                                  IDirect3DVertexBuffer9* vertices,
+                                  IDirect3DIndexBuffer9* indices, UINT stride) {
+    auto& state = *mdl::Mdl(model);
+    // CPU source indices stay untouched for saving and stable coplanar order.
+    const auto* pmxIndices = state.physicsMode == 2 ? mdl::PmxIndices(model) : nullptr;
+    const auto* pmdIndices = state.physicsMode != 2 ? mdl::Indices(model) : nullptr;
+    if (pmxIndices == nullptr && pmdIndices == nullptr)
+        return;
+    D3DINDEXBUFFER_DESC desc{};
+    if (FAILED(indices->GetDesc(&desc)) ||
+        (desc.Format != D3DFMT_INDEX16 && desc.Format != D3DFMT_INDEX32))
+        return;
+    const UINT indexSize = desc.Format == D3DFMT_INDEX32 ? 4 : 2;
+    if (state.indexCount > desc.Size / indexSize)
+        return;
+    Matrix world, view, worldView;
+    sub->device->GetTransform(D3DTS_WORLD, reinterpret_cast<D3DMATRIX*>(&world));
+    sub->device->GetTransform(D3DTS_VIEW, reinterpret_cast<D3DMATRIX*>(&view));
+    Multiply(&worldView, &world, &view);
+    void* positions = nullptr;
+    void* target = nullptr;
+    if (FAILED(vertices->Lock(0, 0, &positions, 0)))
+        return;
+    if (FAILED(indices->Lock(0, 0, &target, 0))) {
+        vertices->Unlock();
+        return;
+    }
+    UINT first = 0;
+    const auto* materials = mdl::Materials(model);
+    for (UINT i = 0; i < state.materialCount; ++i) {
+        const auto& material = materials[i];
+        const UINT count = static_cast<UINT>(material.faceVertexCount);
+        if (count > state.indexCount - first)
+            break;
+        if (count != 0 && material.diffuse[3] > 0.0f &&
+            ModelMaterialUsesAlpha(sub, state, material)) {
+            const auto sort = [&](auto* output) {
+                for (UINT j = first; j < first + count; ++j)
+                    output[j] = static_cast<std::remove_reference_t<decltype(output[j])>>(
+                        pmxIndices != nullptr ? pmxIndices[j] : pmdIndices[2 * j]);
+                SortTransparentTriangles(positions, stride, state.vertexCount,
+                    output + first, count, *reinterpret_cast<D3DMATRIX*>(&worldView));
+            };
+            if (indexSize == 4) sort(static_cast<std::uint32_t*>(target));
+            else sort(static_cast<std::uint16_t*>(target));
+        }
+        first += count;
+    }
+    indices->Unlock();
+    vertices->Unlock();
 }
 
 void ModelVertexFormat(unsigned char* model, DWORD* fvf, UINT* stride) {
@@ -845,7 +925,7 @@ void ConfigureEffectMaterial(MMDApp* app, D3DRenderer* sub,
 }
 
 void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
-                        bool shadowOnly) {
+                        bool shadowOnly, ModelAlphaPass alphaPass = ModelAlphaPass::Original) {
     if (model == nullptr || mdl::Mdl(model)->loadComplete == 0)
         return;
     mdl::ModelRecord& state = *mdl::Mdl(model);
@@ -864,6 +944,8 @@ void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
     DWORD fvf;
     UINT stride;
     ModelVertexFormat(model, &fvf, &stride);
+    if (alphaPass == ModelAlphaPass::Translucent && !shadowOnly)
+        SortTransparentModelMaterials(sub, model, vertices, indices, stride);
     UINT firstIndex = 0;
     state.toonShared = static_cast<std::uint32_t>(-1);
     for (UINT i = 0; i < state.materialCount; ++i) {
@@ -875,6 +957,9 @@ void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
             continue;
 
         bool draw = true;
+        if (!shadowOnly && alphaPass != ModelAlphaPass::Original) {
+            draw = ModelMaterialMatchesPass(alphaPass, ModelMaterialUsesAlpha(sub, state, record));
+        }
         if (shadowOnly) {
             if (mdl::Mdl(model)->physicsMode == 2 && record.edgeSize <= 0.0f)
                 draw = false;
@@ -1339,16 +1424,18 @@ void RenderModelsFixed(MMDApp* app) {                         // 0x425D20
     const bool materialCapture = BeginMaterialStateCapture();
     // x64 twin sub_7FF7CB4BFB20+0x4C0710..0x4C077A: order and slot both run
     // to 0xFF (cmp edi,0FFh @0x4C0774 / cmp edx,0FFh @0x4C073C).
-    for (int order = 0; order < kModelSlotCount; ++order) {
-        for (int slot = 0; slot < kModelSlotCount; ++slot) {
-            auto* model = app->ModelSlot(slot);
-            if (model == nullptr || mdl::Mdl(model)->comboSelIndex != order)
-                continue;
-            app->ActiveRenderObject() = model;
-            app->ActiveRenderPass() = AccessoryRenderPass::FixedFunction;
-            DrawModelMaterials(app, model, false, false);
-            app->ActiveRenderObject() = nullptr;
-            break;
+    for (auto alphaPass : {ModelAlphaPass::Opaque, ModelAlphaPass::Translucent}) {
+        for (int order = 0; order < kModelSlotCount; ++order) {
+            for (int slot = 0; slot < kModelSlotCount; ++slot) {
+                auto* model = app->ModelSlot(slot);
+                if (model == nullptr || mdl::Mdl(model)->comboSelIndex != order)
+                    continue;
+                app->ActiveRenderObject() = model;
+                app->ActiveRenderPass() = AccessoryRenderPass::FixedFunction;
+                DrawModelMaterials(app, model, false, false, alphaPass);
+                app->ActiveRenderObject() = nullptr;
+                break;
+            }
         }
     }
     if (materialCapture)
@@ -1489,24 +1576,26 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     // x64 twin sub_7FF7CB4C1E60+0x4C3570..0x4C36D0 (toonFlag dispatch at
     // model+0x3B68): order and slot both run to 0xFF (cmp edi,0FFh
     // @0x4C36CA / cmp edx,0FFh @0x4C359C).
-    for (int order = 0; order < kModelSlotCount; ++order) {
-        for (int slot = 0; slot < kModelSlotCount; ++slot) {
-            auto* model = app->ModelSlot(slot);
-            if (model == nullptr || mdl::Mdl(model)->comboSelIndex != order)
-                continue;
-            if (app->ModelNonDisplayMode() != 0)
+    for (auto alphaPass : {ModelAlphaPass::Opaque, ModelAlphaPass::Translucent}) {
+        for (int order = 0; order < kModelSlotCount; ++order) {
+            for (int slot = 0; slot < kModelSlotCount; ++slot) {
+                auto* model = app->ModelSlot(slot);
+                if (model == nullptr || mdl::Mdl(model)->comboSelIndex != order)
+                    continue;
+                if (app->ModelNonDisplayMode() != 0)
+                    break;
+                app->ActiveRenderObject() = model;
+                if (mdl::Mdl(model)->toonFlag != 0) {
+                    app->ActiveRenderPass() = AccessoryRenderPass::Effect;
+                    device->SetTexture(0, sub->hdrTexture);
+                    DrawModelMaterials(app, model, true, false, alphaPass);
+                } else {
+                    app->ActiveRenderPass() = AccessoryRenderPass::FixedFunction;
+                    DrawModelMaterials(app, model, false, false, alphaPass);
+                }
+                app->ActiveRenderObject() = nullptr;
                 break;
-            app->ActiveRenderObject() = model;
-            if (mdl::Mdl(model)->toonFlag != 0) {
-                app->ActiveRenderPass() = AccessoryRenderPass::Effect;
-                device->SetTexture(0, sub->hdrTexture);
-                DrawModelMaterials(app, model, true, false);
-            } else {
-                app->ActiveRenderPass() = AccessoryRenderPass::FixedFunction;
-                DrawModelMaterials(app, model, false, false);
             }
-            app->ActiveRenderObject() = nullptr;
-            break;
         }
     }
     FxSetInt(effect, "transp", 0);

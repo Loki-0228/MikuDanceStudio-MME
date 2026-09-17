@@ -632,12 +632,13 @@ bool RegisterMorphKeyFromRecord(unsigned char* model, const unsigned char* rec,
     const int morphCnt = static_cast<int>(mdl::Mdl(m)->morphCount);
     if (morphCnt <= 0) return true;
     const mikudancestudio::mdl::MorphRecord* mrec = mikudancestudio::mdl::Morphs(m);
-    while (std::strcmp(reinterpret_cast<const char*>(rec),
-                       reinterpret_cast<const char*>(mrec)) != 0) {
+    if (mrec == nullptr) return true;
+    while (std::strncmp(reinterpret_cast<const char*>(rec),
+                        mrec->name, sizeof(mrec->name)) != 0) {
         if (++morphIdx >= morphCnt) return true;
-        mrec += 136;
+        ++mrec; // typed records already account for the x86/x64 stride
     }
-    if (morphIdx == -1) return true;
+    if (keys == nullptr) return false;
 
     int cur = morphIdx;
     if (keys[cur].frame < frame) {
