@@ -20,18 +20,18 @@ the alignment target, rebuilt with a modern toolchain
 
 ### Features
 
-* **Models**: PMD / PMX loading (incl. BDEF4/SDEF weights), bone trees, IK,
+- **Models**: PMD / PMX loading (incl. BDEF4/SDEF weights), bone trees, IK,
   morphs, toon rendering
-* **Animation**: VMD load/save, VPD export, frame editor (bone / morph /
+- **Animation**: VMD load/save, VPD export, frame editor (bone / morph /
   camera / lighting / self-made expression / accessory tracks), frame playback
   with physics preview
-* **Physics**: Bullet 2.75 rigid bodies + constraints (6DOF spring),
+- **Physics**: Bullet 2.75 rigid bodies + constraints (6DOF spring),
   deterministic solve order
-* **Rendering**: DirectX 9 fixed pipeline + optional SM2/SM3 effect chain
+- **Rendering**: DirectX 9 fixed pipeline + optional SM2/SM3 effect chain
   (HDR RT), toon textures, ground shadows, stereoscopic 3D (NVIDIA 3D Vision)
-* **Multimedia**: Wave/AVI recording (DirectShow, incl. the MMDxShow push
+- **Multimedia**: Wave/AVI recording (DirectShow, incl. the MMDxShow push
   source filter), VSQ score import, Kinect skeleton input
-* **UI**: EN/JP bilingual, 168-control main window, timeline, accessory
+- **UI**: EN/JP bilingual, 168-control main window, timeline, accessory
   editing, undo/redo
 
 ### Building from Source
@@ -89,7 +89,7 @@ ctest --test-dir build -C Release --output-on-failure
 The executable keeps the original name `MikuMikuDance.exe` and meets MME's three
 host requirements: the 37 `Exp*` exports by ordinal 1..37
 (`exports/MikuMikuDance.def`); **static** imports of the `d3dx9_43.dll` entries
-MMHack.dll patches - it rewrites the *host's* IAT, so a host that resolved D3DX
+MMHack.dll patches - it rewrites the _host's_ IAT, so a host that resolved D3DX
 at runtime exposed no slot and MME aborted with `Initialize error`
 (`res/imports/d3dx9_43.def`, import library generated at build time); and the
 exact module name, from which MMHack.dll's import table binds those `Exp*`
@@ -98,13 +98,18 @@ and the `MMEffect` menu appears; `.fx` effects are then assigned as usual. No
 DirectX SDK, at runtime or at build time. See
 [docs/MME_COMPATIBILITY.md](docs/MME_COMPATIBILITY.md).
 
-### Other features
+#### Personal additions
 
-The program writes no log files, and errors raise a modal fatal-error window
-(Ctrl+C copies its text; the PDB under `build/symbols/` resolves source lines).
-Letter hotkeys keep working with a Chinese/Japanese IME active - P play/stop plus
-A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R - except inside text fields. Both follow
-maintainer 洛琪's own usage habits and can be changed or dropped as needed.
+These additions exist only for personal convenience; they are neither MMD's
+original usage habits nor compatibility requirements, and builders may delete
+them by editing the code.
+
+- **Error reporting**: The program writes no log files; a fatal error raises a
+  modal window whose text can be copied with Ctrl+C, and the PDB under
+  `build/symbols/` resolves source lines.
+- **IME and hotkeys**: Letter hotkeys keep working with a Chinese/Japanese IME
+  active - P play/stop plus A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R - except inside
+  text fields.
 
 ### Contributions
 
@@ -149,15 +154,15 @@ VMD/VPD 动作数据，在 DirectX 9 视口中编辑骨骼/形态/相机/照明/
 
 ### 功能
 
-* **模型**：PMD / PMX（含 BDEF4/SDEF 权重）加载，骨骼树、IK、形态（morph）、toon 渲染
-* **动画**：VMD 加载/保存、VPD 导出、帧编辑器（骨骼/形态/相机/照明/自作表情/附件轨道）、
+- **模型**：PMD / PMX（含 BDEF4/SDEF 权重）加载，骨骼树、IK、形态（morph）、toon 渲染
+- **动画**：VMD 加载/保存、VPD 导出、帧编辑器（骨骼/形态/相机/照明/自作表情/附件轨道）、
   帧回放与物理预览
-* **物理**：Bullet 2.75 刚体 + 约束（6DOF spring），确定性求解顺序
-* **渲染**：DirectX 9 固定管线 + 可选 SM2/SM3 特效链（HDR RT）、toon 纹理、地面阴影、
+- **物理**：Bullet 2.75 刚体 + 约束（6DOF spring），确定性求解顺序
+- **渲染**：DirectX 9 固定管线 + 可选 SM2/SM3 特效链（HDR RT）、toon 纹理、地面阴影、
   立体视觉（NVIDIA 3D Vision）
-* **多媒体**：Wave/AVI 录制（DirectShow，含 MMDxShow 推源过滤器）、VSQ 乐谱导入、
+- **多媒体**：Wave/AVI 录制（DirectShow，含 MMDxShow 推源过滤器）、VSQ 乐谱导入、
   Kinect 骨骼输入
-* **UI**：EN/JP 双语、168 控件主窗口、时间轴、附件编辑、撤销/重做
+- **UI**：EN/JP 双语、168 控件主窗口、时间轴、附件编辑、撤销/重做
 
 ### 从源码构建
 
@@ -189,12 +194,12 @@ cmake --build build --config Release
 
 构建完成后，主要文件如下：
 
-| 路径 | 用途 |
-| --- | --- |
-| `build/Release/MikuMikuDance.exe` | GUI 主程序 |
+| 路径                              | 用途                                 |
+| --------------------------------- | ------------------------------------ |
+| `build/Release/MikuMikuDance.exe` | GUI 主程序                           |
 | `build/Release/Data/MMDxShow.dll` | AVI 录制使用的 DirectShow 推源过滤器 |
-| `build/lib/` | 静态库和导入库 |
-| `build/symbols/` | 用于调试和崩溃定位的 PDB 符号文件 |
+| `build/lib/`                      | 静态库和导入库                       |
+| `build/symbols/`                  | 用于调试和崩溃定位的 PDB 符号文件    |
 
 运行前，还需将 `toon01.bmp` 至 `toon10.bmp` 等 toon 纹理放在**工作目录**的 `Data/` 下。
 例如，以 `build/Release/` 为工作目录启动时，纹理应放在 `build/Release/Data/`。
@@ -256,7 +261,9 @@ ctest --test-dir build -C Release -R keyboard_input_regressions --output-on-fail
 
 对象登记、效果分配及已验证的兼容范围，见 [MME 兼容性说明](docs/MME_COMPATIBILITY.md)。
 
-### 使用与故障排查
+#### 个人添加特性
+
+特性添加仅为方便本人使用，非MMD原本使用习惯或适配需求，编译者可编辑代码删去。
 
 - **错误提示**：程序不写日志文件；遇到致命错误时会弹出对话框，可按 `Ctrl+C` 复制内容。
   开发者可结合 `build/symbols/` 下对应构建的 PDB 定位源码。
@@ -268,7 +275,7 @@ ctest --test-dir build -C Release -R keyboard_input_regressions --output-on-fail
 本仓库 fork 自 [jstzwj/MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio)。
 上游作者 **jstzwj** 完成了主体行为级移植与 x64 对齐，是本分支继续开发的基础。
 
-本分支由 **洛琪（[Loki-0228](https://github.com/Loki-0228)）**维护，
+本分支由洛琪（[Loki-0228](https://github.com/Loki-0228)）维护，
 主要改动包括 MME 兼容适配、中文界面改进、播放与输入修复、崩溃诊断，以及构建与发布整理。
 
 ### 致谢
@@ -306,19 +313,19 @@ Bullet 2.75 剛体物理、AVI 動画録画、VSQ 音源との同期、アニメ
 
 ### 機能
 
-* **モデル**：PMD / PMX（BDEF4/SDEF ウェイト対応）読み込み、ボーンツリー、IK、
+- **モデル**：PMD / PMX（BDEF4/SDEF ウェイト対応）読み込み、ボーンツリー、IK、
   モーフ、トゥーンレンダリング
-* **アニメーション**：VMD 読み込み／保存、VPD エクスポート、フレームエディタ
+- **アニメーション**：VMD 読み込み／保存、VPD エクスポート、フレームエディタ
   （ボーン／モーフ／カメラ／照明／自作表情／アクセサリトラック）、物理プレビュー付き
   フレーム再生
-* **物理**：Bullet 2.75 剛体＋コンストレイント（6DOF スプリング）、決定論的な
+- **物理**：Bullet 2.75 剛体＋コンストレイント（6DOF スプリング）、決定論的な
   求解順序
-* **レンダリング**：DirectX 9 固定機能パイプライン＋オプションの SM2/SM3
+- **レンダリング**：DirectX 9 固定機能パイプライン＋オプションの SM2/SM3
   エフェクトチェーン（HDR RT）、トゥーンテクスチャ、地面影、立体視
   （NVIDIA 3D Vision）
-* **マルチメディア**：Wave/AVI 録画（DirectShow、MMDxShow プッシュソースフィルタ
+- **マルチメディア**：Wave/AVI 録画（DirectShow、MMDxShow プッシュソースフィルタ
   含む）、VSQ 楽譜インポート、Kinect スケルトン入力
-* **UI**：英／日バイリンガル、168 コントロールのメインウィンドウ、タイムライン、
+- **UI**：英／日バイリンガル、168 コントロールのメインウィンドウ、タイムライン、
   アクセサリ編集、元に戻す／やり直し
 
 ### ソースからのビルド
@@ -373,13 +380,16 @@ cmake --install build --config Release --prefix dist
 `.fx` を割り当てるだけです。実行時もビルド時も DirectX SDK は不要です。詳細は
 [docs/MME_COMPATIBILITY.md](docs/MME_COMPATIBILITY.md)。
 
-### その他の機能
+#### 個人による追加機能
 
-ログファイルは出力せず、エラー時はモーダルな致命的エラーウィンドウを表示します（Ctrl+C で
-内容をコピーでき、`build/symbols/` の PDB でソース行を特定できます）。入力メソッドを ON に
-したままでも英字ショートカット（P 再生／停止、ほか A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R）が
-有効です（テキスト入力欄を除く）。いずれも保守者の洛琪が自身の使用習慣に合わせて追加した
-もので、必要に応じて変更・削除できます。
+追加機能は個人的な利便性のためのもので、MMD 本来の使用習慣でも互換要件でもありません。
+ビルドする方はコードを編集して削除できます。
+
+- **エラー表示**：ログファイルは出力せず、致命的エラー時はモーダルなエラーウィンドウを
+  表示します（Ctrl+C で内容をコピーでき、`build/symbols/` の PDB でソース行を特定できます）。
+- **入力メソッドとショートカット**：中国語／日本語の入力メソッドを ON にしたままでも
+  英字ショートカット（P 再生／停止、ほか A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R）が有効です
+  （テキスト入力欄を除く）。
 
 ### 貢献
 
