@@ -112,6 +112,7 @@
 #include <cstdlib>
 #include <io.h>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
@@ -1093,7 +1094,14 @@ static bool LoadSceneV1_AccessoryBlock(PmmV1LoadContext& ctx, int fd) {
         LogV1Stage("acc-obj-done", _tell(fd), accSlot);
         mdl::AccessoryRecord& accessory = *mdl::Accessory(accs[accSlot]);
         Rd(fd, &accessory.order, 1);                              // 0x45BBB8
-        strcpy_s(accessory.name, sizeof accessory.name, accName);// 0x45BBDA
+        accName[sizeof accName - 1] = '\0';
+        const auto displayName = text_encoding::LegacyFilename(accName, accessory.sourcePath);
+        text_encoding::EncodeDisplay(accessory.name, sizeof accessory.name, displayName.c_str());
+        // Replace the shadow-list label using the resolved Unicode filename.
+        HWND accessoryCombo = GetDlgItem(main, panel::kAccessoryCombo);
+        SendMessageW(accessoryCombo, CB_DELETESTRING, accessory.order, 0);
+        SendMessageW(accessoryCombo, CB_INSERTSTRING, accessory.order,
+                     reinterpret_cast<LPARAM>(displayName.c_str()));// 0x45BBDA
         // accessory track record 0 + sparse keys (0x45BBF3..0x45C16F);
         // record shape (55 stream bytes, transparency quirk included) lives
         // in pmm_io_common.hpp ReadPmmAccessoryKey - byte-identical to v2.
@@ -1861,9 +1869,7 @@ static void LoadSceneV1_SuccessTail(PmmV1LoadContext& ctx) {
     }
     // Title brand: the port ships as MikuDanceStudio (About-box rename);
     // the same kAppTitleFormat constant serves the v2 load and pmm_save.cpp.
-    swprintf_s(wndText, 0x100, kAppTitleFormat,                   // 0x45E2A4
-               reinterpret_cast<const wchar_t*>(s->state.envFileName));
-    SetWindowTextW(main, wndText);
+    SetProjectWindowTitle(main, s->EnvFileName());
 
     // physics key-chain integrity (0x26E8 array, 0x1C stride)
     // (0x45E2C2..0x45E3C0)
@@ -1959,11 +1965,12 @@ static void LoadSceneV1_SuccessTail(PmmV1LoadContext& ctx) {
             const LRESULT n =
                 SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0);
             for (LRESULT i = 0; i < n; ++i) {                    // 0x45E705
-                SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT,
+                wchar_t accessoryLabel[256]{};
+                SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT,
                              static_cast<WPARAM>(i),
-                             reinterpret_cast<LPARAM>(lbText));
-                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                             reinterpret_cast<LPARAM>(lbText));
+                             reinterpret_cast<LPARAM>(accessoryLabel));
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+                             reinterpret_cast<LPARAM>(accessoryLabel));
             }
             SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_SETCURSEL, 0, 0);
         } else {

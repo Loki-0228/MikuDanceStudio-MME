@@ -120,6 +120,7 @@
 #include <cstdlib>
 #include <io.h>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
@@ -396,18 +397,16 @@ void WritePmmModelBlocks(int fd, unsigned char** const slots,
         W(fd, &slot, 1);                                       // 0x41B381
         unsigned char* const model = slots[slot];
 
-        {  // name1 at model+0x2248
-            const unsigned char len = NameLen(
-                reinterpret_cast<const unsigned char*>(mdl::Mdl(model)->name));
-            W(fd, &len, 1);                                    // 0x41B3B7
-            W(fd, mdl::Mdl(model)->name, len);                 // 0x41B3D9
-        }
-        {  // name2 at model+0x227A
-            const unsigned char len = NameLen(
-                reinterpret_cast<const unsigned char*>(
-                    mdl::Mdl(model)->nameEn));
-            W(fd, &len, 1);                                    // 0x41B40F
-            W(fd, mdl::Mdl(model)->nameEn, len);               // 0x41B432
+        for (int language = 0; language < 2; ++language) {
+            const char* name = language ? mdl::Mdl(model)->nameEn : mdl::Mdl(model)->name;
+            if (mdl::Mdl(model)->pmxTextBuffers[language]) {
+                const auto wide = text_encoding::ModelName(*mdl::Mdl(model), language != 0);
+                text_encoding::EncodePath(text, 0x100, wide.c_str());
+                name = text;
+            }
+            const auto len = static_cast<unsigned char>(std::strlen(name));
+            W(fd, &len, 1);
+            W(fd, name, len);
         }
 
         WideToSjisPath(text,                                  // 0x41B45D
@@ -687,8 +686,10 @@ void WritePmmAccessoryShadowList(int fd, HWND main, char* text) {
             SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0));
         W(fd, &cnt, 1);                                        // 0x41D2CD
         for (unsigned int i = 0; i < cnt; ++i) {               // 0x41D2FC
-            SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT, i,
-                         reinterpret_cast<LPARAM>(text));
+            wchar_t label[256]{};
+            SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT, i,
+                         reinterpret_cast<LPARAM>(label));
+            text_encoding::EncodeDisplay(text, 100, label);
             W(fd, text, 100);                                  // 0x41D310
         }
     }
@@ -960,7 +961,6 @@ void SaveSceneFile(MMDApp* app) {
     // byte-identical, matching the original's determinism property.
     char text[0x100] = {};
     char hdr[0x100];    // sprintf buffer at stack -0x34
-    wchar_t title[0x100];
 
     unsigned char** const slots = s->ModelSlots();
     mdl::AccessoryRecord** const accessories = s->AccessorySlots();
@@ -975,7 +975,34 @@ void SaveSceneFile(MMDApp* app) {
         return;
     }
 
-    s->SceneModified() = 0;                                    // 0x41B0C6
+    // Check fixed-width fields BEFORE opening/truncating the destination.
+    // Neither a substitution character nor a partial multibyte path is usable.
+    const wchar_t* invalidPath = nullptr;
+    auto checkPath = [&](const wchar_t* path) {
+        if (!text_encoding::EncodePath(text, sizeof text, path)) invalidPath = path;
+    };
+    for (int i = 0; i < kModelSlotCount; ++i)
+        if (slots[i]) {
+            auto& model = *mdl::Mdl(slots[i]);
+            checkPath(model.path);
+            for (int language = 0; language < 2; ++language)
+                if (model.pmxTextBuffers[language] && !text_encoding::EncodePath(
+                        text, sizeof text, model.pmxTextBuffers[language]))
+                    invalidPath = model.path;
+        }
+    for (int i = 0; i < 255; ++i)
+        if (accessories[i]) checkPath(accessories[i]->sourcePath);
+    checkPath(s->WavePath());
+    checkPath(s->AviBackgroundPath());
+    checkPath(s->PictureBackgroundPath());
+    if (invalidPath) {
+        std::wstring message = L"文件路径超出 PMM 的 255 字节限制，无法无损保存。请缩短路径后重试。\n"
+                               L"Path exceeds the PMM field size. Shorten it before saving.\n\n";
+        message += invalidPath;
+        MessageBoxW(main, message.c_str(), L"保存 / Save", MB_OK | MB_ICONERROR);
+        return;
+    }
+
     int fd = -1;
     const errno_t err =
         _wsopen_s(&fd, s->EnvFileName(), 0x8301, 0x40, 0x80);  // 0x41B125
@@ -1004,8 +1031,8 @@ void SaveSceneFile(MMDApp* app) {
 
     // ---- 12. success tail (0x41E747) --------------------------------------
     _close(fd);
-    swprintf_s(title, 0x100, pmm_io::kAppTitleFormat, s->EnvFileName());
-    SetWindowTextW(main, title);
+    pmm_io::SetProjectWindowTitle(main, s->EnvFileName());
+    s->SceneModified() = 0;
     MessageBeep(0x40);
     s->state.windowLayoutReady = 1;
 }

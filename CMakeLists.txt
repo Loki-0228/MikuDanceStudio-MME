@@ -87,6 +87,8 @@ add_library(mikudancestudio_core STATIC
     src/app/app_ctor.cpp
     src/app/app_defaults.cpp
     src/main/charset_conv.cpp
+    src/main/text_encoding.cpp
+    src/window/unicode_window.cpp
     src/math/quat_to_mat3x4.cpp
     src/math/color_lerp.cpp
     src/math/kernel_gaps.cpp
@@ -312,6 +314,16 @@ if (MIKUDANCESTUDIO_BUILD_EFFECT_TESTS)
     set_target_properties(effect_api_tests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
     add_test(NAME effect_api_regressions COMMAND effect_api_tests)
+endif()
+
+option(MIKUDANCESTUDIO_BUILD_ENCODING_TESTS "Build filename encoding regression tests" OFF)
+if (MIKUDANCESTUDIO_BUILD_ENCODING_TESTS)
+    enable_testing()
+    add_executable(filename_encoding_tests EXCLUDE_FROM_ALL tests/filename_encoding_tests.cpp)
+    target_link_libraries(filename_encoding_tests PRIVATE mikudancestudio_core winmm dsound)
+    set_target_properties(filename_encoding_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
+    add_test(NAME filename_encoding_regressions COMMAND filename_encoding_tests)
 endif()
 
 # ---------------------------------------------------------------------------

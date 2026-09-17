@@ -439,10 +439,10 @@ void ApplyModelComboSelection(MMDApp* app) {  // was Sub44D940, 0x44D940
             const int count = static_cast<int>(
                 SendMessageA(accessoryCombo, CB_GETCOUNT, 0, 0));
             for (int index = 0; index < count; ++index) {
-                char name[100]{};
-                SendMessageA(accessoryCombo, CB_GETLBTEXT, index,
+                wchar_t name[256]{};
+                SendMessageW(accessoryCombo, CB_GETLBTEXT, index,
                              reinterpret_cast<LPARAM>(name));
-                SendMessageA(frameCombo, CB_ADDSTRING, 0,
+                SendMessageW(frameCombo, CB_ADDSTRING, 0,
                              reinterpret_cast<LPARAM>(name));
             }
             SendMessageA(frameCombo, CB_SETCURSEL, 0, 0);

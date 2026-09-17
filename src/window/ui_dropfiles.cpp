@@ -69,6 +69,7 @@
 #include <new>
 
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -135,23 +136,7 @@ wchar_t* DirOf(MMDApp* app, const wchar_t* szFile) {
 // wide source is non-empty - the prefill is dead here because a dropped
 // path is never empty, so it is not replicated.
 void WideToSjisPath(char* dst, const wchar_t* src, rsize_t size) {
-    dst[0] = '\0';
-    if (src == nullptr || src[0] == L'\0')
-        return;
-    const int need = WideCharToMultiByte(932, 0, src, -1, nullptr, 0,
-                                         nullptr, nullptr);
-    char* tmp = static_cast<char*>(operator new(need));
-    BOOL usedDefault = FALSE;
-    const int n = WideCharToMultiByte(932, 0, src, -1, tmp, need, nullptr,
-                                      &usedDefault);
-    if (n == 0 || usedDefault) {
-        size_t dummy = 0;
-        if (wcstombs_s(&dummy, dst, size, src, _TRUNCATE) != 0)
-            dst[0] = '\0';
-    } else {
-        strncpy_s(dst, size, tmp, _TRUNCATE);
-    }
-    operator delete(tmp);
+    text_encoding::EncodePath(dst, size, src);
 }
 
 }  // namespace
@@ -164,7 +149,7 @@ void HandleDropFiles(HDROP hDrop) {
         // 0x461360: the original passes cch = 0x200 for a 256-wchar buffer
         // (harmless for real paths); replicated verbatim.
         wchar_t szFile[256];
-        DragQueryFileW(hDrop, iFile, szFile, 0x200);
+        DragQueryFileW(hDrop, iFile, szFile, _countof(szFile));
 
         // ---- .pmm - project file -----------------------------------------
         if (wcsstr(szFile, L".pmm") || wcsstr(szFile, L".PMM") ||

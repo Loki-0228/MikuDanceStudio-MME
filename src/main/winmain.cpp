@@ -16,6 +16,7 @@
 #define NOMINMAX
 #include <Windows.h>
 #include <timeapi.h>   // timeGetTime (excluded by WIN32_LEAN_AND_MEAN)
+#include <shellapi.h>
 #include <new>
 
 #include <cstdint>
@@ -48,11 +49,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     app->state = MMDAppState{};  // original: memset(p, 0, 0xA4530)
     app->InitDefaults();                                          // 0x40A730
 
-    if (*lpCmdLine != '\0') {
-        wchar_t converted[256];  // `Source` local in the original (ebp-0x204)
-        ConvertAnsiToWide(app->LocaleTablePtr(),                  // [Block+0xA06C4]
-                          lpCmdLine, converted, 0x100);           // 0x407A70
-        wcscpy_s(app->EnvFileName(), 0x100, converted);
+    // WinMain's ANSI command line has already lost characters outside ACP.
+    // Parse the original UTF-16 command line, including quoted paths/spaces.
+    (void)lpCmdLine;
+    int argc = 0;
+    wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (argv && argc > 1) {
+        wcscpy_s(app->EnvFileName(), 0x100, argv[1]);
     } else {
         // Original pushes only Format/BufferCount/Buffer - no varargs
         // (verified in disassembly at 0x4C44CA..0x4C44DA).  VC9 read two
@@ -62,6 +65,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         // way without relying on undefined behaviour of the modern CRT.
         swprintf_s(app->EnvFileName(), 0x100, g_SourceFormat, L"", L"");
     }
+    if (argv) LocalFree(argv);
 
     runtime_log::Write("INIT window and Direct3D begin");
     runtime_log::SetPhase("initialize window and Direct3D");
@@ -79,7 +83,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DWORD timeLow = timeGetTime();      // Time/ebx
     app->MilliToSec() = 0.001f;         // [Block+0xA0B70] = flt_5318D0
 
-    PeekMessageA(&msg, nullptr, 0, 0, 0);  // PM_NOREMOVE prime, original arg set
+    PeekMessageW(&msg, nullptr, 0, 0, 0);  // PM_NOREMOVE prime, original arg set
     // DIAG(fps): once per second append loop/pump/sleep statistics to the
     // file named by MIKUDANCESTUDIO_PUMP_STATS.  Purely observational -
     // the loop below is untouched when the variable is unset.
@@ -94,13 +98,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     double statsSleepMs = 0.0, statsPumpMs = 0.0;
     while (msg.message != WM_QUIT) {       // 18
         runtime_log::SetPhase("message loop");
-        if (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             runtime_log::SetPhase("dispatch window message");
             if (msg.message == WM_CLOSE || msg.message == WM_QUIT)
                 runtime_log::Write("EXIT_MESSAGE message=0x%04X code=%llu", msg.message,
                     static_cast<unsigned long long>(msg.wParam));
             TranslateMessage(&msg);
-            DispatchMessageA(&msg);
+            DispatchMessageW(&msg);
             if (pumpStats != nullptr) ++statsMsgs;
         } else {
             std::uint32_t nowLow = timeGetTime();           // v9

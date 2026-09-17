@@ -118,6 +118,7 @@
 #include <cstring>
 #include <new>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
@@ -482,23 +483,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         app->state.enterKeyState = 1;  // 0xBC
         mdl::AccessoryRecord* acc = app->AccessorySlot(found);
 
-        char text[0x100];
-        if (app->state.englishUI != 0) {
-            sprintf_s(text, 0x100,
-                      "Trying to delete Accessory(%s).\n"
-                      "All flame data about this accessory will be deleted "
-                      "too.\n(This operation cannot undo!!)\n\nAre you OK?",
-                      acc->name);
-        } else {
-            sprintf_s(text, 0x100, kMsgDelAccessoryJp,
-                      acc->name);
-        }
-        const std::uint32_t flags =
-            app->state.floatingWindow != 0 ? (MB_OKCANCEL | MB_TOPMOST) : MB_OKCANCEL;
-        const char* caption = app->state.englishUI != 0
-                                  ? "delete accessory"
-                                  : kCaptionDelAccessoryJp;
-        if (MessageBoxA(hwnd, text, caption, flags) != IDOK) {
+        const auto name = text_encoding::Display(acc->name);
+        std::wstring text = app->state.englishUI != 0
+            ? L"Delete accessory and all its frame data? (Cannot undo)\n\n"
+            : L"アクセサリと全フレームのデータを削除しますか？\n\n";
+        text += name;
+        const std::uint32_t flags = app->state.floatingWindow != 0
+            ? (MB_OKCANCEL | MB_TOPMOST) : MB_OKCANCEL;
+        if (MessageBoxW(hwnd, text.c_str(), L"Delete accessory", flags) != IDOK) {
             break;
         }
 

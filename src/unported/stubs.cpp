@@ -23,6 +23,7 @@
 #include <cwchar>
 #include <locale.h>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
@@ -281,32 +282,9 @@ void IdentityCtor(void* obj)            { (void)obj; }  // was Sub4C46F0
 // src/app/frame_modes.cpp.
 // PushBoneEditUndo (0x42D6E0) is ported in src/model/bone_edit_undo.cpp.
 // Sub401150 (0x401150 array ctor) is ported in src/window/accessory_paste.cpp.
-// 0x407910 wide->SJIS path conversion (PMM save model/WAV/AVI paths and
-// the drop-file flow).  Original: strcpy_s prefill from the .data "Locale"
-// narrow string ("%", 0x529679), then when src is non-empty
-// WideCharToMultiByte(932) into a heap scratch and strncpy_s it out; on
-// failure/default-char a _wcstombs_s_l fallback chain (orig tries four
-// pre-created locale pointers at ctx+0x1D4C4 - approximated with the
-// locale-agnostic wcstombs_s, the only branch reachable for the pure-ASCII
-// paths the save emits).
+// Shared, lossless legacy path encoder (independent of the UI/CRT locale).
 void WideToSjisPath(char* dst, const wchar_t* src, std::size_t size) {
-    strcpy_s(dst, size, "%");                       // 0x407927 Locale prefill
-    if (src == nullptr || src[0] == L'\0')
-        return;
-    const int need = WideCharToMultiByte(932, 0, src, -1, nullptr, 0,
-                                        nullptr, nullptr);
-    char* tmp = static_cast<char*>(operator new(need));
-    BOOL usedDefault = FALSE;
-    const int n = WideCharToMultiByte(932, 0, src, wcslen(src) + 1, tmp,
-                                     need, nullptr, &usedDefault);
-    if (n == 0 || usedDefault) {
-        size_t dummy = 0;
-        if (wcstombs_s(&dummy, dst, size, src, _TRUNCATE) != 0)
-            dst[0] = '\0';
-    } else {
-        strncpy_s(dst, size, tmp, _TRUNCATE);
-    }
-    free(tmp);
+    text_encoding::EncodePath(dst, size, src);
 }
 // 0x4341E0 stop-playback restore is ported in src/app/playback_state.cpp.
 // Sub40A710 (0x40A710 dispose+free wrapper) is ported in
@@ -343,8 +321,8 @@ INT_PTR CALLBACK DialogFuncStub(HWND hDlg, UINT msg, WPARAM wp, LPARAM lp) {
     (void)lp;
     if (msg == WM_INITDIALOG) {                                    // 0x410014
         MMDApp* app = g_Block;
-        SetWindowTextA(GetDlgItem(hDlg, panel::kScaleFromEdit),
-                       app->state.statusText);
+        SetWindowTextW(GetDlgItem(hDlg, panel::kScaleFromEdit),
+                       text_encoding::Display(app->state.statusText).c_str());
         return 0;
     }
     if (msg == WM_COMMAND) {                                       // 0x40FF98

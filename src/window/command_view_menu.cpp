@@ -231,6 +231,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <cwchar>
 #include <btBulletDynamicsCommon.h>
 
@@ -1201,7 +1202,7 @@ INT_PTR CALLBACK ModelCalculateOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     if (msg == WM_INITDIALOG) {
         MakeDialogTopmostIfRequested(app, hDlg);
         g_calculateOrderDialogCount = static_cast<int>(
-            SendMessageA(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
+            SendMessageW(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
                          CB_GETCOUNT, 0, 0)) -
             1;
         InitModelOrderDialog(g_calculateOrderDialogCount, hDlg);  // 0x41E810
@@ -1213,16 +1214,16 @@ INT_PTR CALLBACK ModelCalculateOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     const WORD id = LOWORD(wParam);
     if (id == 630) {  // move up (0x42E3A6)
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETCURSEL, 0, 0));
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETCURSEL, 0, 0));
         if (sel >= 1) {
-            char buf[100];
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
-                         (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING, sel,
+            const auto length = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXTLEN, sel, 0);
+            std::wstring buf(length >= 0 ? static_cast<size_t>(length) + 1 : 1, L'\0');
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel, (LPARAM)buf.data());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING, sel,
                          0);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
-                         sel - 1, (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL, sel - 1,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
+                         sel - 1, (LPARAM)buf.c_str());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL, sel - 1,
                          0);
             std::int32_t* arr =
                 static_cast<std::int32_t*>(app->AccessoryOrderArray());
@@ -1234,16 +1235,16 @@ INT_PTR CALLBACK ModelCalculateOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     }
     if (id == 631) {  // move down (0x42E451)
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETCURSEL, 0, 0));
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETCURSEL, 0, 0));
         if (sel != -1 && sel < g_calculateOrderDialogCount - 1) {
-            char buf[100];
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
-                         (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING, sel,
+            const auto length = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXTLEN, sel, 0);
+            std::wstring buf(length >= 0 ? static_cast<size_t>(length) + 1 : 1, L'\0');
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel, (LPARAM)buf.data());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING, sel,
                          0);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
-                         sel + 1, (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL, sel + 1,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
+                         sel + 1, (LPARAM)buf.c_str());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL, sel + 1,
                          0);
             std::int32_t* arr =
                 static_cast<std::int32_t*>(app->AccessoryOrderArray());
@@ -1534,16 +1535,16 @@ INT_PTR CALLBACK ModelDisplayOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     if (msg == WM_INITDIALOG) {
         MakeDialogTopmostIfRequested(app, hDlg);
         const int count = static_cast<int>(
-            SendMessageA(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
+            SendMessageW(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
                          CB_GETCOUNT, 0, 0));
         g_displayOrderDialogCount = count;
-        app->AccessoryOrderArray() = new std::int32_t[count];
-        char buf[0x100];
+        app->AccessoryOrderArray() = std::calloc(count, sizeof(std::int32_t));
         for (int i = 1; i < count; ++i) {
-            SendMessageA(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
-                         CB_GETLBTEXT, i, (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_ADDSTRING, 0,
-                         (LPARAM)buf);
+            const auto length = SendMessageW(GetDlgItem(app->state.hwnd, panel::kMainComboModel), CB_GETLBTEXTLEN, i, 0);
+            std::wstring buf(length >= 0 ? static_cast<size_t>(length) + 1 : 1, L'\0');
+            SendMessageW(GetDlgItem(app->state.hwnd, panel::kMainComboModel), CB_GETLBTEXT, i, (LPARAM)buf.data());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_ADDSTRING, 0,
+                         (LPARAM)buf.c_str());
         }
         BuildModelOrderArray(app, count);  // 0x41E7B0
         return 0;
@@ -1554,16 +1555,16 @@ INT_PTR CALLBACK ModelDisplayOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     const WORD id = LOWORD(wParam);
     if (id == 630) {  // move up (0x464225)
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETCURSEL, 0, 0));
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETCURSEL, 0, 0));
         if (sel >= 1) {
-            char buf[0x100];
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
-                         (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
+            const auto length = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXTLEN, sel, 0);
+            std::wstring buf(length >= 0 ? static_cast<size_t>(length) + 1 : 1, L'\0');
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel, (LPARAM)buf.data());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
                          sel, 0);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
-                         sel - 1, (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
+                         sel - 1, (LPARAM)buf.c_str());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
                          sel - 1, 0);
             std::int32_t* arr =
                 static_cast<std::int32_t*>(app->AccessoryOrderArray());
@@ -1575,16 +1576,16 @@ INT_PTR CALLBACK ModelDisplayOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     }
     if (id == 631) {  // move down (0x4642DE)
         const int sel = static_cast<int>(
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETCURSEL, 0, 0));
-        if (sel != -1 && sel < g_displayOrderDialogCount - 1) {
-            char buf[0x100];
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
-                         (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETCURSEL, 0, 0));
+        if (sel != -1 && sel < g_displayOrderDialogCount - 2) {
+            const auto length = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXTLEN, sel, 0);
+            std::wstring buf(length >= 0 ? static_cast<size_t>(length) + 1 : 1, L'\0');
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel, (LPARAM)buf.data());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
                          sel, 0);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
-                         sel + 1, (LPARAM)buf);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
+                         sel + 1, (LPARAM)buf.c_str());
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
                          sel + 1, 0);
             std::int32_t* arr =
                 static_cast<std::int32_t*>(app->AccessoryOrderArray());
@@ -1596,11 +1597,11 @@ INT_PTR CALLBACK ModelDisplayOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     }
     if (id == 632) {  // OK (0x4643AD)
         HWND mainWnd = app->state.hwnd;
-        SendMessageA(GetDlgItem(mainWnd, panel::kMainComboModel), CB_RESETCONTENT, 0,
+        SendMessageW(GetDlgItem(mainWnd, panel::kMainComboModel), CB_RESETCONTENT, 0,
                      0);
-        SendMessageA(GetDlgItem(mainWnd, panel::kMainComboGround), CB_RESETCONTENT, 0,
+        SendMessageW(GetDlgItem(mainWnd, panel::kMainComboGround), CB_RESETCONTENT, 0,
                      0);
-        SendMessageA(GetDlgItem(mainWnd, panel::kMainComboNormal), CB_RESETCONTENT, 0,
+        SendMessageW(GetDlgItem(mainWnd, panel::kMainComboNormal), CB_RESETCONTENT, 0,
                      0);
         if (app->state.englishUI != 0) {
             AddUiComboText(app, GetDlgItem(mainWnd, panel::kMainComboModel),
@@ -1617,18 +1618,18 @@ INT_PTR CALLBACK ModelDisplayOrderDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
             SendMessageW(GetDlgItem(mainWnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
                          (LPARAM)kJpNone);
         }
-        char buf[0x100];
         for (int i = 0; i < g_displayOrderDialogCount - 1; ++i) {
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, i,
-                         (LPARAM)buf);
-            SendMessageA(GetDlgItem(mainWnd, panel::kMainComboModel), CB_ADDSTRING, 0,
-                         (LPARAM)buf);
-            SendMessageA(GetDlgItem(mainWnd, panel::kMainComboGround), CB_ADDSTRING, 0,
-                         (LPARAM)buf);
-            SendMessageA(GetDlgItem(mainWnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
-                         (LPARAM)buf);
+            const auto length = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXTLEN, i, 0);
+            std::wstring buf(length >= 0 ? static_cast<size_t>(length) + 1 : 1, L'\0');
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, i, (LPARAM)buf.data());
+            SendMessageW(GetDlgItem(mainWnd, panel::kMainComboModel), CB_ADDSTRING, 0,
+                         (LPARAM)buf.c_str());
+            SendMessageW(GetDlgItem(mainWnd, panel::kMainComboGround), CB_ADDSTRING, 0,
+                         (LPARAM)buf.c_str());
+            SendMessageW(GetDlgItem(mainWnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
+                         (LPARAM)buf.c_str());
         }
-        SendMessageA(GetDlgItem(mainWnd, panel::kMainComboModel), CB_SETCURSEL, 0, 0);
+        SendMessageW(GetDlgItem(mainWnd, panel::kMainComboModel), CB_SETCURSEL, 0, 0);
         ApplyModelDisplayOrderDialog(app, g_displayOrderDialogCount, hDlg);  // 0x45EC80
         EndDialog(hDlg, 1);
         if (app->AccessoryOrderArray() == nullptr) {

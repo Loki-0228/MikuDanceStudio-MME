@@ -150,7 +150,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         case WM_CLOSE:
             runtime_log::Write("WM_CLOSE received enhancedDirty=%d sceneModified=%d",
                                s.EnhancedModelDirty(), s.SceneModified());
-            // Each branch below ends at DefWindowProcA once the user accepted
+            // Each branch below ends at DefWindowProcW once the user accepted
             // the close (or when there is nothing unsaved).  From that point
             // the program is exiting: teardown faults must not raise the modal
             // report any more, so the flag is set before the window is
@@ -165,12 +165,12 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                                  (MB_OKCANCEL | MB_TOPMOST));  // x64 正文 0x7FF7CB4FBCE7/标题 0x7FF7CB4FBCEE
                 if (r == IDOK) {                                  // original: == 1
                     runtime_log::BeginShutdown();
-                    return DefWindowProcA(hwnd, msg, wParam, lParam);
+                    return DefWindowProcW(hwnd, msg, wParam, lParam);
                 }
             } else {
                 if (s.SceneModified() == 0) {                     // 658189
                     runtime_log::BeginShutdown();
-                    return DefWindowProcA(hwnd, msg, wParam, lParam);
+                    return DefWindowProcW(hwnd, msg, wParam, lParam);
                 }
                 int r = s.EnglishUI()
                     ? MessageBoxA(hwnd,
@@ -180,7 +180,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                                  (MB_OKCANCEL | MB_TOPMOST));  // x64 正文 0x7FF7CB4FBD44/标题共用
                 if (r == IDOK) {
                     runtime_log::BeginShutdown();
-                    return DefWindowProcA(hwnd, msg, wParam, lParam);
+                    return DefWindowProcW(hwnd, msg, wParam, lParam);
                 }
             }
             return 0;
@@ -192,13 +192,13 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             return HandleNotify(hwnd, msg, wParam, lParam);       // 0x4398B0
 
         default:
-            return DefWindowProcA(hwnd, msg, wParam, lParam);
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
         }
     }
 
     if (msg > 0x233) {
         if (msg != 792 /*0x318*/)
-            return DefWindowProcA(hwnd, msg, wParam, lParam);
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
         HandlePaletteChanged(reinterpret_cast<HDC>(wParam));      // 0x42CEB0
         HandlePaletteChanged2(reinterpret_cast<HDC>(wParam));     // 0x42C140
         return 0;
@@ -264,7 +264,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         HandleMouseWheel(HIWORD(wParam));                         // 0x44BD70
         return 0;
     default:
-        return DefWindowProcA(hwnd, msg, wParam, lParam);
+        return DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 }
 

@@ -318,20 +318,20 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     InitCommonControls();                                       // 0x47BB90
     s.HInstance() = hInstance;                                  // this+0
 
-    WNDCLASSA wc;                                               // 0x47BBA2
-    std::memset(&wc, 0, sizeof(wc));
-    wc.style = 11;                       // CS_HREDRAW|CS_VREDRAW|CS_DBLCLKS
-    wc.lpfnWndProc = MainWndProc;                               // 0x4C3A10
-    wc.cbClsExtra = 0;
-    wc.cbWndExtra = 4;
-    wc.hInstance = hInstance;
-    wc.hIcon = LoadIconA(hInstance, MAKEINTRESOURCEA(0x64));
-    wc.hCursor = LoadCursorA(nullptr, MAKEINTRESOURCEA(0x7F00));  // IDC_ARROW
-    wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(4));   // BLACK_BRUSH
-    wc.lpszClassName = "Polygon Movie Maker";
-    wc.lpszMenuName = s.EnglishUI() ? "SAMPLE02E" : "SAMPLE02";
+    WNDCLASSW mainClass;                                               // 0x47BBA2
+    std::memset(&mainClass, 0, sizeof(mainClass));
+    mainClass.style = 11;                       // CS_HREDRAW|CS_VREDRAW|CS_DBLCLKS
+    mainClass.lpfnWndProc = MainWndProc;                               // 0x4C3A10
+    mainClass.cbClsExtra = 0;
+    mainClass.cbWndExtra = 4;
+    mainClass.hInstance = hInstance;
+    mainClass.hIcon = LoadIconA(hInstance, MAKEINTRESOURCEA(0x64));
+    mainClass.hCursor = LoadCursorA(nullptr, MAKEINTRESOURCEA(0x7F00));  // IDC_ARROW
+    mainClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(4));   // BLACK_BRUSH
+    mainClass.lpszClassName = L"Polygon Movie Maker";
+    mainClass.lpszMenuName = s.EnglishUI() ? L"SAMPLE02E" : L"SAMPLE02";
 
-    if (!RegisterClassA(&wc)) {                                 // 0x47BC14
+    if (!RegisterClassW(&mainClass)) {                                 // 0x47BC14
         // Original swaps only the caption on JP UI (text stays English):
         // x64 0x7FF7CB54B0E8 = "メインウィンドウ作成".
         MessageBoxA(nullptr, "RegisterClass failed",
@@ -341,6 +341,7 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
         return false;
     }
 
+    WNDCLASSA wc;
     std::memset(&wc, 0, sizeof(wc));
     wc.style = 11;
     wc.lpfnWndProc = RecWndProc;                                // 0x479DA0
@@ -375,10 +376,9 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
         return false;
     }
 
-    char windowName[52];                                        // 0x47BD16
-    strcpy_s(windowName, 0x32, "MikuDanceStudio");
-    HWND hwnd = CreateWindowExA(                                // 0x47BD4B
-        0, "Polygon Movie Maker", windowName, 0xCF0000u /*WS_OVERLAPPEDWINDOW*/,
+    // A Unicode window keeps project filenames intact in WM_SETTEXT/GETTEXT.
+    HWND hwnd = CreateWindowExW(                                // 0x47BD4B
+        0, L"Polygon Movie Maker", L"MikuDanceStudio", 0xCF0000u /*WS_OVERLAPPEDWINDOW*/,
         X, Y, nWidth, nHeight, nullptr, nullptr, hInstance, nullptr);
     s.Hwnd() = hwnd;
     if (!hwnd) {

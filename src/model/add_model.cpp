@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
@@ -72,16 +73,14 @@ void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
                      app->Physics(),                      // a8: -> m+60 scene
                      app->PathWorkspace())) {       // 0x4BF3E0
         app->SceneModified() = 1;
-        const char* name =
-            app->EnglishUI() == 0 ? mdl::Mdl(model)->name
-                                  : mdl::Mdl(model)->nameEn;
-        mdl::Mdl(model)->comboSelIndex = static_cast<std::uint8_t>(SendMessageA(
+        const auto name = text_encoding::ModelName(*mdl::Mdl(model), app->EnglishUI() == 1);
+        mdl::Mdl(model)->comboSelIndex = static_cast<std::uint8_t>(SendMessageW(
             GetDlgItem(hwnd, panel::kMainComboModel), CB_ADDSTRING, 0,
-            reinterpret_cast<LPARAM>(name)));
-        SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>(name));
-        SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>(name));
+            reinterpret_cast<LPARAM>(name.c_str())));
+        SendMessageW(GetDlgItem(hwnd, panel::kMainComboGround), CB_ADDSTRING, 0,
+                     reinterpret_cast<LPARAM>(name.c_str()));
+        SendMessageW(GetDlgItem(hwnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
+                     reinterpret_cast<LPARAM>(name.c_str()));
         mdl::Mdl(model)->comboSelIndex2 = mdl::Mdl(model)->comboSelIndex;
         SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL,
                      mdl::Mdl(model)->comboSelIndex, 0);

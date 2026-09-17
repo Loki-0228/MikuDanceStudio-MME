@@ -117,6 +117,7 @@
 #include <cstring>
 #include <new>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
@@ -767,25 +768,25 @@ static int g_accOrderCount = 0;
 INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                                            LPARAM lParam) {  // was Sub44CA40, VA 0x0044CA40
     MMDApp* app = g_Block;
-    char text[0x100];
+    wchar_t text[0x100];
     if (msg == WM_INITDIALOG) {
         MakeDialogTopmostIfRequested(app, hDlg);
         const HWND main = MainHwnd(app);
         g_accOrderCount = static_cast<int>(
-            SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0));
+            SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0));
         reinterpret_cast<unsigned char*&>(app->AccessoryOrderArray()) = static_cast<unsigned char*>(
-            ::operator new(4u * static_cast<std::uint32_t>(g_accOrderCount)));
+            std::calloc(g_accOrderCount, sizeof(mdl::AccessoryRecord*)));
         for (int i = 0; i < g_accOrderCount; ++i) {
-            SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT, i,
+            SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT, i,
                          (LPARAM)text);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_ADDSTRING, 0,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_ADDSTRING, 0,
                          (LPARAM)text);
         }
         BuildAccessoryOrderArray(app, g_accOrderCount);
-        sprintf_s(text, 0x64, "%d",
+        swprintf_s(text, 0x64, L"%d",
                   app->state.accessoryRenderSplitOrder);
-        SetWindowTextA(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), text);
-        SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
+        SetWindowTextW(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), text);
+        SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
                      0xFFFFFFFF, 0);
         return 0;
     }
@@ -795,38 +796,38 @@ INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     if (LOWORD(wParam) != 633) {
         switch (LOWORD(wParam)) {
         case 0x276: {  // move up
-            const LRESULT sel = SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox),
+            const LRESULT sel = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox),
                                              LB_GETCURSEL, 0, 0);
             if (sel >= 1) {
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
                              (LPARAM)text);
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
                              sel, 0);
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
                              sel - 1, (LPARAM)text);
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
                              sel - 1, 0);
-                std::int32_t* order = reinterpret_cast<std::int32_t*&>(app->AccessoryOrderArray());
-                const std::int32_t tmp = order[sel - 1];
+                auto** order = static_cast<mdl::AccessoryRecord**>(app->AccessoryOrderArray());
+                auto* tmp = order[sel - 1];
                 order[sel - 1] = order[sel];
                 order[sel] = tmp;
             }
             return 0;
         }
         case 0x277: {  // move down
-            const LRESULT sel = SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox),
+            const LRESULT sel = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox),
                                              LB_GETCURSEL, 0, 0);
             if (sel != -1 && sel < g_accOrderCount - 1) {
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
                              (LPARAM)text);
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
                              sel, 0);
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
                              sel + 1, (LPARAM)text);
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
                              sel + 1, 0);
-                std::int32_t* order = reinterpret_cast<std::int32_t*&>(app->AccessoryOrderArray());
-                const std::int32_t tmp = order[sel + 1];
+                auto** order = static_cast<mdl::AccessoryRecord**>(app->AccessoryOrderArray());
+                auto* tmp = order[sel + 1];
                 order[sel + 1] = order[sel];
                 order[sel] = tmp;
             }
@@ -837,24 +838,24 @@ INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                 ReadIntFromEdit(hDlg, panel::kAccessoryOrderEdit, 256);
             ApplyAccessorySettingsDialog(app, g_accOrderCount, hDlg);
             const HWND main = MainHwnd(app);
-            SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_RESETCONTENT, 0, 0);
+            SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_RESETCONTENT, 0, 0);
             for (int j = 0; j < g_accOrderCount; ++j) {
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, j,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, j,
                              (LPARAM)text);
-                SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_ADDSTRING, 0,
+                SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_ADDSTRING, 0,
                              (LPARAM)text);
             }
-            SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_SETCURSEL, 0, 0);
-            SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_RESETCONTENT, 0, 0);
+            SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_SETCURSEL, 0, 0);
+            SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_RESETCONTENT, 0, 0);
             if (app->EnglishUI() != 0) {
-                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                             (LPARAM)"camera");
-                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                             (LPARAM)"light");
-                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                             (LPARAM)"s shadow");
-                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                             (LPARAM)"grav");
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+                             (LPARAM)L"camera");
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+                             (LPARAM)L"light");
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+                             (LPARAM)L"s shadow");
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+                             (LPARAM)L"grav");
             } else {
                 SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              (LPARAM)kAccTypeCameraJp);
@@ -865,16 +866,16 @@ INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                 SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              (LPARAM)kAccTypeGravityJp);
             }
-            char buf[100];
-            const LRESULT n = SendMessageA(GetDlgItem(main, panel::kAccessoryCombo),
+            wchar_t buf[256];
+            const LRESULT n = SendMessageW(GetDlgItem(main, panel::kAccessoryCombo),
                                            CB_GETCOUNT, 0, 0);
             for (LRESULT k = 0; k < n; ++k) {
-                SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT, k,
+                SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT, k,
                              (LPARAM)buf);
-                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                              (LPARAM)buf);
             }
-            SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_SETCURSEL, 0, 0);
+            SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_SETCURSEL, 0, 0);
             EndDialog(hDlg, 1);
             if (app->AccessoryOrderArray() != nullptr) {
                 free(app->AccessoryOrderArray());
@@ -891,14 +892,14 @@ INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
             return 0;
         }
         if (HIWORD(wParam) == 1 /*CBN_SELCHANGE*/) {
-            const LRESULT sel = SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox),
+            const LRESULT sel = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox),
                                              LB_GETCURSEL, 0, 0);
             if (sel >= 0) {
-                SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
+                SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_GETTEXT, sel,
                              (LPARAM)text);
-                SendMessageA(GetDlgItem(hDlg, panel::kAccessoryNameEdit), EM_SETSEL, 0,
-                             GetWindowTextLengthA(GetDlgItem(hDlg, panel::kAccessoryNameEdit)));
-                SendMessageA(GetDlgItem(hDlg, panel::kAccessoryNameEdit), EM_REPLACESEL, 0,
+                SendMessageW(GetDlgItem(hDlg, panel::kAccessoryNameEdit), EM_SETSEL, 0,
+                             GetWindowTextLengthW(GetDlgItem(hDlg, panel::kAccessoryNameEdit)));
+                SendMessageW(GetDlgItem(hDlg, panel::kAccessoryNameEdit), EM_REPLACESEL, 0,
                              (LPARAM)text);
             }
             return 0;
@@ -908,25 +909,25 @@ INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
             return 0;
         }
         {
-            GetWindowTextA(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), text, 256);
-            int orderIdx = atol(text);
+            GetWindowTextW(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), text, 256);
+            int orderIdx = _wtoi(text);
             if (orderIdx > 0) {
                 if (orderIdx > g_accOrderCount) {
                     orderIdx = g_accOrderCount;
-                    sprintf_s(text, 0x64, "%d", g_accOrderCount);
-                    SetWindowTextA(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), text);
-                    SendMessageA(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), EM_SETSEL,
-                                 0, GetWindowTextLengthA(GetDlgItem(hDlg, panel::kAccessoryOrderEdit)));
+                    swprintf_s(text, 0x64, L"%d", g_accOrderCount);
+                    SetWindowTextW(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), text);
+                    SendMessageW(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), EM_SETSEL,
+                                 0, GetWindowTextLengthW(GetDlgItem(hDlg, panel::kAccessoryOrderEdit)));
                 }
             } else {
                 orderIdx = 0;
-                sprintf_s(text, 0x64, "%d", 0);
-                SetWindowTextA(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), text);
-                SendMessageA(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), EM_SETSEL, 0,
-                             GetWindowTextLengthA(GetDlgItem(hDlg, panel::kAccessoryOrderEdit)));
+                swprintf_s(text, 0x64, L"%d", 0);
+                SetWindowTextW(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), text);
+                SendMessageW(GetDlgItem(hDlg, panel::kAccessoryOrderEdit), EM_SETSEL, 0,
+                             GetWindowTextLengthW(GetDlgItem(hDlg, panel::kAccessoryOrderEdit)));
             }
             const bool below = orderIdx < g_accOrderCount;
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
                          below ? static_cast<WPARAM>(orderIdx)
                                : static_cast<WPARAM>(0xFFFFFFFF),
                          0);
@@ -936,15 +937,20 @@ INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     // LOWORD == 633: rename the selected list item from edit 0x275 (the
     // original's IDCANCEL id - the dialog never closes on it).
     if (GetFocus() != GetDlgItem(hDlg, panel::kAccessoryOrderEdit)) {
-        const LRESULT sel = SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox),
+        const LRESULT sel = SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox),
                                          LB_GETCURSEL, 0, 0);
-        GetWindowTextA(GetDlgItem(hDlg, panel::kAccessoryNameEdit), text, 256);
+        GetWindowTextW(GetDlgItem(hDlg, panel::kAccessoryNameEdit), text, 256);
+        char encodedName[100]{};
+        if (text[0] != 0 && !text_encoding::EncodeDisplay(encodedName, sizeof encodedName, text)) {
+            MessageBoxW(hDlg, L"名称过长，请缩短名称。 / Name is too long.", L"配件 / Accessory", MB_OK);
+            return 0;
+        }
         if (text[0] != 0 && sel < g_accOrderCount && sel >= 0) {
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_DELETESTRING,
                          sel, 0);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_INSERTSTRING,
                          sel, (LPARAM)text);
-            SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
+            SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_SETCURSEL,
                          sel, 0);
         }
     }
@@ -1037,20 +1043,23 @@ void ApplyAccessorySettingsDialog(MMDApp* app, int count, HWND hDlg) {  // was S
     auto& s = *app;
     mdl::AccessoryRecord** order = static_cast<mdl::AccessoryRecord**>(
         app->AccessoryOrderArray());   // 0xA0B1C
-    char text[100];
+    wchar_t text[256];
     const HWND list = GetDlgItem(hDlg, panel::kOrderListBox);                   // 0x274
     for (int i = 0; i < count; ++i) {
         mdl::AccessoryRecord* acc = order[i];
         if (acc == nullptr)
             continue;
         acc->order = static_cast<unsigned char>(i);             // 0x439D2D
-        SendMessageA(list, LB_GETTEXT, i,
+        SendMessageW(list, LB_GETTEXT, i,
                      reinterpret_cast<LPARAM>(text));
-        strcpy_s(acc->name, sizeof(acc->name), text);
+        text_encoding::EncodeDisplay(acc->name, sizeof acc->name, text);
     }
-    s.SelectedObjectSlot() =
-        order[0] != nullptr
-            ? reinterpret_cast<unsigned char*>(order[0])[0] : 0; // 0x439D92
+    if (count > 0 && order[0])
+        for (int slot = 0; slot < 255; ++slot)
+            if (app->AccessorySlot(slot) == order[0]) {
+                s.SelectedAccessorySlot() = static_cast<std::uint8_t>(slot);
+                break;
+            }
     SyncAccessoryEditPanel(app);                                             // 0x4134E0
     for (int j = 0; j < 255; ++j) {
         mdl::AccessoryRecord* acc = app->AccessorySlot(j);

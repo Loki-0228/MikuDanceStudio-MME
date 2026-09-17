@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <cwchar>
 #include <new>
 
@@ -485,14 +486,15 @@ void InitModelOrderDialog(int count, HWND hDlg) {  // was Sub41E810, VA 0x0041E8
     // value-init: element 0 stays untouched by the fill below, and the OK
     // apply (ApplyModelCalculateOrderDialog) walks the array from index 0
     app->AccessoryOrderArray() =
-        new std::int32_t[static_cast<std::size_t>(count) + 1]();
+        std::calloc(static_cast<std::size_t>(count) + 1, sizeof(std::int32_t));
 
-    char buf[0x100];
     for (int i = 1; i <= count; ++i) {
-        SendMessageA(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
-                     CB_GETLBTEXT, i, reinterpret_cast<LPARAM>(buf));
-        SendMessageA(GetDlgItem(hDlg, panel::kOrderListBox), LB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>(buf));
+        const auto length = SendMessageW(GetDlgItem(app->state.hwnd, panel::kMainComboModel), CB_GETLBTEXTLEN, i, 0);
+        std::wstring buf(length >= 0 ? static_cast<size_t>(length) + 1 : 1, L'\0');
+        SendMessageW(GetDlgItem(app->state.hwnd, panel::kMainComboModel),
+                     CB_GETLBTEXT, i, reinterpret_cast<LPARAM>(buf.data()));
+        SendMessageW(GetDlgItem(hDlg, panel::kOrderListBox), LB_ADDSTRING, 0,
+                     reinterpret_cast<LPARAM>(buf.data()));
     }
 
     std::int32_t* order =

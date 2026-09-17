@@ -44,6 +44,7 @@
 #include "mikudancestudio/d3d_wrapper.hpp"
 #include "mikudancestudio/path_workspace.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/text_encoding.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -95,6 +96,10 @@ const wchar_t* ResolveUserFilePath(PathResolutionWorkspace& workspace,
         return out;
     }
     const size_t len = wcslen(path);
+    if (len < 3) {
+        out[0] = L'\0';
+        return out;
+    }
     const wchar_t* ext = &path[len - 3];
     const wchar_t* scan = ext;
     const wchar_t* sub = nullptr;
@@ -143,15 +148,19 @@ bool ResolveAnsiUserFile(unsigned char* sub, const char* mbName,
         wcsncpy_s(wideOut, sizeWords, value, _TRUNCATE);
         return true;
     };
-    MultiByteToWideChar(CP_ACP, 0, mbName, -1, candidate,
-                        static_cast<int>(sizeWords));
-    if (resolve())
-        return true;
-    for (int i = 0; i < 4; ++i) {
-        _mbstowcs_s_l(nullptr, candidate, sizeWords, mbName, _TRUNCATE,
-            reinterpret_cast<D3DRenderer*>(sub)->localeTable[i]);
+    (void)sub;
+    const bool utf8 = text_encoding::HasUtf8Bom(mbName);
+    for (UINT cp : {GetACP(), 932u, 936u, 950u, 949u, 65001u}) {
+        std::wstring decoded;
+        if (!text_encoding::Decode(utf8 ? mbName + 3 : mbName,
+                                   utf8 ? CP_UTF8 : cp, decoded))
+            continue;
+        if (decoded.size() >= 256 || decoded.size() >= sizeWords)
+            continue;
+        wcscpy_s(candidate, decoded.c_str());
         if (resolve())
             return true;
+        if (utf8) break;
     }
     return false;
 }

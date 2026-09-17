@@ -26,6 +26,7 @@
 
 #include <cstdint>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
@@ -258,11 +259,11 @@ void LocalizeUI(MMDApp* app) {
         if (slotIdx < 0)
             continue;
         unsigned char* slot = s.ModelSlot(slotIdx);
-        LPARAM name = reinterpret_cast<LPARAM>(
-            english ? mdl::Mdl(slot)->nameEn : mdl::Mdl(slot)->name);
-        SendMessageA(combo436, CB_ADDSTRING, 0, name);
-        SendMessageA(combo474, CB_ADDSTRING, 0, name);
-        SendMessageA(combo449, CB_ADDSTRING, 0, name);
+        const auto label = text_encoding::ModelName(*mdl::Mdl(slot), english);
+        const LPARAM name = reinterpret_cast<LPARAM>(label.c_str());
+        SendMessageW(combo436, CB_ADDSTRING, 0, name);
+        SendMessageW(combo474, CB_ADDSTRING, 0, name);
+        SendMessageW(combo449, CB_ADDSTRING, 0, name);
     }
 
     SendMessageA(combo436, CB_SETCURSEL, sel436, 0);

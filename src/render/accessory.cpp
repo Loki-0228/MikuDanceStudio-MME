@@ -19,6 +19,7 @@
 #include <cwchar>
 #include <new>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/d3dx_effect.hpp"
 #include "mikudancestudio/mmd_app.hpp"
@@ -424,9 +425,7 @@ bool ExtractXTexture(const wchar_t* xFile, int material, char out[256]) {
 }
 
 void WideToAnsi(const wchar_t* source, char* destination, int count) {
-    destination[0] = '\0';
-    WideCharToMultiByte(CP_ACP, 0, source, -1, destination, count,
-                        nullptr, nullptr);
+    text_encoding::EncodeDisplay(destination, count, source);
 }
 
 bool LoadOneTexture(D3DRenderer* sub, void* accessory, DWORD material,
@@ -721,9 +720,9 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
 
     HWND hwnd = static_cast<HWND>(app->Hwnd());
     app->state.sceneModified = 1;
-    const char* name = mdl::Accessory(accessory)->name;
-    LRESULT displayIndex = SendDlgItemMessageA(
-        hwnd, panel::kAccessoryCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
+    const auto name = text_encoding::Display(mdl::Accessory(accessory)->name);
+    LRESULT displayIndex = SendDlgItemMessageW(
+        hwnd, panel::kAccessoryCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
     mdl::Accessory(accessory)->order =
         static_cast<std::uint8_t>(displayIndex);
     if (displayIndex >= 0)
@@ -732,8 +731,8 @@ void LoadAccessoryFile(const wchar_t* path) {                   // 0x460B30
             static_cast<std::int32_t>(displayIndex + 1));
     SendDlgItemMessageA(hwnd, panel::kAccessoryCombo, CB_SETCURSEL, displayIndex, 0);
     app->SelectedAccessorySlot() = static_cast<std::uint8_t>(slot);
-    SendDlgItemMessageA(hwnd, panel::kRegisterScopeCombo, CB_ADDSTRING, 0,
-                        reinterpret_cast<LPARAM>(name));
+    SendDlgItemMessageW(hwnd, panel::kRegisterScopeCombo, CB_ADDSTRING, 0,
+                        reinterpret_cast<LPARAM>(name.c_str()));
     SendDlgItemMessageA(hwnd, panel::kMainComboGround, CB_SETCURSEL, 0, 0);
     SendDlgItemMessageA(hwnd, panel::kAttachBoneCombo, CB_SHOWDROPDOWN, 0, 0);
     CheckDlgButton(hwnd, panel::kAccessoryVisibleCheckbox, BST_CHECKED);

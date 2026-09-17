@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/bottom_panel_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
@@ -286,7 +287,6 @@ void HandlePaletteChanged2(HDC hdc) {
     const bool playing =
         (app->FrameStepPlayback() == 0) & (app->PlaybackActive() != 0);
 
-    char buffer[256];  // Buffer @ ebp-104h; sprintf_s count 0x100
 
     if (app->state.optflag[0] != 0) {   // 0x2F8: camera/light mode
         if (app->EnglishUI() != 0) {                             // 0xA0B4C
@@ -301,21 +301,12 @@ void HandlePaletteChanged2(HDC hdc) {
                     DrawUiGlyph(app, "camera light accessary", hdc, 20,
                               xBase + 10, hideTop - 22, 0xFF, 0xFF, 0xFF, 1);  // 0x42C316
                 } else {
-                    sprintf_s(buffer, 0x100, "camera light accessary / %s",
-                              acc->name);                        // 0x42C2BC
-                    if (app->EnglishUI() == 2) {
-                        wchar_t label[320]{};
-                        wchar_t accessoryName[256]{};
-                        MultiByteToWideChar(CP_ACP, 0, acc->name, -1,
-                                            accessoryName, 256);
-                        swprintf_s(label, L"相机 / 照明 / 配件 / %s", accessoryName);
-                        DrawWideUiGlyph(label, hdc, 20, xBase + 10, hideTop - 25,
-                                        0xFF, 0xFF, 0xFF, 1);
-                    } else {
-                        DrawGlyph(app, buffer, hdc, 20, xBase + 10, hideTop - 22,
-                                  0xFF, 0xFF, 0xFF, 1);
-                    }
-                                                                  // 0x42C2EB
+                    const auto name = text_encoding::Display(acc->name);
+                    const std::wstring label = (app->EnglishUI() == 2
+                        ? L"相机 / 照明 / 配件 / " : L"camera light accessory / ") + name;
+                    DrawWideUiGlyph(label.c_str(), hdc, 20, xBase + 10, hideTop - 22,
+                                    0xFF, 0xFF, 0xFF, 1);
+                    // 0x42C2EB
                 }
             }
             DrawUiGlyph(app, "camera", hdc, 14, xBase + 90, hideBottom + 10,
@@ -334,9 +325,9 @@ void HandlePaletteChanged2(HDC hdc) {
                 DrawGlyph(app, kS52C8B0, hdc, 16, xBase + 10, hideTop - 20,
                           0xFF, 0xFF, 0xFF, 1);                  // 0x42C429
             } else {
-                sprintf_s(buffer, 0x100, kS52C8C0, acc->name);    // 0x42C3CF
-                DrawGlyph(app, buffer, hdc, 16, xBase + 10, hideTop - 20,
-                          0xFF, 0xFF, 0xFF, 1);                  // 0x42C3FE
+                const auto label = L"カメラ・照明・アクセサリ / " + text_encoding::Display(acc->name);
+                DrawWideUiGlyph(label.c_str(), hdc, 16, xBase + 10, hideTop - 20,
+                                0xFF, 0xFF, 0xFF, 1);
             }
         }
         DrawGlyph(app, kS52C8A4, hdc, 14, xBase + 72, hideBottom + 11,
@@ -352,16 +343,16 @@ void HandlePaletteChanged2(HDC hdc) {
                     const mikudancestudio::mdl::ModelRecord& record =
                         *mikudancestudio::mdl::Mdl(model);
                     const std::int32_t boneIdx = record.selectedBone;
-                    if (boneIdx < 0) {
-                        sprintf_s(buffer, 0x100, "%s", record.nameEn);
-                    } else {
-                        sprintf_s(buffer, 0x100, "%s : %s",
-                                  record.nameEn,
-                                  record.boneTable[boneIdx].nameEn);
+                    auto label = text_encoding::ModelName(record, app->EnglishUI() == 1);
+                    if (boneIdx >= 0) {
+                        const auto& bone = record.boneTable[boneIdx];
+                        std::wstring boneName;
+                        text_encoding::Decode(app->EnglishUI() == 1 ? bone.nameEn : bone.name, 932, boneName);
+                        label += L" : " + boneName;
                     }
-                    const int width = DrawGlyph(app, buffer, hdc, 20,
-                                                xBase + 10, hideTop - 22,
-                                                0xFF, 0xFF, 0xFF, 1);  // 0x42C545
+                    const int width = DrawWideUiGlyph(label.c_str(), hdc, 20,
+                                                       xBase + 10, hideTop - 22,
+                                                       0xFF, 0xFF, 0xFF, 1);
                     // Trace-mode line pair: byte 0x9ED98 & (slot==0xA0430)
                     // & (0xA0430 >= 0).
                     const std::int32_t traceTarget =
@@ -400,10 +391,10 @@ void HandlePaletteChanged2(HDC hdc) {
             if (model != nullptr) {                              // 0x42C660
                 const mikudancestudio::mdl::ModelRecord& record =
                     *mikudancestudio::mdl::Mdl(model);
-                sprintf_s(buffer, 0x100, "%s", record.name);
-                const int width = DrawGlyph(app, buffer, hdc, 16,
-                                            xBase + 10, hideTop - 20,
-                                            0xFF, 0xFF, 0xFF, 1);  // 0x42C6F4
+                const auto label = text_encoding::ModelName(record, false);
+                const int width = DrawWideUiGlyph(label.c_str(), hdc, 16,
+                                                   xBase + 10, hideTop - 20,
+                                                   0xFF, 0xFF, 0xFF, 1);
                 const std::int32_t traceTarget = app->CameraParentModel();
                 const bool traceActive =
                     (app->state.followCameraEnabled != 0) &

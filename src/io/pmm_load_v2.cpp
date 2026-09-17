@@ -104,6 +104,7 @@
 #include <cstdlib>
 #include <io.h>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
@@ -1315,16 +1316,9 @@ static bool LoadSceneV2_ModelBlock(PmmV2LoadContext& ctx, int fd,
                     }  // firstPass guard
 
                     // structure-difference gate (0x4519AF..0x451A44)
-                    if (s->EnglishUI() != 0)
-                        sprintf_s(s->state.statusText,
-                                  0x100,
-                                  "Model structure is different from pmm."
-                                  " file:%s",
-                                  workspace.sourceName);
-                    else
-                        sprintf_s(s->state.statusText,
-                                  0x100, kJpQuoted,
-                                  workspace.modelName);
+                    const auto label = text_encoding::ModelName(*mdl::Mdl(model), s->EnglishUI() == 1);
+                    const auto prompt = L"Model structure differs from PMM / 模型结构与工程不同： " + label;
+                    text_encoding::EncodeDisplay(s->state.statusText, sizeof s->state.statusText, prompt.c_str());
                     if (workspace.morphsMatch != 0 && workspace.displaysMatch != 0) break;
 
                     const INT_PTR r = DialogBoxParamA(
@@ -1616,16 +1610,13 @@ static void LoadSceneV2_ResetCombos(PmmV2LoadContext& ctx) {
         // normally start at one because combo item zero is camera mode, so
         // breaking here discarded every loaded model at the very first pass.
         if (found >= kModelSlotCount) continue;
-        const char* name =
-            s->EnglishUI() != 0
-                ? mdl::Mdl(slots[found])->nameEn
-                : mdl::Mdl(slots[found])->name;
-        SendMessageA(GetDlgItem(main, panel::kMainComboModel), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>(name));
-        SendMessageA(GetDlgItem(main, panel::kMainComboGround), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>(name));
-        SendMessageA(GetDlgItem(main, panel::kMainComboNormal), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>(name));
+        const auto name = text_encoding::ModelName(*mdl::Mdl(slots[found]), s->EnglishUI() == 1);
+        SendMessageW(GetDlgItem(main, panel::kMainComboModel), CB_ADDSTRING, 0,
+                     reinterpret_cast<LPARAM>(name.c_str()));
+        SendMessageW(GetDlgItem(main, panel::kMainComboGround), CB_ADDSTRING, 0,
+                     reinterpret_cast<LPARAM>(name.c_str()));
+        SendMessageW(GetDlgItem(main, panel::kMainComboNormal), CB_ADDSTRING, 0,
+                     reinterpret_cast<LPARAM>(name.c_str()));
     }
     SendMessageA(GetDlgItem(main, panel::kInterpCurveCombo), CB_RESETCONTENT, 0, 0); // 0x4548BB
     if (s->state.optflag[0] != 0) {
@@ -1963,7 +1954,14 @@ static bool LoadSceneV2_AccessoryBlock(PmmV2LoadContext& ctx, int fd) {
         mdl::AccessoryRecord& accessory =
             *mdl::Accessory(accs[accSlot]);
         Rd(fd, &accessory.order, 1);                             // 0x455D93
-        strcpy_s(accessory.name, sizeof accessory.name, accName);
+        accName[sizeof accName - 1] = '\0';
+        const auto displayName = text_encoding::LegacyFilename(accName, accessory.sourcePath);
+        text_encoding::EncodeDisplay(accessory.name, sizeof accessory.name, displayName.c_str());
+        // Replace the shadow-list label using the resolved Unicode filename.
+        HWND accessoryCombo = GetDlgItem(main, panel::kAccessoryCombo);
+        SendMessageW(accessoryCombo, CB_DELETESTRING, accessory.order, 0);
+        SendMessageW(accessoryCombo, CB_INSERTSTRING, accessory.order,
+                     reinterpret_cast<LPARAM>(displayName.c_str()));
         // accessory track record 0 + sparse keys (0x455DCA..0x4562E5);
         // record shape (55 stream bytes, transparency quirk included) lives
         // in pmm_io_common.hpp ReadPmmAccessoryKey - byte-identical to v1.
@@ -2600,9 +2598,7 @@ static void LoadSceneV2_SuccessTail(PmmV2LoadContext& ctx,
             physics->world->setGravity(btVector3(v[0], v[1], v[2]));
         }
     }
-    swprintf_s(wndText, 0x100, kAppTitleFormat,
-               reinterpret_cast<const wchar_t*>(s->state.envFileName));
-    SetWindowTextW(main, wndText);
+    SetProjectWindowTitle(main, s->EnvFileName());
 
     // record post-processing (0x458309..0x458996)
     for (unsigned char i = 0; i < modelCount; ++i) {
@@ -2853,11 +2849,12 @@ static void LoadSceneV2_SuccessTail(PmmV2LoadContext& ctx,
             const LRESULT n =
                 SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0);
             for (LRESULT i = 0; i < n; ++i) {
-                SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT,
+                wchar_t accessoryLabel[256]{};
+                SendMessageW(GetDlgItem(main, panel::kAccessoryCombo), CB_GETLBTEXT,
                              static_cast<WPARAM>(i),
-                             reinterpret_cast<LPARAM>(lbText));
-                SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                             reinterpret_cast<LPARAM>(lbText));
+                             reinterpret_cast<LPARAM>(accessoryLabel));
+                SendMessageW(GetDlgItem(main, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+                             reinterpret_cast<LPARAM>(accessoryLabel));
             }
             SendMessageA(GetDlgItem(main, panel::kRegisterScopeCombo), CB_SETCURSEL, 0, 0);
         } else {

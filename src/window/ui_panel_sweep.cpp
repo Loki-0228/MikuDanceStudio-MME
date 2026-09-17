@@ -56,6 +56,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ui_translation.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
@@ -454,12 +455,18 @@ void PostLanguageSweep(MMDApp* app) {
                 if (ordinal >= s.DisplayObjectListScrollPosition() &&
                     line < 200) {
                     if (accessory->rowSelected != 0) {
-                        DrawPanelText(app, accessory->name,
-                                      panel, 12, 12, rowY, s.state.themeColors[34]);
+                        DrawWideUiGlyph(text_encoding::Display(accessory->name).c_str(),
+                                        panel, 12, 12, rowY,
+                                        GetRValue(s.state.themeColors[34]),
+                                        GetGValue(s.state.themeColors[34]),
+                                        GetBValue(s.state.themeColors[34]), 1);
                         s.PanelRowFlags()[4 + line] = 1;
                     } else {
-                        DrawPanelText(app, accessory->name,
-                                      panel, 12, 12, rowY, s.state.themeColors[33]);
+                        DrawWideUiGlyph(text_encoding::Display(accessory->name).c_str(),
+                                        panel, 12, 12, rowY,
+                                        GetRValue(s.state.themeColors[33]),
+                                        GetGValue(s.state.themeColors[33]),
+                                        GetBValue(s.state.themeColors[33]), 1);
                     }
                     *map = slot;
                     ++line;

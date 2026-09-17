@@ -2681,11 +2681,11 @@ static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
     const LRESULT accCount =
         SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_GETCOUNT, 0, 0);
     for (std::int32_t i = 0; i < accCount; ++i) {
-        char buf[0x100];
-        SendMessageA(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_GETLBTEXT,
+        wchar_t buf[0x100];
+        SendMessageW(GetDlgItem(hwnd, panel::kAccessoryCombo), CB_GETLBTEXT,
                      static_cast<WPARAM>(i),
                      reinterpret_cast<LPARAM>(buf));
-        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(buf));
     }
     EnableMenuItem(GetMenu(hwnd), 0x120, 1);

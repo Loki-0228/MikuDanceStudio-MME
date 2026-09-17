@@ -29,10 +29,12 @@
 
 #include <cstdint>
 #include <io.h>
+#include <string>
 
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/unicode_window.hpp"
 
 namespace mikudancestudio::pmm_io {
 
@@ -258,5 +260,10 @@ inline const char kJpOpenCaption[] =
 // the project change: its object table keeps the previous project's entries and
 // its draw hook then dereferences an uninitialised record.
 inline const wchar_t kAppTitleFormat[] = L"MikuMikuDance [%s]";
+
+inline void SetProjectWindowTitle(HWND window, const wchar_t* path) {
+    const std::wstring title = L"MikuMikuDance [" + std::wstring(path) + L"]";
+    SetUnicodeWindowTitle(window, title.c_str());
+}
 
 }  // namespace mikudancestudio::pmm_io
