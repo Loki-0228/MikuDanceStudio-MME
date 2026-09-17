@@ -32,9 +32,7 @@ the alignment target, rebuilt with a modern toolchain
 * **Multimedia**: Wave/AVI recording (DirectShow, incl. the MMDxShow push
   source filter), VSQ score import, Kinect skeleton input
 * **UI**: EN/JP bilingual, 168-control main window, timeline, accessory
-  editing, undo/redo; letter hotkeys (P play/stop, plus
-  A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R) work with a Chinese/Japanese IME on (still
-  disabled inside text fields)
+  editing, undo/redo
 
 ### Building from Source
 
@@ -72,19 +70,6 @@ cmake --install build --config Release --prefix dist
 :: dist\MikuMikuDance.exe  dist\Data\MMDxShow.dll
 ```
 
-Release builds **write nothing to disk** - no log file, no directory, no dump
-(the earlier `logs\` behaviour is gone); the newest 192 runtime messages live in
-memory only. Anything that would terminate the process first raises a modal
-*fatal error* window - exception code and plain-language label, faulting
-address, module base/offset, failing phase, thread id, recent records - and the
-process runs **until OK is pressed**, so a crash is no longer a silent
-flash-exit. Ctrl+C copies the report, and the matching PDB under `build/symbols/`
-resolves it to source lines. The same path covers startup failure (out of
-memory, window/Direct3D init failure), `std::terminate`, `abort` and CRT invalid
-parameters; Task Manager kill, power loss and some system fail-fasts bypass
-in-process handlers. A normal close never raises it: once the close is confirmed
-the process is exiting, and teardown faults are recorded silently.
-
 Regression tests are never part of a release artifact (excluded from the default
 build, no install rule). To run them:
 
@@ -112,6 +97,14 @@ functions. Copy the x64 `d3d9.dll`, `MMHack.dll` and `MMEffect.dll` next to it
 and the `MMEffect` menu appears; `.fx` effects are then assigned as usual. No
 DirectX SDK, at runtime or at build time. See
 [docs/MME_COMPATIBILITY.md](docs/MME_COMPATIBILITY.md).
+
+### Other features
+
+The program writes no log files, and errors raise a modal fatal-error window
+(Ctrl+C copies its text; the PDB under `build/symbols/` resolves source lines).
+Letter hotkeys keep working with a Chinese/Japanese IME active - P play/stop plus
+A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R - except inside text fields. Both follow
+maintainer 洛琪's own usage habits and can be changed or dropped as needed.
 
 ### Contributions
 
@@ -156,8 +149,7 @@ VMD/VPD 动作数据，在 DirectX 9 视口中编辑骨骼/形态/相机/照明/
   立体视觉（NVIDIA 3D Vision）
 * **多媒体**：Wave/AVI 录制（DirectShow，含 MMDxShow 推源过滤器）、VSQ 乐谱导入、
   Kinect 骨骼输入
-* **UI**：EN/JP 双语、168 控件主窗口、时间轴、附件编辑、撤销/重做；字母快捷键（P 播放/停止、
-  A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R）在中文／日文输入法开启时同样有效（编辑框内输入文字时仍不生效）
+* **UI**：EN/JP 双语、168 控件主窗口、时间轴、附件编辑、撤销/重做
 
 ### 从源码构建
 
@@ -191,15 +183,6 @@ cmake --install build --config Release --prefix dist
 :: dist\MikuMikuDance.exe  dist\Data\MMDxShow.dll
 ```
 
-Release 版**不写任何日志、日志目录或转储文件**（早期在 exe 同级 `logs\` 写 `.log`/`.dmp`
-的行为已移除），运行时记录只在内存中，最多最近 192 条。任何会终止进程的错误先弹出模态
-“致命错误”窗口——异常代码及中文说明、异常地址、模块基址与偏移、出错阶段、线程号、最近记录；
-**点“确定”后进程才真正结束**，闪退不再是无提示的静默退出。按 Ctrl+C 可复制窗口内容，
-配合 `build/symbols/MikuMikuDance.pdb` 可还原到源码行。启动失败（内存不足、窗口或 Direct3D
-初始化失败）与 `std::terminate`、`abort`、CRT 无效参数同样覆盖；任务管理器强制结束、断电、
-部分 fail-fast 路径仍会绕过进程内处理器，不会有窗口。正常关闭则不弹窗：确认关闭（或场景
-无需保存）后进程即进入退出状态，退出清理阶段的故障只记录——此时窗口已销毁、配置已写入。
-
 回归测试不属于发布产物（测试可执行文件已从默认构建中排除，也没有安装规则）：
 
 ```bat
@@ -222,6 +205,13 @@ ctest --test-dir build -C Release --output-on-failure
 `d3d9.dll`、`MMHack.dll`、`MMEffect.dll` 放到 exe 同目录，菜单栏右侧即出现 `MMEffect`，
 之后按常规给模型/配件指定 `.fx` 即可；运行与构建都不需要 DirectX SDK。详见
 [docs/MME_COMPATIBILITY.md](docs/MME_COMPATIBILITY.md)。
+
+### 其它特性
+
+程序运行不输出日志，出错时弹出模态“致命错误”窗口（可按 Ctrl+C 复制内容，配合
+`build/symbols/` 的 PDB 定位源码行）。输入法开启时不影响快捷键操作：中文／日文输入法下
+字母快捷键（P 播放/停止、A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R）同样有效，编辑框内输入文字
+时除外。这两项按维护者洛琪的个人使用习惯加入，可按需删改。
 
 ### 贡献
 
@@ -271,9 +261,7 @@ Bullet 2.75 剛体物理、AVI 動画録画、VSQ 音源との同期、アニメ
 * **マルチメディア**：Wave/AVI 録画（DirectShow、MMDxShow プッシュソースフィルタ
   含む）、VSQ 楽譜インポート、Kinect スケルトン入力
 * **UI**：英／日バイリンガル、168 コントロールのメインウィンドウ、タイムライン、
-  アクセサリ編集、元に戻す／やり直し。英字ショートカット（P 再生／停止、ほか
-  A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R）は中国語／日本語 IME を ON にしたままでも
-  有効です（テキスト入力欄では無効）
+  アクセサリ編集、元に戻す／やり直し
 
 ### ソースからのビルド
 
@@ -311,17 +299,6 @@ cmake --install build --config Release --prefix dist
 :: dist\MikuMikuDance.exe  dist\Data\MMDxShow.dll
 ```
 
-Release ビルドは**ディスク上にログ、ログ用ディレクトリ、ダンプを一切作成しません**（以前の
-exe 同階層 `logs\` への出力は廃止）。実行時の記録はメモリ内の直近 192 件のみです。プロセスを
-終了させるエラーは、まずモーダルな「致命的エラー」ウィンドウ（例外コードと説明、例外
-アドレス、モジュールのベースとオフセット、発生段階、スレッド ID、直近の記録）を表示し、
-**「OK」を押すまでプロセスは終了しません**。Ctrl+C で内容をコピーでき、`build/symbols/` の
-PDB と突き合わせるとソース行まで復元できます。起動失敗（メモリ不足、ウィンドウ／Direct3D
-初期化失敗）、`std::terminate`、`abort`、CRT の無効パラメータも同じ経路で報告されます。
-タスクマネージャによる強制終了、停電、一部の fail-fast はプロセス内ハンドラを迂回します。
-通常の終了ではこのウィンドウは出ず、終了処理中の障害は記録のみです（ウィンドウは既に消え、
-設定も保存済みのため）。
-
 > 注：`profiles/` 配下の Conan プロファイルはホストが Windows + MSVC であることを
 > 前提としています。デフォルトプロファイルが既にその設定であれば、そのまま
 > `include(default)` できます。
@@ -337,6 +314,14 @@ PDB と突き合わせるとソース行まで復元できます。起動失敗�
 `MMEffect.dll` を同じフォルダに置くとメニューバーに `MMEffect` 欄が出て、あとは通常どおり
 `.fx` を割り当てるだけです。実行時もビルド時も DirectX SDK は不要です。詳細は
 [docs/MME_COMPATIBILITY.md](docs/MME_COMPATIBILITY.md)。
+
+### その他の機能
+
+ログファイルは出力せず、エラー時はモーダルな致命的エラーウィンドウを表示します（Ctrl+C で
+内容をコピーでき、`build/symbols/` の PDB でソース行を特定できます）。入力メソッドを ON に
+したままでも英字ショートカット（P 再生／停止、ほか A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R）が
+有効です（テキスト入力欄を除く）。いずれも保守者の洛琪が自身の使用習慣に合わせて追加した
+もので、必要に応じて変更・削除できます。
 
 ### 貢献
 
