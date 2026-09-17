@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""PMX 表情（morph）标准化工具。
+""""PMX 表情（morph）标准化工具。
 
 MMD 通用动作（面部/口型/眨眼类 VMD）只按**表情名**驱动表情，模型必须提供
-`あ/い/う/え/お`、`まばたき`、`笑い`、`ウィンク`、`困る`、`怒り` 这类标准名字才能
-被控制。第三方模型（尤其 VRoid → Vroid2Pmx 输出）常常：
+`あ/い/う/え/お`、`まばたき`、`笑い`、`ウィンク２`、`困る`、`怒り` 这类标准名字才能
+被控制。标准名以参考模型 `洛恩.pmx` 为准（`catalog --tier standard`）。第三方模型
+（尤其 VRoid → Vroid2Pmx 输出）常常：
 
 * 缺少标准名（只有 `Fcl_EYE_Close`、`ｳｨﾝｸ２右` 这种导出名或半角/全角混写的名字）；
 * 标准名存在但内容不完整（例如 `まばたき` 只有顶点形变，真正的完整表情叫
@@ -14,24 +15,26 @@ MMD 通用动作（面部/口型/眨眼类 VMD）只按**表情名**驱动表情
 复制/组合」，然后生成一个新的 PMX：
 
 * `copy`  —— 直接把某个原有表情挂到标准名下；
-* `combine` —— 多个原有表情按权重组合（group morph）；
+* `combine` —— 多个原有表情按权重组合（group morph，权重可负）；
 * `flatten` —— 引用到的 group morph 会被递归展开成底层表达式，因为 MMD 只解析
   **一层** group 引用（见 src/model/morph_apply.cpp 与 model_skinning.cpp），
-  嵌套 group 的骨骼/材质部分不会生效；
-* `replace` —— 标准名已存在但内容不对时，就地改写该表情（可保留原表情到备份名）；
-* 别名 —— 同一效果补出多种写法（`ウィンク2` / `ウィンク２`、`Λ` / `∧`、
-  `じと目` / `ジト目`），默认放进 panel 0，不占列表但能被动作驱动。
+  嵌套 group 的骨骼/材质/顶点部分都不会生效；
+* `replace` —— 标准名已存在但内容不对时**就地改写**（默认不保留原表情；仍被其它
+  表情引用的原数据会转存到内部槽位，panel 0 + 不进表示枠，界面里看不到）；
+  `--keep-original` 可以把原表情保留成可见表情（原名加后缀）；
+* 别名 —— 同一效果补出多种写法（`ウィンク２` / `ウィンク2` / `ｳｨﾝｸ２`、`Λ` / `∧`、
+  `ハイライトなし` / `ハイライト消`），默认放进 panel 0，不占列表但能被动作驱动。
 
 用法::
 
-    python tools/pmx_morph_tool.py catalog                     # 内置标准表情目录
-    python tools/pmx_morph_tool.py dump    model.pmx           # 查看模型表情
-    python tools/pmx_morph_tool.py check   model.pmx map.json  # 只检查，不改文件
+    python tools/pmx_morph_tool.py catalog --tier standard      # 内置标准表情目录
+    python tools/pmx_morph_tool.py dump    model.pmx            # 查看模型表情
+    python tools/pmx_morph_tool.py check   model.pmx map.json   # 只检查，不改文件
     python tools/pmx_morph_tool.py apply   model.pmx map.json -o out.pmx --report r.txt
-    python tools/pmx_morph_tool.py verify  out.pmx             # 结构自洽性检查
-    python tools/pmx_morph_tool.py simulate out.pmx motion.vmd # 用动作验证名字能命中
+    python tools/pmx_morph_tool.py verify  out.pmx              # 结构自洽性检查
+    python tools/pmx_morph_tool.py simulate out.pmx motion.vmd  # 用动作验证名字能命中
     python tools/pmx_morph_tool.py draft   model.pmx -o map.json   # 为任意模型起草映射表
-    python tools/pmx_morph_tool.py selftest                    # 合成模型自检
+    python tools/pmx_morph_tool.py selftest                     # 合成模型自检
 
 映射表格式见 docs/PMX_MORPH_MAP_TOOL.md。
 """
@@ -60,103 +63,164 @@ from pmxlib import (  # noqa: E402
 )
 
 TOOL_VERSION = "1.0"
-
 # ---------------------------------------------------------------------------
 # 内置 MMD 标准表情目录
 #
 # name    : 标准名（MMD 通用动作里出现的写法）
 # panel   : 默认面板（1 眉 / 2 目 / 3 口 / 4 その他）
+# tier    : standard = 参考模型（洛恩.pmx）里存在的标准名；extended = 动作里
+#           常见、但参考模型未收录的名字
+# ref_en  : 参考模型里对应的英文名（traceability）
 # aliases : 同一表情在其它动作/模型里的写法（半角・全角・片假名・同义写法）
 # sources : 编写映射表时的取材提示
-# freq    : 本机实际动作语料中出现的次数（见 docs 说明，仅作优先级参考）
+# freq    : 本机实际动作语料中出现的次数（仅作优先级参考）
 # ---------------------------------------------------------------------------
 
-STANDARD_CATALOG: list[dict] = [
-    # ---- 眉 ----
-    dict(name="怒り", panel=1, aliases=["怒り目", "激おこ"], freq=43,
-         sources="眉毛的「怒」形态；本模型为 Fcl_BRW_Angry 系列（怒り/怒り右/怒り左）"),
-    dict(name="困る", panel=1, aliases=["困る2", "困る２", "悲しむ", "悲しい"], freq=92,
-         sources="眉毛的「困」形态；Fcl_BRW_Sorrow 系列"),
-    dict(name="にこり", panel=1, aliases=["にこり2", "にこり２"], freq=42,
-         sources="眉毛上扬的笑；Fcl_BRW_Fun / Fcl_BRW_Joy"),
-    dict(name="上", panel=1, aliases=[], freq=26, sources="眉毛整体上移 brow_Abobe"),
-    dict(name="下", panel=1, aliases=[], freq=243, sources="眉毛整体下移 brow_Below"),
-    dict(name="前", panel=1, aliases=["眉手前"], freq=7, sources="眉毛前移 brow_Front"),
-    dict(name="真面目", panel=1, aliases=["真面目2"], freq=98, sources="严肃眉（怒り+下 的组合）"),
-    dict(name="ひそめ", panel=1, aliases=["ひそめる2"], freq=0, sources="皱眉 brow_Frown / browInnerUp"),
-    dict(name="はんっ", panel=1, aliases=[], freq=0, sources="单侧挑眉 browOuterUp"),
-    # ---- 目 ----
-    dict(name="まばたき", panel=2, aliases=["瞬き"], freq=1604,
-         sources="双眼闭合完整形态（顶点+眼睑骨骼）"),
-    dict(name="笑い", panel=2, aliases=["笑い目", "スマイル"], freq=561,
-         sources="笑眼（眼睛弯成月牙）Fcl_EYE_Joy 的完整形态"),
-    dict(name="ウィンク", panel=2, aliases=[], freq=14, sources="左眼笑眼闭合 Fcl_EYE_Joy_L"),
-    dict(name="ウィンク右", panel=2, aliases=[], freq=10, sources="右眼笑眼闭合 Fcl_EYE_Joy_R"),
-    dict(name="ウィンク2", panel=2, aliases=["ウィンク２"], freq=12,
-         sources="左眼普通闭合 Fcl_EYE_Close_L"),
-    dict(name="ウィンク2右", panel=2, aliases=["ウィンク２右", "ｳｨﾝｸ２右"], freq=7,
-         sources="右眼普通闭合 Fcl_EYE_Close_R"),
-    dict(name="じと目", panel=2, aliases=["ジト目", "じと目2"], freq=22,
-         sources="半眯眼（鄙视/无语）Fcl_EYE_Sorrow"),
-    dict(name="なごみ", panel=2, aliases=["なごみ目"], freq=7, sources="柔和眯眼（材质+顶点）"),
-    dict(name="はぅ", panel=2, aliases=[], freq=5, sources="困惑眼（材质+顶点）"),
-    dict(name="はちゅ目", panel=2, aliases=["はちゅ目縦潰れ", "はちゅ目横潰れ"], freq=5,
-         sources="瞳孔缩小变形的可爱眼"),
-    dict(name="星目", panel=2, aliases=[], freq=6, sources="星星眼（材质）"),
-    dict(name="はぁと", panel=2, aliases=["ハート目", "はーと目"], freq=5, sources="爱心眼（材质）"),
-    dict(name="びっくり", panel=2, aliases=["驚き", "びっくり目"], freq=40,
-         sources="睁大眼 Fcl_EYE_Surprised"),
-    dict(name="びっくり2", panel=2, aliases=[], freq=0, sources="瞪眼 eyeWide"),
-    dict(name="目上", panel=2, aliases=["目線上"], freq=0, sources="视线向上 eyeLookUp"),
-    dict(name="目下", panel=2, aliases=["目線下"], freq=0, sources="视线向下 eyeLookDown"),
-    dict(name="目頭広", panel=2, aliases=["寄り目", "より目"], freq=0, sources="视线向中间 eyeLookIn"),
-    dict(name="目尻広", panel=2, aliases=["離し目"], freq=0, sources="视线向外 eyeLookOut"),
-    dict(name="瞳小", panel=2, aliases=["瞳細", "瞳小2"], freq=8, sources="瞳孔缩小"),
-    dict(name="瞳大", panel=2, aliases=[], freq=0, sources="瞳孔放大"),
-    dict(name="白目", panel=2, aliases=[], freq=0, sources="翻白眼（隐藏虹膜）"),
-    dict(name="ハイライト消", panel=2, aliases=["ハイライトなし", "ハイライト無し", "光消"],
-         freq=5, sources="隐藏眼睛高光"),
-    dict(name="光下", panel=2, aliases=["ハイライト下"], freq=4, sources="高光位置下移"),
-    dict(name="にんまり", panel=2, aliases=[], freq=0, sources="眯眼笑 eyeSquint"),
-    dict(name="下瞼上げ", panel=2, aliases=["下眼上", "下眼up"], freq=0, sources="下眼睑上推"),
-    dict(name="ｷﾘｯ", panel=2, aliases=["キリッ", "キレ目", "つり目", "眼角up"], freq=7,
-         sources="锐利眼神 Fcl_EYE_Angry"),
-    dict(name="目を細める", panel=2, aliases=[], freq=0, sources="眯眼 Fcl_EYE_Fun"),
-    # ---- 口 ----
-    dict(name="あ", panel=3, aliases=[], freq=5959, sources="张嘴（顶点+颌骨骼）"),
-    dict(name="い", panel=3, aliases=[], freq=3919, sources="咧嘴 i 口型"),
-    dict(name="う", panel=3, aliases=[], freq=2413, sources="噘嘴 u 口型"),
-    dict(name="え", panel=3, aliases=[], freq=1520, sources="e 口型"),
-    dict(name="お", panel=3, aliases=[], freq=2955, sources="o 口型"),
-    dict(name="あ2", panel=3, aliases=["あ２"], freq=7, sources="大口（下颌张开 jawOpen）"),
-    dict(name="え2", panel=3, aliases=["え２"], freq=5, sources="更大的 e 口型（模型没有时用 え 近似）"),
-    dict(name="ん", panel=3, aliases=[], freq=25, sources="闭口中性 Fcl_MTH_Neutral"),
-    dict(name="ワ", panel=3, aliases=[], freq=9, sources="「哇」口型"),
-    dict(name="▲", panel=3, aliases=[], freq=7, sources="三角形嘴"),
-    dict(name="∧", panel=3, aliases=["Λ", "へ", "＾"], freq=6, sources="倒 V 嘴（不满）"),
-    dict(name="□", panel=3, aliases=["口四角"], freq=5, sources="方口（张口+横拉）"),
-    dict(name="ω", panel=3, aliases=["ω口", "ω2"], freq=8, sources="猫嘴 ω"),
-    dict(name="ω□", panel=3, aliases=["ω口2", "ω四角"], freq=6, sources="方形猫嘴"),
-    dict(name="にっこり", panel=3, aliases=["にこにこ"], freq=6, sources="嘴角上扬的笑 Fcl_MTH_Fun"),
-    dict(name="にやり", panel=3, aliases=[], freq=23, sources="坏笑（较轻）"),
-    dict(name="にやり2", panel=3, aliases=["にやり２"], freq=6, sources="坏笑（较强）mouthSmile"),
-    dict(name="むっ", panel=3, aliases=[], freq=0, sources="鼓嘴不满 mouthLowerDown"),
-    dict(name="にこ", panel=3, aliases=[], freq=0, sources="抿嘴笑"),
-    dict(name="一文字", panel=3, aliases=["口一文字"], freq=0, sources="一字嘴（抿紧）"),
-    dict(name="口上", panel=3, aliases=["口角上げ"], freq=7, sources="嘴角上抬 Fcl_MTH_Up"),
-    dict(name="口下", panel=3, aliases=["口角下げ"], freq=7, sources="嘴角下拉 Fcl_MTH_Down"),
-    dict(name="口横広げ", panel=3, aliases=["口横広い", "口幅広"], freq=8, sources="嘴角横向拉开 Fcl_MTH_Large"),
-    dict(name="うー", panel=3, aliases=["うーん"], freq=0, sources="噘嘴 mouthPucker"),
-    dict(name="むむ", panel=3, aliases=["口むむ"], freq=0, sources="嘴唇前突 mouthShrug"),
-    dict(name="薄笑い", panel=3, aliases=[], freq=0, sources="抿嘴笑 mouthPress"),
-    dict(name="ぺろっ", panel=3, aliases=["てへぺろ", "ぺろり"], freq=6, sources="吐舌"),
-    dict(name="んむー", panel=3, aliases=[], freq=0, sources="抿嘴 mouthRoll"),
-    # ---- その他 ----
-    dict(name="照れ", panel=4, aliases=["赤面", "頬染", "照れ2"], freq=7,
-         sources="脸红（材质染色，需要材质表情）"),
-    dict(name="涙", panel=4, aliases=["涙1", "涙2", "泣き"], freq=6,
-         sources="眼泪（需要专门的顶点/材质表情，模型没有时无法近似）"),
-    dict(name="エッジOFF", panel=4, aliases=["輪郭消"], freq=0, sources="关闭描边（材质表情）"),
+def _std(name: str, panel: int, sources: str, *, aliases=(), freq: int = 0,
+         ref_en: str = "", note: str = "") -> dict:
+    """目录条目：tier=standard 表示参考模型（洛恩.pmx）里存在的标准名。"""
+    item = dict(name=name, panel=panel, tier="standard", sources=sources,
+                aliases=list(aliases), freq=freq, ref_en=ref_en)
+    if note:
+        item["note"] = note
+    return item
+
+
+def _ext(name: str, panel: int, sources: str, *, aliases=(), freq: int = 0,
+         note: str = "") -> dict:
+    """目录条目：tier=extended 表示动作里常见、但参考模型没有的名字。"""
+    item = dict(name=name, panel=panel, tier="extended", sources=sources,
+                aliases=list(aliases), freq=freq)
+    if note:
+        item["note"] = note
+    return item
+
+
+# 参考模型 洛恩.pmx（64 个表情，全部是可见的标准名）确定的标准名表；
+# tier=extended 的是动作语料里常见、参考模型未收录的名字。
+STANDARD_CATALOG: list[dict] = []
+
+# ---- 眉 ----
+STANDARD_CATALOG += [
+    _std("真面目", 1, "严肃眉（怒り+下 组合）", freq=98, ref_en="Brow_Trouble_L"),
+]
+for _base, _ref, _freq in (("困る", "Brow_Trouble", 92), ("にこり", "Brow_Smily", 42),
+                           ("怒り", "Brow_Angry", 43), ("恥ずかしい", "Brow_Shy", 0),
+                           ("上", "Brow_Up", 26), ("下", "Brow_Down", 243),
+                           ("前", "Brow_Squeeze", 7)):
+    STANDARD_CATALOG.append(_std(
+        _base, 1, f"眉毛的「{_base}」形态；参考模型 {_ref}_L", freq=_freq, ref_en=_ref + "_L"))
+    STANDARD_CATALOG.append(_std(
+        _base + "左", 1, f"左眉单独形态；参考模型 {_ref}_L", ref_en=_ref + "_L"))
+    STANDARD_CATALOG.append(_std(
+        _base + "右", 1, f"右眉单独形态；参考模型 {_ref}_R", ref_en=_ref + "_R"))
+STANDARD_CATALOG += [
+    _ext("ひそめ", 1, "皱眉（眉毛内侧上抬）", aliases=("ひそめる2",), note="参考模型没有，动作里偶见"),
+    _ext("はんっ", 1, "单侧挑眉", note="参考模型没有"),
+    _ext("困る2", 1, "更强的「困る」", aliases=("困る２",), note="参考模型没有"),
+    _ext("真面目2", 1, "更强的严肃眉", note="参考模型没有"),
+]
+
+# ---- 目 ----
+STANDARD_CATALOG += [
+    _std("まばたき", 2, "双眼闭合完整形态（顶点+眼睑骨骼）", freq=1604, ref_en="Eye_WinkB_L(left)"),
+    _std("笑い", 2, "笑眼（眼睛弯成月牙）", freq=561, ref_en="Eye_WinkA_L"),
+    _std("ウィンク", 2, "左眼笑眼闭合", freq=14, ref_en="Eye_WinkA_L"),
+    _std("ウィンク右", 2, "右眼笑眼闭合", freq=10, ref_en="Eye_WinkA_R"),
+    _std("ウィンク２", 2, "左眼普通闭合（全角数字 ２）", aliases=("ウィンク2", "ｳｨﾝｸ２"),
+         freq=12, ref_en="Eye_WinkB_L"),
+    _std("ウィンク２右", 2, "右眼普通闭合（全角数字 ２）",
+         aliases=("ウィンク2右", "ｳｨﾝｸ２右"), freq=7, ref_en="Eye_WinkB_R"),
+    _std("なごみ", 2, "柔和眯眼", freq=7, ref_en="Eye_WinkC_L"),
+    _std("なごみ左", 2, "左眼柔和眯眼", ref_en="Eye_WinkC_L"),
+    _std("なごみ右", 2, "右眼柔和眯眼", ref_en="Eye_WinkC_R"),
+    _std("びっくり", 2, "睁大眼", freq=40, ref_en="Eye_Ha"),
+    _std("じと目", 2, "半眯眼（无语/冷淡）", freq=22, ref_en="Eye_Jito"),
+    _std("悲しむ", 2, "哭泣/悲伤的眼睛", ref_en="Eye_Wail"),
+    _std("怒り目", 2, "生气的眼睛", freq=0, ref_en="Eye_Hostility"),
+    _std("ジト目", 2, "疲惫的半眯眼（与 じと目 是两种表情）", ref_en="Eye_Tired"),
+    _std("眼角上", 2, "眼角上提", aliases=("眼角up",), ref_en="Eye_WUp"),
+    _std("眼角下", 2, "眼角下压", aliases=("眼角down",), ref_en="Eye_WDown"),
+    _std("下眼上", 2, "下眼睑上推", aliases=("下眼up",), ref_en="Eye_Lowereyelid"),
+]
+STANDARD_CATALOG += [
+    _ext("はぅ", 2, "困惑眼（材质+顶点）", freq=5),
+    _ext("はちゅ目", 2, "瞳孔缩小变形的可爱眼", freq=5,
+         aliases=("はちゅ目縦潰れ", "はちゅ目横潰れ")),
+    _ext("星目", 2, "星星眼", freq=6),
+    _ext("はぁと", 2, "爱心眼", freq=5, aliases=("ハート目", "はーと目")),
+    _ext("びっくり2", 2, "瞪眼", note="参考模型没有"),
+    _ext("目上", 2, "视线向上", aliases=("目線上",)),
+    _ext("目下", 2, "视线向下", aliases=("目線下",)),
+    _ext("目頭広", 2, "视线向内", aliases=("寄り目", "より目")),
+    _ext("目尻広", 2, "视线向外", aliases=("離し目",)),
+    _ext("瞳小", 2, "瞳孔缩小", freq=8, aliases=("瞳細", "瞳小2")),
+    _ext("瞳大", 2, "瞳孔放大"),
+    _ext("白目", 2, "翻白眼（隐藏虹膜）"),
+    _ext("ハイライトなし", 2, "隐藏眼睛高光", freq=5,
+         aliases=("ハイライト消", "ハイライト無し", "光消", "ハイライト_透過")),
+    _ext("光下", 2, "高光位置下移", freq=4, aliases=("ハイライト下",)),
+    _ext("にんまり", 2, "眯眼笑"),
+    _ext("下瞼上げ", 2, "下眼睑上推（顶点版）", aliases=("下瞼上げ2",)),
+    _ext("目を細める", 2, "眯眼"),
+    _ext("ｷﾘｯ", 2, "锐利眼神", freq=7, aliases=("キリッ", "キレ目", "つり目")),
+    _ext("カメラ目線", 2, "看向镜头", freq=66, note="很多模型没有专门形状，缺失时等价于无操作"),
+]
+
+# ---- 口 ----
+STANDARD_CATALOG += [
+    _std("あ", 3, "张嘴（顶点+颌骨骼）", freq=5959, ref_en="Mouth_A01"),
+    _std("い", 3, "咧嘴 i 口型", freq=3919, ref_en="Mouth_Open01"),
+    _std("う", 3, "噘嘴 u 口型", freq=2413, ref_en="Mouth_Open01"),
+    _std("え", 3, "e 口型", freq=1520, ref_en="Mouth_Open01"),
+    _std("お", 3, "o 口型", freq=2955, ref_en="Mouth_Open01"),
+    _std("ワ", 3, "「哇」口型", freq=9, ref_en="Mouth_Smile02"),
+    _std("ワ２", 3, "第二种「哇」口型（全角数字）", aliases=("ワ2",), ref_en="Mouth_Doya03"),
+    _std("ん", 3, "闭口中性", freq=25, ref_en="Mouth_Angry01"),
+    _std("い１", 3, "i 口型变体 1（全角数字）", aliases=("い1",), ref_en="Mouth_Angry02"),
+    _std("い２", 3, "i 口型变体 2（全角数字）", aliases=("い2",), ref_en="Mouth_Angry03"),
+    _std("い３", 3, "i 口型变体 3（全角数字）", aliases=("い3",), ref_en="Mouth_Open02"),
+    _std("あ２", 3, "大口（下颌张开）", aliases=("あ2",), freq=7, ref_en="Mouth_Fury01"),
+    _std("ω", 3, "猫嘴 ω", aliases=("ω口",), freq=8, ref_en="Mouth_Neko01"),
+    _std("てへぺろ", 3, "吐舌（配眨眼）", aliases=("てへぺろ2", "てへぺろ２"),
+         freq=6, ref_en="Mouth_Pero01"),
+    _std("ぺろっ", 3, "吐舌", freq=6, ref_en="Mouth_Pero02"),
+    _std("にやり", 3, "坏笑（较轻）", freq=23, ref_en="Mouth_Smile01"),
+    _std("にやり２", 3, "坏笑（较强，全角数字）", aliases=("にやり2",), freq=6,
+         ref_en="Mouth_Doya01"),
+    _std("にやり３", 3, "坏笑变体 3（全角数字）", aliases=("にやり3",), ref_en="Mouth_Doya02"),
+    _std("口角上げ", 3, "嘴角上抬", freq=7, ref_en="Mouth_Default"),
+    _std("口角下げ", 3, "嘴角下拉", freq=7, ref_en="Mouth_Default"),
+    _std("口横広げ", 3, "嘴角横向拉开", freq=8, aliases=("口横広い", "口幅広"),
+         ref_en="Mouth_Line01"),
+    _std("口横狭め", 3, "嘴角横向收窄", ref_en="Mouth_Line02"),
+    _std("舌広げ", 3, "伸舌/舌面展开", ref_en="Mouth_BigTongue01"),
+]
+STANDARD_CATALOG += [
+    _ext("にっこり", 3, "嘴角上扬的笑", freq=6, aliases=("にこにこ",)),
+    _ext("むっ", 3, "鼓嘴不满"),
+    _ext("にこ", 3, "抿嘴笑"),
+    _ext("一文字", 3, "一字嘴（抿紧）", aliases=("口一文字",)),
+    _ext("口上", 3, "嘴角上抬（顶点版）"),
+    _ext("口下", 3, "嘴角下拉（顶点版）"),
+    _ext("うー", 3, "噘嘴", aliases=("うーん",)),
+    _ext("むむ", 3, "嘴唇前突", aliases=("口むむ",)),
+    _ext("薄笑い", 3, "抿嘴笑"),
+    _ext("んむー", 3, "抿嘴"),
+    _ext("ぺろり", 3, "吐舌（模型自带）", freq=6),
+    _ext("▲", 3, "三角形嘴", freq=7),
+    _ext("∧", 3, "倒 V 嘴（不满）", freq=6, aliases=("Λ", "へ", "＾")),
+    _ext("□", 3, "方口（张口+横拉）", freq=5),
+    _ext("ω□", 3, "方形猫嘴", freq=6, aliases=("ω口2",)),
+    _ext("え2", 3, "更大的 e 口型", aliases=("え２",), freq=5),
+]
+
+# ---- その他 ----
+STANDARD_CATALOG += [
+    _std("照れ", 4, "脸红（需要材质染色或专门的腮红材质）", freq=7,
+         aliases=("赤面", "頬染", "照れ2"), ref_en="（参考模型用专用材质做加法 alpha）"),
+    _ext("涙", 4, "眼泪（需要专门的顶点/材质表情）", freq=6, aliases=("涙1", "涙2", "泣き")),
+    _ext("エッジOFF", 4, "关闭描边（材质表情）"),
 ]
 
 CATALOG_BY_NAME: dict[str, dict] = {}
@@ -363,7 +427,7 @@ class MorphOp:
     def __init__(self, action: str, name: str, panel: int, mtype: int,
                  offsets: list, name_en: str, entry: dict,
                  existing_index: int | None = None, detail: str = "") -> None:
-        self.action = action          # create / replace / rename_create / keep
+        self.action = action          # create / replace / keep
         self.name = name
         self.panel = panel
         self.mtype = mtype
@@ -373,6 +437,23 @@ class MorphOp:
         self.existing_index = existing_index
         self.detail = detail
         self.new_index: int | None = None
+        # 别名/隐藏条目默认不进表示枠，避免模型树里堆一堆等价写法
+        self.in_frame = not (entry.get("alias") or entry.get("hide"))
+
+
+class Plan:
+    """一次生成的完整计划：目标表情 + 需要转存的原表情数据。"""
+
+    def __init__(self) -> None:
+        self.ops: list[MorphOp] = []
+        self.slots: list[tuple[int, Morph, int]] = []   # (新索引, morph, 原索引)
+        self.slot_map: dict[int, int] = {}              # 原索引 -> 槽位索引
+        self.rewrite: dict[int, dict[int, int]] = {}    # 现有表情索引 -> {旧引用: 新引用}
+        self.replaced: list[int] = []
+        self.discarded: list[int] = []
+        self.keep_original = False
+        self.warnings: list[str] = []
+        self.skipped: list[dict] = []
 
 
 MATERIAL_CHANNELS = ("diffuse", "specular", "ambient", "edge_color",
@@ -440,13 +521,21 @@ def build_plan(model: PmxModel, mmap: MorphMap, *,
                with_approx: bool = False,
                with_disabled: bool = False,
                force_on_existing: str | None = None,
-               model_path: Path | None = None
-               ) -> tuple[list[MorphOp], list[str], list[dict]]:
-    """生成操作计划（不改动 model）。返回 (ops, warnings, skipped)。"""
+               keep_original: bool | None = None,
+               keep_suffix: str | None = None,
+               model_path: Path | None = None) -> Plan:
+    """生成操作计划（不改动 model）。
+
+    默认 **不保留** 被改写的原表情：标准名占用原索引、就地改写，原表情记录消失。
+    只有当别的表情仍然引用它时，才把它的原始数据转存到内部槽位（panel 0、不加入
+    表示枠，MMD 界面里看不到），否则数据直接丢弃。`keep_original=True` 时被改写的
+    原表情都会保留成可见表情（原名加后缀，仍在表示枠里）。
+    """
     resolver = Resolver(model)
-    warnings: list[str] = []
-    skipped: list[dict] = []
-    ops: list[MorphOp] = []
+    plan = Plan()
+    warnings = plan.warnings
+    skipped = plan.skipped
+    ops = plan.ops
 
     expected = mmap.source_pmx_sha256()
     if expected and model_path is not None:
@@ -460,6 +549,8 @@ def build_plan(model: PmxModel, mmap: MorphMap, *,
     on_existing_default = force_on_existing or mmap.defaults["on_existing"]
     flatten = bool(mmap.defaults["flatten_groups"])
     panel_aliases = parse_panel(mmap.defaults.get("panel_for_aliases", 0))
+    plan.keep_original = bool(mmap.defaults.get("keep_original", False)) \
+        if keep_original is None else bool(keep_original)
 
     for entry in mmap.entries:
         name = str(entry["name"])
@@ -485,8 +576,7 @@ def build_plan(model: PmxModel, mmap: MorphMap, *,
                 offsets = build_material_offsets(model, entry, where)
             else:
                 mtype = 0
-                pairs = resolver.combine(entry["sources"], flatten, where)
-                offsets = [(idx, weight) for idx, weight in pairs]
+                offsets = resolver.combine(entry["sources"], flatten, where)
         except MapError as exc:
             if str(mmap.defaults.get("on_missing_source")) == "skip":
                 skipped.append(dict(entry=entry, reason=str(exc)))
@@ -496,6 +586,9 @@ def build_plan(model: PmxModel, mmap: MorphMap, *,
         existing = resolver.by_name.get(name)
         on_existing = force_on_existing or entry.get("on_existing",
                                                      on_existing_default)
+        if on_existing == "rename":      # 兼容旧写法：就地改写 + 保留原表情
+            on_existing = "replace"
+            entry.setdefault("keep_original", True)
         panel = parse_panel(entry.get("panel"), default=0)
         name_en = entry.get("name_en", "")
         if existing is None:
@@ -509,14 +602,24 @@ def build_plan(model: PmxModel, mmap: MorphMap, *,
             skipped.append(dict(entry=entry, reason=f"模型已有 {name}，按设置保留"))
             continue
         if on_existing == "keep":
-            ops.append(MorphOp("keep", name, panel, mtype, offsets, name_en,
-                               entry, existing))
-            continue
-        if on_existing == "rename":
-            suffix = entry.get("backup_suffix", mmap.defaults.get("backup_suffix") or "_元")
-            ops.append(MorphOp("rename_create", name, panel, mtype, offsets,
-                               name_en, entry, existing,
-                               detail=f"原名改存为 {name}{suffix}"))
+            if entry.get("hide") and plan.keep_original:
+                # 保留模式：这些原表情连面板和表示枠都保持原样
+                ops.append(MorphOp("keep", name, model.morphs[existing].panel, 0,
+                                   [], name_en, entry, existing))
+                continue
+            detail = ""
+            hide = bool(entry.get("hide"))
+            if hide:
+                panel = panel_aliases
+            if "panel" in entry or hide:
+                old = model.morphs[existing]
+                if old.panel != panel:
+                    detail = (f"只调整面板 {old.panel_name} -> "
+                              f"{PANEL_NAMES.get(panel, panel)}")
+            if hide:
+                detail = (detail + "；" if detail else "") + "并移出表示枠"
+            ops.append(MorphOp("keep", name, panel, 0, [], name_en, entry,
+                               existing, detail))
             continue
         if on_existing == "replace":
             old = model.morphs[existing]
@@ -526,154 +629,218 @@ def build_plan(model: PmxModel, mmap: MorphMap, *,
             continue
         raise MapError(f"{where}: 未知 on_existing 取值 {on_existing!r}")
 
-    warnings.extend(resolver.warnings)
-    _inline_replaced_sources(ops, model, warnings)
-    _check_index_ranges(ops, model)
-    return ops, warnings, skipped
+    _plan_slots(plan, model, mmap, keep_suffix)
+    _check_index_ranges(plan, model)
+    return plan
 
 
-def _inline_replaced_sources(ops: list[MorphOp], model: PmxModel,
-                             warnings: list[str]) -> None:
-    """把「来源正好是被改写的表情」内联成改写后的内容。
+def _plan_slots(plan: Plan, model: PmxModel, mmap: MorphMap,
+                keep_suffix: str | None) -> None:
+    """决定哪些被改写的原表情需要转存数据，并把所有引用改指槽位。"""
+    ops = plan.ops
+    plan.replaced = [op.existing_index for op in ops if op.action == "replace"]
 
-    来源都在原始模型快照上解析，但改写在原索引上就地发生：如果生成结果引用了
-    某个正在被改写的表情，索引指向的内容已经变成 group，而 MMD 只解析一层
-    group 引用（src/model/morph_apply.cpp），嵌套的那层不会生效。这里直接把
-    改写后的底层内容按权重内联，保证生成结果在 MMD 里一定有效。
-    """
-    replace_map = {op.existing_index: op for op in ops if op.action == "replace"}
-    if not replace_map:
-        return
-    memo: dict[int, list[tuple[int, float]]] = {}
-    inlined: set[int] = set()
+    # 谁还在引用被改写的索引：现有 group / flip 表情，以及各条目的来源
+    referenced: set[int] = set()
+    for morph in model.morphs:
+        if morph.type in (0, 9):
+            referenced.update(idx for idx, _w in morph.offsets)
+    for op in ops:
+        if op.mtype == 0:
+            referenced.update(idx for idx, _w in op.offsets)
 
-    def resolve_replace(idx: int, stack: tuple[int, ...]) -> list[tuple[int, float]]:
-        if idx in memo:
-            return memo[idx]
-        if idx in stack:
-            chain = " -> ".join(model.morphs[s].name_local for s in stack + (idx,))
-            raise MapError(f"改写后的表情出现循环引用: {chain}")
-        op = replace_map[idx]
-        out: list[tuple[int, float]] = []
-        for sub_idx, sub_w in op.offsets:
-            for leaf, leaf_w in resolve_leaf(sub_idx, stack + (idx,)):
-                out.append((leaf, sub_w * leaf_w))
-        memo[idx] = out
-        return out
+    suffix = keep_suffix or mmap.defaults.get("backup_suffix") or "_元"
+    backup_panel = parse_panel(mmap.defaults.get("backup_panel"), 0)
 
-    def resolve_leaf(idx: int, stack: tuple[int, ...]) -> list[tuple[int, float]]:
-        if idx in replace_map:
-            inlined.add(idx)
-            return resolve_replace(idx, stack)
-        return [(idx, 1.0)]
+    # 先给新建表情分配索引，再给槽位分配
+    next_index = len(model.morphs)
+    for op in ops:
+        if op.action == "create":
+            op.new_index = next_index
+            next_index += 1
 
     for op in ops:
-        if op.mtype != 0 or not op.offsets:
+        if op.action != "replace":
             continue
-        own = (op.existing_index,) if op.action == "replace" else ()
-        merged: dict[int, float] = {}
-        order: list[int] = []
-        for idx, weight in op.offsets:
-            for leaf, leaf_w in resolve_leaf(idx, own):
-                if leaf not in merged:
-                    merged[leaf] = 0.0
-                    order.append(leaf)
-                merged[leaf] += weight * leaf_w
-        op.offsets = [(i, merged[i]) for i in order if merged[i] != 0.0]
-    for idx in sorted(inlined):
-        warnings.append(
-            f"{model.morphs[idx].name_local!r} 同时是改写目标和其他条目的来源："
-            "已把改写后的内容直接内联，避免生成 MMD 不会解析的嵌套 group")
+        individually = bool(op.entry.get("keep_original", plan.keep_original))
+        if not individually and op.existing_index not in referenced:
+            plan.discarded.append(op.existing_index)
+            continue
+        src = model.morphs[op.existing_index]
+        slot = Morph(src.name_local + suffix,
+                     (src.name_en + suffix) if src.name_en else "",
+                     src.panel if individually else backup_panel,
+                     src.type, list(src.offsets),
+                     source=f"mmd-morph-map:{mmap.id}:backup")
+        slot.dirty = True
+        plan.slot_map[op.existing_index] = next_index
+        plan.slots.append((next_index, slot, op.existing_index))
+        next_index += 1
 
+    if not plan.slot_map:
+        return
 
-def _check_index_ranges(ops: list[MorphOp], model: PmxModel) -> None:
+    # 生成结果里的引用改指槽位
     for op in ops:
+        if op.mtype == 0 and op.offsets:
+            op.offsets = [(plan.slot_map.get(i, i), w) for i, w in op.offsets]
+    # 槽位自身的内容也改指（槽位是原表情的副本）
+    for _idx, slot, _src in plan.slots:
+        if slot.type in (0, 9) and slot.offsets:
+            slot.offsets = [(plan.slot_map.get(i, i), w) for i, w in slot.offsets]
+    # 现有表情对被改写索引的引用改指槽位，避免产生 MMD 不解析的嵌套 group
+    for i, morph in enumerate(model.morphs):
+        if morph.type in (0, 9) and any(idx in plan.slot_map
+                                        for idx, _w in morph.offsets):
+            plan.rewrite[i] = dict(plan.slot_map)
+
+    names = "、".join(model.morphs[t].name_local for t in sorted(plan.slot_map))
+    if plan.keep_original:
+        plan.warnings.append(
+            f"已保留 {len(plan.slot_map)} 个被改写表情的原始数据（原名加后缀 {suffix}，"
+            f"仍显示在表情列表）：{names}")
+    else:
+        plan.warnings.append(
+            f"为保持其它表情有效，{len(plan.slot_map)} 个被改写表情的原始数据转存到"
+            f"内部槽位（panel 0、不加入表示枠，MMD 界面看不到）：{names}；"
+            "希望它们显示出来时加 --keep-original")
+    if plan.discarded:
+        names = "、".join(model.morphs[t].name_local for t in sorted(plan.discarded))
+        plan.warnings.append(
+            f"{len(plan.discarded)} 个被改写表情的原始数据已丢弃（没有其它表情引用）："
+            f"{names}")
+
+
+def _check_index_ranges(plan: Plan, model: PmxModel) -> None:
+    limit = len(model.morphs) + len(plan.ops) + len(plan.slots)
+    for op in plan.ops:
         if op.mtype != 0:
             continue
         for idx, _w in op.offsets:
-            if not (0 <= idx < len(model.morphs)):
+            if not (0 <= idx < limit):
                 raise MapError(f"{op.name}: 生成结果引用了越界的 morph 索引 {idx}")
 
 
-def apply_plan(model: PmxModel, ops: list[MorphOp], mmap: MorphMap) -> dict:
+def apply_plan(model: PmxModel, plan: Plan, mmap: MorphMap) -> dict:
     """把计划写进模型；返回统计信息。"""
     stats = Counter()
+    ops = plan.ops
     frame_target = mmap.defaults.get("add_to_display_frame")
-    frame_morphs: list[int] | None = None
+    frame_obj = None
+    frame_morphs: list[int] = []
     if frame_target:
         for frame in model.frames:
             if frame.name_local == frame_target:
+                frame_obj = frame
                 frame_morphs = [el.index for el in frame.elements if el.kind == 1]
                 break
         else:
             stats["frame_missing"] = 1
 
+    def add_to_frame(index: int) -> None:
+        if frame_obj is None or index in frame_morphs:
+            return
+        frame_obj.elements.append(FrameElement(1, index))
+        frame_obj.dirty = True
+        frame_morphs.append(index)
+        stats["frame_add"] += 1
+
+    def remove_from_frame(index: int) -> None:
+        removed = 0
+        for frame in model.frames:
+            keep = [el for el in frame.elements
+                    if not (el.kind == 1 and el.index == index)]
+            if len(keep) != len(frame.elements):
+                frame.elements = keep
+                frame.dirty = True
+                removed += len(frame.elements) - len(keep)
+        if removed:
+            stats["frame_remove"] += removed
+
+    # 1. 新建表情（索引已在计划阶段分配）
+    for op in ops:
+        if op.action != "create":
+            continue
+        morph = Morph(op.name, op.name_en, op.panel, op.mtype, list(op.offsets))
+        morph.source = f"mmd-morph-map:{mmap.id}"
+        morph.dirty = True
+        model.morphs.append(morph)
+        stats["create"] += 1
+        if op.in_frame:
+            add_to_frame(op.new_index)
+
+    # 2. 转存的原表情数据
+    for index, slot, _src in plan.slots:
+        model.morphs.append(slot)
+        if plan.keep_original:
+            stats["slot_visible"] += 1
+            add_to_frame(index)
+        else:
+            stats["slot_hidden"] += 1
+
+    # 3. 现有表情对被改写索引的引用改指槽位
+    for i, mapping in plan.rewrite.items():
+        morph = model.morphs[i]
+        morph.offsets = [(mapping.get(idx, idx), w) for idx, w in morph.offsets]
+        morph.dirty = True
+        stats["rewrite"] += 1
+
+    # 4. 就地改写目标表情
     for op in ops:
         if op.action == "keep":
             stats["keep"] += 1
+            if op.detail:
+                morph = model.morphs[op.existing_index]
+                morph.panel = op.panel
+                morph.dirty = True
+                stats["repanel"] += 1
+            if op.entry.get("hide"):
+                remove_from_frame(op.existing_index)
             continue
-        if op.action == "rename_create":
-            old = model.morphs[op.existing_index]
-            suffix = op.entry.get("backup_suffix",
-                                  mmap.defaults.get("backup_suffix") or "_元")
-            old.name_local = op.name + suffix
-            old.name_en = (old.name_en + suffix) if old.name_en else ""
-            if mmap.defaults.get("backup_panel") is not None:
-                old.panel = parse_panel(mmap.defaults.get("backup_panel"), 0)
-            old.dirty = True
-            stats["renamed"] += 1
-            existing = None
-        else:
-            existing = op.existing_index
-
-        if existing is None:
-            morph = Morph(op.name, op.name_en, op.panel, op.mtype, list(op.offsets))
-            morph.source = f"mmd-morph-map:{mmap.id}"
-            model.morphs.append(morph)
-            op.new_index = len(model.morphs) - 1
-            if op.action == "create":
-                stats["create"] += 1
-        else:
-            morph = model.morphs[existing]
-            morph.name_en = op.name_en or morph.name_en
-            morph.panel = op.panel
-            morph.type = op.mtype
-            morph.offsets = list(op.offsets)
-            morph.dirty = True
-            op.new_index = existing
-            stats["replace"] += 1
-
-        if frame_morphs is not None and op.new_index not in frame_morphs:
-            frame = next(f for f in model.frames if f.name_local == frame_target)
-            frame.elements.append(FrameElement(1, op.new_index))
-            frame.dirty = True
-            frame_morphs.append(op.new_index)
-            stats["frame_add"] += 1
+        if op.action != "replace":
+            continue
+        morph = model.morphs[op.existing_index]
+        morph.name_en = op.name_en or morph.name_en
+        morph.panel = op.panel
+        morph.type = op.mtype
+        morph.offsets = list(op.offsets)
+        morph.dirty = True
+        op.new_index = op.existing_index
+        stats["replace"] += 1
+        if op.in_frame:
+            add_to_frame(op.existing_index)
     return stats
 
 
-# ---------------------------------------------------------------------------
-# 报告
-# ---------------------------------------------------------------------------
+def morph_label(model: PmxModel, plan: Plan | None, idx: int) -> str:
+    """把计划里的 morph 索引翻成名字（可能是尚未写入的槽位/新建表情）。"""
+    if 0 <= idx < len(model.morphs):
+        return model.morphs[idx].name_local
+    if plan is not None:
+        for index, slot, _src in plan.slots:
+            if index == idx:
+                return slot.name_local
+        for op in plan.ops:
+            if op.new_index == idx:
+                return op.name
+    return f"<越界 {idx}>"
 
 
-def describe_offsets(model: PmxModel, op: MorphOp, limit: int = 6) -> str:
+def describe_offsets(model: PmxModel, op: MorphOp, plan: Plan | None = None,
+                     limit: int = 6) -> str:
     if op.mtype == 8:
         return f"材质 morph（{len(op.offsets)} 条材质操作）"
-    names = []
-    for idx, weight in op.offsets[:limit]:
-        if 0 <= idx < len(model.morphs):
-            label = model.morphs[idx].name_local
-        else:
-            label = f"<越界 {idx}>"
-        names.append(f"{label}×{weight:g}")
+    names = [f"{morph_label(model, plan, idx)}×{weight:g}"
+             for idx, weight in op.offsets[:limit]]
     tail = " …" if len(op.offsets) > limit else ""
     return f"group morph <- {', '.join(names)}{tail}"
 
 
 def format_report(model_path: Path, model: PmxModel, mmap: MorphMap,
-                  ops: list[MorphOp], warnings: list[str], skipped: list[dict],
-                  stats: dict | None = None) -> str:
+                  plan: Plan, stats: dict | None = None) -> str:
+    ops = plan.ops
+    warnings = plan.warnings
+    skipped = plan.skipped
     lines: list[str] = []
     lines.append("=" * 78)
     lines.append(f"PMX 表情标准化报告  (pmx_morph_tool {TOOL_VERSION})")
@@ -689,12 +856,12 @@ def format_report(model_path: Path, model: PmxModel, mmap: MorphMap,
     quality = Counter(e.get("quality", "exact") for e in mmap.entries)
     lines.append(f"条目      : {len(mmap.entries)}  精确 {quality.get('exact', 0)} / "
                  f"近似 {quality.get('approx', 0)} / 无法提供 {quality.get('unmapped', 0)}")
+    lines.append(f"原表情处理: {'保留为可见表情（加后缀）' if plan.keep_original else '默认不保留'}")
     lines.append("")
 
     groups = [
         ("create", "新增标准表情", "+"),
-        ("replace", "改写已有标准表情", "~"),
-        ("rename_create", "原表情改存备份后重建", "*"),
+        ("replace", "就地改写已有表情（标准名沿用原索引）", "~"),
         ("keep", "已存在、保持原样", "="),
     ]
     for action, title, mark in groups:
@@ -706,12 +873,29 @@ def format_report(model_path: Path, model: PmxModel, mmap: MorphMap,
             panel = PANEL_NAMES.get(op.panel, str(op.panel))
             detail = f"  [{op.detail}]" if op.detail else ""
             lines.append(f"{mark} {op.name}  ({panel}){detail}")
-            lines.append(f"    {describe_offsets(model, op)}")
+            if op.action != "keep":
+                lines.append(f"    {describe_offsets(model, op, plan)}")
             note = op.entry.get("note")
             if note:
                 lines.append(f"    说明: {note}")
             if op.entry.get("quality") == "approx":
                 lines.append("    ⚠ 近似映射：与原标准表情形态可能不同")
+        lines.append("")
+
+    if plan.slots:
+        title = "被改写表情的数据保留" + ("（可见）" if plan.keep_original else "（内部槽位，界面不可见）")
+        lines.append(f"--- {title} ({len(plan.slots)}) ---")
+        for _index, slot, src in plan.slots:
+            origin = model.morphs[src].name_local
+            lines.append(f"  {origin}  ->  {slot.name_local}  "
+                         f"({PANEL_NAMES.get(slot.panel, slot.panel)}, {slot.type_name}, "
+                         f"{len(slot.offsets)} 项)")
+        lines.append("")
+
+    if plan.discarded:
+        lines.append(f"--- 原表情数据丢弃 ({len(plan.discarded)}) ---")
+        for t in plan.discarded:
+            lines.append(f"  {model.morphs[t].name_local}")
         lines.append("")
 
     if skipped:
@@ -732,10 +916,15 @@ def format_report(model_path: Path, model: PmxModel, mmap: MorphMap,
     if stats is not None:
         lines.append("--- 写入统计 ---")
         lines.append(
-            f"新增 {stats.get('create', 0)}  改写 {stats.get('replace', 0)}  "
-            f"备份重建 {stats.get('renamed', 0)}  保留 {stats.get('keep', 0)}  "
-            f"加入表示枠 {stats.get('frame_add', 0)}")
-        lines.append(f"结果表情数: {len(model.morphs)}")
+            f"新增 {stats.get('create', 0)}  就地改写 {stats.get('replace', 0)}  "
+            f"保留 {stats.get('keep', 0)}（其中仅改面板 {stats.get('repanel', 0)}）")
+        lines.append(
+            f"原数据槽位 {stats.get('slot_hidden', 0)} 个内部隐藏 + "
+            f"{stats.get('slot_visible', 0)} 个可见；引用重写 {stats.get('rewrite', 0)} 个表情")
+        lines.append(f"加入表示枠 {stats.get('frame_add', 0)} 个"
+                     + (f"，移出表示枠 {stats.get('frame_remove', 0)} 个"
+                        if stats.get("frame_remove") else "")
+                     + f"；结果表情数: {len(model.morphs)}")
         if stats.get("frame_missing"):
             lines.append("! 映射表指定的表示枠不存在，新表情未加入表示枠（不影响动作驱动）")
         lines.append("")
@@ -764,14 +953,25 @@ def cmd_catalog(args) -> int:
     if args.json:
         print(json.dumps(STANDARD_CATALOG, ensure_ascii=False, indent=2))
         return 0
-    print(f"内置 MMD 标准表情目录（{len(STANDARD_CATALOG)} 项）")
-    print(f"{'标准名':<12} {'面板':<6} {'动作出现次数':>12}  别名 / 取材提示")
-    print("-" * 78)
-    for entry in sorted(STANDARD_CATALOG, key=lambda e: (e["panel"], -e.get("freq", 0))):
-        panel = PANEL_NAMES.get(entry["panel"], "?")
-        alias = "、".join(entry.get("aliases", [])) or "—"
-        print(f"{entry['name']:<12} {panel:<6} {entry.get('freq', 0):>12}  {alias}")
-        print(f"{'':<12} {'':<6} {'':>12}  {entry.get('sources', '')}")
+    tiers = [("standard", "标准名（参考模型 洛恩.pmx 收录）"),
+             ("extended", "扩展名（动作里常见，参考模型未收录）")]
+    print(f"内置 MMD 标准表情目录（{len(STANDARD_CATALOG)} 项："
+          f"标准 {sum(1 for e in STANDARD_CATALOG if e['tier'] == 'standard')} / "
+          f"扩展 {sum(1 for e in STANDARD_CATALOG if e['tier'] == 'extended')}）")
+    for tier, title in tiers:
+        if args.tier and args.tier != tier:
+            continue
+        rows = [e for e in STANDARD_CATALOG if e["tier"] == tier]
+        print()
+        print(f"===== {title} ({len(rows)}) =====")
+        print(f"{'标准名':<12} {'面板':<6} {'动作次数':>8}  {'参考英文名':<22} 别名 / 取材提示")
+        print("-" * 100)
+        for entry in sorted(rows, key=lambda e: (e["panel"], -e.get("freq", 0))):
+            panel = PANEL_NAMES.get(entry["panel"], "?")
+            alias = "、".join(entry.get("aliases", [])) or "—"
+            print(f"{entry['name']:<12} {panel:<6} {entry.get('freq', 0):>8}  "
+                  f"{entry.get('ref_en', ''):<22} {alias}")
+            print(f"{'':<12} {'':<6} {'':>8}  {'':<22} {entry.get('sources', '')}")
     return 0
 
 
@@ -823,37 +1023,46 @@ def cmd_check(args) -> int:
     model_path = Path(args.model)
     model = load_model(model_path)
     mmap = load_map(Path(args.map))
-    ops, warnings, skipped = build_plan(
+    plan = build_plan(
         model, mmap, with_approx=not args.exact_only,
         with_disabled=args.with_disabled, force_on_existing=args.on_existing,
+        keep_original=args.keep_original, keep_suffix=args.keep_original_suffix,
         model_path=model_path)
-    print(format_report(model_path, model, mmap, ops, warnings, skipped))
+    print(format_report(model_path, model, mmap, plan))
 
-    covered = {op.name for op in ops if op.action != "keep"}
+    covered = {op.name for op in plan.ops if op.action != "keep"}
     existing = {mo.name_local for mo in model.morphs}
-    missing_after = []
-    for entry in STANDARD_CATALOG:
-        names = [entry["name"]] + entry.get("aliases", [])
-        if not any(n in existing for n in names) and entry["name"] not in covered:
-            missing_after.append(entry["name"])
-    print(f"标准目录覆盖：{len(STANDARD_CATALOG) - len(missing_after)}/{len(STANDARD_CATALOG)}"
-          f"（生成后仍缺失 {len(missing_after)} 项）")
-    if missing_after:
-        print("  仍缺失: " + "、".join(missing_after))
+    missing_all: list[str] = []
+    for tier, title in (("standard", "标准名"), ("extended", "扩展名")):
+        rows = [e for e in STANDARD_CATALOG if e["tier"] == tier]
+        missing = [e["name"] for e in rows
+                   if not any(n in existing for n in [e["name"]] + e.get("aliases", []))
+                   and e["name"] not in covered]
+        missing_all += missing
+        print(f"{title}覆盖：{len(rows) - len(missing)}/{len(rows)}"
+              + (f"，仍缺失：{'、'.join(missing)}" if missing else ""))
+    missing_after = missing_all
     if args.json_report:
         Path(args.json_report).write_text(
-            json.dumps(dict(ops=[dict(action=op.action, name=op.name,
-                                      panel=op.panel, type=MORPH_TYPE_NAMES.get(op.mtype),
-                                      sources=[[model.morphs[i].name_local, w]
-                                               for i, w in op.offsets] if op.mtype == 0 else None,
-                                      note=op.entry.get("note", ""),
-                                      quality=op.entry.get("quality", "exact"))
-                               for op in ops],
-                            warnings=warnings,
-                            skipped=[dict(name=s["entry"]["name"], reason=s["reason"])
-                                     for s in skipped],
-                            missing_standard=missing_after),
-                          ensure_ascii=False, indent=2), encoding="utf-8")
+            json.dumps(dict(
+                keep_original=plan.keep_original,
+                ops=[dict(action=op.action, name=op.name,
+                          panel=op.panel, type=MORPH_TYPE_NAMES.get(op.mtype),
+                          sources=[[morph_label(model, plan, i), w]
+                                   for i, w in op.offsets] if op.mtype == 0 else None,
+                          note=op.entry.get("note", ""),
+                          quality=op.entry.get("quality", "exact"))
+                     for op in plan.ops],
+                slots=[dict(origin=model.morphs[src].name_local,
+                            slot=slot.name_local, visible=plan.keep_original)
+                       for _i, slot, src in plan.slots],
+                replaced=[model.morphs[t].name_local for t in plan.replaced],
+                discarded=[model.morphs[t].name_local for t in plan.discarded],
+                warnings=plan.warnings,
+                skipped=[dict(name=s["entry"]["name"], reason=s["reason"])
+                         for s in plan.skipped],
+                missing_standard=missing_after),
+                ensure_ascii=False, indent=2), encoding="utf-8")
     return 0
 
 
@@ -861,20 +1070,21 @@ def cmd_apply(args) -> int:
     model_path = Path(args.model)
     model = load_model(model_path)
     mmap = load_map(Path(args.map))
-    ops, warnings, skipped = build_plan(
+    plan = build_plan(
         model, mmap, with_approx=not args.exact_only,
         with_disabled=args.with_disabled, force_on_existing=args.on_existing,
+        keep_original=args.keep_original, keep_suffix=args.keep_original_suffix,
         model_path=model_path)
     if args.dry_run:
-        print(format_report(model_path, model, mmap, ops, warnings, skipped))
+        print(format_report(model_path, model, mmap, plan))
         print("（--dry-run：未写出文件）")
         return 0
-    stats = apply_plan(model, ops, mmap)
+    stats = apply_plan(model, plan, mmap)
     out = Path(args.output) if args.output else \
         model_path.with_name(model_path.stem + "_标准表情" + model_path.suffix)
     data = model.to_bytes()
     out.write_bytes(data)
-    report = format_report(model_path, model, mmap, ops, warnings, skipped, stats)
+    report = format_report(model_path, model, mmap, plan, stats)
     report += f"\n输出文件: {out}\n输出大小: {len(data)} 字节\n"
     if args.report:
         Path(args.report).write_text(report, encoding="utf-8")
@@ -1267,10 +1477,10 @@ def cmd_selftest(args) -> int:
         "format": "mmd-pmx-morph-map", "id": "selftest",
         "defaults": dict(add_to_display_frame="表情"),
         "morphs": [
-            # 组合 + 展开：まばたき 应被改写成 まばたき連動 的底层内容
+            # 组合 + 展开：まばたき 应被就地改写成 まばたき連動 的底层内容
             dict(name="まばたき", name_en="Blink", panel="目", quality="exact",
                  sources=[dict(morph="まばたき連動", weight=1.0)]),
-            # 别名：标准写法 ウィンク2 指向模型里的 まばたき（仅演示解析）
+            # 来源指向被改写目标本身 -> 必须转存原数据，不能自引用
             dict(name="ウィンク2", name_en="Wink2", panel="システム", alias=True,
                  quality="exact", sources=[dict(morph="まばたき", weight=1.0)]),
             # 组合两个来源
@@ -1286,27 +1496,61 @@ def cmd_selftest(args) -> int:
                                                 diffuse=[1.0, 0.8, 0.8, 1.0])])),
         ],
     })
-    ops, warnings, skipped = build_plan(model, mmap)
-    check("计划条数", len(ops) == 4)
-    check("近似条目被跳过", any(s["entry"]["name"] == "え2" for s in skipped))
+    plan = build_plan(model, mmap)
+    check("计划条数", len(plan.ops) == 4)
+    check("近似条目被跳过", any(s["entry"]["name"] == "え2" for s in plan.skipped))
+    # まばたき(0) 被就地改写、其数据被 ウィンク2/笑い 继续引用 -> 生成内部槽位
+    check("被引用的改写目标转存到内部槽位", len(plan.slots) == 1
+          and plan.slot_map.get(0) is not None)
+    check("默认不保留原表情（槽位隐藏）", plan.keep_original is False)
 
-    stats = apply_plan(model, ops, mmap)
+    stats = apply_plan(model, plan, mmap)
+    slot_index = plan.slot_map[0]
     by_name = {mo.name_local: mo for mo in model.morphs}
-    check("まばたき 被改写为 group", by_name["まばたき"].type == 0)
+    check("まばたき 被就地改写为 group", by_name["まばたき"].type == 0)
     check("まばたき 展开到顶点 morph", by_name["まばたき"].offsets == [(5, 1.0)])
     check("ウィンク2 新建在系统面板", by_name["ウィンク2"].panel == 0
           and by_name["ウィンク2"].type == 0)
-    check("来源为改写目标时内联成改写后内容",
-          by_name["ウィンク2"].offsets == [(5, 1.0)])
+    check("引用改指槽位（避免嵌套 group）",
+          by_name["ウィンク2"].offsets == [(slot_index, 1.0)])
+    check("槽位是原顶点数据的副本",
+          model.morphs[slot_index].type == 1
+          and model.morphs[slot_index].name_local == "まばたき_元"
+          and model.morphs[slot_index].panel == 0)
+    check("隐藏槽位不进表示枠",
+          slot_index not in [el.index for el in model.frames[0].elements])
     check("笑い 权重合并正确",
-          dict(by_name["笑い"].offsets) == {1: 0.5, 5: 0.25})
+          dict(by_name["笑い"].offsets) == {1: 0.5, slot_index: 0.25})
     check("照れ 为材质 morph",
           by_name["照れ"].type == 8 and len(by_name["照れ"].offsets) == 1
           and abs(by_name["照れ"].offsets[0][2] - 1.0) < 1e-6
           and abs(by_name["照れ"].offsets[0][3] - 0.8) < 1e-6)
-    check("表示枠追加了新表情", len(model.frames[0].elements) == 6 + stats["create"])
-    check("被改写表情作为来源时已内联告警",
-          any("内联" in w for w in warnings))
+    framed = sum(1 for op in plan.ops if op.action == "create" and op.in_frame)
+    check("表示枠只追加非别名的新建表情",
+          len(model.frames[0].elements) == 6 + framed and framed == stats["create"] - 1)
+    check("报告说明槽位处理", any("内部槽位" in w for w in plan.warnings))
+
+    # --keep-original：原表情保留成可见表情
+    model_keep = PmxModel.from_bytes(data)
+    plan_keep = build_plan(model_keep, mmap, keep_original=True)
+    check("保留模式下槽位可见", plan_keep.keep_original is True
+          and model_keep.morphs[0].panel == 2)
+    stats_keep = apply_plan(model_keep, plan_keep, mmap)
+    slot_keep = plan_keep.slot_map[0]
+    check("保留模式槽位沿用原面板并进入表示枠",
+          model_keep.morphs[slot_keep].panel == 2
+          and slot_keep in [el.index for el in model_keep.frames[0].elements]
+          and stats_keep["slot_visible"] == 1)
+
+    # 没有被任何表情引用的改写目标 -> 数据直接丢弃
+    model3 = PmxModel.from_bytes(data)
+    drop = MorphMap({
+        "format": "mmd-pmx-morph-map", "id": "drop",
+        "morphs": [dict(name="まばたき連動", panel="システム", quality="exact",
+                        sources=[dict(morph="にっこり", weight=1.0)])],
+    })
+    plan3 = build_plan(model3, drop)
+    check("无引用时数据直接丢弃", plan3.slots == [] and plan3.discarded == [2])
 
     # 回读：写出后再解析，结构必须一致
     out = model.to_bytes()
@@ -1317,7 +1561,7 @@ def cmd_selftest(args) -> int:
           [(mo.name_local, mo.type, len(mo.offsets)) for mo in model.morphs])
 
     # 材质 morph 序列化往返
-    mat_morph = again.morphs[-1]
+    mat_morph = next(mo for mo in again.morphs if mo.name_local == "照れ")
     check("材质 morph 回读类型", mat_morph.type == 8 and len(mat_morph.offsets) == 1)
 
     # 循环引用检测
@@ -1351,6 +1595,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("catalog", help="列出内置 MMD 标准表情目录")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--tier", choices=["standard", "extended"],
+                   help="只看标准名或扩展名")
     p.set_defaults(func=cmd_catalog)
 
     p = sub.add_parser("dump", help="查看模型的表情列表")
@@ -1371,6 +1617,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="忽略映射表中的 enabled=false")
         sp.add_argument("--on-existing", choices=["keep", "replace", "skip", "rename"],
                         help="覆盖映射表里对同名表情的处理策略")
+        sp.add_argument("--keep-original", action="store_true",
+                        help="把被改写的原表情保留为可见表情（原名加后缀）；默认不保留")
+        sp.add_argument("--keep-original-suffix", metavar="SUFFIX",
+                        help="保留原表情时使用的名字后缀（默认取映射表 backup_suffix）")
 
     p = sub.add_parser("check", help="只校验映射表与模型（不写文件）")
     add_common(p)

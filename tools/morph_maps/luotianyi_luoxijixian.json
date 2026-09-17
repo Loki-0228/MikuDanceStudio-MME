@@ -3,12 +3,13 @@
   "format_version": 1,
   "id": "luotianyi_luoxijixian",
   "title": "洛天依·洛希极限 — MMD 通用动作表情映射表",
-  "description": "把 Vroid2Pmx 导出的表情（Fcl_* 顶点表情、半角/全角混写的名字、系统面板里的内部表情）重新组织成 MMD 通用动作可以直接驱动的标准表情。所有生成结果都是 group morph，只引用模型里已有的表情，不新增顶点/材质数据（照れ 除外，默认关闭）。",
+  "description": "按参考模型 洛恩.pmx 的标准表情名（tier=standard，全角数字 ２/３、ぺろっ、悲しむ、怒り目、ジト目、眼角上/下、下眼上、恥ずかしい、口横狭め、舌広げ 等）整理本模型的表情：标准名优先可见，同一效果的不同写法（半角数字、半角片假名）放到系统面板作为别名。所有生成结果都是 group morph，只引用模型里已有的表情，不新增美术数据。默认不保留被改写的原表情；仍被其它表情引用的数据会转存到内部槽位（界面看不到），需要显示时用 --keep-original。",
   "source_pmx": "洛天依洛希极限.pmx",
+  "reference_pmx": "洛恩.pmx",
   "model": {
     "name": "洛天依_洛希極限",
     "sha256": "855709fa7d06c39d4f6f5fc6ffdf850c466263c7309774d45d56021108692288",
-    "note": "Vroid2Pmx 2.01.06 导出，267 个表情。形状变化版（洛天依洛希极限_形状変化.pmx）请另行处理，本表不针对它。"
+    "note": "Vroid2Pmx 2.01.06 导出，267 个表情。形状变化版（洛天依洛希极限_形状変化.pmx）请另行处理。"
   },
   "defaults": {
     "on_existing": "replace",
@@ -16,18 +17,35 @@
     "flatten_groups": true,
     "panel_for_aliases": 0,
     "add_to_display_frame": "表情",
+    "keep_original": false,
     "backup_suffix": "_頂点",
     "backup_panel": 0
   },
   "morphs": [
     {
-      "name": "怒り",
-      "name_en": "AngryBrow",
+      "name": "真面目",
+      "name_en": "Serious",
       "panel": "眉",
       "quality": "exact",
       "on_existing": "keep",
-      "note": "模型自带 Fcl_BRW_Angry，名字与内容都符合标准，不改动",
-      "sources": [{ "morph": "怒り", "weight": 1.0 }]
+      "note": "模型自带，与参考模型 Brow_Trouble_L 对应",
+      "sources": [{ "morph": "真面目", "weight": 1.0 }]
+    },
+    {
+      "name": "真面目左",
+      "name_en": "SeriousL",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "真面目左", "weight": 1.0 }]
+    },
+    {
+      "name": "真面目右",
+      "name_en": "SeriousR",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "真面目右", "weight": 1.0 }]
     },
     {
       "name": "困る",
@@ -35,15 +53,697 @@
       "panel": "眉",
       "quality": "exact",
       "on_existing": "keep",
-      "note": "模型自带 Fcl_BRW_Sorrow",
+      "note": "模型自带 Fcl_BRW_Sorrow，与参考模型 Brow_Trouble_L 对应",
       "sources": [{ "morph": "困る", "weight": 1.0 }]
+    },
+    {
+      "name": "困る左",
+      "name_en": "SadBrowL",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "困る左", "weight": 1.0 }]
+    },
+    {
+      "name": "困る右",
+      "name_en": "SadBrowR",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "困る右", "weight": 1.0 }]
+    },
+    {
+      "name": "にこり",
+      "name_en": "JoyBrow",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "note": "模型自带 Fcl_BRW_Fun；にこり2(Fcl_BRW_Joy) 是另一种「笑眉」，参考模型没有，保持原样",
+      "sources": [{ "morph": "にこり", "weight": 1.0 }]
+    },
+    {
+      "name": "にこり左",
+      "name_en": "JoyBrowL",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "にこり左", "weight": 1.0 }]
+    },
+    {
+      "name": "にこり右",
+      "name_en": "JoyBrowR",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "にこり右", "weight": 1.0 }]
+    },
+    {
+      "name": "怒り",
+      "name_en": "AngryBrow",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "note": "模型自带 Fcl_BRW_Angry，与参考模型 Brow_Angry_L 对应",
+      "sources": [{ "morph": "怒り", "weight": 1.0 }]
+    },
+    {
+      "name": "怒り左",
+      "name_en": "AngryBrowL",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "怒り左", "weight": 1.0 }]
+    },
+    {
+      "name": "怒り右",
+      "name_en": "AngryBrowR",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "怒り右", "weight": 1.0 }]
+    },
+    {
+      "name": "恥ずかしい",
+      "name_en": "ShyBrow",
+      "panel": "眉",
+      "quality": "approx",
+      "note": "参考模型有 Brow_Shy（害羞眉）；模型没有专门形状，用眉毛内侧上抬 ひそめる2 近似",
+      "sources": [{ "morph": "ひそめる2", "weight": 1.0 }]
+    },
+    {
+      "name": "恥ずかしい左",
+      "name_en": "ShyBrowL",
+      "panel": "眉",
+      "quality": "approx",
+      "sources": [{ "morph": "ひそめる2左", "weight": 1.0 }]
+    },
+    {
+      "name": "恥ずかしい右",
+      "name_en": "ShyBrowR",
+      "panel": "眉",
+      "quality": "approx",
+      "sources": [{ "morph": "ひそめる2右", "weight": 1.0 }]
+    },
+    {
+      "name": "上",
+      "name_en": "BrowUp",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "上", "weight": 1.0 }]
+    },
+    {
+      "name": "上左",
+      "name_en": "BrowUpL",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "上左", "weight": 1.0 }]
+    },
+    {
+      "name": "上右",
+      "name_en": "BrowUpR",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "上右", "weight": 1.0 }]
+    },
+    {
+      "name": "下",
+      "name_en": "BrowDown",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "下", "weight": 1.0 }]
+    },
+    {
+      "name": "下左",
+      "name_en": "BrowDownL",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "下左", "weight": 1.0 }]
+    },
+    {
+      "name": "下右",
+      "name_en": "BrowDownR",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "下右", "weight": 1.0 }]
+    },
+    {
+      "name": "前",
+      "name_en": "BrowFront",
+      "panel": "眉",
+      "quality": "approx",
+      "note": "参考模型 Brow_Squeeze（眉毛前压）；模型里叫 眉手前",
+      "sources": [{ "morph": "眉手前", "weight": 1.0 }]
+    },
+    {
+      "name": "前左",
+      "name_en": "BrowFrontL",
+      "panel": "眉",
+      "quality": "approx",
+      "sources": [{ "morph": "左眉手前", "weight": 1.0 }]
+    },
+    {
+      "name": "前右",
+      "name_en": "BrowFrontR",
+      "panel": "眉",
+      "quality": "approx",
+      "sources": [{ "morph": "右眉手前", "weight": 1.0 }]
+    },
+
+    {
+      "name": "まばたき",
+      "name_en": "Blink",
+      "panel": "目",
+      "quality": "exact",
+      "note": "原「まばたき」只有顶点形变，完整表情是 まばたき連動（顶点+眼睑骨骼+眉毛+瞳孔）；就地改写为标准名，原顶点数据转存内部槽位供其它表情引用",
+      "sources": [{ "morph": "まばたき連動", "weight": 1.0 }]
+    },
+    {
+      "name": "笑い",
+      "name_en": "EyeSmile",
+      "panel": "目",
+      "quality": "exact",
+      "note": "同 まばたき：改成 笑い連動 的完整组合（笑眼+眼睑骨骼+眉毛）",
+      "sources": [{ "morph": "笑い連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク",
+      "name_en": "WinkL",
+      "panel": "目",
+      "quality": "exact",
+      "note": "左眼笑眼闭：改成 ウィンク連動 的完整组合",
+      "sources": [{ "morph": "ウィンク連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク右",
+      "name_en": "WinkR",
+      "panel": "目",
+      "quality": "exact",
+      "note": "右眼笑眼闭：改成 ウィンク右連動 的完整组合",
+      "sources": [{ "morph": "ウィンク右連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク２",
+      "name_en": "Wink2L",
+      "panel": "目",
+      "quality": "exact",
+      "note": "参考模型的标准写法（全角数字 ２）：左眼普通闭合，改成 ウィンク２連動 的完整组合",
+      "sources": [{ "morph": "ウィンク２連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク2",
+      "name_en": "Wink2LHalf",
+      "panel": "システム",
+      "quality": "exact",
+      "alias": true,
+      "note": "半角数字写法（ワールドイズマイン（男性モデル向け）等动作使用）；同一效果，放系统面板避免列表重复",
+      "sources": [{ "morph": "ウィンク２連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ｳｨﾝｸ２",
+      "name_en": "Wink2LHankaku",
+      "panel": "システム",
+      "quality": "exact",
+      "alias": true,
+      "note": "半角片假名 + 全角数字写法（ワールドイズマイン.vmd 的占位键使用）",
+      "sources": [{ "morph": "ウィンク２連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク２右",
+      "name_en": "Wink2R",
+      "panel": "目",
+      "quality": "exact",
+      "note": "参考模型的标准写法（全角数字 ２）：右眼普通闭合",
+      "sources": [{ "morph": "ｳｨﾝｸ２右連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク2右",
+      "name_en": "Wink2RHalf",
+      "panel": "システム",
+      "quality": "exact",
+      "alias": true,
+      "note": "半角数字写法，放系统面板",
+      "sources": [{ "morph": "ｳｨﾝｸ２右連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ｳｨﾝｸ２右",
+      "name_en": "Wink2RHankaku",
+      "panel": "システム",
+      "quality": "exact",
+      "alias": true,
+      "note": "半角片假名写法（导出器产物，Facials.vmd 使用）：就地改写为完整组合，移入系统面板",
+      "sources": [{ "morph": "ｳｨﾝｸ２右連動", "weight": 1.0 }]
+    },
+    {
+      "name": "なごみ",
+      "name_en": "Nagomi",
+      "panel": "目",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "なごみ", "weight": 1.0 }]
+    },
+    {
+      "name": "なごみ左",
+      "name_en": "NagomiL",
+      "panel": "目",
+      "quality": "approx",
+      "note": "参考模型有单眼版本；模型只有双眼，用整只近似",
+      "sources": [{ "morph": "なごみ", "weight": 1.0 }]
+    },
+    {
+      "name": "なごみ右",
+      "name_en": "NagomiR",
+      "panel": "目",
+      "quality": "approx",
+      "sources": [{ "morph": "なごみ", "weight": 1.0 }]
+    },
+    {
+      "name": "びっくり",
+      "name_en": "Surprised",
+      "panel": "目",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "びっくり", "weight": 1.0 }]
+    },
+    {
+      "name": "じと目",
+      "name_en": "Jitome",
+      "panel": "目",
+      "quality": "exact",
+      "on_existing": "keep",
+      "note": "模型自带 Fcl_EYE_Sorrow，与参考模型 Eye_Jito 对应",
+      "sources": [{ "morph": "じと目", "weight": 1.0 }]
+    },
+    {
+      "name": "悲しむ",
+      "name_en": "Wail",
+      "panel": "目",
+      "quality": "approx",
+      "note": "参考模型 Eye_Wail（哭眼）；模型没有专门形状，用 じと目 近似",
+      "sources": [{ "morph": "じと目", "weight": 1.0 }]
+    },
+    {
+      "name": "怒り目",
+      "name_en": "AngryEye",
+      "panel": "目",
+      "quality": "approx",
+      "note": "参考模型 Eye_Hostility；模型没有专门的怒眼，用 ｷﾘｯ(Fcl_EYE_Angry) 近似",
+      "sources": [{ "morph": "ｷﾘｯ", "weight": 1.0 }]
+    },
+    {
+      "name": "ジト目",
+      "name_en": "TiredEye",
+      "panel": "目",
+      "quality": "approx",
+      "note": "参考模型里 Eye_Tired 与 じと目(Eye_Jito) 是两种表情；模型只有一种，用 じと目 近似",
+      "sources": [{ "morph": "じと目", "weight": 1.0 }]
+    },
+    {
+      "name": "眼角上",
+      "name_en": "EyeCornerUp",
+      "panel": "目",
+      "quality": "approx",
+      "note": "参考模型 Eye_WUp；用上眼睑上提 上瞼↑(Fcl_EYE_Spread) 近似",
+      "sources": [{ "morph": "上瞼↑", "weight": 1.0 }]
+    },
+    {
+      "name": "眼角up",
+      "name_en": "EyeCornerUpEn",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "note": "BEHIND.vmd 里的英文写法",
+      "sources": [{ "morph": "上瞼↑", "weight": 1.0 }]
+    },
+    {
+      "name": "眼角下",
+      "name_en": "EyeCornerDown",
+      "panel": "目",
+      "quality": "approx",
+      "note": "参考模型 Eye_WDown；用下眼睑上推 下瞼上げ 近似，形态请目视确认",
+      "sources": [{ "morph": "下瞼上げ", "weight": 1.0 }]
+    },
+    {
+      "name": "眼角down",
+      "name_en": "EyeCornerDownEn",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "note": "BEHIND.vmd 里的英文写法",
+      "sources": [{ "morph": "下瞼上げ", "weight": 1.0 }]
+    },
+    {
+      "name": "下眼上",
+      "name_en": "LowerLidUp",
+      "panel": "目",
+      "quality": "approx",
+      "note": "参考模型 Eye_Lowereyelid；模型里叫 下瞼上げ",
+      "sources": [{ "morph": "下瞼上げ", "weight": 1.0 }]
+    },
+    {
+      "name": "下眼up",
+      "name_en": "LowerLidUpEn",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [{ "morph": "下瞼上げ", "weight": 1.0 }]
+    },
+
+    {
+      "name": "あ",
+      "name_en": "A",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "note": "已是「顶点+颌骨骼」的组合，动作里最高频（本机语料 5959 次）",
+      "sources": [{ "morph": "あ", "weight": 1.0 }]
+    },
+    {
+      "name": "い",
+      "name_en": "I",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "い", "weight": 1.0 }]
+    },
+    {
+      "name": "う",
+      "name_en": "U",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "う", "weight": 1.0 }]
+    },
+    {
+      "name": "え",
+      "name_en": "E",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "え", "weight": 1.0 }]
+    },
+    {
+      "name": "お",
+      "name_en": "O",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "お", "weight": 1.0 }]
+    },
+    {
+      "name": "ワ",
+      "name_en": "Wa",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "ワ", "weight": 1.0 }]
+    },
+    {
+      "name": "ワ２",
+      "name_en": "Wa2",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型里是第二种「哇」口型；模型没有对应形状，用 わー 近似",
+      "sources": [{ "morph": "わー", "weight": 1.0 }]
+    },
+    {
+      "name": "ワ2",
+      "name_en": "Wa2Half",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [{ "morph": "わー", "weight": 1.0 }]
+    },
+    {
+      "name": "ん",
+      "name_en": "N",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "ん", "weight": 1.0 }]
+    },
+    {
+      "name": "い１",
+      "name_en": "I1",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型有 i 口型的三个变体；模型只有 い，统一用 い 近似",
+      "sources": [{ "morph": "い", "weight": 1.0 }]
+    },
+    {
+      "name": "い1",
+      "name_en": "I1Half",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [{ "morph": "い", "weight": 1.0 }]
+    },
+    {
+      "name": "い２",
+      "name_en": "I2",
+      "panel": "口",
+      "quality": "approx",
+      "sources": [{ "morph": "い", "weight": 1.0 }]
+    },
+    {
+      "name": "い2",
+      "name_en": "I2Half",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [{ "morph": "い", "weight": 1.0 }]
+    },
+    {
+      "name": "い３",
+      "name_en": "I3",
+      "panel": "口",
+      "quality": "approx",
+      "sources": [{ "morph": "い", "weight": 1.0 }]
+    },
+    {
+      "name": "い3",
+      "name_en": "I3Half",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [{ "morph": "い", "weight": 1.0 }]
+    },
+    {
+      "name": "あ２",
+      "name_en": "A2",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型里是张口更大的 a；模型没有专门形状，用「あ」的完整组合叠加一半 あああ(jawOpen) 近似",
+      "sources": [
+        { "morph": "あ", "weight": 1.0 },
+        { "morph": "あああ", "weight": 0.5 }
+      ]
+    },
+    {
+      "name": "あ2",
+      "name_en": "A2Half",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [
+        { "morph": "あ", "weight": 1.0 },
+        { "morph": "あああ", "weight": 0.5 }
+      ]
+    },
+    {
+      "name": "ω",
+      "name_en": "CatMouth",
+      "panel": "口",
+      "quality": "exact",
+      "note": "参考模型 Mouth_Neko01；模型里叫 ω口",
+      "sources": [{ "morph": "ω口", "weight": 1.0 }]
+    },
+    {
+      "name": "てへぺろ",
+      "name_en": "Tehepero",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型 Mouth_Pero01；模型只有吐舌 ぺろり 可用（不含眨眼部分）",
+      "sources": [{ "morph": "ぺろり", "weight": 1.0 }]
+    },
+    {
+      "name": "ぺろっ",
+      "name_en": "Pero",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型 Mouth_Pero02；用 ぺろり 近似",
+      "sources": [{ "morph": "ぺろり", "weight": 1.0 }]
+    },
+    {
+      "name": "にやり",
+      "name_en": "Smirk",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型 Mouth_Smile01；模型只有较强的 にやり2，用其 0.6 倍近似较轻的坏笑",
+      "sources": [
+        { "morph": "にやり2右", "weight": 0.6 },
+        { "morph": "にやり2左", "weight": 0.6 }
+      ]
+    },
+    {
+      "name": "にやり２",
+      "name_en": "Smirk2",
+      "panel": "口",
+      "quality": "exact",
+      "note": "参考模型的标准写法（全角数字 ２）；模型自带 にやり2(mouthSmile) 的内容",
+      "sources": [{ "morph": "にやり2", "weight": 1.0 }]
+    },
+    {
+      "name": "にやり2",
+      "name_en": "Smirk2Half",
+      "panel": "システム",
+      "quality": "exact",
+      "alias": true,
+      "on_existing": "keep",
+      "note": "模型自带的半角数字写法，内容就是 にやり２；移入系统面板避免列表重复（动作仍可驱动）",
+      "sources": [{ "morph": "にやり2", "weight": 1.0 }]
+    },
+    {
+      "name": "にやり３",
+      "name_en": "Smirk3",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型 Mouth_Doya02；模型没有第三种坏笑，用 にやり2 近似",
+      "sources": [{ "morph": "にやり2", "weight": 1.0 }]
+    },
+    {
+      "name": "にやり3",
+      "name_en": "Smirk3Half",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [{ "morph": "にやり2", "weight": 1.0 }]
+    },
+    {
+      "name": "口角上げ",
+      "name_en": "MouthCornerUp",
+      "panel": "口",
+      "quality": "approx",
+      "note": "模型没有单独的嘴角上抬，用 にっこり 的 0.6 倍近似（ワールドイズマイン 等动作会驱动）",
+      "sources": [{ "morph": "にっこり", "weight": 0.6 }]
+    },
+    {
+      "name": "口角下げ",
+      "name_en": "MouthCornerDown",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "note": "模型自带（Λ + 口横広げ），内容与参考模型 Mouth_Default 同类",
+      "sources": [{ "morph": "口角下げ", "weight": 1.0 }]
+    },
+    {
+      "name": "口横広げ",
+      "name_en": "MouthWide",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "note": "对应参考模型 Mouth_Line01",
+      "sources": [{ "morph": "口横広げ", "weight": 1.0 }]
+    },
+    {
+      "name": "口横狭め",
+      "name_en": "MouthNarrow",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型 Mouth_Line02；模型没有收窄形状，用 口横広げ 反向（负权重）近似，形态请目视确认",
+      "sources": [{ "morph": "口横広げ", "weight": -0.8 }]
+    },
+    {
+      "name": "舌広げ",
+      "name_en": "TongueWide",
+      "panel": "口",
+      "quality": "approx",
+      "note": "参考模型 Mouth_BigTongue01；用模型自带的吐舌 ぺろり 近似",
+      "sources": [{ "morph": "ぺろり", "weight": 1.0 }]
+    },
+
+    {
+      "name": "照れ",
+      "name_en": "Blush",
+      "panel": "その他",
+      "quality": "unmapped",
+      "enabled": false,
+      "note": "参考模型用一条专门的「照れ」材质（默认 alpha=0）做加法显现；本模型没有这种材质，原有的 照れ 是「0 条材质操作」的空材质表情。要真正做腮红需要新增材质/贴图，超出本工具范围；不生成等价于动作无效果",
+      "material": {
+        "operations": [
+          {
+            "material": "00_Face",
+            "mode": "mul",
+            "diffuse": [1.0, 0.86, 0.86, 1.0],
+            "ambient": [1.0, 0.9, 0.9]
+          }
+        ]
+      }
+    },
+    {
+      "name": "エッジOFF",
+      "name_en": "EdgeOff",
+      "panel": "その他",
+      "quality": "exact",
+      "on_existing": "keep",
+      "note": "模型自带材质表情",
+      "sources": [{ "morph": "エッジOFF", "weight": 1.0 }]
+    },
+    {
+      "name": "喜び",
+      "name_en": "Joy",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "note": "BEHIND.vmd 的占位键；模型里对应的整体表情是 喜(Fcl_ALL_Joy)",
+      "sources": [{ "morph": "喜", "weight": 1.0 }]
+    },
+
+    {
+      "name": "ひそめ",
+      "name_en": "Frown",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "note": "扩展名：参考模型没有，模型自带 brow_Frown",
+      "sources": [{ "morph": "ひそめ", "weight": 1.0 }]
+    },
+    {
+      "name": "ひそめる2",
+      "name_en": "InnerBrowUp",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "ひそめる2", "weight": 1.0 }]
+    },
+    {
+      "name": "はんっ",
+      "name_en": "SmugBrow",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "はんっ", "weight": 1.0 }]
+    },
+    {
+      "name": "真面目2",
+      "name_en": "Serious2",
+      "panel": "眉",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "真面目2", "weight": 1.0 }]
     },
     {
       "name": "困る2",
       "name_en": "SadBrow2",
       "panel": "システム",
       "quality": "approx",
-      "note": "模型没有「困る2」专用形状，用 困る 顶替；BEHIND.vmd 等动作会驱动 困る２",
+      "alias": true,
+      "note": "模型没有「困る2」专用形状，用 困る 顶替（BEHIND.vmd 会驱动 困る２）",
       "sources": [{ "morph": "困る", "weight": 1.0 }]
     },
     {
@@ -52,42 +752,7 @@
       "panel": "システム",
       "quality": "approx",
       "alias": true,
-      "note": "全角数字写法（BEHIND.vmd 使用）",
       "sources": [{ "morph": "困る", "weight": 1.0 }]
-    },
-    {
-      "name": "悲しむ",
-      "name_en": "Sad",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "动作里的写法（表情+目线.vmd）；模型没有整体悲伤表情的眉毛部分可直接借用，用 困る（悲伤眉）近似",
-      "sources": [{ "morph": "困る", "weight": 1.0 }]
-    },
-    {
-      "name": "悲しい",
-      "name_en": "Sad2",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "sources": [{ "morph": "困る", "weight": 1.0 }]
-    },
-    {
-      "name": "前右",
-      "name_en": "BrowFrontR",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "BEHIND.vmd 使用；模型里是 右眉手前",
-      "sources": [{ "morph": "右眉手前", "weight": 1.0 }]
-    },
-    {
-      "name": "前左",
-      "name_en": "BrowFrontL",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "sources": [{ "morph": "左眉手前", "weight": 1.0 }]
     },
     {
       "name": "困る２右",
@@ -106,238 +771,12 @@
       "sources": [{ "morph": "困る左", "weight": 1.0 }]
     },
     {
-      "name": "真面目右",
-      "name_en": "SeriousR",
-      "panel": "眉",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "真面目右", "weight": 1.0 }]
-    },
-    {
-      "name": "真面目左",
-      "name_en": "SeriousL",
-      "panel": "眉",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "真面目左", "weight": 1.0 }]
-    },
-    {
-      "name": "にこり",
-      "name_en": "JoyBrow",
-      "panel": "眉",
-      "quality": "exact",
-      "on_existing": "keep",
-      "note": "模型自带 Fcl_BRW_Fun；にこり2(Fcl_BRW_Joy) 也已是独立表情，无需别名",
-      "sources": [{ "morph": "にこり", "weight": 1.0 }]
-    },
-    {
-      "name": "上",
-      "name_en": "BrowUp",
-      "panel": "眉",
-      "quality": "exact",
-      "on_existing": "keep",
-      "note": "上 + 上右/上左 都已存在",
-      "sources": [{ "morph": "上", "weight": 1.0 }]
-    },
-    {
-      "name": "下",
-      "name_en": "BrowDown",
-      "panel": "眉",
-      "quality": "exact",
-      "on_existing": "keep",
-      "note": "下 + 下右/下左 都已存在",
-      "sources": [{ "morph": "下", "weight": 1.0 }]
-    },
-    {
-      "name": "前",
-      "name_en": "BrowFront",
-      "panel": "眉",
-      "quality": "approx",
-      "note": "标准「前」= 眉毛前移；模型里叫 眉手前（brow_Front）",
-      "sources": [{ "morph": "眉手前", "weight": 1.0 }]
-    },
-    {
-      "name": "真面目",
-      "name_en": "Serious",
-      "panel": "眉",
-      "quality": "exact",
-      "on_existing": "keep",
-      "note": "模型自带 真面目/真面目右/真面目左",
-      "sources": [{ "morph": "真面目", "weight": 1.0 }]
-    },
-    {
-      "name": "ひそめ",
-      "name_en": "Frown",
-      "panel": "眉",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "ひそめ", "weight": 1.0 }]
-    },
-    {
-      "name": "はんっ",
-      "name_en": "Smug",
-      "panel": "眉",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "はんっ", "weight": 1.0 }]
-    },
-
-    {
-      "name": "まばたき",
-      "name_en": "Blink",
-      "panel": "目",
-      "quality": "exact",
-      "on_existing": "rename",
-      "note": "原「まばたき」只有顶点形变（Fcl_EYE_Close），真正完整的表情是 まばたき連動（顶点+眼睑骨骼+眉毛）。原名改存为 まばたき_頂点（移入系统面板），标准名改为完整组合",
-      "sources": [{ "morph": "まばたき連動", "weight": 1.0 }],
-      "expected_sources": ["ｳｨﾝｸ２右", "ウィンク２", "ｳｨﾝｸ２右ボーン", "ウィンク２ボー"]
-    },
-    {
-      "name": "笑い",
-      "name_en": "EyeSmile",
-      "panel": "目",
-      "quality": "exact",
-      "on_existing": "rename",
-      "note": "同 まばたき：标准名改为 笑い連動 的完整组合（笑眼+眼睑骨骼+眉毛）",
-      "sources": [{ "morph": "笑い連動", "weight": 1.0 }]
-    },
-    {
-      "name": "ウィンク",
-      "name_en": "WinkL",
-      "panel": "目",
-      "quality": "exact",
-      "on_existing": "rename",
-      "note": "左眼笑眼闭：改为 ウィンク連動 的完整组合",
-      "sources": [{ "morph": "ウィンク連動", "weight": 1.0 }]
-    },
-    {
-      "name": "ウィンク右",
-      "name_en": "WinkR",
-      "panel": "目",
-      "quality": "exact",
-      "on_existing": "rename",
-      "note": "右眼笑眼闭：改为 ウィンク右連動 的完整组合",
-      "sources": [{ "morph": "ウィンク右連動", "weight": 1.0 }]
-    },
-    {
-      "name": "ウィンク2",
-      "name_en": "Wink2L",
-      "panel": "目",
-      "quality": "exact",
-      "note": "标准写法（半角数字 2）。模型原有的是全角写法 ウィンク２，这里把两种写法都补齐",
-      "sources": [{ "morph": "ウィンク２連動", "weight": 1.0 }]
-    },
-    {
-      "name": "ウィンク２",
-      "name_en": "Wink2LFull",
-      "panel": "目",
-      "quality": "exact",
-      "on_existing": "rename",
-      "note": "全角写法（Facials.vmd / ワールドイズマイン.vmd 使用）：原名改存为 ウィンク２_頂点，标准名改为完整组合",
-      "sources": [{ "morph": "ウィンク２連動", "weight": 1.0 }]
-    },
-    {
-      "name": "ウィンク2右",
-      "name_en": "Wink2R",
-      "panel": "目",
-      "quality": "exact",
-      "note": "标准写法（半角数字 2）",
-      "sources": [{ "morph": "ｳｨﾝｸ２右連動", "weight": 1.0 }]
-    },
-    {
-      "name": "ウィンク２右",
-      "name_en": "Wink2RFull",
-      "panel": "目",
-      "quality": "exact",
-      "alias": true,
-      "note": "全角数字写法（ワールドイズマイン.vmd 使用）",
-      "sources": [{ "morph": "ｳｨﾝｸ２右連動", "weight": 1.0 }]
-    },
-    {
-      "name": "ｳｨﾝｸ２右",
-      "name_en": "Wink2RHalf",
-      "panel": "システム",
-      "quality": "exact",
-      "on_existing": "rename",
-      "alias": true,
-      "note": "半角片假名写法（导出器产物，Facials.vmd 使用）：原名改存为 ｳｨﾝｸ２右_頂点，标准名改为完整组合",
-      "sources": [{ "morph": "ｳｨﾝｸ２右連動", "weight": 1.0 }]
-    },
-    {
-      "name": "じと目",
-      "name_en": "Jitome",
-      "panel": "目",
-      "quality": "exact",
-      "on_existing": "keep",
-      "note": "模型自带 Fcl_EYE_Sorrow",
-      "sources": [{ "morph": "じと目", "weight": 1.0 }]
-    },
-    {
-      "name": "ジト目",
-      "name_en": "JitomeKana",
-      "panel": "システム",
-      "quality": "exact",
-      "alias": true,
-      "note": "片假名写法（BEHIND.vmd 使用）",
-      "sources": [{ "morph": "じと目", "weight": 1.0 }]
-    },
-    {
-      "name": "なごみ",
-      "name_en": "Nagomi",
-      "panel": "目",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "なごみ", "weight": 1.0 }]
-    },
-    {
-      "name": "なごみ右",
-      "name_en": "NagomiR",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "BEHIND.vmd / 表情+目线.vmd 使用；模型只有双眼的 なごみ，单眼无法分开，用整只近似",
-      "sources": [{ "morph": "なごみ", "weight": 1.0 }]
-    },
-    {
-      "name": "なごみ左",
-      "name_en": "NagomiL",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "sources": [{ "morph": "なごみ", "weight": 1.0 }]
-    },
-    {
-      "name": "下眼上",
-      "name_en": "LowerLidUp2",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "动作里的写法（表情+目线.vmd）；模型里叫 下瞼上げ",
-      "sources": [{ "morph": "下瞼上げ", "weight": 1.0 }]
-    },
-    {
-      "name": "下眼up",
-      "name_en": "LowerLidUp3",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "sources": [{ "morph": "下瞼上げ", "weight": 1.0 }]
-    },
-    {
-      "name": "怒り目",
-      "name_en": "AngryEye",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "动作里指「生气的眼睛」；模型没有专门的怒眼，用 ｷﾘｯ(Fcl_EYE_Angry) 近似",
-      "sources": [{ "morph": "ｷﾘｯ", "weight": 1.0 }]
-    },
-    {
       "name": "はぅ",
       "name_en": "Hau",
       "panel": "目",
       "quality": "exact",
       "on_existing": "keep",
+      "note": "扩展名：模型自带（材质+顶点）",
       "sources": [{ "morph": "はぅ", "weight": 1.0 }]
     },
     {
@@ -347,6 +786,32 @@
       "quality": "exact",
       "on_existing": "keep",
       "sources": [{ "morph": "はちゅ目", "weight": 1.0 }]
+    },
+    {
+      "name": "はちゅ目縦潰れ",
+      "name_en": "HachuEyeV",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "note": "动作里的细分写法；模型只有 はちゅ目 一种",
+      "sources": [{ "morph": "はちゅ目", "weight": 1.0 }]
+    },
+    {
+      "name": "はちゅ目横潰れ",
+      "name_en": "HachuEyeH",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [{ "morph": "はちゅ目", "weight": 1.0 }]
+    },
+    {
+      "name": "瞳縦潰れ",
+      "name_en": "IrisVertical",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "note": "动作里的细分写法；用 瞳小 近似",
+      "sources": [{ "morph": "瞳小", "weight": 1.0 }]
     },
     {
       "name": "星目",
@@ -363,14 +828,6 @@
       "quality": "exact",
       "on_existing": "keep",
       "sources": [{ "morph": "はぁと", "weight": 1.0 }]
-    },
-    {
-      "name": "びっくり",
-      "name_en": "Surprised",
-      "panel": "目",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "びっくり", "weight": 1.0 }]
     },
     {
       "name": "びっくり2",
@@ -485,7 +942,7 @@
       "panel": "システム",
       "quality": "approx",
       "alias": true,
-      "note": "对应模型的 highlight_down（highlight_down_left/right 的组合）",
+      "note": "对应模型的 highlight_down（左右组合）",
       "sources": [
         { "morph": "highlight_down", "weight": 1.0 },
         { "morph": "highlight_down2", "weight": 1.0 }
@@ -501,11 +958,27 @@
     },
     {
       "name": "下瞼上げ",
-      "name_en": "LowerLidUp",
+      "name_en": "LowerLidUpVertex",
       "panel": "目",
       "quality": "exact",
       "on_existing": "keep",
       "sources": [{ "morph": "下瞼上げ", "weight": 1.0 }]
+    },
+    {
+      "name": "下瞼上げ2",
+      "name_en": "LowerLidUp2",
+      "panel": "目",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "下瞼上げ2", "weight": 1.0 }]
+    },
+    {
+      "name": "上瞼↑",
+      "name_en": "UpperLidUp",
+      "panel": "目",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "上瞼↑", "weight": 1.0 }]
     },
     {
       "name": "目を細める",
@@ -542,197 +1015,12 @@
       "sources": [{ "morph": "ｷﾘｯ", "weight": 1.0 }]
     },
     {
-      "name": "カメラ目線",
-      "name_en": "CameraGaze",
-      "panel": "システム",
-      "quality": "unmapped",
-      "enabled": false,
-      "note": "ザムザ_facial 使用 66 次。VRoid 脸没有专门的「看向镜头」表情，模型的默认视线即为正前方；不生成等价于无操作（MMD 会直接忽略该表情名），不会出错"
-    },
-    {
-      "name": "涙",
-      "name_en": "Tears",
-      "panel": "その他",
-      "quality": "unmapped",
-      "enabled": false,
-      "note": "模型没有眼泪的顶点/材质表情，无法从原有表情复制出来；要做需要新增泪痕顶点或泪材质。不生成等价于无操作"
-    },
-    {
-      "name": "涙１",
-      "name_en": "Tears1",
-      "panel": "システム",
-      "quality": "unmapped",
-      "enabled": false,
-      "alias": true,
-      "note": "同 涙，缺少来源"
-    },
-    {
-      "name": "涙２",
-      "name_en": "Tears2",
-      "panel": "システム",
-      "quality": "unmapped",
-      "enabled": false,
-      "alias": true,
-      "note": "同 涙，缺少来源"
-    },
-
-    {
-      "name": "あ",
-      "name_en": "A",
-      "panel": "口",
+      "name": "なぬ！",
+      "name_en": "Nanu",
+      "panel": "目",
       "quality": "exact",
       "on_existing": "keep",
-      "note": "已是「顶点+颌骨骼」的组合，动作里最高频（本机语料 5959 次）",
-      "sources": [{ "morph": "あ", "weight": 1.0 }]
-    },
-    {
-      "name": "い",
-      "name_en": "I",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "い", "weight": 1.0 }]
-    },
-    {
-      "name": "う",
-      "name_en": "U",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "う", "weight": 1.0 }]
-    },
-    {
-      "name": "え",
-      "name_en": "E",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "え", "weight": 1.0 }]
-    },
-    {
-      "name": "お",
-      "name_en": "O",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "お", "weight": 1.0 }]
-    },
-    {
-      "name": "あ2",
-      "name_en": "A2",
-      "panel": "口",
-      "quality": "approx",
-      "note": "标准「あ2」是张口更大的 a；模型没有单独表情，用「あ」的完整组合（顶点+颌骨骼）叠加一半的 あああ(jawOpen) 近似，形态请目视确认",
-      "sources": [
-        { "morph": "あ", "weight": 1.0 },
-        { "morph": "あああ", "weight": 0.5 }
-      ]
-    },
-    {
-      "name": "あ２",
-      "name_en": "A2Full",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "全角数字写法（Facials.vmd / BEHIND.vmd 使用）",
-      "sources": [
-        { "morph": "あ", "weight": 1.0 },
-        { "morph": "あああ", "weight": 0.5 }
-      ]
-    },
-    {
-      "name": "え2",
-      "name_en": "E2",
-      "panel": "口",
-      "quality": "approx",
-      "note": "キュートなカノジョ 使用；模型没有更大的 e，先用 え 顶替",
-      "sources": [{ "morph": "え", "weight": 1.0 }]
-    },
-    {
-      "name": "え２",
-      "name_en": "E2Full",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "sources": [{ "morph": "え", "weight": 1.0 }]
-    },
-    {
-      "name": "い１",
-      "name_en": "I1",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "BEHIND.vmd / 表情+目线.vmd 使用；模型没有 i1/i2 细分，统一用 い 近似",
-      "sources": [{ "morph": "い", "weight": 1.0 }]
-    },
-    {
-      "name": "い２",
-      "name_en": "I2",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "sources": [{ "morph": "い", "weight": 1.0 }]
-    },
-    {
-      "name": "ん",
-      "name_en": "N",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "ん", "weight": 1.0 }]
-    },
-    {
-      "name": "ワ",
-      "name_en": "Wa",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "ワ", "weight": 1.0 }]
-    },
-    {
-      "name": "▲",
-      "name_en": "TriangleMouth",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "▲", "weight": 1.0 }]
-    },
-    {
-      "name": "∧",
-      "name_en": "WedgeMouth",
-      "panel": "口",
-      "quality": "exact",
-      "note": "模型里是希腊字母 Λ（U+039B），动作里用的是数学符号 ∧（U+2227），必须补一个同名表情",
-      "sources": [{ "morph": "Λ", "weight": 1.0 }]
-    },
-    {
-      "name": "□",
-      "name_en": "SquareMouth",
-      "panel": "口",
-      "quality": "approx",
-      "enabled": false,
-      "note": "模型没有方口专用形状；可用 あああ + 口横広げ 近似，但形态需要目视确认，默认不生成（不生成 = 动作无效果，不会出错）",
-      "sources": [
-        { "morph": "あああ", "weight": 0.6 },
-        { "morph": "口横広げ", "weight": 0.5 }
-      ]
-    },
-    {
-      "name": "ω",
-      "name_en": "CatMouth",
-      "panel": "口",
-      "quality": "exact",
-      "note": "模型里叫 ω口",
-      "sources": [{ "morph": "ω口", "weight": 1.0 }]
-    },
-    {
-      "name": "ω□",
-      "name_en": "CatMouthSquare",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "模型里最接近的是 ω口2，请目视确认",
-      "sources": [{ "morph": "ω口2", "weight": 1.0 }]
+      "sources": [{ "morph": "なぬ！", "weight": 1.0 }]
     },
     {
       "name": "にっこり",
@@ -740,44 +1028,8 @@
       "panel": "口",
       "quality": "exact",
       "on_existing": "keep",
+      "note": "扩展名：参考模型没有，模型自带 Fcl_MTH_Fun，动作常用",
       "sources": [{ "morph": "にっこり", "weight": 1.0 }]
-    },
-    {
-      "name": "にやり",
-      "name_en": "Smirk",
-      "panel": "口",
-      "quality": "approx",
-      "note": "模型只有 にやり2（较强的坏笑），用 0.6 倍近似较轻的 にやり",
-      "sources": [
-        { "morph": "にやり2右", "weight": 0.6 },
-        { "morph": "にやり2左", "weight": 0.6 }
-      ]
-    },
-    {
-      "name": "にやり2",
-      "name_en": "Smirk2",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "にやり2", "weight": 1.0 }]
-    },
-    {
-      "name": "にやり２",
-      "name_en": "Smirk2Full",
-      "panel": "システム",
-      "quality": "exact",
-      "alias": true,
-      "note": "全角数字写法（Facials.vmd / BEHIND.vmd 使用）",
-      "sources": [{ "morph": "にやり2", "weight": 1.0 }]
-    },
-    {
-      "name": "にやり３",
-      "name_en": "Smirk3Full",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "模型没有 にやり3，用 にやり2 顶替",
-      "sources": [{ "morph": "にやり2", "weight": 1.0 }]
     },
     {
       "name": "むっ",
@@ -820,30 +1072,6 @@
       "sources": [{ "morph": "口下", "weight": 1.0 }]
     },
     {
-      "name": "口角上げ",
-      "name_en": "MouthCornerUp",
-      "panel": "口",
-      "quality": "approx",
-      "note": "模型没有单独的嘴角上抬，用 にっこり 的 0.6 倍近似（ワールドイズマイン 等动作会驱动）",
-      "sources": [{ "morph": "にっこり", "weight": 0.6 }]
-    },
-    {
-      "name": "口角下げ",
-      "name_en": "MouthCornerDown",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "口角下げ", "weight": 1.0 }]
-    },
-    {
-      "name": "口横広げ",
-      "name_en": "MouthWide",
-      "panel": "口",
-      "quality": "exact",
-      "on_existing": "keep",
-      "sources": [{ "morph": "口横広げ", "weight": 1.0 }]
-    },
-    {
       "name": "うー",
       "name_en": "Pucker",
       "panel": "口",
@@ -868,6 +1096,14 @@
       "sources": [{ "morph": "薄笑い", "weight": 1.0 }]
     },
     {
+      "name": "んむー",
+      "name_en": "MouthRoll",
+      "panel": "口",
+      "quality": "exact",
+      "on_existing": "keep",
+      "sources": [{ "morph": "んむー", "weight": 1.0 }]
+    },
+    {
       "name": "ぺろり",
       "name_en": "TongueUp",
       "panel": "口",
@@ -876,30 +1112,170 @@
       "sources": [{ "morph": "ぺろり", "weight": 1.0 }]
     },
     {
-      "name": "ぺろっ",
-      "name_en": "Tongue",
+      "name": "てへぺろ２",
+      "name_en": "Tehepero2",
       "panel": "システム",
       "quality": "approx",
       "alias": true,
-      "note": "BEHIND.vmd 使用；用 ぺろり 近似",
+      "note": "动作里的第二种写法（全角数字）；与 てへぺろ 同一近似",
       "sources": [{ "morph": "ぺろり", "weight": 1.0 }]
     },
     {
-      "name": "てへぺろ",
-      "name_en": "Tehepero",
+      "name": "口幅狭",
+      "name_en": "MouthNarrowAlt",
       "panel": "システム",
       "quality": "approx",
       "alias": true,
-      "note": "标准「てへぺろ」= 吐舌 + 眨眼，模型只有吐舌，这里只近似吐舌部分",
-      "sources": [{ "morph": "ぺろり", "weight": 1.0 }]
+      "note": "ワールドイズマイン（男性モデル向け）等动作的写法；与 口横狭め 同一近似",
+      "sources": [{ "morph": "口横広げ", "weight": -0.8 }]
     },
     {
-      "name": "んむー",
-      "name_en": "MouthRoll",
+      "name": "▲",
+      "name_en": "TriangleMouth",
       "panel": "口",
       "quality": "exact",
       "on_existing": "keep",
-      "sources": [{ "morph": "んむー", "weight": 1.0 }]
+      "sources": [{ "morph": "▲", "weight": 1.0 }]
+    },
+    {
+      "name": "∧",
+      "name_en": "WedgeMouth",
+      "panel": "口",
+      "quality": "exact",
+      "note": "模型里是希腊字母 Λ（U+039B），动作里用的是数学符号 ∧（U+2227），字形不同必须补一个同名表情",
+      "sources": [{ "morph": "Λ", "weight": 1.0 }]
+    },
+    {
+      "name": "□",
+      "name_en": "SquareMouth",
+      "panel": "口",
+      "quality": "approx",
+      "enabled": false,
+      "note": "模型没有方口专用形状；可用 あああ + 口横広げ 近似，但形态需要目视确认，默认不生成（不生成 = 动作无效果，不会出错）",
+      "sources": [
+        { "morph": "あああ", "weight": 0.6 },
+        { "morph": "口横広げ", "weight": 0.5 }
+      ]
+    },
+    {
+      "name": "ω□",
+      "name_en": "CatMouthSquare",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "note": "模型里最接近的是 ω口2，请目视确认",
+      "sources": [{ "morph": "ω口2", "weight": 1.0 }]
+    },
+    {
+      "name": "え2",
+      "name_en": "E2",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "note": "キュートなカノジョ 使用；模型没有更大的 e，先用 え 顶替",
+      "sources": [{ "morph": "え", "weight": 1.0 }]
+    },
+    {
+      "name": "え２",
+      "name_en": "E2Full",
+      "panel": "システム",
+      "quality": "approx",
+      "alias": true,
+      "sources": [{ "morph": "え", "weight": 1.0 }]
+    },
+    {
+      "name": "まばたき連動",
+      "name_en": "BlinkLinked",
+      "panel": "システム",
+      "quality": "exact",
+      "on_existing": "keep",
+      "hide": true,
+      "note": "导出器生成的联动组合，内容已由标准名 まばたき 覆盖；移入系统面板减少列表重复（动作仍可驱动）",
+      "sources": [{ "morph": "まばたき連動", "weight": 1.0 }]
+    },
+    {
+      "name": "笑い連動",
+      "name_en": "EyeSmileLinked",
+      "panel": "システム",
+      "quality": "exact",
+      "on_existing": "keep",
+      "hide": true,
+      "sources": [{ "morph": "笑い連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク連動",
+      "name_en": "WinkLinked",
+      "panel": "システム",
+      "quality": "exact",
+      "on_existing": "keep",
+      "hide": true,
+      "sources": [{ "morph": "ウィンク連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク右連動",
+      "name_en": "WinkRLinked",
+      "panel": "システム",
+      "quality": "exact",
+      "on_existing": "keep",
+      "hide": true,
+      "sources": [{ "morph": "ウィンク右連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ウィンク２連動",
+      "name_en": "Wink2Linked",
+      "panel": "システム",
+      "quality": "exact",
+      "on_existing": "keep",
+      "hide": true,
+      "sources": [{ "morph": "ウィンク２連動", "weight": 1.0 }]
+    },
+    {
+      "name": "ｳｨﾝｸ２右連動",
+      "name_en": "Wink2RLinked",
+      "panel": "システム",
+      "quality": "exact",
+      "on_existing": "keep",
+      "hide": true,
+      "sources": [{ "morph": "ｳｨﾝｸ２右連動", "weight": 1.0 }]
+    },
+    {
+      "name": "カメラ目線",
+      "name_en": "CameraGaze",
+      "panel": "目",
+      "quality": "approx",
+      "note": "参考模型也没有这个形状。用「视线反向抵消」近似：把 目上/目下/目頭広/目尻広 以 -1 权重相减，动作同时驱动视线表情时把视线拉回正前方（VRoid 脸的默认视线方向）；单独驱动时无任何效果。ザムザ_facial 里 34 个有效关键帧都驱动它",
+      "sources": [
+        { "morph": "目上", "weight": -1.0 },
+        { "morph": "目下", "weight": -1.0 },
+        { "morph": "目頭広", "weight": -1.0 },
+        { "morph": "目尻広", "weight": -1.0 }
+      ]
+    },
+    {
+      "name": "涙",
+      "name_en": "Tears",
+      "panel": "その他",
+      "quality": "unmapped",
+      "enabled": false,
+      "note": "参考模型也没有眼泪表情；要做需要新增泪痕顶点或泪材质。不生成等价于无操作"
+    },
+    {
+      "name": "涙１",
+      "name_en": "Tears1",
+      "panel": "システム",
+      "quality": "unmapped",
+      "enabled": false,
+      "alias": true,
+      "note": "同 涙，缺少来源"
+    },
+    {
+      "name": "涙２",
+      "name_en": "Tears2",
+      "panel": "システム",
+      "quality": "unmapped",
+      "enabled": false,
+      "alias": true,
+      "note": "同 涙，缺少来源"
     },
     {
       "name": "歯無し上",
@@ -916,43 +1292,6 @@
       "quality": "unmapped",
       "enabled": false,
       "note": "同上"
-    },
-
-    {
-      "name": "照れ",
-      "name_en": "Blush",
-      "panel": "その他",
-      "quality": "exact",
-      "enabled": false,
-      "note": "模型原有的 照れ 是一条「0 条材质操作」的空材质表情，驱动它没有任何变化。开启本条目会把它改写成对脸部材质做乘算染色的材质表情（只有一条材质操作，可自行调整颜色），但整体泛红并非真正的腮红，请目视确认后再用 --with-disabled 生成",
-      "material": {
-        "operations": [
-          {
-            "material": "00_Face",
-            "mode": "mul",
-            "diffuse": [1.0, 0.86, 0.86, 1.0],
-            "ambient": [1.0, 0.9, 0.9]
-          }
-        ]
-      }
-    },
-    {
-      "name": "喜び",
-      "name_en": "Joy",
-      "panel": "システム",
-      "quality": "approx",
-      "alias": true,
-      "note": "BEHIND.vmd 使用；模型里对应的整体表情是 喜(Fcl_ALL_Joy)",
-      "sources": [{ "morph": "喜", "weight": 1.0 }]
-    },
-    {
-      "name": "エッジOFF",
-      "name_en": "EdgeOff",
-      "panel": "その他",
-      "quality": "exact",
-      "on_existing": "keep",
-      "note": "模型自带材质表情，可直接用",
-      "sources": [{ "morph": "エッジOFF", "weight": 1.0 }]
     }
   ]
 }
