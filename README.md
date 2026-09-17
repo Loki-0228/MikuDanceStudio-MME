@@ -117,12 +117,17 @@ input fixes, crash diagnostics, and build and release organization.
 
 ### Acknowledgments
 
-* Thank you to Yu Higuchi (樋口優), the original author of
-  [MikuMikuDance](https://learnmmd.com/downloads/), and to the contributors to
-  the original port for the foundation of this project.
-* [Bullet Physics](https://github.com/bulletphysics/bullet3) (zlib license)
-* The MikuMikuEffect (MME) community effect ecosystem — the 37 `Exp*` APIs in
-  `exports/` are compatible with it
+* **Yu Higuchi (樋口優)**, original author of
+  [MikuMikuDance](https://learnmmd.com/downloads/), whose application provides
+  the behavior and feature reference for this project.
+* **jstzwj and the upstream contributors**, for their work on the
+  [MikuDanceStudio port](https://github.com/jstzwj/MikuDanceStudio).
+* **舞力介入P**, original author of MikuMikuEffect (MME), for bringing effect
+  extensions to MMD. See the [MME introduction coauthored by its creator](https://codezine.jp/article/detail/5997).
+* **MME community effect authors and contributors**, for sharing effects,
+  tools, and knowledge.
+* **[Bullet Physics](https://github.com/bulletphysics/bullet3) developers and
+  contributors**, for the physics engine used in this project (zlib license).
 
 ### License
 
@@ -156,79 +161,127 @@ VMD/VPD 动作数据，在 DirectX 9 视口中编辑骨骼/形态/相机/照明/
 
 ### 从源码构建
 
-依赖：Windows 10/11、Visual Studio 2022（v143 工具集 + C++ 桌面开发工作负载）、
-[CMake](https://cmake.org/) ≥ 3.21、[Conan](https://conan.io/) 2.x。
+#### 准备环境
+
+- Windows 10/11。
+- Visual Studio 2022：安装 **C++ 桌面开发**工作负载和 **v143** 工具集。
+- [CMake](https://cmake.org/) ≥ 3.21、[Conan](https://conan.io/) 2.x。
+
+以下命令均在仓库根目录执行，构建目标为 x64 Release。
+`profiles/x64` 会通过 `include(default)` 继承 Conan 默认配置，再指定 x64 架构；
+请先确保默认 profile 已配置为 Windows + MSVC。
+
+#### 1. 准备 Bullet 源码
+
+下载 [Bullet 2.75 源码压缩包](https://github.com/bulletphysics/bullet3/archive/refs/tags/2.75.zip)，
+将其中的源码目录内容解压到 `recipes/bullet275/bullet-src/`。
+确认目录结构为 `recipes/bullet275/bullet-src/src/`，不要多套一层压缩包目录。
+本地 Conan 配方会使用这些源码构建依赖。
+
+#### 2. 安装依赖并编译
 
 ```bat
-:: 1) 取得 Bullet 2.75 源码（Conan 本地配方使用）
-::    下载 https://github.com/bulletphysics/bullet3/archive/refs/tags/2.75.zip
-::    解压到 recipes/bullet275/bullet-src/
-
-:: 2) 注册本地配方并安装依赖（对齐 x64 原版）
 conan export recipes/bullet275
 conan install . --profile:all profiles/x64 --build=missing -s build_type=Release
-
-:: 3) 配置并构建
 cmake --preset conan-default
 cmake --build build --config Release
 ```
 
-产物：`build/Release/MikuMikuDance.exe`（GUI 主程序）与
-`build/Release/Data/MMDxShow.dll`（DirectShow 推源过滤器）。该过滤器由内嵌清单按
-`Data\MMDxShow.dll` 免注册加载 COM，所以构建树里也放在 `Data\` 下，与原版 MMD 的发布布局
-一致；静态库/导入库、PDB 等其它构建产物不落在运行目录（分别在 `build/lib`、
-`build/symbols`），运行目录只有程序本体和这个 `Data\`。MMDxShow.dll 只在 AVI 录制时加载，
-缺少它不影响启动。运行时还需把 `toon01.bmp..toon10.bmp` 等 toon 纹理放在工作目录 `Data/`
-下。发布目录只含发布文件：
+构建完成后，主要文件如下：
+
+| 路径 | 用途 |
+| --- | --- |
+| `build/Release/MikuMikuDance.exe` | GUI 主程序 |
+| `build/Release/Data/MMDxShow.dll` | AVI 录制使用的 DirectShow 推源过滤器 |
+| `build/lib/` | 静态库和导入库 |
+| `build/symbols/` | 用于调试和崩溃定位的 PDB 符号文件 |
+
+运行前，还需将 `toon01.bmp` 至 `toon10.bmp` 等 toon 纹理放在**工作目录**的 `Data/` 下。
+例如，以 `build/Release/` 为工作目录启动时，纹理应放在 `build/Release/Data/`。
+
+`MMDxShow.dll` 通过程序内嵌清单从 `Data/MMDxShow.dll` 加载，无需手动注册 COM。
+请保留这一相对路径；该 DLL 仅在 AVI 录制时加载，缺少它不影响程序启动。
+
+#### 3. 整理发布目录
 
 ```bat
 cmake --install build --config Release --prefix dist
-:: dist\MikuMikuDance.exe  dist\Data\MMDxShow.dll
 ```
 
-回归测试不属于发布产物（测试可执行文件已从默认构建中排除，也没有安装规则）：
+安装规则会将以下文件放入 `dist/`：
+
+```text
+dist/
+├── MikuMikuDance.exe
+└── Data/
+    └── MMDxShow.dll
+```
+
+运行所需的 toon 纹理仍需自行补充到 `Data/`。
+静态库、导入库、PDB 和回归测试程序不随此命令安装。
+
+#### 可选：运行输入回归测试
+
+测试程序不参与默认构建，需启用选项并显式构建测试目标：
 
 ```bat
 cmake --preset conan-default -DMIKUDANCESTUDIO_BUILD_INPUT_TESTS=ON
-cmake --build build --config Release
 cmake --build build --config Release --target keyboard_input_tests
-ctest --test-dir build -C Release --output-on-failure
+ctest --test-dir build -C Release -R keyboard_input_regressions --output-on-failure
 ```
-
-> 说明：`profiles/` 下的 Conan profile 假定主机为 Windows + MSVC；若你的默认 profile
-> 已如此设置，可直接 `include(default)`。
 
 ### MikuMikuEffect（MME）支持
 
-发布的可执行文件沿用原版名 `MikuMikuDance.exe`，满足 MME 对宿主的三项硬性要求：37 个
-`Exp*` 导出（序号 1..37，见 `exports/MikuMikuDance.def`）；以**静态导入**提供 MMHack.dll
-需要改写的 `d3dx9_43.dll` IAT 槽位（`res/imports/d3dx9_43.def` 在构建时生成导入库；
-本移植此前动态解析 D3DX，IAT 里没有可改写的槽位，MME 因此直接报 `Initialize error`）；
-模块名正好是 `MikuMikuDance.exe`（MMHack.dll 的导入表按此绑定那些 `Exp*` 函数）。把 x64 版
-`d3d9.dll`、`MMHack.dll`、`MMEffect.dll` 放到 exe 同目录，菜单栏右侧即出现 `MMEffect`，
-之后按常规给模型/配件指定 `.fx` 即可；运行与构建都不需要 DirectX SDK。详见
-[docs/MME_COMPATIBILITY.md](docs/MME_COMPATIBILITY.md)。
+#### 安装与使用
 
-### 其它特性
+将 **x64 版 MME** 的以下三个文件放到 `MikuMikuDance.exe` 同一目录：
 
-程序运行不输出日志，出错时弹出模态“致命错误”窗口（可按 Ctrl+C 复制内容，配合
-`build/symbols/` 的 PDB 定位源码行）。输入法开启时不影响快捷键操作：中文／日文输入法下
-字母快捷键（P 播放/停止、A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R）同样有效，编辑框内输入文字
-时除外。这两项按维护者洛琪的个人使用习惯加入，可按需删改。
+- `d3d9.dll`
+- `MMHack.dll`
+- `MMEffect.dll`
 
-### 贡献
+启动后，菜单栏会出现 `MMEffect` 菜单，可按 MME 的常规方式为模型和配件分配 `.fx` 特效。
+请保留主程序名 `MikuMikuDance.exe`，MME 依赖这个名称识别宿主。
+本项目的构建与运行均不要求安装 DirectX SDK。
 
-本仓库 fork 自上游 [jstzwj/MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio)，
-主体移植与 x64 对齐由 jstzwj 完成。洛琪（GitHub：[Loki-0228](https://github.com/Loki-0228)）
-负责本仓库的维护，贡献包括 MME 兼容适配、中文界面改进、播放与输入修复、崩溃诊断，
-以及构建与发布整理。
+#### 兼容实现说明
+
+本移植为 MME 提供了以下宿主接口：
+
+- **导出函数**：提供 37 个 `Exp*` 函数，导出序号为 1–37，定义见
+  [`exports/MikuMikuDance.def`](exports/MikuMikuDance.def)。
+- **D3DX 静态导入**：为 `MMHack.dll` 提供可挂钩的导入地址表（IAT）条目，
+  导入库由 [`res/imports/d3dx9_43.def`](res/imports/d3dx9_43.def) 在构建时生成。
+- **宿主名称**：使用 `MikuMikuDance.exe`，与 `MMHack.dll` 引用的模块名一致。
+
+对象登记、效果分配及已验证的兼容范围，见 [MME 兼容性说明](docs/MME_COMPATIBILITY.md)。
+
+### 使用与故障排查
+
+- **错误提示**：程序不写日志文件；遇到致命错误时会弹出对话框，可按 `Ctrl+C` 复制内容。
+  开发者可结合 `build/symbols/` 下对应构建的 PDB 定位源码。
+- **输入法与快捷键**：开启中文或日文输入法时，字母快捷键仍有效，包括 `P`（播放/停止）
+  和 `A/S/D/F/G/H/I/J/K/L/U/V/X/Z/B/C/R`；在编辑框内输入文字时除外。
+
+### 项目来源与维护
+
+本仓库 fork 自 [jstzwj/MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio)。
+上游作者 **jstzwj** 完成了主体行为级移植与 x64 对齐，是本分支继续开发的基础。
+
+本分支由 **洛琪（[Loki-0228](https://github.com/Loki-0228)）**维护，
+主要改动包括 MME 兼容适配、中文界面改进、播放与输入修复、崩溃诊断，以及构建与发布整理。
 
 ### 致谢
 
-* 感谢 [MikuMikuDance](https://learnmmd.com/downloads/) 原作者樋口優，
-  以及原移植工程的贡献者，为本项目奠定基础。
-* [Bullet Physics](https://github.com/bulletphysics/bullet3)（zlib 许可）
-* MikuMikuEffect（MME）社区特效生态 —— `exports/` 的 37 个 `Exp*` API 与之兼容
+- **樋口優**：[MikuMikuDance](https://learnmmd.com/downloads/) 原作者。
+  原版 MMD 是本项目行为与功能对齐的基础。
+- **jstzwj 及上游贡献者**：感谢他们在
+  [MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio) 移植工程中的工作。
+- **舞力介入P**：MikuMikuEffect（MME）原作者，感谢其为 MMD 带来的特效扩展能力。
+  可参阅[作者参与撰写的 MME 介绍](https://codezine.jp/article/detail/5997)。
+- **MME 社区的特效作者与贡献者**：感谢他们创作和分享特效、工具与使用经验。
+- **[Bullet Physics](https://github.com/bulletphysics/bullet3) 开发者与贡献者**：
+  本项目使用其物理引擎（zlib 许可）。
 
 ### 许可
 
@@ -338,11 +391,17 @@ MME 互換対応、中国語 UI の改善、再生・入力の不具合修正、
 
 ### 謝辞
 
-* [MikuMikuDance](https://learnmmd.com/downloads/) の原作者である樋口優氏と、
-  本プロジェクトの基盤を築いた元の移植プロジェクトの貢献者に感謝します。
-* [Bullet Physics](https://github.com/bulletphysics/bullet3)（zlib ライセンス）
-* MikuMikuEffect（MME）コミュニティのエフェクトエコシステム —— `exports/` の
-  37 個の `Exp*` API は互換性を保っています
+* **樋口優氏**：[MikuMikuDance](https://learnmmd.com/downloads/) の原作者。
+  オリジナル MMD の動作と機能を本プロジェクトの目標としています。
+* **jstzwj 氏および上流の貢献者の皆様**：
+  [MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio) の移植作業に感謝します。
+* **舞力介入P 氏**：MikuMikuEffect（MME）の原作者。
+  MMD にエフェクト拡張機能をもたらしてくださったことに感謝します。
+  [作者が共著した MME 紹介記事](https://codezine.jp/article/detail/5997)もご覧ください。
+* **MME コミュニティのエフェクト作者・貢献者の皆様**：
+  エフェクト、ツール、ノウハウの共有に感謝します。
+* **[Bullet Physics](https://github.com/bulletphysics/bullet3) の開発者・貢献者の皆様**：
+  本プロジェクトで使用する物理エンジン（zlib ライセンス）に感謝します。
 
 ### ライセンス
 
