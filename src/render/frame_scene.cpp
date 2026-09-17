@@ -16,6 +16,7 @@
 #include <cstring>
 
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/frame_presentation.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/effect_api.hpp"
 
@@ -459,6 +460,7 @@ void RenderFrameScene(MMDApp* app) {
     DrawTextOverlay(app, device);
     DrawLineOverlay(app, sub, device);
     DrawSpriteOverlay(app, device);
+    FillFramePresentationMargins(app, device);
     device->EndScene();
     DumpAccessoryScreenTexture(app, device);
 }

@@ -123,6 +123,7 @@ add_library(mikudancestudio_core STATIC
     src/render/render_states.cpp
     src/render/stereo_nvapi.cpp
     src/render/frame_scene.cpp
+    src/render/frame_presentation.cpp
     src/render/sprite_overlay.cpp
     src/render/overlay_producers.cpp
     src/render/capture_downsample.cpp

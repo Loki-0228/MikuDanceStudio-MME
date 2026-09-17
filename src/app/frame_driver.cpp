@@ -45,6 +45,7 @@
 #include <cwchar>
 
 #include "mikudancestudio/d3dx_dyn.hpp"
+#include "mikudancestudio/frame_presentation.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
@@ -622,12 +623,12 @@ void FrameDriver(MMDApp* app) {
                 hr = device->Present(&r, &r,
                                      s.RecordingWindow(), nullptr);
             } else if (s.FloatingWindow() != nullptr) {
-                RECT r = s.ViewportRect();                        // 0xA0D40
+                RECT r = FramePresentationRect(app);
                 hr = device->Present(&r, &r,
                                      s.state.floatingWindow,
                                      nullptr);
             } else {
-                RECT r = s.ViewportRect();                        // 0xA0D40
+                RECT r = FramePresentationRect(app);
                 hr = device->Present(&r, &r,
                                      static_cast<HWND>(s.Hwnd()),
                                      nullptr);
