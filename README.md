@@ -98,7 +98,7 @@ and the `MMEffect` menu appears; `.fx` effects are then assigned as usual. No
 DirectX SDK, at runtime or at build time. See
 [docs/MME_COMPATIBILITY.md](docs/MME_COMPATIBILITY.md).
 
-#### Personal additions
+### Personal additions
 
 These additions exist only for personal convenience; they are neither MMD's
 original usage habits nor compatibility requirements, and builders may delete
@@ -261,7 +261,7 @@ ctest --test-dir build -C Release -R keyboard_input_regressions --output-on-fail
 
 对象登记、效果分配及已验证的兼容范围，见 [MME 兼容性说明](docs/MME_COMPATIBILITY.md)。
 
-#### 个人添加特性
+### 个人添加特性
 
 特性添加仅为方便本人使用，非MMD原本使用习惯或适配需求，编译者可编辑代码删去。
 
@@ -380,7 +380,7 @@ cmake --install build --config Release --prefix dist
 `.fx` を割り当てるだけです。実行時もビルド時も DirectX SDK は不要です。詳細は
 [docs/MME_COMPATIBILITY.md](docs/MME_COMPATIBILITY.md)。
 
-#### 個人による追加機能
+### 個人による追加機能
 
 追加機能は個人的な利便性のためのもので、MMD 本来の使用習慣でも互換要件でもありません。
 ビルドする方はコードを編集して削除できます。
