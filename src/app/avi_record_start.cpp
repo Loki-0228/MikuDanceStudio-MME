@@ -131,21 +131,31 @@ bool ProbeWritable(const wchar_t* path) {  // _wsopen_s/_close pair, 0x45E849
 
 // Grows the render target when the output is larger and resets the device
 // (shared by 0x45E820 and the 0x114 picture renderer).
-void GrowRenderTarget(MMDApp* app, std::int32_t w, std::int32_t h) {
+bool GrowRenderTarget(MMDApp* app, std::int32_t w, std::int32_t h) {
     auto& s = *app;
     D3DRenderer* r = s.Renderer();
     if (r == nullptr)
-        return;
+        return false;
     s.state.recRTW = r->screenWidth;
     s.state.recRTH = r->screenHeight;
     if (w > s.state.recRTW ||
         h > s.state.recRTH) {
+        const auto previousParameters = r->presentParameters;
         r->presentParameters.BackBufferWidth = w;
         r->presentParameters.BackBufferHeight = h;
         r->screenWidth = w;
         r->screenHeight = h;
-        PostDeviceReset(app);  // 0x440DB0 (0x45E94E)
+        if (PostDeviceReset(app))    // 0x440DB0 (0x45E94E)
+            return true;
+        // Restore the preview size so another export attempt cannot mistake
+        // a failed resize for an already available render target.
+        r->presentParameters = previousParameters;
+        r->screenWidth = s.state.recRTW;
+        r->screenHeight = s.state.recRTH;
+        PostDeviceReset(app);
+        return false;
     }
+    return true;
 }
 
 // Lazy creation of the recording render target (0x45EA68..0x45EACC):
@@ -276,7 +286,12 @@ void StartAviRecordWindow(MMDApp* app) {
         return;
     }
 
-    GrowRenderTarget(app, s.RenderWidth(), s.RenderHeight());
+    if (!GrowRenderTarget(app, s.RenderWidth(), s.RenderHeight())) {
+        MessageBoxW(s.MainWindow(), L"无法重置渲染设备，视频导出未开始。\n"
+            L"Could not reset the render device; video export was not started.",
+            L"AVI export", MB_OK | MB_ICONERROR);
+        return;
+    }
 
     RECT rc{0, 0, s.RenderWidth(), s.RenderHeight()};
     AdjustWindowRect(&rc, WS_POPUP | WS_CAPTION, FALSE);                  // 0x45E95F
@@ -342,7 +357,15 @@ void StartAviRecordFullscreen(MMDApp* app) {
 
     s.FullscreenMode() = 1;
     ApplyFullscreenWindowState(app);                                            // 0x4629D0
-    PostDeviceReset(app);                                  // 0x440DB0
+    if (!PostDeviceReset(app)) {
+        s.FullscreenMode() = 0;
+        ApplyFullscreenWindowState(app);
+        PostDeviceReset(app);
+        MessageBoxW(main, L"无法重置渲染设备，视频导出未开始。\n"
+            L"Could not reset the render device; video export was not started.",
+            L"AVI export", MB_OK | MB_ICONERROR);
+        return;
+    }
     s.RecordingWindow() = main;                                // 0xA0D24
 
     EnsureRecordRenderTarget(app);

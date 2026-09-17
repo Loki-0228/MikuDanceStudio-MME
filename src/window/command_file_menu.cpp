@@ -307,7 +307,7 @@ void SelectionReeval(MMDApp* app);                  // VA 0x00430510 (ui_selecti
 void RefreshMainWindowViewport(MMDApp* app);  // VA 0x0042C810 (ui_viewport_refresh.cpp) viewport refresh
 void AviBgOverlayRefresh(MMDApp* app);             // VA 0x004168D0 (bg_overlay.cpp)
 void PicBgOverlayRefresh(MMDApp* app);             // VA 0x00417130 (bg_overlay.cpp)
-void PostDeviceReset(MMDApp* app);             // VA 0x00440DB0 (device_reset.cpp)
+bool PostDeviceReset(MMDApp* app);             // VA 0x00440DB0 (device_reset.cpp)
 void LayoutViewportPanels(MMDApp* app);             // VA 0x0040CAC0, was Sub40CAC0
                                                    // (ui_viewport_layout.cpp)
 void SnapshotSelectedKeysForUndo(unsigned char* model, int frame);  // VA 0x004A1510, was Sub4A1510 (model_keyframe_edit.cpp)

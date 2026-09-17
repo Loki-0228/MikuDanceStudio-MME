@@ -259,7 +259,7 @@ void ReloadModels(MMDApp*);                       // VA 0x0042E640
 void PostModelReload(MMDApp*);                    // VA 0x0041A650 (Sub41A650 was an
                                                   //  alias of this - decl removed)
 void SelectionReeval(MMDApp*);                    // VA 0x00430510
-void PostDeviceReset(MMDApp*);                    // VA 0x00440DB0
+bool PostDeviceReset(MMDApp*);                    // VA 0x00440DB0; false on reset failure
 void UpdateBoneFrames(MMDApp*);                   // VA 0x00433A40
 void RenderFrameScene(MMDApp*);                   // VA 0x0046DC00..0x0046E787
 bool RecordingReadbackPass(MMDApp*);              // VA 0x0046E787..0x0046EFB7

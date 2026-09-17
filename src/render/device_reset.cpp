@@ -26,6 +26,7 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/d3dx_effect.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -41,7 +42,7 @@ void ReleaseSubSlot(ComPtr& slot) {
 
 }  // namespace
 
-void PostDeviceReset(MMDApp* app) {
+bool PostDeviceReset(MMDApp* app) {
     ReleaseSubSlot(app->CaptureTexture());                        // 0x440DC8
     ReleaseSubSlot(app->AviBackgroundTexture());                  // 0x440DE0
     ReleaseSubSlot(app->AviBackgroundSurface());                  // 0x440DF8
@@ -50,7 +51,7 @@ void PostDeviceReset(MMDApp* app) {
 
     D3DRenderer* r = app->Renderer();
     if (r == nullptr)
-        return;
+        return false;
     ReleaseSubSlot(r->captureSurface);                            // 0x440E4A
     ReleaseSubSlot(r->depthStencilSurface);                       // 0x440E72
     ReleaseSubSlot(r->backbufferSurface);                         // 0x440E9A
@@ -65,8 +66,15 @@ void PostDeviceReset(MMDApp* app) {
 
     IDirect3DDevice9* device = r->device;
     if (device == nullptr)
-        return;
-    device->Reset(&r->presentParameters);                          // 0x440F57
+        return false;
+    const HRESULT reset = device->Reset(&r->presentParameters);    // 0x440F57
+    runtime_log::Write("DEVICE_RESET size=%ux%u hr=0x%08lX",
+        r->presentParameters.BackBufferWidth, r->presentParameters.BackBufferHeight,
+        static_cast<unsigned long>(reset));
+    // A failed Reset leaves the device lost. Do not ask effects to recreate
+    // resources or issue rendering calls until a later reset succeeds.
+    if (FAILED(reset))
+        return false;
 
     InitRenderStates(app);                                        // 0x406E90
 
@@ -76,8 +84,13 @@ void PostDeviceReset(MMDApp* app) {
         static_cast<D3DRENDERSTATETYPE>(0xA1),
         (menuState & 8) != 0 ? 1 : 0);
 
-    if (r->effect != nullptr)
-        d3dx::FxOnResetDevice(r->effect);
+    if (r->effect != nullptr) {
+        const HRESULT effectReset = d3dx::FxOnResetDevice(r->effect);
+        if (FAILED(effectReset)) {
+            runtime_log::Write("EFFECT_RESET hr=0x%08lX", static_cast<unsigned long>(effectReset));
+            return false;
+        }
+    }
 
     if (app->FullscreenMode() != 0) {
         RefreshSeparateWindowViewport(app);                                           // 0x4290F0
@@ -88,6 +101,7 @@ void PostDeviceReset(MMDApp* app) {
     app->state.recentFile0[0] = 0;                                 // 0x440FE2
     app->state.recentFile1[0] = 0;
     app->state.recentFile2[0] = 0;
+    return true;
 }
 
 }  // namespace mikudancestudio
