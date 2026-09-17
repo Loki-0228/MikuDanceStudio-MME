@@ -326,6 +326,11 @@ if (MIKUDANCESTUDIO_BUILD_EFFECT_TESTS)
     set_target_properties(model_alpha_tests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
     add_test(NAME model_alpha_regressions COMMAND model_alpha_tests)
+    add_executable(device_reset_tests EXCLUDE_FROM_ALL tests/device_reset_tests.cpp)
+    target_link_libraries(device_reset_tests PRIVATE mikudancestudio_core winmm dsound)
+    set_target_properties(device_reset_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
+    add_test(NAME device_reset_regressions COMMAND device_reset_tests)
 endif()
 
 option(MIKUDANCESTUDIO_BUILD_ENCODING_TESTS "Build filename encoding regression tests" OFF)

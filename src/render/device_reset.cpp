@@ -25,6 +25,7 @@
 #include <cstdint>
 
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/d3dx_effect.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 
 namespace mikudancestudio {
@@ -57,12 +58,10 @@ void PostDeviceReset(MMDApp* app) {
     ReleaseSubSlot(r->hdrTexture);                                // 0x440EEA
     ReleaseSubSlot(r->shadowDepthSurface);                        // 0x440F12
 
-    auto* d3dxObj = reinterpret_cast<IUnknown*>(r->effect);
-    if (d3dxObj != nullptr) {
-        // vtable+0x114 = OnLostDevice on the effect (D3DX) object.
-        (*(void(__stdcall**) (IUnknown*))(
-            (*reinterpret_cast<void***>(d3dxObj))[0x114 / 4]))(d3dxObj);
-    }
+    // A vtable entry is the function address, not a pointer to that address.
+    // Use the shared, architecture-independent COM dispatch helpers.
+    if (r->effect != nullptr)
+        d3dx::FxOnLostDevice(r->effect);
 
     IDirect3DDevice9* device = r->device;
     if (device == nullptr)
@@ -77,12 +76,8 @@ void PostDeviceReset(MMDApp* app) {
         static_cast<D3DRENDERSTATETYPE>(0xA1),
         (menuState & 8) != 0 ? 1 : 0);
 
-    d3dxObj = reinterpret_cast<IUnknown*>(r->effect);
-    if (d3dxObj != nullptr) {
-        // vtable+0x118 = OnResetDevice on the effect (D3DX) object.
-        (*(void(__stdcall**) (IUnknown*))(
-            (*reinterpret_cast<void***>(d3dxObj))[0x118 / 4]))(d3dxObj);
-    }
+    if (r->effect != nullptr)
+        d3dx::FxOnResetDevice(r->effect);
 
     if (app->FullscreenMode() != 0) {
         RefreshSeparateWindowViewport(app);                                           // 0x4290F0

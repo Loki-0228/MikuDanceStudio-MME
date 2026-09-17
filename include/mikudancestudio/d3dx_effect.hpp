@@ -64,4 +64,14 @@ inline HRESULT FxEnd(void* effect) {
     return EffectMethod<Fn, 67>(effect)(effect);
 }
 
+inline HRESULT FxOnLostDevice(void* effect) {
+    using Fn = HRESULT(WINAPI*)(void*);
+    return EffectMethod<Fn, 69>(effect)(effect);
+}
+
+inline HRESULT FxOnResetDevice(void* effect) {
+    using Fn = HRESULT(WINAPI*)(void*);
+    return EffectMethod<Fn, 70>(effect)(effect);
+}
+
 }  // namespace mikudancestudio::d3dx
