@@ -27,7 +27,7 @@
 //   4. 0x444B3B  visibility re-toggle: five id ranges (455..469, 471..488,
 //      504..528, 402..414, 531..535) get ShowWindow(SW_HIDE) followed by
 //      ShowWindow(SW_SHOW) when IsWindowVisible.
-//   5. 0x444C9D  refresh tail: RefreshMainWindowViewport (0x42C810) then 0x40CAC0
+//   5. 0x444C9D  refresh tail: RefreshMainWindowViewport (0x42C810) then Sub40CAC0
 //      (0x40CAC0).
 //
 // All MoveWindow calls pass bRepaint = TRUE; every GetDlgItem handle is
@@ -71,7 +71,7 @@ void ToggleVisible(HWND parent, int firstId, int lastId) {
 }  // namespace
 
 void PanelPaint(MMDApp* app);  // VA 0x00414610 (defined in ui_panel_paint.cpp)
-void LayoutViewportPanels(MMDApp* app);   // VA 0x0040CAC0
+void LayoutViewportPanels(MMDApp* app);   // VA 0x0040CAC0, was Sub40CAC0
                                           // (ui_viewport_layout.cpp)
 
 void HandleWindowSize(MMDApp* app) {
@@ -309,7 +309,7 @@ void HandleWindowSize(MMDApp* app) {
     LayoutViewportPanels(app);  // original tail call: `return sub_40CAC0(this);`
 }
 
-// VA 0x00442EB0 - live relayout of the sidebar-anchored
+// was Sub442EB0, VA 0x00442EB0 - live relayout of the sidebar-anchored
 // controls (top tool row 400..417/532/533/558/559 plus the bottom frame
 // grid 415..434) at the current sidebar width and client height; the
 // visibility re-toggle refreshes those bands without the full WM_SIZE

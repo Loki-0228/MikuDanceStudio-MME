@@ -2,7 +2,7 @@
 // Window procedures (separate/recording windows)
 // ===========================================================================
 // The separate window WM_COMMAND child dispatch 0x004620A0 is a full port
-// below (DispatchSeparateWindowCommand).  The main WndProc
+// below (DispatchSeparateWindowCommand, was Sub4620A0).  The main WndProc
 // 0x004C3A10 is ported in src/window/wndproc.cpp; the separate-window WndProc
 // 0x00466A10 and its mouse filter 0x00428FF0 are ported in
 // src/window/mic_window.cpp.
@@ -25,7 +25,7 @@ namespace mikudancestudio {
 
 // Full-port callees defined in other TUs (local declarations).
 void RefreshAfterFrameApply(MMDApp* app);      // VA 0x432FA0 (ui_frame_step.cpp),
-
+                                                // was Sub432FA0
 void PushBoneEditUndo(MMDApp* app);                   // VA 0x42D6E0 (bone_edit_undo.cpp)
 
 // 0x52EB80: "録画を中断してもよいですか" / 0x52EB9C: "録画中断確認"
@@ -69,7 +69,7 @@ LRESULT CALLBACK RecWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004620A0 - DispatchSeparateWindowCommand(app, id):
+// VA 0x004620A0 - DispatchSeparateWindowCommand(app, id) (was Sub4620A0):
 //   separate-window WM_COMMAND dispatch
 // over child controls 0x218..0x22D (called from the separate WndProc at
 // 0x466B9E with LOWORD(wParam)).  Cases verbatim:
@@ -89,7 +89,7 @@ LRESULT CALLBACK RecWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 //   0x21F camera angle z (0xA08DC) zero
 //   0x227 toggle byte 0x31E + menu 0xD3 (off path also zeroes 0x320/0x324)
 //   0x228 menu 0x12B check toggle + byte 0xA4220
-//   0x229 frame edit 554: atol, clamp >= 0, frame 0x980, 0x432FA0 +
+//   0x229 frame edit 554: atol, clamp >= 0, frame 0x980, Sub432FA0 +
 //         PostViewRefresh + "%d" echo into edit 417
 //   0x22B "%d" frame echo back into edit 554
 //   0x22C checkbox 556: BM_GETCHECK -> 4096/2048 into wrapper
@@ -98,7 +98,7 @@ LRESULT CALLBACK RecWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 //         shadowSurface (+0x1D548/+0x1D554/+0x1D550)
 //   0x22D toggle byte 0x31D + menu 0xD7
 // ---------------------------------------------------------------------------
-void DispatchSeparateWindowCommand(MMDApp* app, unsigned short id) {  // VA 0x004620A0
+void DispatchSeparateWindowCommand(MMDApp* app, unsigned short id) {  // was Sub4620A0, VA 0x004620A0
     auto& s = *app;
     HWND main = static_cast<HWND>(s.Hwnd());
     HWND separate = s.FloatingWindow();

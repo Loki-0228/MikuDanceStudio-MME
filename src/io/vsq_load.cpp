@@ -8,8 +8,8 @@
 //   _wsopen_s probe (errno -> EN 0x52CDF0 / JP 0x52CDD4 box, caption "").
 //   The path buffer is edited in place: wcsstr(path, L".vsq")+1 gets
 //   L"txt" -> "<name>.txt".  _wfopen_s(txt, path, L"wt"), then a plain SMF
-//   walk with ReadFixedString / ReadBeWord (was
-//   0x41A1A0):
+//   walk with ReadFixedString (was Sub41A1F0) / ReadBeWord (was
+//   Sub41A1A0):
 //     MThd hdr(4) hdrlen(4) format(2) ntracks(2) division(2);
 //     "[number of Track:%d]" via "%s\n", "[UnitTime:%d]" via "%s\n\n".
 //   per track: "[Track%d]" via "%s\n", MTrk(4) tracklen(4), event loop with
@@ -48,7 +48,7 @@
 //     ev[0x1E] = 0.
 //   loop C (count x): fgets-scan until a line contains the ev handle id;
 //     fgets (the L0/L1 lyric line); m = strstr(line, "\",\""); *m = 0;
-//     sprintf_s(ev+7, 8, first '"'+1)  -> L0 token; if m[4] == '"'
+//     sprintf_s(ev+7, 10, first '"'+1)  -> L0 token; if m[4] == '"'
 //     (second field is a single char): ev[0] = 0, ev[6] = m[3];
 //     else if m[4] == '\\' (x64 0x7FF7CB48F664): if m[5] == ' ' then
 //     m[5] = 0, sprintf_s(ev, 6, m+3), ev[6] = m[6]; else ev[0] = 0,
@@ -207,10 +207,8 @@ struct VsqEvent {           // stride 0x24, calloc'd by the original
     char consonant[6];      // +0x00 canonical mouth shape (sprintf cap 6)
     char vowel;             // +0x06
     char token[9];          // +0x07 raw L0 token (written via a cast with
-                            //        sprintf cap 8 - x64 0x7FF7CB48F3D5
-                            //        "mov edx, 8": 7 chars + NUL land in
-                            //        +0x07..+0x0E, +0x0F keeps its memset
-                            //        zero and +0x10 (start) is never hit)
+                            //        sprintf cap 10, exactly like the
+                            //        original's overlap into +0x10)
     float start;            // +0x10 tick -> start seconds
     float end;              // +0x14 length ticks -> end seconds
     char handle[10];        // +0x18 lyric-handle id (sprintf cap 10)
@@ -251,7 +249,7 @@ void VsqMorphKey(unsigned char* model, mdl::MorphRecord* morphs, int idx,
 }  // namespace
 
 // VA 0x00435FE0 - VSQ load and auto lipsync.
-void LoadVsqFile(MMDApp* app, const wchar_t* path) {
+void LoadVsqFile(MMDApp* app, const wchar_t* path) {  // was Sub435FE0
     auto& s = *app;
     HWND hwnd = static_cast<HWND>(s.Hwnd());                       // 0xa06b8
     char line[0x100];        // shared fgets buffer (single buffer as binary)
@@ -521,9 +519,7 @@ void LoadVsqFile(MMDApp* app, const wchar_t* path) {
         char* m = strstr(line, "\",\"");                             // 0x52D1E0
         *m = 0;                    // truncate the line at the '","'
         char* firstQuote = strstr(line, "\"");                      // 0x52D1DC
-        // cap 8 as in the binary (0x7FF7CB48F3D5 mov edx,8;
-        // 0x7FF7CB48F3DA lea rcx,[r15+7])
-        sprintf_s(reinterpret_cast<char*>(&ev) + 7, 8, firstQuote + 1);
+        sprintf_s(reinterpret_cast<char*>(&ev) + 7, 10, firstQuote + 1);
 
         const char* m1 = m + 1;              // points at the ','
         if (m1[3] == '"') {                  // 0x436A16: 1-char field

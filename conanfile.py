@@ -26,23 +26,13 @@ class MikuDanceStudioConan(ConanFile):
         "src/*",
         "include/*",
         "exports/*",
-        "docs/*",
+        "mmd-refactor/docs/*",
     )
 
     generators = ("CMakeDeps", "CMakeToolchain")
 
     def layout(self):
         cmake_layout(self)
-
-    def validate(self):
-        # The restoration targets the exact 32-bit layout of the original
-        # binary; the state-class offsets in docs/FIELD_MAP.md only describe
-        # the x86 original.
-        if self.info.settings.arch != "x86":
-            self.output.warning(
-                "MikuDanceStudio reproduces the x86 (32-bit) original; "
-                "consider building with an x86 profile."
-            )
 
     def build(self):
         # Build is driven by CMake directly (conan install + cmake --preset).

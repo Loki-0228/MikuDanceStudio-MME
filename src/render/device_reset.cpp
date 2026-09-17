@@ -15,7 +15,7 @@
 // Reached from the render-to-picture command (0x114), the canvas-size dialog
 // (0xD4), the AVI record starters (0x45E820/0x464760) and the frame driver's
 // device-lost recovery.  The former PostDeviceReset stub twin in
-// src/app/late_ports.cpp was removed; this is the single definition now.
+// src/unported/stubs.cpp was removed; this is the single definition now.
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX

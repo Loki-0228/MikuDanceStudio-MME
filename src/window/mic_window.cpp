@@ -19,16 +19,16 @@
 
 namespace mikudancestudio {
 
-// WM_COMMAND child dispatch (0x004620A0) - full port in wndproc_aux_windows.cpp.
-void DispatchSeparateWindowCommand(MMDApp* app, unsigned short id);  // VA 0x004620A0
+// WM_COMMAND child dispatch (0x004620A0) - full port in wndproc_stubs.cpp.
+void DispatchSeparateWindowCommand(MMDApp* app, unsigned short id);  // VA 0x004620A0, was Sub4620A0
 // Viewport overlay layout (0x0040CAC0) - ported in ui_viewport_layout.cpp.
-void LayoutViewportPanels(MMDApp* app);  // VA 0x0040CAC0
+void LayoutViewportPanels(MMDApp* app);  // VA 0x0040CAC0, was Sub40CAC0
 
 // VA 0x00428FF0 - separate-window mouse-move filter (thiscall on app).
 // Tracks the cursor inside the detached panel, clears the left/top
 // "auto-hide armed" bytes once the pointer crosses the hide margins, and
 // raises the moved-flag for the frame driver (drag threshold 50px).
-// 
+// was Sub428FF0
 int FilterSeparateWindowMouseMove(MMDApp* app, unsigned short x, unsigned short y) {
     auto& s = *app;
     if (s.state.a06B5 != 0) {          // 0x428FF6
@@ -113,12 +113,7 @@ LRESULT CALLBACK MicWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         RefreshSeparateWindowViewport(app);                                            // 0x466A6C
         LayoutViewportPanels(app);                                 // 0x466A77
         return 0;
-    case WM_RBUTTONDBLCLK:                                           // 0x7FF7CB4C4B29
-        // x64 twin sub_7FF7CB4C48A0 dispatches the panel-activation
-        // helper on WM_RBUTTONDBLCLK (0x206) and returns 0; WM_MOUSE-
-        // ACTIVATE (0x21) is not in its switch and falls to
-        // DefWindowProcA.  The old "0x466C6E = WM_MOUSEACTIVATE" note
-        // misread the case label.
+    case WM_MOUSEACTIVATE:                                         // 0x466C6E
         HandleMouseActivate(app);
         return 0;
     case WM_LBUTTONDOWN:                                           // 0x466C4E

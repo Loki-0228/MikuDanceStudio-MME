@@ -149,7 +149,7 @@ const float kCpScaleF = 0.02362200058996677f;
 }  // namespace
 
 // ---- VA 0x004A05A0 / x64 sub_7FF7CB4EDB00 ----------------------------------
-float BoneEase(unsigned char* model, int channel, int keyIdx, float t) {
+float BoneEase(unsigned char* model, int channel, int keyIdx, float t) {  // was Sub4A05A0
     const mdl::BoneKey& rec = mdl::BoneKeys(model)[keyIdx];
     const unsigned char x1 = rec.interpolation[channel];
     const unsigned char y1 = rec.interpolation[channel + 4];
@@ -221,7 +221,7 @@ float BoneEase(unsigned char* model, int channel, int keyIdx, float t) {
 }
 
 // ---- VA 0x00499B50 --------------------------------------------------------
-void NotifyBonePhysicsMode(unsigned char* model, int boneIdx, unsigned char mode) {
+void NotifyBonePhysicsMode(unsigned char* model, int boneIdx, unsigned char mode) {  // was Sub499B50
     mikudancestudio::mdl::RigidRecord* const rigids = mikudancestudio::mdl::Rigids(model);
     const int cnt = static_cast<int>(mdl::Mdl(model)->rigidCount);
     for (int i = 0; i < cnt; ++i) {
@@ -252,7 +252,7 @@ void NotifyBonePhysicsMode(unsigned char* model, int boneIdx, unsigned char mode
 // ---- VA 0x004A2CD0 --------------------------------------------------------
 // Initializes every per-model animation cursor at playback start.  Unlike
 // SeekModelFrame this preserves the incremental-track state consumed by 0x4A31D0.
-void InitModelTrackCursors(unsigned char* model, float cursor, int physicsMode) {
+void InitModelTrackCursors(unsigned char* model, float cursor, int physicsMode) {  // was Sub4A2CD0
     unsigned char* const m = model;
     const double frame = static_cast<double>(cursor) * 30.0;
 
@@ -285,21 +285,24 @@ void InitModelTrackCursors(unsigned char* model, float cursor, int physicsMode) 
     mikudancestudio::mdl::MorphRecord* const morphValues = mikudancestudio::mdl::Morphs(m);
     unsigned char* const morphActive = state.morphTrackActive;
     std::uint32_t* const morphCursor = state.morphKeyCursors;
-    for (int morph = 0; morph < morphCount; ++morph) {
-        morphActive[morph] = 1;
-        morphCursor[morph] = static_cast<std::uint32_t>(morph);
-        for (;;) {
-            const int cur = static_cast<int>(morphCursor[morph]);
-            if (static_cast<double>(morphKeys[cur].frame) >= frame)
+    if (morphCount > 0 && morphKeys != nullptr && morphValues != nullptr &&
+        morphActive != nullptr && morphCursor != nullptr) {
+        for (int morph = 0; morph < morphCount; ++morph) {
+            morphActive[morph] = 1;
+            morphCursor[morph] = static_cast<std::uint32_t>(morph);
+            for (;;) {
+                const int cur = static_cast<int>(morphCursor[morph]);
+                if (static_cast<double>(morphKeys[cur].frame) >= frame)
+                    break;
+                const int next = static_cast<int>(morphKeys[cur].next);
+                if (next != 0) {
+                    morphCursor[morph] = static_cast<std::uint32_t>(next);
+                    continue;
+                }
+                morphActive[morph] = 0;
+                morphValues[morph].value = morphKeys[cur].value;
                 break;
-            const int next = static_cast<int>(morphKeys[cur].next);
-            if (next != 0) {
-                morphCursor[morph] = static_cast<std::uint32_t>(next);
-                continue;
             }
-            morphActive[morph] = 0;
-            morphValues[morph].value = morphKeys[cur].value;
-            break;
         }
     }
 
@@ -345,7 +348,7 @@ void InitModelTrackCursors(unsigned char* model, float cursor, int physicsMode) 
 }
 
 // ---- VA 0x004A31D0 --------------------------------------------------------
-void AdvanceModelKeyframes(unsigned char* model, float cursor, int physicsMode) {
+void AdvanceModelKeyframes(unsigned char* model, float cursor, int physicsMode) {  // was Sub4A31D0
     unsigned char* const m = model;
     mdl::ModelRecord& state = *mdl::Mdl(m);
 

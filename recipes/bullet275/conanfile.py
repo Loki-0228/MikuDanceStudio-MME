@@ -27,6 +27,18 @@ class Bullet275Conan(ConanFile):
         tc.generate()
 
     def build(self):
+        # ---- 修补软体头文件（修复 C2737 错误） ----
+        header = os.path.join(self.source_folder, "bullet-src", "src", "BulletSoftBody", "btSoftBodyInternals.h")
+        if os.path.exists(header):
+            with open(header, 'r', encoding='utf-8') as f:
+                content = f.read()
+            # 替换未初始化的 const 对象（处理空格/制表符差异）
+            content = content.replace("static const T\tzerodummy;", "static const T\tzerodummy = T();")
+            content = content.replace("static const T zerodummy;", "static const T zerodummy = T();")
+            with open(header, 'w', encoding='utf-8') as f:
+                f.write(content)
+        # ---- 修补结束 ----
+
         # Wrapper project written into the exported source folder (CMake's
         # source dir under conan's build cache): build only the three
         # libraries MMD links (LinearMath, BulletCollision, BulletDynamics)

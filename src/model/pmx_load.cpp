@@ -106,24 +106,6 @@ static const char kMsgPmxUtf8Jp[] =
     "\x82\xDC\x82\xB9\x82\xF1";               // ません
 // JP caption of both header errors: "ファイル読込" - same blob the PMD open
 // path uses (x64 0x7FF7CB550880, x86 0x52DB80; = kTitleOpenFailJp).
-// x64 0x7FF7CB551FF0: モデル"%s"の表情"%s"に不正なデータが含まれています
-// \n強制的に変換します - the wrong-morph-data message (JP branch of
-// "%s include wrong data in morph %s"; 表情 is MMD's word for a morph).
-static const wchar_t kFmtPmxWrongMorphDataJp[] =
-    L"\x30E2\x30C7\x30EB"                    // モデル
-    L"\"%s\""
-    L"\x306E"                                // の
-    L"\x8868\x60C5"                          // 表情
-    L"\"%s\""
-    L"\x306B"                                // に
-    L"\x4E0D\x6B63\x306A"                    // 不正な
-    L"\x30C7\x30FC\x30BF"                    // データ
-    L"\x304C"                                // が
-    L"\x542B\x307E\x308C\x3066"              // 含まれて
-    L"\x304A\x308A\x307E\x3059"              // おります
-    L"\n"
-    L"\x5F37\x5236\x7684\x306B"              // 強制的に
-    L"\x5909\x63DB\x3057\x307E\x3059";       // 変換します
 
 IDirect3DDevice9* DevOf(D3DRenderer* sub) {
     return sub->device;                       // wrapper + 120032
@@ -320,8 +302,6 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             mdl::PmxTextBuffer(m, kTextSlots[i]) = buf;
             if (i == 3)
                 swprintf_s(buf, 0x14, L"NoInfo");
-            else if (i == 2)  // empty JP comment slot (x64 0x7FF7CB4C9F5A)
-                swprintf_s(buf, 0x14, L"\x60C5\x5831\x306A\x3057");  // 情報なし
             else
                 swprintf_s(buf, 0x14, L"Null_%02d", nullIdx++);
         }
@@ -507,7 +487,9 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
     if (faceCount != 0) {
         IDirect3DDevice9* dev = DevOf(sub);
         const bool wideIdx = model.pmxVertexIndexSize >= 4;
-        IDirect3DIndexBuffer9* ib = nullptr;
+        // MME recovers the full x64 object address from this output slot.
+        // A stack temporary loses the association with ExpGetPmdID.
+        auto& ib = mdl::ResourceAs<IDirect3DIndexBuffer9>(model.indexBuffer);
         if (FAILED(dev->CreateIndexBuffer(
                 (wideIdx ? 4 : 2) * faceCount, 0,
                 wideIdx ? D3DFMT_INDEX32 : D3DFMT_INDEX16,
@@ -520,7 +502,6 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             _close(fh);
             return false;
         }
-        mdl::ResourceAs<IDirect3DIndexBuffer9>(mdl::Mdl(m)->indexBuffer) = ib;
         auto* indices = static_cast<std::int32_t*>(
             operator new(sizeof(std::int32_t) * faceCount));
         mdl::PmxIndices(m) = indices;
@@ -748,14 +729,14 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             WideToSjis(reinterpret_cast<char*>(bone),
                        reinterpret_cast<const wchar_t*>(
                            bone->jpText), 0x14);
-            // center bone detection (SJIS memcmp, 9 bytes with NUL; x64
-            // 0x7FF7CB4CC36D: 操作中心 first, センター as pre-flag
-            // fallback - same pair/order as the PMD path)
-            if (!std::memcmp(bone->name, kNameCenter2Jp, 9)) {
+            // center bone detection (SJIS memcmp, 9 bytes with NUL)
+            const char kCenter[9] = "\x83\x5A\x83\x93\x83\x5E\x81\x5B";
+            const char kCenterJp[9] = "\x92\x86\x90\x53";
+            if (std::memcmp(bone->name, kCenter, 9) == 0) {
                 model.centerBone = i;
                 centerFound = true;
             } else if (!centerFound
-                       && !std::memcmp(bone->name, kNameCenterJp, 9)) {
+                       && std::memcmp(bone->name, kCenterJp, 9) == 0) {
                 model.centerBone = i;
             }
             bone->enText = ReadTextBuf(fh, nullIdx); // EN name
@@ -948,19 +929,32 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
         default: { std::int32_t v; _read(fh, &v, 4); return v; }
         }
     };
+    // Vertex indices are unsigned, unlike the bone / material / morph indices
+    // where -1 means "none" (the face reader above already reads them this
+    // way).  A model with more than 32767 vertices stores indices >= 0x8000 in
+    // the 2-byte field: reading those signed turned them into large negatives,
+    // and the vertex-morph bookkeeping then wrote ~4 GB past its map - the
+    // 0xC0000005 that killed the process right after a scene was opened.
+    auto readVertIdx = [fh](int size) -> std::uint32_t {
+        switch (size) {
+        case 1: { std::uint8_t v = 0; _read(fh, &v, 1); return v; }
+        case 2: { std::uint16_t v = 0; _read(fh, &v, 2); return v; }
+        default: { std::uint32_t v = 0; _read(fh, &v, 4); return v; }
+        }
+    };
     if (morphCount > 0) {
+        // Playback uses one cursor and active flag per morph, just as PMD
+        // does. These must exist even when no VMD has been imported.
+        model.morphKeyCursors = static_cast<std::uint32_t*>(
+            operator new(sizeof(*model.morphKeyCursors) * morphCount));
+        std::memset(model.morphKeyCursors, 0,
+                    sizeof(*model.morphKeyCursors) * morphCount);
+        model.morphTrackActive = static_cast<unsigned char*>(operator new(morphCount));
+        std::memset(model.morphTrackActive, 0, morphCount);
         mdl::Morphs(m) = static_cast<mdl::MorphRecord*>(
             operator new(sizeof(mdl::MorphRecord) * morphCount));
         std::memset(mdl::Morphs(m), 0,
                     sizeof(mdl::MorphRecord) * morphCount);
-        // track cursors/flags beside the table (x64 0x7FF7CB4CD40D/CD42A
-        // -> m+88/96) - ModelKeyframeAdvance writes morphTrackActive[morph]
-        void* w1 = operator new(4 * morphCount);
-        std::memset(w1, 0, 4 * morphCount);
-        mdl::Mdl(m)->morphKeyCursors = static_cast<std::uint32_t*>(w1);
-        void* w2 = operator new(morphCount);
-        std::memset(w2, 0, morphCount);
-        mdl::Mdl(m)->morphTrackActive = static_cast<unsigned char*>(w2);
         for (std::int32_t i = 0; i < morphCount; ++i) {
             TracePmxOffset(fh, "morph-record-begin", i, 0);
             mdl::MorphRecord& morph = mdl::Morphs(m)[i];
@@ -1003,7 +997,7 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                                            morph.enText));
                         else
                             swprintf_s(wbuf, 0x100,
-                                       kFmtPmxWrongMorphDataJp,
+                                       L"%s include wrong data in morph %s",
                                        mdl::PmxTextBuffer(
                                            m, mdl::PmxTextBufferSlot::japaneseName),
                                        reinterpret_cast<LPCWSTR>(
@@ -1023,9 +1017,14 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                             sizeof(*morph.vertexEntries) * cnt);
                 for (int o = 0; o < cnt; ++o) {
                     mdl::PmdVertexMorphEntry& entry = morph.vertexEntries[o];
-                    entry.vertexIndex = readIdxS(vertIdxSize);
+                    entry.vertexIndex = readVertIdx(vertIdxSize);
                     _read(fh, entry.offset, sizeof(entry.offset));
-                    vmap[entry.vertexIndex] = 1;
+                    // Defensive: an out-of-range index in a damaged file must
+                    // not write outside the vertex map (the unsigned read above
+                    // keeps well-formed files in range by construction).
+                    if (entry.vertexIndex <
+                        static_cast<std::uint32_t>(vertCount))
+                        vmap[entry.vertexIndex] = 1;
                 }
                 break;
             }
@@ -1049,7 +1048,7 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                                            morph.enText));
                         else
                             swprintf_s(wbuf, 0x100,
-                                       kFmtPmxWrongMorphDataJp,
+                                       L"%s include wrong data in morph %s",
                                        mdl::PmxTextBuffer(
                                            m, mdl::PmxTextBufferSlot::japaneseName),
                                        reinterpret_cast<LPCWSTR>(
@@ -1077,7 +1076,8 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                             sizeof(*morph.uvEntries[family]) * cnt);
                 for (int o = 0; o < cnt; ++o) {
                     mdl::PmxUvMorphEntry& entry = morph.uvEntries[family][o];
-                    entry.vertexIndex = readIdxS(vertIdxSize);
+                    entry.vertexIndex =
+                        static_cast<std::int32_t>(readVertIdx(vertIdxSize));
                     _read(fh, entry.offset, sizeof(entry.offset));
                     switch (type) {
                     case 3: ++uvMorphTotal; break;
@@ -1170,44 +1170,10 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             if (morph.type != 2)
                 continue;
             for (int o = 0; o < morph.boneCount; ++o) {
-                // unique-bone table: skip a bone already offered by an
-                // EARLIER bone morph (x64 0x7FF7CB4CEFA0 scans j < i only)
-                bool seen = false;
-                for (std::int32_t j = 0; j < i && !seen; ++j) {
-                    const mdl::MorphRecord& prev = mdl::Morphs(m)[j];
-                    if (prev.type != 2)
-                        continue;
-                    for (int p = 0; p < prev.boneCount; ++p) {
-                        if (prev.boneEntries[p].boneIndex
-                                == morph.boneEntries[o].boneIndex) {
-                            seen = true;
-                            break;
-                        }
-                    }
-                }
-                if (seen)
-                    continue;
                 mdl::BoneMorphOffsetRecord& rec =
                     mdl::BoneMorphOffsets(m)[w];
                 rec.boneIndex = morph.boneEntries[o].boneIndex;
                 ++w;
-            }
-        }
-        // entries index the deduped table, not the bone list (x64
-        // 0x7FF7CB4CF090 rewrites to the first matching record)
-        for (std::int32_t i = 0; i < morphCount; ++i) {
-            mdl::MorphRecord& morph = mdl::Morphs(m)[i];
-            if (morph.type != 2)
-                continue;
-            for (int o = 0; o < morph.boneCount; ++o) {
-                mdl::PmxBoneMorphEntry& entry = morph.boneEntries[o];
-                for (int r = 0; r < boneMorphTotal; ++r) {
-                    if (mdl::BoneMorphOffsets(m)[r].boneIndex
-                            == entry.boneIndex) {
-                        entry.boneIndex = r;
-                        break;
-                    }
-                }
             }
         }
         // record tails: pos zero, quat identity (+28 = 1)
@@ -1244,32 +1210,18 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             for (int o = 0; o < cnt; ++o) {
                 const std::int32_t vi =
                     morph.uvEntries[kUvFamilies[fam].morphFamily][o].vertexIndex;
-                // skip a vertex an earlier same-family morph already
-                // offered (x64 0x7FF7CB4CF200 scans j < i only)
-                bool seen = false;
-                for (std::int32_t j = 0; j < i && !seen; ++j) {
-                    const mdl::MorphRecord& prev = mdl::Morphs(m)[j];
-                    if (prev.type != kUvFamilies[fam].type)
-                        continue;
-                    const int pcnt =
-                        prev.uvCounts[kUvFamilies[fam].morphFamily];
-                    for (int p = 0; p < pcnt; ++p) {
-                        if (prev.uvEntries[kUvFamilies[fam].morphFamily][p]
-                                .vertexIndex == vi) {
-                            seen = true;
-                            break;
-                        }
-                    }
-                }
-                if (seen)
-                    continue;
                 mdl::PmxUvMorphEntry& rec = records[w];
-                rec.vertexIndex = vi;
-                const mdl::PmxVertex& vertex = model.pmxVertices[vi];
-                rec.offset[0] = vertex.uv[0];
-                rec.offset[1] = vertex.uv[1];
-                rec.offset[2] = vertex.uvMorphBaseZW[0];
-                rec.offset[3] = vertex.uvMorphBaseZW[1];
+                // Same defensive range gate as the vertex morphs: a damaged
+                // index leaves the record inert instead of reading outside the
+                // vertex array.
+                if (vi >= 0 && vi < vertCount) {
+                    rec.vertexIndex = vi;
+                    const mdl::PmxVertex& vertex = model.pmxVertices[vi];
+                    rec.offset[0] = vertex.uv[0];
+                    rec.offset[1] = vertex.uv[1];
+                    rec.offset[2] = vertex.uvMorphBaseZW[0];
+                    rec.offset[3] = vertex.uvMorphBaseZW[1];
+                }
                 ++w;
             }
         }

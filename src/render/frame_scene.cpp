@@ -17,6 +17,7 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/effect_api.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -385,6 +386,7 @@ void RenderFrameScene(MMDApp* app) {
     device->Clear(0, nullptr, clearFlags, clearColor, 1.0f, 0);
 
     app->state.renderPassCount = 1;
+    BeginEffectObjectRegistration();
     if (FAILED(device->BeginScene()))
         return;
 

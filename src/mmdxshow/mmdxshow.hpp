@@ -520,7 +520,7 @@ class CPushPinDIBSq;   // forward: parked-pin member below
 class CPushSourceDIBSq : public CSource, public IPushSource
 {
 public:
-    CPushSourceDIBSq(LPUNKNOWN pUnkOuter, HRESULT* phr);     // TODO(phase B) 0x10001A70
+    CPushSourceDIBSq(LPUNKNOWN pUnkOuter, HRESULT* phr);     // 0x10001A70 (push_source.cpp)
     virtual ~CPushSourceDIBSq();                             // +0x0C 0x10001B50
     // NonDelegating QI override (primary +0x00, 0x100018B0):
     // IID_IPushSource -> ReturnSelf(this+0x70); else CBaseFilter's.

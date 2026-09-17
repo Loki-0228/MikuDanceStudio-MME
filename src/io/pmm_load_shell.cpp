@@ -43,6 +43,8 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/effect_api.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 
 namespace mikudancestudio {
 
@@ -104,7 +106,10 @@ void FontSubInit(MMDApp* app, const wchar_t* directory) {
 void LoadSceneFile() {
 
     MMDApp* app = g_Block;
+    runtime_log::WritePath("LOAD_SCENE", app->EnvFileName());
     char box[0x100];
+
+    NotifyEffectFileOpen(app->EnvFileName());
 
     app->SceneModified() = 0;                                  // 0x458FE6
     int fd = -1;

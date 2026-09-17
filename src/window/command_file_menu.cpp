@@ -5,7 +5,7 @@
 // (0x47E8A0): file open/save dialogs (GetOpenFileNameW/GetSaveFileNameW),
 // modal editor dialogs (DialogBoxParamA), menu check toggles
 // (CheckMenuItem), confirmations (MessageBox) and frame-maintenance loops.
-//   PORTING NOTE: stub migrated from src/app/late_ports.cpp (phase
+//   PORTING NOTE: stub migrated from src/unported/stubs.cpp (phase
 //   scaffolding); real body filled by parallel port.  Reference:
 //   ../translated/MikuMikuDance/fcn_0047e8a0.cpp
 //
@@ -56,7 +56,7 @@
 //                         "%d point was deleted." report
 //   223 (0xDF, 0x489C62)  output AVI: GetSaveFileNameW ("AVI files(*.avi)",
 //                         Flags 6) + AVI-out options dialog (sub_40F2F0,
-//                         tpl 0x28E/0x260) + 0x464760/0x45E820
+//                         tpl 0x28E/0x260) + Sub464760/Sub45E820
 //   224 (0xE0, 0x488AE8)  load VSQ: OPENFILENAMEW ("vsq files(*.vsq)",
 //                         "UserFile\Vsq", defext "vsq"), LoadVsqFile (VSQ load)
 //   225 (0xE1, 0x488DDE)  frame-shift dialog (sub_40F0B0,
@@ -71,7 +71,7 @@
 //   231 (0xE7, 0x489279)  delete eyebrow frames: confirm + PurgeMorphFrames(1)
 //   232 (0xE8, 0x487266)  load background picture (multi-format filter,
 //                         defext "bmp", DirBg/"UserFile\BackGround"),
-//                         LoadBackgroundPicture + dirty
+//                         LoadBackgroundPicture (was Sub4337A0) + dirty
 //   233 (0xE9, 0x4873DB)  accessory-bone display toggle (app+0x9E428 +
 //                         0xE9 menu check, gated on app+0x9E42C)
 //   234/235/236 (0xEA/0xEB/0xEC) FPS-cap radios: 1000/30/60 into
@@ -92,7 +92,7 @@
 //   250 (0xFA, 0x485387)  paste to difference flame: confirm (accessary/
 //                         bone by 0x2F8), selection clears, accessary
 //                         record replay (app+0x370, 0x34 stride,
-//                         0x414110) or bone paste (undo records at
+//                         Sub414110) or bone paste (undo records at
 //                         model+0x26EC..0x2700, 0x24 snapshots,
 //                         ResetBoneKeyCursor, record replay app+0x354, 0x54
 //                         stride, RegisterBoneKey) + refresh chain
@@ -101,9 +101,9 @@
 //                         frame, watermark + undo record + refresh
 //   230 (0xE6, 0x48DACB)  reset morph weights: table weights zeroed,
 //                         panel morph sliders/edits (0x1F9..0x209) reset
-// TODO(port): cases 251..302 (View/option menu) live in
-//              command_view_menu.cpp; 282..287 menu toggles sit between
-//              0x48B624 and 0x48DACB in the original (out of scope here).
+// Cases 251..302 (View/option menu) are ported in command_view_menu.cpp;
+// 282..287 menu toggles sit between 0x48B624 and 0x48DACB in the original
+// (out of scope here).
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -254,7 +254,7 @@ static const char kMsgSelectBoneJp[] =
 // call (which passes NO varargs) write an empty string; the %s slots are
 // never consumed.  Kept byte-identical; the two dummy args below are never
 // read (only silence the compiler's format-string warning).
-static const wchar_t kEmptyPathFormat[] = L"\x0\x0%s%s";
+static const wchar_t kFmt529688[] = L"\x0\x0%s%s";
 
 // 0x52B834: "このPCで処理できる大きさを超えています" (canvas-size dialog
 // "too big for your PC!" JP text, 0x40ECE0; x64 0x7FF7CB54F9E8 is
@@ -289,33 +289,32 @@ static const wchar_t kAccTypeGravityJp[] = L"\x91CD\x529B";            // 重力
 // 0x529679: the original's "Locale" label - a zero-initialised string blob,
 // so the canvas "too big" MessageBox caption is EMPTY (the original pushes
 // this address directly as lpCaption).
-static const char kEmptyCaption[] = "";
+static const char kEmptyCaption529679[] = "";
 
 // ---------------------------------------------------------------------------
 // External targets ported in other translation units (declared here with
-// their original VAs; not yet registered in ported_funcs.hpp).
+// their original VAs; bodies in the files noted on each line).
 // ---------------------------------------------------------------------------
-void PanelPaint(MMDApp* app);                       // VA 0x00414610
-void SelectionReeval(MMDApp* app);                  // VA 0x00430510 (stubs.cpp)
+void PanelPaint(MMDApp* app);                       // VA 0x00414610 (ui_panel_paint.cpp)
+void SelectionReeval(MMDApp* app);                  // VA 0x00430510 (ui_selection_reeval.cpp)
 
 // ---------------------------------------------------------------------------
-// Unported dependencies - kept as file-local external stubs with the call
-// sites intact (stubs.cpp must not be touched).  TODO(port): replace with
-// real bodies as the corresponding functions are ported.  The dialog procs
-// are now implemented below ("Dialog proc implementations").
+// Dependencies ported in other translation units - call sites preserved via
+// these file-local declarations.  The dialog procs are implemented below
+// ("Dialog proc implementations").
 // ---------------------------------------------------------------------------
-void RefreshMainWindowViewport(MMDApp* app);  // VA 0x0042C810 viewport refresh
+void RefreshMainWindowViewport(MMDApp* app);  // VA 0x0042C810 (ui_viewport_refresh.cpp) viewport refresh
 void AviBgOverlayRefresh(MMDApp* app);             // VA 0x004168D0 (bg_overlay.cpp)
 void PicBgOverlayRefresh(MMDApp* app);             // VA 0x00417130 (bg_overlay.cpp)
 void PostDeviceReset(MMDApp* app);             // VA 0x00440DB0 (device_reset.cpp)
-void LayoutViewportPanels(MMDApp* app);             // VA 0x0040CAC0
+void LayoutViewportPanels(MMDApp* app);             // VA 0x0040CAC0, was Sub40CAC0
                                                    // (ui_viewport_layout.cpp)
-void SnapshotSelectedKeysForUndo(unsigned char* model, int frame);  // VA 0x004A1510
-int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // VA 0x004B4260 frame seek
-void DeleteMarkedKeyframes(MMDApp* app);                       // VA 0x004316B0 frame
+void SnapshotSelectedKeysForUndo(unsigned char* model, int frame);  // VA 0x004A1510, was Sub4A1510 (model_keyframe_edit.cpp)
+int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // VA 0x004B4260 (model_frame_seek.cpp) frame seek
+void DeleteMarkedKeyframes(MMDApp* app);                       // VA 0x004316B0 (command_control_400.cpp) frame
                                                    // cleanup (delete unused)
 void LoadVsqFile(MMDApp* app, const wchar_t* path);  // VA 0x00435FE0 VSQ load
-void CopyDirPathW(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 path copy
+void CopyDirPathW(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 (media_load.cpp) path copy
 // 0x42AE40 path copy - real port in src/media/media_load.cpp as CopyPathW
 void CopyPathW(wchar_t* dest, const wchar_t* src);
 void StartAviRecordFullscreen(MMDApp* app);        // VA 0x00464760 (avi_record_start.cpp)
@@ -323,16 +322,16 @@ void StartAviRecordWindow(MMDApp* app);            // VA 0x0045E820 (avi_record_
 void RegisterMorphKeyCurrent(unsigned char* model, int morph,
                int frame);                         // VA 0x0049EEE0 frame
                                                    // register (blink keys)
-void RefreshLightPanel(MMDApp* app);                       // VA 0x00411070 undo chain
-void RefreshSelfShadowPanel(MMDApp* app);                       // VA 0x00411B90 undo chain
-void ApplyGravityTrack(MMDApp* app);                       // VA 0x00412330 undo chain
-void ApplyAccessoryTrack(MMDApp* app, int slot);             // VA 0x00413120 accessory
+void RefreshLightPanel(MMDApp* app);                       // VA 0x00411070 (ui_frame_refresh.cpp) undo chain
+void RefreshSelfShadowPanel(MMDApp* app);                       // VA 0x00411B90 (ui_frame_refresh.cpp) undo chain
+void ApplyGravityTrack(MMDApp* app);                       // VA 0x00412330 (track_apply.cpp) undo chain
+void ApplyAccessoryTrack(MMDApp* app, int slot);             // VA 0x00413120 (accessory_paste.cpp) accessory
                                                    // reload (undo chain)
-void SyncAccessoryEditPanel(MMDApp* app);                       // VA 0x004134E0 undo chain
+void SyncAccessoryEditPanel(MMDApp* app);                       // VA 0x004134E0 (ui_frame_refresh.cpp) undo chain
 // 0x4337A0 picture load - real port in src/media/media_load.cpp
 void LoadBackgroundPicture(MMDApp* app);
                                                    // load (0xE8)
-int PasteAccessoryKeyRecord(MMDApp* app, void* rec, int useSelectedSlot);  // VA 0x00414110
+int PasteAccessoryKeyRecord(MMDApp* app, void* rec, int useSelectedSlot);  // VA 0x00414110, was Sub414110
                                                    // accessary paste step (returns
                                                    // int: 0 stops the replay loop)
 void ResetBoneKeyCursor(unsigned char* model);              // VA 0x004A4940 frame
@@ -343,7 +342,7 @@ bool RegisterBoneKey(unsigned char* model, unsigned char* rec, int frameOffset,
 void IdentityCtor(void* obj);                         // VA 0x004C46F0 ctor
 void* ConstructArrayElements(void* block, std::uint32_t elementSize,
                              std::uint32_t count,
-                             void* ctor);          // VA 0x00401150
+                             void* ctor);          // VA 0x00401150, was Sub401150
 
 // 32-bit multiply with the original's overflow idiom (mul/seto/neg/or):
 // returns 0xFFFFFFFF when the product overflows (case 250 allocations).
@@ -430,13 +429,13 @@ void PurgeMorphFrames(MMDApp* app, std::uint8_t type) {
 
 // Forward declarations of the in-file dependency stubs defined below (the
 // dialog procs reference them before their definitions).
-int FillCodecCombo(DShowRecorder* recorder, HWND hCombo, char english);  // VA 0x00408F20
-void RebindCodecOnComboChange(DShowRecorder* recorder, int sel, HWND hButton, char english);  // VA 0x00409730
-void ShowCodecConfigDialog(DShowRecorder* recorder, HWND hDlg);  // VA 0x004092A0
-void ApplyCameraFrameMultiplyDialog(MMDApp* app, HWND hDlg);  // VA 0x0043DAD0
-void BuildAccessoryOrderArray(MMDApp* app, int count);        // VA 0x00439C90
-void ApplyAccessorySettingsDialog(MMDApp* app, int count, HWND hDlg);  // VA 0x00439D00
-LRESULT __stdcall GroundShadowColorEditSubclassProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0040F730
+int FillCodecCombo(DShowRecorder* recorder, HWND hCombo, char english);  // VA 0x00408F20, was Sub408F20
+void RebindCodecOnComboChange(DShowRecorder* recorder, int sel, HWND hButton, char english);  // VA 0x00409730, was Sub409730
+void ShowCodecConfigDialog(DShowRecorder* recorder, HWND hDlg);  // VA 0x004092A0, was Sub4092A0
+void ApplyCameraFrameMultiplyDialog(MMDApp* app, HWND hDlg);  // VA 0x0043DAD0, was Sub43DAD0
+void BuildAccessoryOrderArray(MMDApp* app, int count);        // VA 0x00439C90, was Sub439C90
+void ApplyAccessorySettingsDialog(MMDApp* app, int count, HWND hDlg);  // VA 0x00439D00, was Sub439D00
+LRESULT __stdcall GroundShadowColorEditSubclassProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0040F730, was Sub40F730
 
 // VA 0x0040ECE0 - screen-size dialog proc (template caption "screen size" /
 // 出力画面サイズ変更; case 212, tpl 0x28D/0x25F).
@@ -448,7 +447,7 @@ LRESULT __stdcall GroundShadowColorEditSubclassProc(HWND, UINT, WPARAM, LPARAM);
 // 0x529679) is shown; otherwise the values land in app+0xA08D4/0xA08D8 and
 // EndDialog(1).  Cancel: EndDialog(2).
 INT_PTR __stdcall ScreenSizeDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                    LPARAM lParam) {  // VA 0x0040ECE0
+                                    LPARAM lParam) {  // was Sub40ECE0, VA 0x0040ECE0
     MMDApp* app = g_Block;
     (void)lParam;
     char text[0x100];
@@ -471,7 +470,7 @@ INT_PTR __stdcall ScreenSizeDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                 MessageBoxA(hDlg,
                             app->EnglishUI() != 0 ? "too big for your PC!"
                                                   : kMsgCanvasTooBigJp,
-                            kEmptyCaption, 0);
+                            kEmptyCaption529679, 0);
             } else {
                 app->RenderWidth() = w;
                 app->RenderHeight() = h;
@@ -489,7 +488,7 @@ INT_PTR __stdcall ScreenSizeDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // select-all on 0x259.  OK: atof each edit into the model-offset floats
 // app+0xA08E4/0xA08E8/0xA08EC and EndDialog(1).  Cancel: EndDialog(2).
 INT_PTR __stdcall ModelOffsetDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                     LPARAM lParam) {  // VA 0x0040EEF0
+                                     LPARAM lParam) {  // was Sub40EEF0, VA 0x0040EEF0
     MMDApp* app = g_Block;
     (void)lParam;
     if (msg == WM_INITDIALOG) {
@@ -517,7 +516,7 @@ INT_PTR __stdcall ModelOffsetDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // select-all.  OK: app+0xA08F4 = atol(edit 0x268) and EndDialog(1).
 // Cancel: EndDialog(2).
 INT_PTR __stdcall FrameShiftDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                    LPARAM lParam) {  // VA 0x0040F0B0
+                                    LPARAM lParam) {  // was Sub40F0B0, VA 0x0040F0B0
     MMDApp* app = g_Block;
     (void)lParam;
     if (msg == WM_INITDIALOG) {
@@ -539,7 +538,7 @@ INT_PTR __stdcall FrameShiftDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // WM_INITDIALOG: topmost only.  OK: app+0xA08F8/0xA08FC = atol(edits
 // 0x26A/0x26B) and EndDialog(1).  Cancel: EndDialog(2).
 INT_PTR __stdcall BlinkRegisterDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                       LPARAM lParam) {  // VA 0x0040F1E0
+                                       LPARAM lParam) {  // was Sub40F1E0, VA 0x0040F1E0
     MMDApp* app = g_Block;
     (void)lParam;
     if (msg == WM_INITDIALOG) {
@@ -571,7 +570,7 @@ INT_PTR __stdcall BlinkRegisterDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // bind) + app+0xA0CD8 update; button 0x2D4 -> ShowCodecConfigDialog (the
 // codec's own config dialog + state capture).
 INT_PTR __stdcall AviOutDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                LPARAM lParam) {  // VA 0x0040F2F0
+                                LPARAM lParam) {  // was Sub40F2F0, VA 0x0040F2F0
     MMDApp* app = g_Block;
     char text[0x100];
     if (msg == WM_INITDIALOG) {
@@ -656,7 +655,7 @@ INT_PTR __stdcall AviOutDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // edits into the camera frame transform scale/offset) then EndDialog(1).
 // Cancel: EndDialog(2).
 INT_PTR __stdcall CameraFrameMultiplyDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                             LPARAM lParam) {  // VA 0x0044D2D0
+                                             LPARAM lParam) {  // was Sub44D2D0, VA 0x0044D2D0
     MMDApp* app = g_Block;
     (void)lParam;
     if (msg == WM_INITDIALOG) {
@@ -692,7 +691,7 @@ INT_PTR __stdcall CameraFrameMultiplyDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 // app+0xA0D6C=1, the four app+0xA0BF0..0xA0BFC floats take
 // TBM_GETPOS/100.0 and the edit is refreshed (returns 1).
 INT_PTR __stdcall GroundShadowColorDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                           LPARAM lParam) {  // VA 0x0042DFF0
+                                           LPARAM lParam) {  // was Sub42DFF0, VA 0x0042DFF0
     MMDApp* app = g_Block;
     (void)lParam;
     char text[0x100];
@@ -766,7 +765,7 @@ static int g_accOrderCount = 0;
 //      only when clamped) and the list selection reflects it (-1 when out
 //      of range).
 INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
-                                           LPARAM lParam) {  // VA 0x0044CA40
+                                           LPARAM lParam) {  // was Sub44CA40, VA 0x0044CA40
     MMDApp* app = g_Block;
     char text[0x100];
     if (msg == WM_INITDIALOG) {
@@ -953,21 +952,18 @@ INT_PTR __stdcall AccessorySettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 }
 
 // ---------------------------------------------------------------------------
-// New unported dependencies of the dialog procs above - kept as in-file
-// external-linkage stubs with the call sites intact (stubs.cpp must not be
-// touched).  TODO(port): replace with real bodies as the corresponding
-// functions are ported.
+// Dependencies of the dialog procs above.  0x408F20 / 0x409730 / 0x4092A0
+// (AVI codec combo fill / bind / test) have real bodies in
+// src/app/dshow_record_graph.cpp; the forward declarations above are their
+// only in-file reference.  The dialog procs themselves are ported below.
 // ---------------------------------------------------------------------------
-// 0x408F20 / 0x409730 / 0x4092A0 (AVI codec combo fill / bind / test) now
-// have real bodies in src/app/dshow_record_graph.cpp; the forward
-// declarations above are their only in-file reference.
 // VA 0x0043DAD0 - thiscall app method (this = Block): reads the 16
 // dialog edits (0x2AE..0x2BD) and applies the scale/offset pairs to every
 // used camera-frame record of the camera key table (0x54-stride over
 // 0xCD140 bytes, transform floats at +0x10..+0x24, frame-count int at
 // +0x44; the three rotation edits enter as -deg*pi/180), then
 // ReloadModels (0x42E640) + PostViewRefresh + dirty (app+0xA0B4D).
-void ApplyCameraFrameMultiplyDialog(MMDApp* app, HWND hDlg) {  // VA 0x0043DAD0
+void ApplyCameraFrameMultiplyDialog(MMDApp* app, HWND hDlg) {  // was Sub43DAD0, VA 0x0043DAD0
     auto& s = *app;
     char text[256];
     float v[16];
@@ -1015,8 +1011,8 @@ void ApplyCameraFrameMultiplyDialog(MMDApp* app, HWND hDlg) {  // VA 0x0043DAD0
 // VA 0x00439C90 - thiscall app method (this = Block): rebuilds the
 // accessory order index array (app+0xA0B1C) from the 255 accessory
 // objects (table at app+0x9DD70, order byte at obj+1181), then
-// 0x42F1E0 + 0x40D070.
-void BuildAccessoryOrderArray(MMDApp* app, int count) {  // VA 0x00439C90
+// Sub42F1E0 + Sub40D070.
+void BuildAccessoryOrderArray(MMDApp* app, int count) {  // was Sub439C90, VA 0x00439C90
     void** order = static_cast<void**>(
         app->AccessoryOrderArray());   // 0xA0B1C
     for (int i = 0; i < count; ++i) {
@@ -1035,9 +1031,9 @@ void BuildAccessoryOrderArray(MMDApp* app, int count) {  // VA 0x00439C90
 // - order byte (obj+1181) and name (obj+568) updated from the dialog list
 // 0x274 (LB_GETTEXT per row), the selected-index byte (app+0x9E170) set
 // from order[0], SyncAccessoryEditPanel, per-object show-flag sweep (+1196) over the
-// 255 accessory slots (51 x 5 unrolled in the original), 0x42F1E0 +
-// 0x40D070.
-void ApplyAccessorySettingsDialog(MMDApp* app, int count, HWND hDlg) {  // VA 0x00439D00
+// 255 accessory slots (51 x 5 unrolled in the original), Sub42F1E0 +
+// Sub40D070.
+void ApplyAccessorySettingsDialog(MMDApp* app, int count, HWND hDlg) {  // was Sub439D00, VA 0x00439D00
     auto& s = *app;
     mdl::AccessoryRecord** order = static_cast<mdl::AccessoryRecord**>(
         app->AccessoryOrderArray());   // 0xA0B1C
@@ -1075,7 +1071,7 @@ void ApplyAccessorySettingsDialog(MMDApp* app, int count, HWND hDlg) {  // VA 0x
 // original body is ported.
 LRESULT __stdcall GroundShadowColorEditSubclassProc(HWND hWnd, UINT uMsg,
                                                     WPARAM wParam,
-                                                    LPARAM lParam) {  // VA 0x0040F730
+                                                    LPARAM lParam) {  // was Sub40F730, VA 0x0040F730
     return DefWindowProcA(hWnd, uMsg, wParam, lParam);
 }
 
@@ -1440,7 +1436,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
 
     // ------------------------------------------------------------------
     // 224 (0x00488AE8): load VSQ.  SetCurrentDirectoryW(exe dir), empty
-    // file buffer (kEmptyPathFormat), OPENFILENAMEW: filter "vsq files(*.vsq)",
+    // file buffer (kFmt529688), OPENFILENAMEW: filter "vsq files(*.vsq)",
     // initial dir "UserFile\Vsq", defext "vsq", title "load vsq data"
     // (EN) / JP, Flags 0x1000; on OK LoadVsqFile(app, path) (VSQ load) and
     // dirty.  Owner = app+0xA0D38 when set, else the main window.
@@ -1449,7 +1445,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         SetCurrentDirectoryW(app->ExeDir());
         app->state.enterKeyState = 1;
         wchar_t path[0x100];
-        swprintf_s(path, 0x100, kEmptyPathFormat, L"", L"");
+        swprintf_s(path, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = sizeof(ofn);
@@ -1481,14 +1477,14 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // defext "avi", Flags 6, initial dir "UserFile" or DirUser when the
     // 0x12D menu gate is checked); dir-copy into DirUser + path-copy into
     // app+0x9EB90, then the AVI-out options dialog (sub_40F2F0, tpl 0x28E EN /
-    // 0x260 JP) and 0x464760 / 0x45E820 depending on app+0xA0D61.
+    // 0x260 JP) and Sub464760 / Sub45E820 depending on app+0xA0D61.
     // ------------------------------------------------------------------
     case 223: {
         app->state.dialogFlags[3] = 1;
         app->state.enterKeyState = 1;
         SetCurrentDirectoryW(app->ExeDir());
         wchar_t path[0x100];
-        swprintf_s(path, 0x100, kEmptyPathFormat, L"", L"");
+        swprintf_s(path, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = sizeof(ofn);
@@ -1786,7 +1782,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // MessageBox (accessary or bone variant by app+0x2F8), then either
     // the accessary paste (clear the four frame-table selections + the
     // 255 accessory tables, replay app+0x9DA44 records of app+0x370
-    // (0x34 stride) through 0x414110, refresh chain) or the bone paste
+    // (0x34 stride) through Sub414110, refresh chain) or the bone paste
     // (paste counter model+0x31B4 wrap at 0x1E, 28-byte-stride undo
     // records at model+0x26EC/0x26F8/0x26FC/0x2700, per-bone 0x24 records
     // with pos/quat/frame-flag snapshots, model+0x3904 clear, ResetBoneKeyCursor,
@@ -2186,13 +2182,13 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
     // 対応フォーマット", 8 extensions, defext "bmp"), initial dir
     // "UserFile\BackGround" or DirBg when the 0x12D menu gate is checked;
     // dir-copy into DirBg + path-copy into app+0x9E448, then
-    // LoadBackgroundPicture and the dirty flag.
+    // LoadBackgroundPicture (was Sub4337A0) and the dirty flag.
     // ------------------------------------------------------------------
     case 232: {
         app->state.enterKeyState = 1;
         SetCurrentDirectoryW(app->ExeDir());
         wchar_t path[0x100];
-        swprintf_s(path, 0x100, kEmptyPathFormat, L"", L"");
+        swprintf_s(path, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = sizeof(ofn);

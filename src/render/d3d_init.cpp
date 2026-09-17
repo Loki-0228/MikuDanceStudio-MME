@@ -320,14 +320,9 @@ bool InitD3D(MMDApp* app, HWND hwnd, bool english, HMODULE hModule) {
     D3DCAPS9 caps;
     if (FAILED(device->GetDeviceCaps(&caps)))
         return true;                       // original proceeds regardless
-    // x64 0x7FF7CB4280E1: renderer+240048 mirrors caps+0x6C, which is
-    // D3DCAPS9::MaxAnisotropy (MaxTextureWidth/Height live at +0x58/+0x5C
-    // in this struct, pushing MaxAnisotropy to +0x6C; MaxStreams is the
-    // far later +0xBC).  render_states feeds this field to
-    // D3DSAMP_MAXANISOTROPY.  The old +0x70 read picked MaxVertexW (float
-    // bits) and delivered a garbage anisotropy cap.
+    const auto* capsB = reinterpret_cast<const unsigned char*>(&caps);
     r->shaderModelCaps =
-        static_cast<std::int32_t>(caps.MaxAnisotropy);
+        *reinterpret_cast<const std::int32_t*>(capsB + 0x70);
     // The original stack-local labels are displaced by one dword around
     // GetDeviceCaps.  The actual fields consumed at 0x4084DA..0x408533 are
     // MaxTextureWidth/Height and the VS/PS version dwords.  Reading the
@@ -392,22 +387,17 @@ bool InitD3D(MMDApp* app, HWND hwnd, bool english, HMODULE hModule) {
                     effectResult = d3dx->createEffectFromResA(
                         device, nullptr, MAKEINTRESOURCEA(117), nullptr,
                         nullptr, 0, nullptr, effect, &effectErrors);
-                    // Level-0 format of the HDR texture decides the integer
-                    // the effect receives under the name "SKII1": 114 ==
-                    // D3DFMT_R32F ('r') -> 600 plus the shader-model-3 flag,
-                    // anything else -> 500.  (In the original this is
-                    // IDirect3DTexture9::GetLevelDesc followed by
-                    // ID3DXBaseEffect::SetInt - x86 vtable bytes 0x44 on the
-                    // texture and 0x68 on the effect.)
+                    // technique desc first-char 'r' check -> SKII1 = 600/500
                     if (*effect != nullptr) {
-                        D3DSURFACE_DESC levelDesc{};
-                        r->hdrTexture->GetLevelDesc(0, &levelDesc);
-                        const bool r32fTarget =
-                            levelDesc.Format == D3DFMT_R32F;
-                        static_cast<d3dx::Effect*>(*effect)->SetInt(
-                            "SKII1", r32fTarget ? 600 : 500);
+                        DWORD desc[6] = {};
+                        auto* vt = *reinterpret_cast<void***>(*effect);
+                        reinterpret_cast<void(__stdcall*)(void*, int, void*)>(
+                            vt[0x44 / 4])(*effect, 0, desc);
+                        reinterpret_cast<HRESULT(__stdcall*)(void*, const char*, int)>(
+                            vt[0x68 / 4])(*effect, "SKII1",
+                                          desc[0] == 'r' ? 600 : 500);
                         r->shaderModel3 =
-                            static_cast<std::uint8_t>(r32fTarget);
+                            static_cast<std::uint8_t>(desc[0] == 'r');
                     }
                 }
                 if (FAILED(effectResult) || *effect == nullptr)

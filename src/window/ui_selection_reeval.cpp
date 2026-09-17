@@ -97,7 +97,7 @@ void DrawControlPoints(MMDApp* app, const Curve& curve) {  // 0x416090
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// VA 0x00416280 - DragInterpolationControlPoint(app):
+// VA 0x00416280 - DragInterpolationControlPoint(app) (was Sub416280):
 //   interpolation-curve panel drag handler
 // (mouse move while dragging a control point).  Repaints the 128x128 curve
 // cache white, clamps the pointer to the panel (x = mouse X-8, y =
@@ -118,7 +118,7 @@ void DrawControlPoints(MMDApp* app, const Curve& curve) {  // 0x416090
 // Ends with DrawCurve + DrawControlPoints (0x415E90/0x416090) and the
 // 8/bottom-135/137/bottom-6 invalidate rect.
 // ---------------------------------------------------------------------------
-void DragInterpolationControlPoint(MMDApp* app) {  // VA 0x00416280
+void DragInterpolationControlPoint(MMDApp* app) {  // was Sub416280, VA 0x00416280
     const HWND window = static_cast<HWND>(app->Hwnd());
     HDC dc = app->CurveDC();
     HPEN pen = CreatePen(PS_SOLID, 1, 0x00FFFFFFu);              // 0x41629D

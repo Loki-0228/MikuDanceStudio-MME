@@ -45,7 +45,7 @@
 //      gated on mode word this+0x24 != 3) and then re-set for the hovered
 //      rows to (this+0xC0 != 3); the hover rect lands in
 //      this+0xA05C0..0xA05CC.  Ends with PanelPaint and the rect zeroed.
-//   6. 0x446A4C  if byte this+0x9DA09 != 0: 0x416280.
+//   6. 0x446A4C  if byte this+0x9DA09 != 0: Sub416280.
 //
 // The magic-number divisions (/13 = 0x4EC4EC4F<<2, /14 = 0x92492493<<3 with
 // add) were verified numerically against the original instruction stream -
@@ -73,16 +73,16 @@ namespace mikudancestudio {
 // VA 0x00414610 - ported (ui_panel_paint.cpp).
 void PanelPaint(MMDApp* app);
 
-// Not-yet-ported refresh helpers (src/app/late_ports.cpp).
-void SyncAccessoryEditPanel(MMDApp* a);              // 0x4134E0
-void RefreshLightPanel(MMDApp* a);              // 0x411070
-void ApplyGravityTrack(MMDApp* a);              // 0x412330
-void RefreshSelfShadowPanel(MMDApp* a);              // 0x411B90
-void DragInterpolationControlPoint(MMDApp* a);  // 0x416280
-void ReloadModels(MMDApp* a);              // 0x42E640
-void RelayoutSidebarControls(MMDApp* a);              // 0x442EB0
-int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // 0x4B4260
-void ApplyAccessoryTrack(MMDApp* a, int idx);     // 0x413120
+// Refresh helpers, ported in other translation units.
+void SyncAccessoryEditPanel(MMDApp* a);              // 0x4134E0 (ui_frame_refresh.cpp)
+void RefreshLightPanel(MMDApp* a);              // 0x411070 (ui_frame_refresh.cpp)
+void ApplyGravityTrack(MMDApp* a);              // 0x412330 (track_apply.cpp)
+void RefreshSelfShadowPanel(MMDApp* a);              // 0x411B90 (ui_frame_refresh.cpp)
+void DragInterpolationControlPoint(MMDApp* a);  // 0x416280, was Sub416280 (ui_selection_reeval.cpp)
+void ReloadModels(MMDApp* a);              // 0x42E640, was Sub42E640 (timeline_advance.cpp)
+void RelayoutSidebarControls(MMDApp* a);              // 0x442EB0 (ui_windowsize.cpp)
+int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // 0x4B4260 (model_frame_seek.cpp)
+void ApplyAccessoryTrack(MMDApp* a, int idx);     // 0x413120 (accessory_paste.cpp)
 
 namespace {
 
@@ -120,10 +120,34 @@ unsigned char* CurrentModel(MMDApp* app) {
 // lists, nullptr for the band lists.
 template <typename Key>
 void RemapList(MMDApp* app, const int* recs, int count, Key* keys,
-               int row, int limit, std::uint32_t* maxModel) {
+               int row, int limit, std::uint32_t* maxModel,
+               int capacity = 10000) {
     auto valid = [limit](int idx) {
         return limit >= 0 ? idx >= limit : idx > 0;
     };
+#ifdef MIKUDANCESTUDIO_DIAG
+    // TEMP(debug, keyframe-drag crash): validate the record buffer before
+    // the remap walks it - rec[0] must be a list index within capacity.
+    // Logs and skips the whole remap instead of dereferencing a wild index.
+    // (Diagnostic only: the original walks the records unvalidated.)
+    for (int i = 0; i < count; ++i) {
+        const int idx = recs[4 * i];
+        if (idx < 0 || idx >= capacity) {
+            std::fprintf(stderr,
+                         "REMAP-GUARD: rec[%d/%d]={%d,%d,%d,%d} row=%d "
+                         "limit=%d capacity=%d keys=%p recs=%p\n",
+                         i, count, idx, recs[4 * i + 1], recs[4 * i + 2],
+                         recs[4 * i + 3], row, limit, capacity,
+                         static_cast<void*>(keys), static_cast<const void*>(recs));
+            for (int d = 0; d < 8 && d < count; ++d)
+                std::fprintf(stderr, "  rec[%d]={%d,%d,%d,%d}\n", d,
+                             recs[4 * d], recs[4 * d + 1], recs[4 * d + 2],
+                             recs[4 * d + 3]);
+            std::fflush(stderr);
+            return;
+        }
+    }
+#endif
     if (row == 0) {
         for (int i = 0; i < count; ++i) {
             const int* rec = recs + 4 * i;
@@ -184,6 +208,28 @@ void RemapAccList(MMDApp* app, const int* recs, int count, int row) {
     auto listOf = [app](int slot) {
         return app->AccessoryKeys(slot);
     };
+#ifdef MIKUDANCESTUDIO_DIAG
+    // TEMP(debug, keyframe-drag crash): same validation as RemapList - the
+    // accessory records carry the key index at +4 and the slot at +8.
+    // (Diagnostic only: the original walks the records unvalidated.)
+    for (int i = 0; i < count; ++i) {
+        const int idx = recs[4 * i + 1];
+        const int slot = recs[4 * i + 2];
+        if (idx < 0 || idx >= static_cast<int>(mdl::kTimelineKeyCapacity) ||
+            slot < 0 || slot >= 255 || listOf(slot) == nullptr) {
+            std::fprintf(stderr,
+                         "REMAPACC-GUARD: rec[%d/%d]={%d,%d,%d,%d} row=%d\n",
+                         i, count, recs[4 * i], idx, slot, recs[4 * i + 3],
+                         row);
+            for (int d = 0; d < 8 && d < count; ++d)
+                std::fprintf(stderr, "  rec[%d]={%d,%d,%d,%d}\n", d,
+                             recs[4 * d], recs[4 * d + 1], recs[4 * d + 2],
+                             recs[4 * d + 3]);
+            std::fflush(stderr);
+            return;
+        }
+    }
+#endif
     if (row == 0) {
         for (int i = 0; i < count; ++i) {
             const int* rec = recs + 4 * i;
@@ -358,7 +404,8 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                               TimelineSelectionBand::ModelBone)),
                           app->TimelineSelectionCount(TimelineSelectionBand::ModelBone),
                           mdl::DisplayKeys(model), row, -1,
-                          &record.maxFrame);
+                          &record.maxFrame,
+                          static_cast<int>(mdl::kDisplayKeyCapacity));
                 // morph list: 20-byte records, idx >= model count
                 // (0x445B38..0x445D90)
                 RemapList(app,
@@ -368,7 +415,8 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                               TimelineSelectionBand::ModelMorph),
                           mdl::MorphKeys(model), row,
                           static_cast<std::int32_t>(record.morphCount),
-                          &record.maxFrame);
+                          &record.maxFrame,
+                          static_cast<int>(mdl::kMorphKeyCapacity));
                 // IK list: 60-byte records, idx >= model count
                 // (0x445D9E..0x446040)
                 RemapList(app,
@@ -377,7 +425,8 @@ void HandleMouseMove(std::uint32_t lParam, int mouseY) {
                           app->TimelineSelectionCount(TimelineSelectionBand::ModelIk),
                           mdl::BoneKeys(model), row,
                           static_cast<std::int32_t>(record.boneCount),
-                          &record.maxFrame);
+                          &record.maxFrame,
+                          static_cast<int>(mdl::kBoneKeyCapacity));
                 PanelPaint(app);  // 0x446044
                 // 0x446065: original __thiscall(this=model, dword0x980,
                 // dword0xA0CC4).

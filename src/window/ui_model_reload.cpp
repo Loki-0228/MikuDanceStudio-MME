@@ -15,6 +15,7 @@
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/ui_translation.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/panel_controls.hpp"
 
@@ -205,7 +206,7 @@ void PostModelReload(MMDApp* app) {  // 0x41A650
                              referenceTranslation.m[3][2];
 }
 
-// (0x41A650 was a local alias wrapper of PostModelReload above - removed;
+// (Sub41A650 was a local alias wrapper of PostModelReload above - removed;
 //  callers now use the PostModelReload name directly.)
 
 void PostModelReload2(MMDApp* app) {  // 0x40D940
@@ -274,8 +275,8 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
         EnableWindow(MainControl(app, 400), FALSE);
         EnableWindow(MainControl(app, 401), FALSE);
         if (app->EnglishUI() != 0) {
-            SetWindowTextA(MainControl(app, 407), "btm");
-            SetWindowTextA(GetDlgItem(viewportWindow, panel::kModelEditToggle), "To model");
+            SetUiControlText(app, MainControl(app, 407), "btm");
+            SetUiControlText(app, GetDlgItem(viewportWindow, panel::kModelEditToggle), "To model");
         } else {
             SetWindowTextW(MainControl(app, 407), L"\x4e0b\x9762");
             SetWindowTextW(GetDlgItem(viewportWindow, panel::kModelEditToggle),
@@ -294,8 +295,8 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     EnableWindow(MainControl(app, 401),
                  mdl::Mdl(model)->redoDirty != 0);
     if (app->EnglishUI() != 0) {
-        SetWindowTextA(MainControl(app, 407), "camer");
-        SetWindowTextA(GetDlgItem(viewportWindow, panel::kModelEditToggle), "To camera");
+        SetUiControlText(app, MainControl(app, 407), "camer");
+        SetUiControlText(app, GetDlgItem(viewportWindow, panel::kModelEditToggle), "To camera");
     } else {
         SetWindowTextW(MainControl(app, 407), L"\x30ab\x30e1\x30e9");
         SetWindowTextW(GetDlgItem(viewportWindow, panel::kModelEditToggle),
@@ -305,7 +306,7 @@ void PostModelReload2(MMDApp* app) {  // 0x40D940
     ShowWindow(GetDlgItem(viewportWindow, panel::kReadoutDistEdit), SW_HIDE);
 }
 
-void RebuildModelModePanel(MMDApp* app) {  // 0x44D610
+void RebuildModelModePanel(MMDApp* app) {  // was Sub44D610, 0x44D610
     app->state.optflag[0] = 0;
     HWND combo = MainControl(app, 433);
     SendMessageA(combo, CB_DELETESTRING, 5, 0);
@@ -360,7 +361,7 @@ void RebuildModelModePanel(MMDApp* app) {  // 0x44D610
     }
 }
 
-void RebuildCameraModePanel(MMDApp* app) {  // 0x44D780
+void RebuildCameraModePanel(MMDApp* app) {  // was Sub44D780, 0x44D780
     // Rebuild the camera-mode transform combo exactly as the original does.
     // Item four is the model-mode "all" entry; the three camera entries are
     // appended in its place.
@@ -368,12 +369,9 @@ void RebuildCameraModePanel(MMDApp* app) {  // 0x44D780
     HWND combo = MainControl(app, 433);
     SendMessageA(combo, CB_DELETESTRING, 4, 0);
     if (app->EnglishUI() != 0) {
-        SendMessageA(combo, CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("distance"));
-        SendMessageA(combo, CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("view angle"));
-        SendMessageA(combo, CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("all"));
+        AddUiComboText(app, combo, "distance");
+        AddUiComboText(app, combo, "view angle");
+        AddUiComboText(app, combo, "all");
     } else {
         SendMessageW(combo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(L"\x8ddd\x96e2"));
@@ -406,7 +404,7 @@ void RebuildCameraModePanel(MMDApp* app) {  // 0x44D780
     basis[15] = 1.0f;
 }
 
-void ApplyModelComboSelection(MMDApp* app) {  // 0x44D940
+void ApplyModelComboSelection(MMDApp* app) {  // was Sub44D940, 0x44D940
     HWND hwnd = static_cast<HWND>(app->Hwnd());
     const int selection = static_cast<int>(
         SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_GETCURSEL, 0, 0));
@@ -424,10 +422,8 @@ void ApplyModelComboSelection(MMDApp* app) {  // 0x44D940
                 static constexpr const char* kNames[] = {
                     "camera", "light", "s shadow", "gravity",
                 };
-                for (const char* name : kNames) {
-                    SendMessageA(frameCombo, CB_ADDSTRING, 0,
-                                 reinterpret_cast<LPARAM>(name));
-                }
+                for (const char* name : kNames)
+                    AddUiComboText(app, frameCombo, name);
             } else {
                 static constexpr const wchar_t* kNames[] = {
                     L"\x30ab\x30e1\x30e9", L"\x7167\x660e",

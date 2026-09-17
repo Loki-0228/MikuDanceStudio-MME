@@ -207,7 +207,7 @@ bool EditModeRecord(MMDApp* app, int mode) {
                 value = static_cast<float>(value -
                     static_cast<double>(dy) * kAccDrag);
                 EchoRecord(dialog, 754 + axis, "%3.2f",
-                    value / g_AnglePiTruncated * g_AngleDegreesScale);
+                    value / g_ConvB52B768 * g_ConvA52B760);
             }
         } else {
             // Rigid-body page: drag edits the body rotation (715..717).
@@ -220,7 +220,7 @@ bool EditModeRecord(MMDApp* app, int mode) {
                 value = static_cast<float>(value -
                     static_cast<double>(dy) * kAccDrag);
                 EchoRecord(dialog, 715 + axis, "%3.2f",
-                    value / g_AnglePiTruncated * g_AngleDegreesScale);
+                    value / g_ConvB52B768 * g_ConvA52B760);
             }
         }
         return true;

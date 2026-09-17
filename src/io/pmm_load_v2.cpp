@@ -1,5 +1,5 @@
 // ===========================================================================
-// VA 0x00450000 - LoadSceneV2  (; original: sub_450000,
+// VA 0x00450000 - LoadSceneV2  (was Sub450000; original: sub_450000,
 //                            0x9796 bytes - the v2 (.pmm "0002") loader body)
 // ===========================================================================
 // Called by the load shell sub_458F80 (0x459106) as sub_450000(app, fd).
@@ -39,7 +39,7 @@
 //   0x454230  UI combo reset run: 436/474/449/450/433 CB_RESETCONTENT +
 //             initial entries (EN/JP), model re-population by order byte
 //             (0x2D9C), register list per edit mode, CB_SETCURSEL,
-//             0x49C850 (0x454C72)
+//             Sub49C850 (0x454C72)
 //   0x454C9A  re-allocate: camera 840000 / light 400000 / selection
 //             240000 / self-shadow 360000 + memset; shadow mode byte
 //             from the D3D wrapper (0x1D544); default +0x10 float
@@ -53,7 +53,7 @@
 //             rgb/direction slider UI
 //   0x45593E  9E170 byte + 9DA48 dword; CB_RESETCONTENT 0x1D7/0x1DB;
 //             accessory-shadow name list; accessory block (0x4B0
-//             objects, InitAccessoryRecord, LoadAccessoryObject 0x4C5F40 with
+//             objects, Sub04B0Init, LoadAccessoryObject 0x4C5F40 with
 //             locate-and-retry dialog, name 0x64 + path 0x100 + 60-byte
 //             track records with the transparency quirk byte decoded
 //             as (b&1) flag + (100 - b/2)/100 scale)
@@ -1897,7 +1897,7 @@ static bool LoadSceneV2_AccessoryBlock(PmmV2LoadContext& ctx, int fd) {
         if (acc != nullptr) IdentityCtor(acc);
         accs[accSlot] = acc;
         std::memset(accs[accSlot], 0, sizeof(mdl::AccessoryRecord));
-        InitAccessoryRecord(accs[accSlot]);                             // 0x4C4760
+        Sub04B0Init(accs[accSlot]);                             // 0x4C4760
         Rd(fd, accName, 0x64);                                  // 0x455ABE
         Rd(fd, mbPath, 0x100);                                  // 0x455AD1
         ResolveAnsiUserFile(reinterpret_cast<unsigned char*>(wrap),
@@ -2910,7 +2910,7 @@ static void LoadSceneV2_SuccessTail(PmmV2LoadContext& ctx,
 
 }  // namespace
 
-void LoadSceneV2(MMDApp* app, int fd) {  // VA 0x00450000
+void LoadSceneV2(MMDApp* app, int fd) {  // was Sub450000, VA 0x00450000
     auto* s = app;
     PmmV2LoadContext ctx(app);
 

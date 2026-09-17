@@ -9,9 +9,12 @@
 // scripts/gen_ui_controls.py - ids, classes, texts, styles, geometry and
 // sidebar-relative positions are the original's, in original order).
 //
-// TODO(port) remaining phases of the original (tracked in docs/PORTING_STATUS.md):
-//   - splite.tga / auxiliary D3D texture load
-//   - font system init tail (0x00424DC0 / 0x0042AE80 beyond CreateUiFont)
+// Remaining phases of the original, now ported:
+//   - HUD sprite sheet (the original's "splite.tga", shipped as
+//     res/assets/hud_sprites.png) + accessory-helper texture: loaded below
+//     via LoadPngTexture (0x467509 / 0x46759E).
+//   - InitToonTextures (0x00424DC0) - src/render/toon_textures.cpp
+//   - InitSceneFontTexture (0x0042AE80) - src/render/scene_font.cpp
 //
 // Deviation note (resolved): per-control ANSI/wide variants are now issued
 // through CreateWindowExA/W exactly like the original call sites; ANSI
@@ -37,6 +40,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include <cstdio>
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/ui_translation.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/panel_controls.hpp"
 #include "ui_controls.inc"
@@ -155,7 +159,7 @@ static bool InitTimelineAudio(MMDApp* app, HWND hwnd, HDC timeline,
     return true;
 }
 
-// VA 0x0040AE00 - .  Blank the timeline strip and the
+// VA 0x0040AE00 - was Sub40AE00.  Blank the timeline strip and the
 // interpolation-curve box: white rectangles over both GDI surfaces (the
 // timeline spans the backbuffer width at 49 px, the curve is 127x127) plus
 // the black centre line at timeline y=25.
@@ -217,7 +221,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 
     // Physics scene construction (original call site 0x00466D78, directly
     // after the D3D bootstrap): gizmo buffers + the Bullet world and its
-    // static ground body inside the 0x048 wrapper.
+    // static ground body inside the Sub048 wrapper.
     if (!SceneConstruct(app->Physics(), app->Renderer()))
         return false;
 
@@ -320,7 +324,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 
     // 0x4672C2..0x4672E4: initialize the ruler/curve caches, then bind the
     // ruler HDC to the wave/timeline object while DirectSound is initialized.
-    ClearTimelineAndCurveDCs(app);  // 0x40AE00
+    ClearTimelineAndCurveDCs(app);  // was Sub40AE00, 0x40AE00
     s.DirectSoundAvailable() = static_cast<std::uint8_t>(
         InitTimelineAudio(app, hwnd, s.TimelineDC(),
                           app->EnglishUI() != 0));
@@ -680,10 +684,20 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     static const char kJpNvidia3D[] =
         "NVIDIA 3D Vision\x95\x5C\x8E\xA6(Alt+Enter)";
     const bool stereoCapable = w->stereoEnabled != 0;
+    if (app->EnglishUI() == 2) {
+        static const wchar_t kZhFullScreen[] = L"全屏(Alt+Enter)";
+        static const wchar_t kZhNvidia3D[] = L"NVIDIA 3D Vision(Alt+Enter)";
+        MENUITEMINFOW zhMii{};
+        zhMii.cbSize = sizeof(zhMii);
+        zhMii.fMask = MIIM_STRING;
+        zhMii.dwTypeData = const_cast<wchar_t*>(
+            stereoCapable ? kZhNvidia3D : kZhFullScreen);
+        SetMenuItemInfoW(GetSubMenu(menu, 2), 0x1D, TRUE, &zhMii);
+    } else {
     const char* fullScreenText;
     if (app->EnglishUI() != 0)
         fullScreenText = stereoCapable
-            ? "NDIVIA 3D Vision(Alt+Enter)"
+            ? "NVIDIA 3D Vision(Alt+Enter)"
             : "full screen(Alt+Enter)";
     else
         fullScreenText = stereoCapable ? kJpNvidia3D : kJpFullScreen;
@@ -692,6 +706,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
     mii.fMask = MIIM_STRING;
     mii.dwTypeData = const_cast<char*>(fullScreenText);
     SetMenuItemInfoA(GetSubMenu(menu, 2), 0x1D, TRUE, &mii);
+    }
 
     // ---- 0x46AFD4..0x46B06E: self-shadow mode/range mirrors ---------------
     SendMessageA(GetDlgItem(hwnd, panel::kEditMode1Checkbox), BM_SETCHECK, BST_CHECKED, 0);
@@ -706,7 +721,7 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x00410040 - .  RefillBoneRegisterCombo(app, slot):
+// VA 0x00410040 - was Sub410040.  RefillBoneRegisterCombo(app, slot):
 // bone-register combo (control 450) refill.  CB_RESETCONTENT, then for the
 // model in slot app+0x780[slot] every bone whose type byte (+484) is < 7
 // or == 8 is appended (CB_ADDSTRING) with the English (+20) or Japanese

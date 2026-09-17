@@ -77,8 +77,11 @@
 //                          wrap at 0x1E, undo records at model+0x26FC
 //                          (0x24-stride), name-match paste loop, SetFocus,
 //                          undo-flag 0x9EDB5 = 1
-//   498 1F2  0x0048203D    bone paste (delete-tag variant, "ボーン削除"
-//                          name filter); head ported, tail TODO(port)
+//   498 1F2  0x0048203D    bone paste (delete-tag variant, name-tag filter);
+//                          full port in the case body below.  Needle bytes
+//                          and the second search pointer remain unverified
+//                          against the binary (docs/PORTING_STATUS.md:
+//                          BONE-498 / BONE-498-NAME).
 //   499 1F3  def_47E903    default (no-op)
 //
 // Default handler def_47E903 (0x482897): only acts when HIWORD(notify)==1
@@ -199,7 +202,7 @@ static const char kCaptionDelAccessoryJp[] =
 // original call (which passes NO varargs) write an empty string; the %s
 // slots are never consumed.  Kept byte-identical; the two dummy args below
 // are never read (only silence the compiler's format-string warning).
-static const wchar_t kEmptyPathFormat[] = L"\x0\x0%s%s";
+static const wchar_t kFmt529688[] = L"\x0\x0%s%s";
 
 // 0x52D948: JP open-filter for accessories (double-NUL terminated):
 // "読込可能ファイル(*.x,*.vac)"
@@ -210,42 +213,54 @@ static const wchar_t kFilterAccJp[] =
 // 0x52DC84: JP dialog title "ファイルを開く"
 static const wchar_t kTitleOpenJp[] = L"\x30D5\x30A1\x30A4\x30EB\x3092\x958B\x304F";
 
-// strstr needles of case 498, matched against bone names:
-//   kBoneNameNeedleRight = Shift-JIS 右 ("right"),
-//   kBoneNameNeedleModelDelete = Shift-JIS モデル削除 ("model delete").
-static const char kBoneNameNeedleRight[] = "\x89\x45";
-static const char kBoneNameNeedleModelDelete[] =
-    "\x83\x82\x83\x66\x83\x8B\x8D\xED\x8F\x9C";
+// strstr needles of case 498.  x64 control flow verified (2026-09-07,
+// tools/x64_disasm_case498.py): the mirror-paste body 0x14004425E does
+//   pass 1: strstr(bones[k1].name, 左); find the 右-tagged bone whose
+//           suffix after the tag matches (0x14004456C..0x140044617)
+//   pass 2 (fallback): strstr(bones[k1].name, 右); find the 左-tagged
+//           bone whose suffix matches (0x14004461D..0x1400446D9)
+//   fallback: target = k1 (0x1400446D9)
+// and mirrors via xmm6 = -0.0f pool @0x140132B80.  The needles are the
+// SJIS pair 左 (0x14012D9BC, \x8D\xB6) and 右 (0x14012D9C0, \x89\x45);
+// モデル削除/ボーン削除 bytes do not occur in the x64 image.  The x86
+// 0x530BFC image bytes remain unverified (no x86 binary at hand).
+static const char kNeedle530BF8[] = "\x89\x45";   // 右 @0x14012D9C0
+static const char kNeedle530BFC[] = "\x8D\xB6";   // 左 @0x14012D9BC
 
 // ---------------------------------------------------------------------------
 // External targets ported in other translation units (declared here with
-// their original VAs; not yet registered in ported_funcs.hpp).
+// their original VAs; bodies in the files noted on each line).
 // ---------------------------------------------------------------------------
-void RefreshRequest(int area);                     // VA 0x00440AC0
-void PanelPaint(MMDApp* app);                      // VA 0x00414610
-void SelectionReeval(MMDApp* app);                 // VA 0x00430510 (stubs.cpp)
-void CopyDirPathW(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 path copy
+void RefreshRequest(int area);                     // VA 0x00440AC0 (ui_refresh.cpp)
+void PanelPaint(MMDApp* app);                      // VA 0x00414610 (ui_panel_paint.cpp)
+void SelectionReeval(MMDApp* app);                 // VA 0x00430510 (ui_selection_reeval.cpp)
+void CopyDirPathW(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 (media_load.cpp) path copy
 
 // ---------------------------------------------------------------------------
-// Unported dependencies - kept as file-local external stubs with the call
-// sites intact (stubs.cpp must not be touched).  TODO(port): replace with
-// real bodies as the corresponding functions are ported.
+// Dependencies ported in other translation units (call sites preserved via
+// these file-local declarations; bodies in the files noted on each line).
 // ---------------------------------------------------------------------------
-void PushBoneEditUndo(MMDApp* app);                       // VA 0x0042D6E0
-void RebuildCameraModePanel(MMDApp* app);                       // VA 0x0044D780
-void SyncAccessoryEditPanel(MMDApp* app);                       // VA 0x004134E0
-void RegisterAccessoryKey(MMDApp* app, int frame, int slot);   // VA 0x00413CB0
-void RegisterCameraState(MMDApp* app, int frame);  // VA 0x00410560
-void RegisterLightState(MMDApp* app, int frame);   // VA 0x00411630
-void CommitEditControl(MMDApp* app, HWND hwnd);            // VA 0x00463640
-void DeleteAccessory(mdl::AccessoryRecord* accessory, int flag);  // VA 0x0040A6F0
-void IdentityCtor(void* obj);                         // VA 0x004C46F0 (ctor)
+void PushBoneEditUndo(MMDApp* app);                       // VA 0x0042D6E0 (bone_edit_undo.cpp)
+void RebuildCameraModePanel(MMDApp* app);                       // VA 0x0044D780 (ui_model_reload.cpp)
+void SyncAccessoryEditPanel(MMDApp* app);                       // VA 0x004134E0 (ui_frame_refresh.cpp)
+void RegisterAccessoryKey(MMDApp* app, int frame, int slot);   // VA 0x00413CB0 (render/accessory.cpp)
+void RegisterCameraState(MMDApp* app, int frame);  // VA 0x00410560, was Sub410560 (command_control_400.cpp)
+void RegisterLightState(MMDApp* app, int frame);   // VA 0x00411630, was Sub411630 (command_control_400.cpp)
+void CommitEditControl(MMDApp* app, HWND hwnd);            // VA 0x00463640 (ui_edit_commit.cpp)
+void DeleteAccessory(mdl::AccessoryRecord* accessory, int flag);  // VA 0x0040A6F0, was Sub40A6F0 (render/accessory.cpp)
+void IdentityCtor(void* obj);                         // VA 0x004C46F0 (stubs.cpp; original is `return this`)
 void* ConstructArrayElements(void* block, std::uint32_t elementSize,
                              std::uint32_t count,
-                             void* ctor);  // VA 0x00401150
+                             void* ctor);  // VA 0x00401150, was Sub401150 (accessory_paste.cpp)
 
 void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                    std::uint16_t notify) {
+    // These bone operations may arrive from the frame-loop shortcut path,
+    // even when there is no loaded/selected model. Guard before undo or UI
+    // side effects, not just before the first dereference in case 494.
+    if (id >= 494 && id <= 498 &&
+        (app->SelectedModelSlot() >= kModelSlotCount || ActiveModel(app) == nullptr))
+        return;
     (void)notify;  // see header: the default handler's notify gate can never
                    // match any id of this family
     switch (id) {
@@ -337,7 +352,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         // 0.602f is bit-exact with the x64 immediate 0x3F1A1CAC
         // (0x7FF7CB46A492..0x7FF7CB46A4BC, written to all three light
         // channels and copied into Specular); same constant as the
-        // light-key default in command_frame_edit.cpp ResetLightRecord.
+        // light-key default in command_control_400.cpp ResetLightRecord.
         const float col = 0.602f;  // flt_52C9A4
         app->LightColor()[0] = col;
         app->LightColor()[1] = col;
@@ -399,7 +414,7 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     case 472: {
         SetCurrentDirectoryW(app->ExeDir());  // 0xA06CE
         wchar_t fileBuf[0x100];
-        swprintf_s(fileBuf, 0x100, kEmptyPathFormat, L"", L"");
+        swprintf_s(fileBuf, 0x100, kFmt529688, L"", L"");
         OPENFILENAMEW ofn;
         memset(&ofn, 0, sizeof(ofn));
         ofn.lStructSize = sizeof(ofn);
@@ -693,6 +708,8 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
         const std::int32_t boneCount = modelRecord->boneCount;
         mikudancestudio::mdl::BoneRecord* const bones = modelRecord->boneTable;
         unsigned char* const sel = modelRecord->boneSelection;
+        if (boneCount > 0 && (bones == nullptr || sel == nullptr))
+            break;
         for (std::int32_t i = 0; i < boneCount; ++i) {
             const mdl::BoneType type = bones[i].type;
             const std::uint16_t flag = bones[i].flags;
@@ -1022,12 +1039,14 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     }
 
     // ------------------------------------------------------------------
-    // 498 (0x0048203D): bone paste, delete-tag variant.  Same undo-record
-    // bookkeeping as 497; the paste target is resolved through the
-    // "ボーン削除" name tags instead of a plain name match, and the pasted
-    // transform is mirrored (X position and quat Y/Z negated).  When the
-    // tag search fails the exact-name match index (k1) is used as the
-    // fallback target.
+    // 498 (0x0048203D): bone paste, left/right mirror variant (x64 body
+    // 0x14004425E, verified 2026-09-07 - was misnamed "delete-tag").  Same
+    // undo-record bookkeeping as 497; the paste target is the opposite-side
+    // bone resolved through the 左/右 name tags (kNeedle530BFC/kNeedle530BF8)
+    // instead of a plain name match, and the pasted transform is mirrored
+    // (X position and quat Y/Z negated; x64 uses -0.0f from the 0x140132B80
+    // pool).  When both tag searches fail, the exact-name match index (k1)
+    // is used as the fallback target.
     // ------------------------------------------------------------------
     case 498: {
         if (app->state.copiedBoneCount == 0) {
@@ -1094,13 +1113,13 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                 continue;  // no exact-name bone: record skipped
             }
             std::int32_t target = -1;
-            const char* tag1 = strstr(bones[k1].name, kBoneNameNeedleModelDelete);
+            const char* tag1 = strstr(bones[k1].name, kNeedle530BFC);
             if (tag1 != nullptr) {
-                // k1 carries the "ボーン削除" tag: find the "\x89\x45"-tagged
-                // bone whose suffix matches the tag suffix
+                // pass 1 (x64 0x14004456C..0x140044617): k1 carries the 左
+                // tag; find the 右-tagged bone whose suffix matches
                 const char* suffix = tag1 + 2;
                 for (std::int32_t k = 0; k < nBones; ++k) {
-                    const char* q = strstr(bones[k].name, kBoneNameNeedleRight);
+                    const char* q = strstr(bones[k].name, kNeedle530BF8);
                     if (q != nullptr && strcmp(q + 2, suffix) == 0) {
                         target = k;
                         break;
@@ -1108,14 +1127,15 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                 }
             }
             if (target < 0) {
-                // second search: needle from frames+j (raw byte offset, as
-                // in the original) against the "ボーン削除" tag
-                const char* suffix = strstr(
-                    reinterpret_cast<const char*>(bones) + j, kBoneNameNeedleRight);
+                // pass 2 (x64 0x14004461D..0x1400446D9): k1 carries the 右
+                // tag; find the 左-tagged bone whose suffix matches.  (The
+                // old x86-derived raw-offset search from (char*)bones + j
+                // does not exist in the x64 image.)
+                const char* suffix = strstr(bones[k1].name, kNeedle530BF8);
                 if (suffix != nullptr) {
                     suffix += 2;
                     for (std::int32_t k = 0; k < nBones; ++k) {
-                        const char* q = strstr(bones[k].name, kBoneNameNeedleModelDelete);
+                        const char* q = strstr(bones[k].name, kNeedle530BFC);
                         if (q != nullptr && strcmp(q + 2, suffix) == 0) {
                             target = k;
                             break;

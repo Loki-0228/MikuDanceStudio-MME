@@ -28,7 +28,7 @@
 #include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
-void ReloadModels(MMDApp* app);   // VA 0x0042E640 (timeline_advance.cpp)
+void ReloadModels(MMDApp* app);   // VA 0x0042E640 (timeline_advance.cpp), was Sub42E640
 }  // namespace mikudancestudio
 
 namespace mikudancestudio {

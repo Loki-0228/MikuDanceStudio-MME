@@ -18,10 +18,10 @@
 //                   window), resets the device, reuses the main window as
 //                   the record window and runs the same 0x409A80 tail.
 //   VA 0x004629D0 - fullscreen enter/restore window manager.
-//   VA 0x00401BD0 - 0x048-object physics kick (vtable slot 4 of the object
+//   VA 0x00401BD0 - Sub048-object physics kick (vtable slot 4 of the object
 //                   at obj+0x3C); runs once recording starts.
 //
-// NOTE: the shared stubs.cpp still exports the names 0x45E820/0x464760;
+// NOTE: the shared stubs.cpp still exports the names Sub45E820/Sub464760;
 // the 0xDF dispatch (command_file_menu.cpp case 223) calls these
 // implementations instead.  ApplyFullscreenWindowState previously lived as an inline stub in
 // command_view_menu.cpp; the real body replaces it here.
@@ -47,11 +47,11 @@
 namespace mikudancestudio {
 
 // Bodies live in other translation units (see ported_funcs.hpp / their TUs).
-void RefreshAfterFrameApply(MMDApp* app);          // VA 0x00432FA0
+void RefreshAfterFrameApply(MMDApp* app);          // VA 0x00432FA0, was Sub432FA0
 void DisablePlaybackMenus(HWND hwnd);              // VA 0x00429790
 void RestorePlaybackMenus(MMDApp* app);            // VA 0x004298E0
 
-// VA 0x00401BD0 - "physics kick" through the 0x048 object (app+0x9EDB0).
+// VA 0x00401BD0 - "physics kick" through the Sub048 object (app+0x9EDB0).
 // The original is a four-instruction TAIL JUMP:
 //   ecx = [ecx+0x3C]; eax = [ecx]; edx = [eax+0x10]; jmp edx
 // - a thiscall tail-jump into vtable slot 4 (offset 0x10) of the
@@ -64,7 +64,7 @@ void RestorePlaybackMenus(MMDApp* app);            // VA 0x004298E0
 // vtable did not match (AVI output stuck at 0 bytes, AV at
 // RecordStartTail 0x41C1ED).  Skip the dispatch entirely - the
 // observable behaviour (nothing) is identical.
-void KickRecordPhysics(MMDApp* app) {
+void KickRecordPhysics(MMDApp* app) {  // was Sub401BD0
     (void)app;
 }
 
@@ -74,7 +74,7 @@ bool BuildRecordingGraph(DShowRecorder* recorder, HWND hwnd,
                          unsigned char english,
                          void* recStruct, void* config, float fps,
                          std::uint32_t one,
-                         const wchar_t* wavPath, float seconds);
+                         const wchar_t* wavPath, float seconds);  // was Sub409A80
 
 namespace {
 
@@ -368,7 +368,7 @@ void StartAviRecordFullscreen(MMDApp* app) {
 // frame, sizes to the screen, hides the control band and mirrors the client
 // size into the present parameters.  Restore: reapplies the saved style,
 // placement and menu, shows the control band and restores the RT dimensions.
-void ApplyFullscreenWindowState(MMDApp* app) {
+void ApplyFullscreenWindowState(MMDApp* app) {  // was Sub4629D0
     auto& s = *app;
     const HWND main = static_cast<HWND>(s.state.hwnd);
     if (main == nullptr)

@@ -4,7 +4,7 @@
 // The main pump (x86 0x46B090 / x64 sub_7FF7CB4474F0) consumes the arrow
 // keys, the right/middle mouse drags and the numpad view presets inline,
 // using the 0/1/2/3 edge cells that MouseInteractionBegin polls
-// (frame_modes.cpp kKeySlots / model_query_helpers.cpp PollKeyboardStates; values:
+// (frame_modes.cpp kKeySlots / model_query_gaps.cpp PollKeyboardStates; values:
 // 0 idle, 1 pressed, 2 released, 3 held).  This file ports the four
 // segments as self-contained free functions so the frame driver can call
 // them in pump VA order next to ConsumeLetterHotkeys (key_ladder.cpp):
@@ -81,14 +81,14 @@ namespace mikudancestudio {
 // Sibling-TU bodies, declared locally the key_ladder.cpp way (kept out of
 // ported_funcs.hpp).
 void StepFrame(MMDApp* app, bool forward);  // VA 0x00430F20 (frame +1) / 0x004312E0
-                                            // (frame -1)/0x4312E0
+                                            // (frame -1), was Sub430F20/Sub4312E0
                                             // (ui_frame_step.cpp)
-void SelectPreviousDisplayBone(MMDApp* app);  // VA 0x00438D60 (model_query_helpers.cpp)
-void SelectNextDisplayBone(MMDApp* app);      // VA 0x00438F50 (model_query_helpers.cpp)
-void SelectPrevEditTarget(MMDApp* app);       // VA 0x004391D0 (model_query_helpers.cpp)
-void SelectNextEditTarget(MMDApp* app);       // VA 0x00439520 (model_query_helpers.cpp)
-void JumpNextKeyframe(MMDApp* app);   // VA 0x00441070 (app_utilities.cpp)
-void JumpPrevKeyframe(MMDApp* app);   // VA 0x004414C0 (app_utilities.cpp)
+void SelectPreviousDisplayBone(MMDApp* app);  // VA 0x00438D60 (model_query_gaps.cpp), was Sub438D60
+void SelectNextDisplayBone(MMDApp* app);      // VA 0x00438F50 (model_query_gaps.cpp), was Sub438F50
+void SelectPrevEditTarget(MMDApp* app);       // VA 0x004391D0 (model_query_gaps.cpp), was Sub4391D0
+void SelectNextEditTarget(MMDApp* app);       // VA 0x00439520 (model_query_gaps.cpp), was Sub439520
+void JumpNextKeyframe(MMDApp* app);   // VA 0x00441070 (app_gap_bodies.cpp)
+void JumpPrevKeyframe(MMDApp* app);   // VA 0x004414C0 (app_gap_bodies.cpp)
 
 namespace {
 

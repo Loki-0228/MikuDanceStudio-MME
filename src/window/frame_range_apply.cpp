@@ -301,7 +301,7 @@ void ScaleDisplayKeys(MMDApp* app, unsigned char* model, HWND hDlg,
 
 }  // namespace
 
-// VA 0x0043E970 - read the dialog's start/end/scale fields
+// was Sub43E970, VA 0x0043E970 - read the dialog's start/end/scale fields
 // and re-register the selected key families through the scaled range.
 void ApplyFrameRangeScale(HWND hDlg) {
     TraceRange("entered");

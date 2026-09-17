@@ -2,9 +2,9 @@
 // VA 0x0046FF35..0x004739E2 - ConsumeLetterHotkeys  (main-pump letter ladder)
 // ===========================================================================
 // The main pump (sub_46B090, x64 twin sub_7FF7CB4474F0) polls the keyboard
-// at 0x46FF02 (frame_modes.cpp MouseInteractionBegin / model_query_helpers.cpp
-// 0x42D3A0) and then walks a consumption ladder that checks each letter's
-// pressed-this-frame cell in MMDAppState::dialogFlags (values: 0 idle,
+// at 0x46FF02 (frame_modes.cpp MouseInteractionBegin / model_query_gaps.cpp
+// Sub42D3A0) and then walks a consumption ladder that checks each letter's
+// pressed-this-frame cell in the runtime LetterHotkeyState (values: 0 idle,
 // 1 pressed, 2 released, 3 held; only ==1 is consumed here) and dispatches
 // the equivalent of a menu command.  This port runs the ladder from
 // FrameDriver right after MouseInteractionBegin.
@@ -30,7 +30,7 @@
 // is gated on slot 7 - i.e. on the G key, exactly as MMD 9.32 documents
 // (G: go to frame, Shift+G: self-shadow map, Ctrl+G: the "fine shadow
 // mode" notice; S: select unregistered bones, Ctrl+S: save + beep).
-// The poll tables (frame_modes.cpp / model_query_helpers.cpp kLetterKeys)
+// The poll tables (frame_modes.cpp / model_query_gaps.cpp kLetterKeys)
 // carry the same binary pairing after the 2026-09 s/g transpose fix.
 //
 // The non-letter segments that surround the ladder in the pump are ported
@@ -55,6 +55,7 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 
 namespace mikudancestudio {
 
@@ -64,8 +65,8 @@ namespace mikudancestudio {
 void FineShadowModeNotice(MMDApp* app);
 
 // ui_frame_step.cpp - frame-apply chain; declared locally like
-// command_frame_register.cpp does (not in ported_funcs.hpp).
-void RefreshAfterFrameApply(MMDApp* app);                 // VA 0x432FA0
+// command_control_500.cpp does (not in ported_funcs.hpp).
+void RefreshAfterFrameApply(MMDApp* app);                 // VA 0x432FA0, was Sub432FA0
 
 // pump_navigation.cpp - arrow-key navigation and numpad presets, called
 // from the ladder at their binary positions (see the call sites below).
@@ -109,12 +110,16 @@ bool FocusInPanelEdit(MMDApp* app) {
 // The ladder re-dispatches menu command ids through the main window
 // (SendMessageA(main, WM_COMMAND, id, 0) at e.g. 0x471F84).
 void SendMenuCommand(MMDApp* app, int id) {
+    runtime_log::Write("COMMAND_SOURCE source=letter-hotkey id=%d", id);
     SendMessageA(static_cast<HWND>(app->Hwnd()), WM_COMMAND, id, 0);
 }
 
 }  // namespace
 
 void ConsumeLetterHotkeys(MMDApp* app) {
+    // GetFocus is thread-local and can retain a control while another app
+    // is foreground. Recheck eligibility at consumption as well as polling.
+    if (!LetterHotkeyInputAllowed(app)) return;
     auto& state = app->state;
     const HWND main = static_cast<HWND>(app->Hwnd());
     const HWND focus = GetFocus();                        // var_14C4
@@ -124,9 +129,10 @@ void ConsumeLetterHotkeys(MMDApp* app) {
     const bool shift = state.shiftModifierState == 3;      // +0x24
     const bool ctrl = state.ctrlModifierState == 3;        // +0xC0
     const bool playing = app->PlaybackActive() != 0;       // +0x330
-    const bool modelMode = state.optflag[0] == 0;          // +0x2F8
-    const auto pressed = [&state](int slot) {
-        return state.dialogFlags[slot] == 1;
+    const bool modelMode = state.optflag[0] == 0 &&
+        app->SelectedModelSlot() < kModelSlotCount && app->SelectedModel() != nullptr;
+    const auto pressed = [app](int slot) {
+        return app->LetterHotkeys().Pressed(slot);
     };
 
     // ---- 'B' (0x471EB5): toggle background color black/white ------------
@@ -266,12 +272,24 @@ void ConsumeLetterHotkeys(MMDApp* app) {
     }
 
     // ---- 'P' (0x472A95): play/stop via the play button 0x198 -------------
-    if (focusOK && app->FrameStepPlayback() == 0 && !playing &&
-        !focusInEdit && pressed(kSlotP)) {
-        // The BM_SETCHECK wParam keys on app+0x330, which the gate already
-        // forced to 0 - always 1 here.
-        SendMessageA(GetDlgItem(main, panel::kPlayButton), BM_SETCHECK, 1, 0);
-        SendMenuCommand(app, 0x198);                       // case 408 play
+    // Button 408 is a push-look auto checkbox (0x50001003 = BS_AUTOCHECKBOX |
+    // BS_PUSHLIKE, ui_controls.inc), its check mark mirrors the playback flag
+    // (+0x330), and command 408 itself toggles: the stop branch runs when
+    // PlaybackActive() != 0.  The gate here therefore must NOT test !playing:
+    // with that test the key went dead the moment playback started, so a
+    // second P could not stop it.  P now acts exactly like a click on the
+    // button - start when stopped, stop while playing.
+    //
+    // The key itself is sampled IME independently (keyboard_input.cpp): with
+    // a Chinese/Japanese input method switched on, GetKeyboardState alone
+    // never reported the press, which is the other half of "P cannot stop
+    // playback" (the user had to switch the IME to English first).
+    if (focusOK && app->FrameStepPlayback() == 0 && !focusInEdit &&
+        pressed(kSlotP)) {
+        const bool starting = app->PlaybackActive() == 0;
+        SendMessageA(GetDlgItem(main, panel::kPlayButton), BM_SETCHECK,
+                     starting ? 1 : 0, 0);
+        SendMenuCommand(app, 0x198);                 // case 408 play/stop
         SetFocus(main);
     }
 
@@ -348,17 +366,16 @@ void ConsumeLetterHotkeys(MMDApp* app) {
     }
 
     // ---- 'A' (0x473092): select all bones (0x1EE) ------------------------
-    // No focus gates at all in the original - fires even while an edit or
-    // another window has focus.
-    if (pressed(kSlotA))
+    // A model and foreground, non-edit focus are required for bone commands.
+    if (focusOK && modelMode && !playing && !focusInEdit && pressed(kSlotA))
         SendMenuCommand(app, 0x1EE);                       // case 494
 
     // ---- plain 'S' (0x4730B1): select unregistered bones (0x1F5) ---------
-    if (pressed(kSlotS) && !ctrl)
+    if (focusOK && modelMode && !playing && !focusInEdit && pressed(kSlotS) && !ctrl)
         SendMenuCommand(app, 0x1F5);                       // case 501
 
     // ---- 'D' (0x4730D9): model-offset dialog (0xDB) ----------------------
-    if (pressed(kSlotD))
+    if (focusOK && !focusInEdit && pressed(kSlotD))
         SendMenuCommand(app, 0xDB);                        // case 219
 
     // x86 0x47314B..0x4739E2: the numpad view presets run after the ESC

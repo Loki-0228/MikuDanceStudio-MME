@@ -6,26 +6,26 @@
 //   WM_CREATE      -> CreateUIControls (0x466D20); failure exits process
 //   WM_DESTROY     -> save Data\mmconfig.ini (mirror of the 0x47A5B0 load)
 //                     then PostQuitMessage
-//   WM_SIZE        -> flag 672812 toggles around sub_443300 [stubbed]
-//   WM_PAINT       -> sub_47C0A0 [stubbed]
+//   WM_SIZE        -> flag 672812 toggles around HandleWindowSize (0x443300,
+//                     ui_windowsize.cpp)
+//   WM_PAINT       -> HandleWindowPaint (0x47C0A0, wm_paint.cpp)
 //   WM_CLOSE       -> dirty-flag confirm dialogs (EN + JP texts; JP bytes
 //                     backfilled from x64 0x7FF7CB552700/0x7FF7CB552798)
 //   WM_ERASEBKGND  -> suppress (D3D owns the client area)
-//   WM_NOTIFY      -> sub_4398B0 [stubbed]
-//   WM_COMMAND     -> command dispatcher 0x47E8A0 (68 KB) [stubbed]
-//   WM_DROPFILES   -> sub_461300 [stubbed]
-//   0x318 (792)    -> palette: sub_42CEB0 + sub_42C140 [stubbed]
+//   WM_NOTIFY      -> HandleNotify (0x4398B0, ui_notify.cpp)
+//   WM_COMMAND     -> CommandDispatch (0x47E8A0, command_dispatch.cpp, 68 KB)
+//   WM_DROPFILES   -> HandleDropFiles (0x461300, ui_dropfiles.cpp)
+//   0x318 (792)    -> palette: HandlePaletteChanged (0x42CEB0) +
+//                     HandlePaletteChanged2 (0x42C140) (ui_palette.cpp)
 //   WM_TIMER       -> timer 100: sub_429770; timer 101: the Kinect
 //                     auto-frame-record stage byte (app+658792 = 0xA0D68,
 //                     state.autoRepeat / x64 0xA1E14), walked 1->2->3->4
 //                     at 1500 ms intervals
-//   WM_H/VSCROLL   -> sub_44AEE0 / sub_44BB30 [stubbed]
-//   WM_CTLCOLORSTATIC(0x138) -> sub_40E0E0 [stubbed]
-//   WM_MOUSE*      -> capture handling + sub_446A70/44A9A0/44AAA0; the
-//                     panel-activation sub_4632F0 rides WM_RBUTTONDBLCLK
-//                     (x64 0x7FF7CB4FC2C9 case 518), NOT WM_MOUSEACTIVATE
-//                     (0x21 falls through to DefWindowProc)
-//   WM_MOUSEWHEEL  -> sub_44BD70 [stubbed]
+//   WM_H/VSCROLL   -> HandleHScroll (0x44AEE0, ui_hscroll.cpp) /
+//                     HandleVScroll (0x44BB30, ui_scroll_mouse.cpp)
+//   WM_CTLCOLORSTATIC(0x138) -> HandleCtlColor (0x40E0E0, ui_ctlcolor.cpp)
+//   WM_MOUSE*      -> capture handling + sub_446A70/44A9A0/44AAA0/4632F0
+//   WM_MOUSEWHEEL  -> HandleMouseWheel (0x44BD70, ui_scroll_mouse.cpp)
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -38,6 +38,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 
 namespace mikudancestudio {
 
@@ -77,6 +78,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             return 0;
 
         case WM_DESTROY: {
+            runtime_log::Write("WM_DESTROY begin (window is closing)");
             WINDOWPLACEMENT wndpl;
             wndpl.length = sizeof(wndpl);
             GetWindowPlacement(hwnd, &wndpl);
@@ -146,6 +148,13 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             return 0;
 
         case WM_CLOSE:
+            runtime_log::Write("WM_CLOSE received enhancedDirty=%d sceneModified=%d",
+                               s.EnhancedModelDirty(), s.SceneModified());
+            // Each branch below ends at DefWindowProcA once the user accepted
+            // the close (or when there is nothing unsaved).  From that point
+            // the program is exiting: teardown faults must not raise the modal
+            // report any more, so the flag is set before the window is
+            // destroyed and the configuration is written.
             if (s.EnhancedModelDirty() != 0) {                    // 658276
                 // enhanced-model dirty flag
                 int r = s.EnglishUI()
@@ -154,19 +163,25 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                         "quit", 0x40001)
                     : MessageBoxA(hwnd, kMsgQuitEnhancedJp, kCaptionQuitJp,
                                  (MB_OKCANCEL | MB_TOPMOST));  // x64 正文 0x7FF7CB4FBCE7/标题 0x7FF7CB4FBCEE
-                if (r == IDOK)                                    // original: == 1
+                if (r == IDOK) {                                  // original: == 1
+                    runtime_log::BeginShutdown();
                     return DefWindowProcA(hwnd, msg, wParam, lParam);
+                }
             } else {
-                if (s.SceneModified() == 0)                       // 658189
+                if (s.SceneModified() == 0) {                     // 658189
+                    runtime_log::BeginShutdown();
                     return DefWindowProcA(hwnd, msg, wParam, lParam);
+                }
                 int r = s.EnglishUI()
                     ? MessageBoxA(hwnd,
                         "There is a change point not preserved.\n\nDo you realy quit?",
                         "quit", 0x40001)
                     : MessageBoxA(hwnd, kMsgQuitModifiedJp, kCaptionQuitJp,
                                  (MB_OKCANCEL | MB_TOPMOST));  // x64 正文 0x7FF7CB4FBD44/标题共用
-                if (r == IDOK)
+                if (r == IDOK) {
+                    runtime_log::BeginShutdown();
                     return DefWindowProcA(hwnd, msg, wParam, lParam);
+                }
             }
             return 0;
 
@@ -242,11 +257,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
     case WM_MBUTTONUP:
         ReleaseCapture();
         return 0;
-    case WM_RBUTTONDBLCLK:
-        // x64 sub_7FF7CB4FBBF0 jumptable case 518 @0x7FF7CB4FC2C9: call
-        // sub_7FF7CB45DCD0 (0x4632F0 twin), then the common epilogue
-        // (xor eax,eax / return 0).  WM_MOUSEACTIVATE (0x21) is NOT a case
-        // in either window procedure - default branch -> DefWindowProc.
+    case WM_MOUSEACTIVATE:
         HandleMouseActivate(app);                                 // 0x4632F0
         return 0;
     case WM_MOUSEWHEEL:

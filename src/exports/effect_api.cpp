@@ -7,7 +7,7 @@
 // the 0x42A0D0..0x42AE10 model-query family (verified on the live
 // disassembly of 0x4C3590..0x4C3A10).
 //
-// GetPmdNum (0x42A110) is the canonical full port in src/app/late_ports.cpp;
+// GetPmdNum (0x42A110) is the canonical full port in src/unported/stubs.cpp;
 // the former file-local CountModels twin was removed and its callers
 // (ExpGetPmdNum + the two ordering helpers) now forward to GetPmdNum.
 //
@@ -62,17 +62,36 @@
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/effect_api.hpp"
 
-// VA 0x00407910 - wide -> Shift-JIS; real body in src/window/ui_dropfiles.cpp.
-// VA 0x0042A110 - model-slot count; real body in src/app/late_ports.cpp.
+// VA 0x0042A110 - model-slot count; real body in src/unported/stubs.cpp.
 namespace mikudancestudio {
-void WideToSjisPath(char* dst, const wchar_t* src, rsize_t size);
 int GetPmdNum(MMDApp* app);
 }  // namespace mikudancestudio
 
 namespace {
 
 using mikudancestudio::MMDApp;
+
+// x64 reference RVA 0xA6FA0: try CP932, then the renderer's explicit
+// locales. The process-wide Japanese locale cannot encode Chinese paths.
+void EffectFilename(MMDApp* app, char* out, const wchar_t* path) {
+    char encoded[3 * 256]{};
+    BOOL usedDefault = FALSE;
+    if (WideCharToMultiByte(932, 0, path, -1, encoded, sizeof(encoded),
+                            nullptr, &usedDefault) != 0 && !usedDefault) {
+        strncpy_s(out, 256, encoded, _TRUNCATE);
+        return;
+    }
+    if (auto* renderer = app->Renderer()) {
+        for (auto locale : renderer->localeTable) {
+            if (locale != nullptr &&
+                _wcstombs_s_l(nullptr, out, 256, path, _TRUNCATE, locale) == 0)
+                return;
+        }
+    }
+    out[0] = '\0';
+}
 
 // ---- slot resolution (shared shape of the 0x42A1xx family) ----------------
 // Occupied-slot counter: index counts only non-null slots, matching the
@@ -111,6 +130,19 @@ int CountAcs(MMDApp* app) {
 // Model/accessory fields are reached through the typed records
 // (mdl::Mdl / mdl::Bones / mdl::Morphs / mdl::Materials), never through
 // numeric offsets - the layouts differ between the x86 and x64 ABIs.
+
+// Objects the effect engine has registered.  MMHack rebuilds its order->state
+// map every frame from ExpGetPmdOrder/ExpGetAcsOrder, but only asks for the
+// order of an object whose pointer it already tracks, so an object it has not
+// registered is missing from that map.  ExpGetCurrentObject supplies the map
+// key of the object being drawn, and MMHack's draw hook dereferences the null
+// state record it inserts for an unknown key (MMHack+0x28D8, an access
+// violation at address 0 that cannot be intercepted from the host side).
+// Report the key only for objects the engine has asked about this frame.
+// Otherwise return 0, which MMHack reads as "no current object", continuing
+// without per-object effect state.
+std::uint8_t g_modelOrderSeen[mikudancestudio::kModelSlotCount] = {0};
+std::uint8_t g_accessoryOrderSeen[0xFF] = {0};
 
 // ---- D3DX wrappers with local fallbacks (d3dx9_32.dll may be absent) ------
 void Identity(mikudancestudio::d3dx::D3DXMATRIXF* m) {
@@ -211,6 +243,27 @@ float* AccWorldMatrix(const mikudancestudio::mdl::AccessoryRecord& acc, float* d
 
 }  // namespace
 
+namespace mikudancestudio {
+
+void BeginEffectObjectRegistration() {
+    // Ordinals can be reused after deletion, Skip, or a new project load.
+    // Only orders reported during this BeginScene are safe draw-hook keys.
+    std::memset(g_modelOrderSeen, 0, sizeof(g_modelOrderSeen));
+    std::memset(g_accessoryOrderSeen, 0, sizeof(g_accessoryOrderSeen));
+}
+
+void NotifyEffectFileOpen(const wchar_t* path) {
+    if (path == nullptr || GetModuleHandleW(L"MMHack.dll") == nullptr)
+        return;
+    HANDLE file = CreateFileW(path, GENERIC_READ,
+                             FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE)
+        CloseHandle(file);
+}
+
+}  // namespace mikudancestudio
+
 extern "C" {
 
 // --- model (PMD) queries ---------------------------------------------------
@@ -224,7 +277,7 @@ __declspec(dllexport) char* ExpGetPmdFilename(int index) {
     if (model == nullptr)
         return nullptr;                      // original: xor eax, eax
     char* out = reinterpret_cast<char*>(app->state.sjisOut);
-    mikudancestudio::WideToSjisPath(out, mikudancestudio::mdl::Mdl(model)->path, 0x100);
+    EffectFilename(app, out, mikudancestudio::mdl::Mdl(model)->path);
     return out;
 }
 
@@ -238,8 +291,11 @@ __declspec(dllexport) int ExpGetPmdOrder(int index) {
     int occupied = -1;
     for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
-        if (slot != nullptr && ++occupied == index)
+        if (slot != nullptr && ++occupied == index) {
+            if (index >= 0 && index < mikudancestudio::kModelSlotCount)
+                g_modelOrderSeen[index] = 1;
             return mikudancestudio::mdl::Mdl(slot)->comboSelIndex + base;
+        }
     }
     return 0;
 }
@@ -342,9 +398,11 @@ __declspec(dllexport) int ExpGetPmdDisp(int index) {
     return static_cast<unsigned char>(mikudancestudio::mdl::Mdl(model)->loadComplete);
 }
 
-// 0x4C3750 -> 0x42A5B0: the model object pointer itself.
-__declspec(dllexport) void* ExpGetPmdID(int index) {
-    return ModelByIndex(mikudancestudio::g_Block, index);
+// x64 reference RVA 0xDB91C returns EAX, not RAX: IDs are the low 32 bits
+// of the object address. MME recovers the native pointer from resource slots.
+__declspec(dllexport) std::uint32_t ExpGetPmdID(int index) {
+    return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(
+        ModelByIndex(mikudancestudio::g_Block, index)));
 }
 
 // --- accessory (ACS/stage) queries -----------------------------------------
@@ -363,7 +421,7 @@ __declspec(dllexport) char* ExpGetAcsFilename(int index) {
     if (acc == nullptr)
         return nullptr;
     char* out = reinterpret_cast<char*>(app->state.sjisOut);
-    mikudancestudio::WideToSjisPath(out, acc->sourcePath, 0x100);
+    EffectFilename(app, out, acc->sourcePath);
     return out;
 }
 
@@ -374,6 +432,8 @@ __declspec(dllexport) int ExpGetAcsOrder(int index) {
     mikudancestudio::mdl::AccessoryRecord* acc = AcsByIndex(app, index);
     if (acc == nullptr)
         return 0;
+    if (index >= 0 && index < 0xFF)
+        g_accessoryOrderSeen[index] = 1;
     int order = acc->order + 1;
     if (order < app->state.accessoryRenderSplitOrder + 1)
         return -order;
@@ -457,9 +517,10 @@ __declspec(dllexport) int ExpGetAcsDisp(int index) {
     return acc->visible;
 }
 
-// 0x4C3920 -> 0x42ABC0: the accessory object pointer itself.
-__declspec(dllexport) void* ExpGetAcsID(int index) {
-    return AcsByIndex(mikudancestudio::g_Block, index);
+// x64 reference RVA 0xDBACC uses the same 32-bit ID ABI as models.
+__declspec(dllexport) std::uint32_t ExpGetAcsID(int index) {
+    return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(
+        AcsByIndex(mikudancestudio::g_Block, index)));
 }
 
 // 0x4C3940 -> 0x42AC00: dword acc+0x4A4.
@@ -492,31 +553,45 @@ __declspec(dllexport) float* ExpGetAcsMaterial(float* out, int index,
 // --- render state ----------------------------------------------------------
 // 0x4C39A0 -> 0x42ACD0: encode app+0xA0268 (object being rendered) as the
 // combined model+accessory order index (same encoding as ExpGetAcsOrder /
-// ExpGetPmdOrder); 0 when null or unmatched.
+// ExpGetPmdOrder); 0 when null, unmatched, or not registered by the effect
+// engine yet (see g_modelOrderSeen).
 __declspec(dllexport) int ExpGetCurrentObject() {
     MMDApp* app = mikudancestudio::g_Block;
     unsigned char* cur = static_cast<unsigned char*>(app->state.activeRenderObject);
     if (cur == nullptr)
         return 0;
     // accessory slots first
+    int ordinal = 0;
     for (int i = 0; i < 0xFF; ++i) {
         mikudancestudio::mdl::AccessoryRecord* slot = app->AccessorySlot(i);
+        if (slot == nullptr)
+            continue;
         if (slot == reinterpret_cast<mikudancestudio::mdl::AccessoryRecord*>(cur)) {
+            if (g_accessoryOrderSeen[ordinal] == 0)
+                return 0;  // not in MMHack's order map yet
             int order = slot->order + 1;
             if (order >= app->state.accessoryRenderSplitOrder + 1)
                 return order + mikudancestudio::GetPmdNum(app);
             return -order;
         }
+        ++ordinal;
     }
     // then model slots, offset by min(AcsNum, PreAcsNum)
     int base = CountAcs(app);
     const int pre = app->state.accessoryRenderSplitOrder;
     if (pre < base)
         base = pre;
+    ordinal = 0;
     for (int i = 0; i < mikudancestudio::kModelSlotCount; ++i) {
         unsigned char* slot = app->ModelSlot(i);
-        if (slot == cur)
+        if (slot == nullptr)
+            continue;
+        if (slot == cur) {
+            if (g_modelOrderSeen[ordinal] == 0)
+                return 0;  // not in MMHack's order map yet
             return mikudancestudio::mdl::Mdl(slot)->comboSelIndex + base;
+        }
+        ++ordinal;
     }
     return 0;
 }

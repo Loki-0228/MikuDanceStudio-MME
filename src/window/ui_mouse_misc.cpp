@@ -25,7 +25,7 @@
 //                 this+0x9DD70 + SyncAccessoryEditPanel
 //        clear, byte this+0x9ED98 set -> zero floats this+0x308/+0x30C,
 //                 same reload chain, then if this+0xA0430 >= 0:
-//                 0x4970B0(model at that slot) and SetPhysicsMode (0x4A9220)
+//                 Sub4970B0(model at that slot) and SetPhysicsMode (0x4A9220)
 //                 (model, 0, slots, this+0xA0CC4); then PostModelReload
 //                 (0x41A650)
 //        clear, byte 0x9ED98 clear -> EnableWindow(ctrl 400, TRUE) and
@@ -60,27 +60,23 @@
 
 namespace mikudancestudio {
 
-// Forward declarations for functions ported in this wave whose bodies live
-// in other translation units (not yet registered in ported_funcs.hpp;
-// declared here with their original VAs).
-void PanelPaint(MMDApp* app);                                   // VA 0x00414610
-void TimelineDrawTicks(int frameOffset, int width);             // VA 0x004C2A00
-void SetFrameNormalized(int frame);                             // VA 0x004C2B80
+// Forward declarations for functions ported in other translation units
+// (declared here with their original VAs; bodies in the files noted).
+void PanelPaint(MMDApp* app);                                   // VA 0x00414610 (ui_panel_paint.cpp)
+void TimelineDrawTicks(int frameOffset, int width);             // VA 0x004C2A00 (ui_timeline_gfx.cpp)
+void SetFrameNormalized(int frame);                             // VA 0x004C2B80 (ui_timeline_gfx.cpp)
 
-// Editor-panel refresh helpers still living in src/app/late_ports.cpp
-// (signatures below are the placeholder ones from stubs.cpp; where the
-// original passes a MODEL pointer or extra arguments the call site casts
-// and marks TODO(port) - see the individual call sites).
-void RefreshLightPanel(MMDApp* app);                                    // VA 0x00411070
-void RefreshSelfShadowPanel(MMDApp* app);                                    // VA 0x00411B90
-void ApplyGravityTrack(MMDApp* app);                                    // VA 0x00412330
-void SyncAccessoryEditPanel(MMDApp* app);                                    // VA 0x004134E0
-void ApplyAccessoryTrack(MMDApp* app, int idx);                           // VA 0x00413120
-void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame);  // VA 0x004A0080
-void SyncModelEditControls(unsigned char* model);                     // VA 0x004A02C0
-int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // VA 0x004B4260
-void WaveRestartAt(void* sub, double v);                       // VA 0x004C3530
-void AviBgOverlayRefresh(MMDApp* app);                                    // VA 0x004168D0
+// Editor-panel refresh helpers, ported in other translation units.
+void RefreshLightPanel(MMDApp* app);                                    // VA 0x00411070 (ui_frame_refresh.cpp)
+void RefreshSelfShadowPanel(MMDApp* app);                                    // VA 0x00411B90 (ui_frame_refresh.cpp)
+void ApplyGravityTrack(MMDApp* app);                                    // VA 0x00412330 (track_apply.cpp)
+void SyncAccessoryEditPanel(MMDApp* app);                                    // VA 0x004134E0 (ui_frame_refresh.cpp)
+void ApplyAccessoryTrack(MMDApp* app, int idx);                           // VA 0x00413120 (accessory_paste.cpp)
+void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame);  // VA 0x004A0080, was Sub4A0080 (model_keyframe_edit.cpp)
+void SyncModelEditControls(unsigned char* model);                     // VA 0x004A02C0, was Sub4A02C0 (model_keyframe_edit.cpp)
+int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // VA 0x004B4260 (model_frame_seek.cpp)
+void WaveRestartAt(void* sub, double v);                       // VA 0x004C3530, was Sub4C3530 (subsystem_init.cpp)
+void AviBgOverlayRefresh(MMDApp* app);                                    // VA 0x004168D0 (bg_overlay.cpp)
 
 // VA 0x0044D940 - row/panel mode toggle (combobox-driven rebuild of the
 // accessory/camera panel + menu enable state).  Full port lives in
@@ -253,16 +249,11 @@ void HandleLButtonDblClk(MMDApp* app) {
 // ===========================================================================
 // VA 0x004632F0 - HandleMouseActivate  (original: sub_4632F0)
 // ===========================================================================
-// Panel-activation on right-button double click.  x64 ground truth: both
-// window procedures dispatch it from WM_RBUTTONDBLCLK (case 518), NOT
-// WM_MOUSEACTIVATE - main WndProc sub_7FF7CB4FBBF0 @0x7FF7CB4FC2C9 and
-// the separate-window RecWndProc twin sub_7FF7CB4C48A0 @0x7FF7CB4C4B29;
-// 0x21 falls through to DefWindowProc in both.  (The historical
-// "WM_MOUSEACTIVATE @ 0x4C41A6/0x466C6E" reading was a misclassification.)
-// The original returns an HWND/BOOL
+// WM_MOUSEACTIVATE handler (callers: WndProc 0x4C3A10 @ 0x4C41A6 and
+// RecWndProc 0x466A10 @ 0x466C6E).  The original returns an HWND/BOOL
 // (sub_44D940's / SetForegroundWindow's / SetCursorPos's result, or
 // GetClientRect's BOOL when byte 0x330 is set); the project's void
-// signature drops it (both callers return 0).
+// signature drops it (WndProc returns 0).
 //
 // Guard: byte this+0x330 (816) set -> no-op.
 //

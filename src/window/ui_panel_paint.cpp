@@ -126,9 +126,10 @@ unsigned char* CurrentModel(MMDApp* app) {
 template <typename Key>
 void DrawBandList(MMDApp* app, HDC panel, HDC icons, Key* keys,
                   int bandY, std::int32_t (&map)[200], int rowCount) {
-    // The original never sees these four lists null because 0x466D20
-    // (reached via the window proc on WM_CREATE) allocates them before
-    // LocalizeUI; that path is not ported yet, so guard until it lands.
+    // TEMP(build fix, physics session): the original never sees these
+    // four lists null because 0x466D20 (reached via the window proc on
+    // WM_CREATE) allocates them before LocalizeUI; that path is not
+    // ported yet, so guard until it lands.
     if (keys == nullptr)
         return;
     const std::int32_t scroll = app->state.timelineStartFrame;
@@ -407,7 +408,7 @@ void PanelPaint(MMDApp* app) {
             if (idx < 0)
                 break;
             mdl::AccessoryKey* list = app->AccessoryKeys(idx);
-            if (list == nullptr)  // see the DrawBandList note
+            if (list == nullptr)  // TEMP(build fix): see DrawBandList note
                 break;
             int record = 0;
             if (static_cast<std::int32_t>(list[0].frame) < limit) {

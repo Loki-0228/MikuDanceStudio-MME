@@ -61,12 +61,9 @@ void FreeTimelineSelectionRecords(MMDApp* app, TimelineSelectionBand band) {
 
 }  // namespace
 
-// Not yet declared in ported_funcs.hpp - external-linkage forward
-// declarations so the calls below resolve to the real definitions
-// (ui_panel_paint.cpp / coordinator-provided stub); the coordinator
-// registers them centrally in the finishing phase.
-void PanelPaint(MMDApp* app);       // VA 0x00414610
-void SelectionReeval(MMDApp* app);  // VA 0x00430510
+// Forward declarations; bodies in the files noted.
+void PanelPaint(MMDApp* app);       // VA 0x00414610 (ui_panel_paint.cpp)
+void SelectionReeval(MMDApp* app);  // VA 0x00430510 (ui_selection_reeval.cpp)
 
 LRESULT HandleCtlColor(HWND control, HDC dc) {
     // The original does not use the device context.

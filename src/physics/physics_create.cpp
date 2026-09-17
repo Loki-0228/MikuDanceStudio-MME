@@ -52,6 +52,19 @@
 namespace mikudancestudio {
 namespace {
 
+// The parity-patched Bullet exposes a separate solver UID. Prefer it when
+// available; stock 2.75's getUid() reads the user constraint ID instead.
+template <typename Constraint>
+auto SetConstraintUid(Constraint* constraint, int uid, int)
+    -> decltype(constraint->setUid(uid), void()) {
+    constraint->setUid(uid);
+}
+
+template <typename Constraint>
+void SetConstraintUid(Constraint* constraint, int uid, long) {
+    constraint->setUserConstraintId(uid);
+}
+
 // Manual fallback of D3DXQuaternionRotationMatrix (used only if the
 // original DLL entry cannot be resolved).
 void QuatFromMatrixManual(float out[4], const float* m) {
@@ -612,10 +625,10 @@ int CreatePhysJoint(PhysicsScene* scene, void* rbA, void* rbB,
 
     int& counter = scene->constraintId;                         // 0x4064xx
     // The original stores this monotonically increasing value at
-    // constraint+0x60: distinct solver UID.  m_userConstraintId at +0x18
-    // remains -1 in the original; merging the two fields changes the VC9
-    // class size and the constraint ordering used by the impulse solver.
-    con->setUid(counter);
+    // constraint+0x60: distinct solver UID in the parity-patched library.
+    // Stock 2.75 aliases getUid() to m_userConstraintId, so use its setter
+    // there to keep joint lookup/removal consistent with the linked library.
+    SetConstraintUid(con, counter, 0);
     DumpConstraintCreateState(counter, con);
     return counter++;
 }

@@ -57,6 +57,7 @@
 #include <cstring>
 
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/ui_translation.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 
@@ -123,7 +124,8 @@ void DrawRecordName(MMDApp* app, const mdl::FrameGroup& record, HDC hdc, int y,
 // Fixed header label of the display-mode band column (0x42F292 etc.).
 void DrawHeader(MMDApp* app, HDC hdc, const char* text, int y,
                 const std::uint32_t& color) {
-    DrawPanelText(app, text, hdc, 12, 12, y, color);
+    DrawUiGlyph(app, text, hdc, 12, 12, y, color & 0xFF,
+                (color >> 8) & 0xFF, (color >> 16) & 0xFF, 1);
 }
 
 }  // namespace

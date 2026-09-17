@@ -1,5 +1,5 @@
 // ===========================================================================
-// dialog_helpers.cpp - remaining dialog/feature gap functions (round N)
+// dialog_gaps.cpp - remaining dialog/feature gap functions (round N)
 // ===========================================================================
 // Ported here (Hex-Rays pseudocode is ground truth; x87 operand order and
 // store rounding are reproduced with explicit double intermediates wherever
@@ -58,11 +58,11 @@ namespace mikudancestudio {
 // resolves it internally, so SavePmdFile drops that argument at the call.
 void WideToSjisPath(char* dst, const wchar_t* src, std::size_t size);
 
-// VA 0x004A6520 - InitStandardSkeletonQuats: standard-pose
+// VA 0x004A6520 - InitStandardSkeletonQuats (was Sub4A6520): standard-pose
 // quaternion derivation from the leg/arm bone
-// chain (fills model+64..332).  Defined in src/features/audio_pose_helpers.cpp
+// chain (fills model+64..332).  Defined in src/features/query_audio_gaps.cpp
 // (same namespace/build); declared here for the 0x4B5760 call below.
-// was: int 0x4A6520(unsigned char* model, unsigned char a2); with a
+// was: int Sub4A6520(unsigned char* model, unsigned char a2); with a
 // "body not yet ported" note - stale, and the int return disagreed with the
 // definition (ODR).  The original's eax is dead at its sole caller
 // (0x4B5850; the next instruction is fld, no eax read), hence void.
@@ -138,7 +138,7 @@ float* QuaternionNlerp(float* out, float q0x, float q0y, float q0z, float q0w,
 // Callers (unported): 0x4DD7C0 (3 sites), 0x4FC760.  The receiver object is
 // the one carrying its transform matrix at offset +16.
 // ---------------------------------------------------------------------------
-void CopyMatrixToObject(unsigned char* self, const void* matrix16) {
+void CopyMatrixToObject(unsigned char* self, const void* matrix16) {  // was Sub48F7C0
     std::memcpy(self + 16, matrix16, 16 * 4);
 }
 
@@ -702,7 +702,7 @@ char ModelStandardPoseSetup(unsigned char* model, bool recordEnable,
             bone->rotQuat[0] = 0.0f;
             bone->rotQuat[1] = 0.0f;
             bone->rotQuat[2] = 0.0f;
-            if (model[8616] != 0) {
+            if (mikudancestudio::mdl::PoseTraceFlag(model) != 0) {
                 TraceSlot(model, 0) = bone->trans[0];
                 TraceSlot(model, 4) = bone->trans[1];
                 TraceSlot(model, 8) = bone->trans[2];
@@ -846,7 +846,7 @@ char ModelStandardPoseSetup(unsigned char* model, bool recordEnable,
                 bone->trans[1] = centerPos[1];
                 bone->trans[2] = centerPos[2];
             }
-            if (model[8616] != 0) {
+            if (mikudancestudio::mdl::PoseTraceFlag(model) != 0) {
                 TraceSlot(model, 188) = bone->trans[0];
                 TraceSlot(model, 192) = bone->trans[1];
                 TraceSlot(model, 196) = bone->trans[2];
@@ -900,7 +900,7 @@ char ModelStandardPoseSetup(unsigned char* model, bool recordEnable,
                 bone->trans[1] = centerPos[1];
                 bone->trans[2] = centerPos[2];
             }
-            if (model[8616] != 0) {
+            if (mikudancestudio::mdl::PoseTraceFlag(model) != 0) {
                 TraceSlot(model, 216) = bone->trans[0];
                 TraceSlot(model, 220) = bone->trans[1];
                 TraceSlot(model, 224) = bone->trans[2];
@@ -947,7 +947,7 @@ char ModelStandardPoseSetup(unsigned char* model, bool recordEnable,
                     mikudancestudio::mdl::Mdl(model)->localTransforms[63]);
         }
     }
-    if (model[8616] != 0)
+    if (mikudancestudio::mdl::PoseTraceFlag(model) != 0)
         ++mikudancestudio::mdl::Mdl(model)->matMisc;                        // 0x4B77C7
     return wasRecording;
 }

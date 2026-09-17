@@ -78,7 +78,7 @@
 namespace mikudancestudio {
 
 // VA 0x00407470 - stereo activation toggle on the 0x1D574 wrapper
-// (src/io/io_device_helpers.cpp).
+// (src/io/io_gaps.cpp).
 int StereoActivationToggle(unsigned char* wrapper, std::uint8_t enable);
 
 namespace {
@@ -212,7 +212,7 @@ bool RecordingReadbackPass(MMDApp* app) {
         }
         PostDeviceReset(app);                                    // 0x440DB0
     }
-    // StereoActivationToggle (io_device_helpers.cpp) still works on the raw wrapper
+    // StereoActivationToggle (io_gaps.cpp) still works on the raw wrapper
     // bytes - hand it the object address unchanged.
     StereoActivationToggle(
         reinterpret_cast<unsigned char*>(wrapper), 1);           // 0x46EA49

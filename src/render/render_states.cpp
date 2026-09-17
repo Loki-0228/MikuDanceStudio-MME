@@ -17,9 +17,7 @@
 //   +276  SetSamplerState
 //
 // Sub-object fields (D3DRenderer; x86 offsets kept for reference):
-//   +120024  shaderModelCaps / MaxAnisotropy (caps+0x6C mirrored by InitD3D;
-//            x64 0x7FF7CB4280E1 - +0x6C is D3DCAPS9::MaxAnisotropy because
-//            MaxTextureWidth/Height sit at +0x58/+0x5C in this struct)
+//   +120024  shaderModelCaps / MaxAnisotropy (caps @0x70, mirrored by InitD3D)
 //   +120032  device (IDirect3DDevice9*)
 //   +120164  d3dInitialized (stencil-shadow enable byte; edge/depth setup
 //            when set)
@@ -69,29 +67,23 @@ void InitRenderStates(MMDApp* app) {
     dev->SetTextureStageState(1, D3DTSS_COLORARG1, D3DTA_TEXTURE);
     dev->SetTextureStageState(1, D3DTSS_COLORARG2, D3DTA_CURRENT);   // (1,3,1)
 
-    // Sampler filters, x64 0x7FF7CB4286E9..0x7FF7CB428951: the original
-    // groups the writes by sampler STATE, not by stage - all three
-    // MINFILTER writes first, then MAGFILTER, then MIPFILTER - and only
-    // samplers 0/1 receive MAXANISOTROPY from the caps mirror; the two
-    // branches then converge on a constant write for sampler 2.
-    const DWORD maxAniso = static_cast<DWORD>(sub->shaderModelCaps);
-    const DWORD minMagFilter = sub->runtimeToggle != 0 ? D3DTEXF_ANISOTROPIC
-                                                       : D3DTEXF_LINEAR;
-    const DWORD mipFilter = sub->runtimeToggle != 0 ? D3DTEXF_ANISOTROPIC
-                                                    : D3DTEXF_NONE;
-    const DWORD maxAniso01 = sub->runtimeToggle != 0 ? maxAniso : 1;
-    for (DWORD s = 0; s < 3; ++s) {
-        dev->SetSamplerState(s, D3DSAMP_MINFILTER, minMagFilter);   // (s,6)
+    const DWORD maxAniso =
+        static_cast<DWORD>(sub->shaderModelCaps);
+    if (sub->runtimeToggle != 0) {  // anisotropic path
+        for (DWORD s = 0; s < 3; ++s) {
+            dev->SetSamplerState(s, D3DSAMP_MINFILTER, D3DTEXF_ANISOTROPIC);  // (s,6,3)
+            dev->SetSamplerState(s, D3DSAMP_MAGFILTER, D3DTEXF_ANISOTROPIC);  // (s,5,3)
+            dev->SetSamplerState(s, D3DSAMP_MIPFILTER, D3DTEXF_ANISOTROPIC);  // (s,7,3)
+            dev->SetSamplerState(s, D3DSAMP_MAXANISOTROPY, maxAniso);         // (s,10)
+        }
+    } else {                 // trilinear path
+        for (DWORD s = 0; s < 3; ++s) {
+            dev->SetSamplerState(s, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);   // (s,6,2)
+            dev->SetSamplerState(s, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);   // (s,5,2)
+            dev->SetSamplerState(s, D3DSAMP_MIPFILTER, D3DTEXF_NONE);     // (s,7,0)
+            dev->SetSamplerState(s, D3DSAMP_MAXANISOTROPY, 1);            // (s,10,1)
+        }
     }
-    for (DWORD s = 0; s < 3; ++s) {
-        dev->SetSamplerState(s, D3DSAMP_MAGFILTER, minMagFilter);   // (s,5)
-    }
-    for (DWORD s = 0; s < 3; ++s) {
-        dev->SetSamplerState(s, D3DSAMP_MIPFILTER, mipFilter);      // (s,7)
-    }
-    dev->SetSamplerState(0, D3DSAMP_MAXANISOTROPY, maxAniso01);     // (0,10)
-    dev->SetSamplerState(1, D3DSAMP_MAXANISOTROPY, maxAniso01);     // (1,10)
-    dev->SetSamplerState(2, D3DSAMP_MAXANISOTROPY, 1);              // (2,10,1)
 
     // half-texel matrix for stages 1/2 (D3DTS_TEXTURE1=17, D3DTS_TEXTURE2=18)
     D3DMATRIX halfTexel = {

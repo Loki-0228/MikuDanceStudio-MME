@@ -12,7 +12,7 @@
 //   * dialog controls 600..817 - res/templates/dialog/dialogs.rc
 //     (JP/EN template twins share control IDs);
 //   * per-ID behavior cross-checked against the WM_COMMAND dispatchers
-//     (command_frame_edit / command_panel_toggles / command_frame_register (.cpp)) and the loader/UI refresh code.
+//     (command_control_400/450/500.cpp) and the loader/UI refresh code.
 //
 // IDs are dialog-local in places: the same number can mean different
 // controls in different dialogs (e.g. 628 is the codec combo in the AVI

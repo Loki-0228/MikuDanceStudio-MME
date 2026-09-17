@@ -131,7 +131,7 @@ LPARAM StrParam(const void* s) {
 // ===========================================================================
 // VA 0x00466630 - InitSelectNavDialog: fill the select dialog on WM_INITDIALOG
 // ===========================================================================
-void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // VA 0x00466630
+void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466630
     app->AccessoryApplyGate() = 0;                     // 0x46665D
     if (app->state.selectNavRecords != nullptr) {      // 0x466664
         free(app->state.selectNavRecords);             // j_j__free_0
@@ -236,7 +236,7 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // VA 0x00466630
 // ===========================================================================
 // VA 0x00461C20 - SyncSelectAttachCombo: sync combo 673 with the combo-669 record
 // ===========================================================================
-void SyncSelectAttachCombo(MMDApp* app, HWND hDlg) {  // VA 0x00461C20
+void SyncSelectAttachCombo(MMDApp* app, HWND hDlg) {  // was Sub461C20, VA 0x00461C20
     const HWND combo673 = GetDlgItem(hDlg, panel::kMorphNameCombo);                     // 0x461C47
     const HWND combo669 = GetDlgItem(hDlg, panel::kBoneNameCombo);                     // 0x461C49
     const int attach = SelRecord(
@@ -271,7 +271,7 @@ void SyncSelectAttachCombo(MMDApp* app, HWND hDlg) {  // VA 0x00461C20
 // VA 0x0043D2E0 - RebuildTargetBoneList: rebuild the combo-677 bone list for the
 // attach target selected in combo 673
 // ===========================================================================
-void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection) {  // VA 0x0043D2E0
+void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection) {  // was Sub43D2E0, VA 0x0043D2E0
     const HWND combo677 = GetDlgItem(hDlg, panel::kGroupNameCombo);                     // 0x43D30A
     const int boneSel = static_cast<int>(SendMessageA(
         GetDlgItem(hDlg, panel::kBoneNameCombo), CB_GETCURSEL, 0, 0));       // 0x43D320
@@ -348,7 +348,7 @@ void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection) {  // VA 0
 // ===========================================================================
 // VA 0x0043D560 - CommitTargetBonePick: store the combo-677 pick into rec[4]
 // ===========================================================================
-void CommitTargetBonePick(MMDApp* app, HWND hDlg) {  // VA 0x0043D560
+void CommitTargetBonePick(MMDApp* app, HWND hDlg) {  // was Sub43D560, VA 0x0043D560
     const int boneSel = static_cast<int>(SendMessageA(
         GetDlgItem(hDlg, panel::kBoneNameCombo), CB_GETCURSEL, 0, 0));       // 0x43D597
     const int attach = static_cast<int>(SendMessageA(
@@ -369,7 +369,7 @@ void CommitTargetBonePick(MMDApp* app, HWND hDlg) {  // VA 0x0043D560
 // VA 0x004256C0 - ResetModelSelection: clear all per-vertex/per-morph selection state
 // and restore the select records (button id 632)
 // ===========================================================================
-void ResetModelSelection(MMDApp* app) {  // VA 0x004256C0
+void ResetModelSelection(MMDApp* app) {  // was Sub4256C0, VA 0x004256C0
     app->SceneModified() = 1;                                       // 0x4256C5
 
     unsigned char* const model = ActiveModel(app);
@@ -417,7 +417,7 @@ void ResetModelSelection(MMDApp* app) {  // VA 0x004256C0
 // VA 0x0043D610 - ApplyBoneAttach: apply the selected attach to the current bone
 // (button id 630) - matrix bake + selection flag + refresh
 // ===========================================================================
-void ApplyBoneAttach(MMDApp* app, HWND hDlg) {  // VA 0x0043D610
+void ApplyBoneAttach(MMDApp* app, HWND hDlg) {  // was Sub43D610, VA 0x0043D610
     const int boneSel = static_cast<int>(SendMessageA(
         GetDlgItem(hDlg, panel::kBoneNameCombo), CB_GETCURSEL, 0, 0));       // 0x43D650
     const int attach = static_cast<int>(SendMessageA(
@@ -528,7 +528,7 @@ void ApplyBoneAttach(MMDApp* app, HWND hDlg) {  // VA 0x0043D610
 //   m[10]); gimbal patch when |cos(pitch)| < 1e-6 (±3.141592 on yaw/roll
 //   by matrix signs).
 // ---------------------------------------------------------------------------
-void RefreshSelectNavDisplay(MMDApp* app, HWND hDlg) {  // VA 0x004250C0
+void RefreshSelectNavDisplay(MMDApp* app, HWND hDlg) {  // was Sub4250C0, VA 0x004250C0
     auto& s = *app;
     const int sel = static_cast<int>(SendMessageA(
         GetDlgItem(hDlg, panel::kBoneNameCombo), CB_GETCURSEL, 0, 0));             // 0x425111

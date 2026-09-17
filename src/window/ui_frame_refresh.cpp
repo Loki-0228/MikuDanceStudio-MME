@@ -1,12 +1,12 @@
 // ===========================================================================
 // Timeline-driven Light / Self Shadow panel refresh.
-//   0x00411070  RefreshLightPanel: evaluate the light key
+//   0x00411070  RefreshLightPanel (was Sub411070): evaluate the light key
 //               list and synchronize controls 455..466
-//   0x00411B90  RefreshSelfShadowPanel: evaluate the shadow
+//   0x00411B90  RefreshSelfShadowPanel (was Sub411B90): evaluate the shadow
 //               key list and synchronize controls 560..564
-//   0x004134E0  SyncAccessoryEditPanel: reload the accessory
+//   0x004134E0  SyncAccessoryEditPanel (was Sub4134E0): reload the accessory
 //               edit controls 474..486 from the selected accessory
-//   0x00411DF0  RegisterSelfShadowState: insert/overwrite the
+//   0x00411DF0  RegisterSelfShadowState (was Sub411DF0): insert/overwrite the
 //               self-shadow key at a frame with the current mode + interval
 //               (the SelfShadow sibling of RegisterCameraState/RegisterLightState)
 // ===========================================================================
@@ -97,7 +97,7 @@ void TraceSceneLightState(MMDApp* app, const char* stage) {
         WriteLightTrace(app, stage);
 }
 
-// VA 0x00411070
+// was Sub411070, VA 0x00411070
 void RefreshLightPanel(MMDApp* app) {
     if (app == nullptr)
         return;
@@ -168,7 +168,7 @@ void RefreshLightPanel(MMDApp* app) {
     }
 }
 
-// VA 0x00411B90
+// was Sub411B90, VA 0x00411B90
 void RefreshSelfShadowPanel(MMDApp* app) {
     if (app == nullptr)
         return;
@@ -208,7 +208,7 @@ void RefreshSelfShadowPanel(MMDApp* app) {
                  mode != 0 && mode != 1 ? BST_CHECKED : BST_UNCHECKED, 0);
 }
 
-// VA 0x004134E0 - reload the accessory edit panel
+// was Sub4134E0, VA 0x004134E0 - reload the accessory edit panel
 // (combos 474/475 + checkboxes 476/477/486 + pos/rot/scale/opacity edits)
 // from the selected accessory slot.
 void SyncAccessoryEditPanel(MMDApp* app) {
@@ -304,7 +304,7 @@ void SyncAccessoryEditPanel(MMDApp* app) {
     ReplaceEditText(main, 485, text);
 }
 
-// VA 0x00411DF0 - self-shadow track's "register" backend:
+// was Sub411DF0, VA 0x00411DF0 - self-shadow track's "register" backend:
 // exact-hit overwrite or free-slot splice of the 24-byte shadow key carrying
 // the current shadow mode (this+0xA0B10) and interval (this+0xA0B0C).
 void RegisterSelfShadowState(MMDApp* app, int frameValue) {

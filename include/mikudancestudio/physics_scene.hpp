@@ -1,5 +1,5 @@
 // ===========================================================================
-// MikuDanceStudio - the physics scene wrapper ("0x48 object", 0x048)
+// MikuDanceStudio - the physics scene wrapper ("0x48 object", Sub048)
 // ===========================================================================
 // Original form (recovered from the x86 AND x64 binaries):
 //   InitMainWindowAndD3D performs

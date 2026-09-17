@@ -12,15 +12,13 @@
 //      branch re-sets the same strings the controls were created with -
 //      restored from ui_controls.inc by id, single source of truth).
 //   3. model-slot language flag sweep: for each of the 100 slots at
-//      this+1920, physicsFlags(slot) = english (x86 12740 / x64 0x3560 =
-//      13664, x64 store at 0x7FF7CB43A4F5); subobject(this+204)+596 too.
+//      this+1920, *(slot+12740) = english; subobject(this+204)+596 too.
 //   4. InvalidateRect + sub_42F1E0 + sub_40D070 [stubs]
 //   5. camera-mode branch (this+760): combobox 434 entries
 //      gravity/s shadow/light/camera (EN) else sub_49C850(slot).
 //   6. selector comboboxes 436/474/449: save cur selection, reset, add
 //      "camera/light/accessory" / "ground" / JP/EN third label, add every
-//      loaded model's name (nameEn/name: x86 8826/8776, x64 8946/8896 -
-//      x64 fills at 0x7FF7CB43A9AE/0x7FF7CB43AA21), restore selection.
+//      loaded model's name (slot+8826 EN / slot+8776 JP), restore selection.
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -36,29 +34,47 @@
 namespace mikudancestudio {
 namespace {
 
-struct TextEntry { int id; const char* en; };
+struct TextEntry { int id; const char* en; const wchar_t* zh; };
 
-// English texts in original call order (0x441AD0 EN branch).
+// English texts in original call order (0x441AD0 EN branch).  The zh column
+// is the port's Simplified-Chinese translation, cross-checked against both
+// the EN literal and the JP creation string in ui_controls.inc.
 constexpr TextEntry kEnTexts[] = {
-    {400, "undo"}, {401, "redo"}, {418, "<"}, {419, ">"}, {429, "current"},
-    {416, "v-sel"}, {423, "delete"}, {420, "copy"}, {421, "paste"},
-    {422, "revers"}, {415, "range-sel"}, {424, "expand"}, {432, "liner"},
-    {431, "paste"}, {430, "copy"}, {435, "load"}, {437, "delete"},
-    {440, "shadow"}, {441, "Add-syn"}, {442, "OP"}, {438, "register"},
-    {451, "reset"}, {446, "perspect"}, {452, "register"}, {454, "+"},
-    {453, "-"}, {467, "reset"}, {468, "register"}, {562, "off"},
-    {563, "mode1"}, {564, "mode2"}, {565, "register"}, {470, "+"},
-    {469, "-"}, {489, "+"}, {488, "-"}, {472, "load"}, {473, "delete"},
-    {477, "Add-syn"}, {487, "register"}, {402, "front"}, {403, "back"},
-    {404, "top"}, {405, "left"}, {406, "right"}, {407, "btm"},
-    {408, "play"}, {535, "track"}, {490, "select"}, {493, "rotate"},
-    {492, "move"}, {491, "BOX-sel"}, {494, "select all"},
-    {501, "unregisted"}, {496, "copy"}, {497, "paste"}, {498, "revers"},
-    {500, "register"}, {499, "physics"}, {495, "reset"}, {503, "+"},
-    {502, "-"}, {529, "+"}, {528, "-"}, {567, "+"}, {566, "-"},
-    {524, "register"}, {525, "register"}, {527, "register"},
-    {526, "register"}, {543, "dist"}, {551, "info"}, {552, "low pow"},
-    {557, "axis"}, {555, "set"}, {556, "Fshadow"},
+    {400, "undo", L"\u64a4\u6d88"}, {401, "redo", L"\u91cd\u505a"},
+    {418, "<", L"<"}, {419, ">", L">"}, {429, "current", L"\u5f53\u524d"},
+    {416, "v-sel", L"\u9876\u70b9\u9009\u62e9"}, {423, "delete", L"\u5220\u9664"},
+    {420, "copy", L"\u590d\u5236"}, {421, "paste", L"\u7c98\u8d34"},
+    {422, "revers", L"\u53cd\u8f6c"}, {415, "range-sel", L"\u8303\u56f4\u9009\u62e9"},
+    {424, "expand", L"\u5c55\u5f00"}, {432, "liner", L"\u7ebf\u6027"},
+    {431, "paste", L"\u7c98\u8d34"}, {430, "copy", L"\u590d\u5236"},
+    {435, "load", L"\u8bfb\u53d6"}, {437, "delete", L"\u5220\u9664"},
+    {440, "shadow", L"\u9634\u5f71"}, {441, "Add-syn", L"\u6dfb\u52a0\u540c\u6b65"},
+    {442, "OP", L"OP"}, {438, "register", L"\u767b\u8bb0"},
+    {451, "reset", L"\u91cd\u7f6e"}, {446, "perspect", L"\u900f\u89c6"},
+    {452, "register", L"\u767b\u8bb0"}, {454, "+", L"+"},
+    {453, "-", L"-"}, {467, "reset", L"\u91cd\u7f6e"}, {468, "register", L"\u767b\u8bb0"},
+    {562, "off", L"\u5173\u95ed"}, {563, "mode1", L"\u6a21\u5f0f1"},
+    {564, "mode2", L"\u6a21\u5f0f2"}, {565, "register", L"\u767b\u8bb0"},
+    {470, "+", L"+"}, {469, "-", L"-"}, {489, "+", L"+"}, {488, "-", L"-"},
+    {472, "load", L"\u8bfb\u53d6"}, {473, "delete", L"\u5220\u9664"},
+    {477, "Add-syn", L"\u6dfb\u52a0\u540c\u6b65"}, {487, "register", L"\u767b\u8bb0"},
+    {402, "front", L"\u6b63\u9762"}, {403, "back", L"\u80cc\u9762"},
+    {404, "top", L"\u4e0a\u9762"}, {405, "left", L"\u5de6\u9762"},
+    {406, "right", L"\u53f3\u9762"}, {407, "btm", L"\u4e0b\u9762"},
+    {408, "play", L"\u64ad\u653e"}, {535, "track", L"\u8f68\u8ff9"},
+    {490, "select", L"\u9009\u62e9"}, {493, "rotate", L"\u65cb\u8f6c"},
+    {492, "move", L"\u79fb\u52a8"}, {491, "BOX-sel", L"\u6846\u9009"},
+    {494, "select all", L"\u5168\u9009"}, {501, "unregisted", L"\u672a\u767b\u8bb0"},
+    {496, "copy", L"\u590d\u5236"}, {497, "paste", L"\u7c98\u8d34"},
+    {498, "revers", L"\u53cd\u8f6c"}, {500, "register", L"\u767b\u8bb0"},
+    {499, "physics", L"\u7269\u7406"}, {495, "reset", L"\u91cd\u7f6e"},
+    {503, "+", L"+"}, {502, "-", L"-"}, {529, "+", L"+"}, {528, "-", L"-"},
+    {567, "+", L"+"}, {566, "-", L"-"},
+    {524, "register", L"\u767b\u8bb0"}, {525, "register", L"\u767b\u8bb0"},
+    {527, "register", L"\u767b\u8bb0"}, {526, "register", L"\u767b\u8bb0"},
+    {543, "dist", L"\u8ddd\u79bb"}, {551, "info", L"\u4fe1\u606f"},
+    {552, "low pow", L"\u7701\u7535"}, {557, "axis", L"\u5750\u6807\u8f74"},
+    {555, "set", L"\u8bbe\u7f6e"}, {556, "Fshadow", L"\u81ea\u9634\u5f71"},
 };
 
 HWND Dlg(MMDApp* app, int id) {
@@ -88,8 +104,10 @@ const wchar_t* JpControlText(int id) {
 }  // namespace
 
 void LocalizeUI(MMDApp* app) {
+    RefreshMenuLanguage(app);
     auto& s = *app;
-    const bool english = s.EnglishUI() != 0;                       // 658252
+    const bool english = s.EnglishUI() == 1;                       // 658252
+    const bool chinese = s.EnglishUI() == 2;
     const bool modelMode = s.state.optflag[0] != 0;  // 760
 
     HWND combo433 = Dlg(app, 433);
@@ -108,6 +126,19 @@ void LocalizeUI(MMDApp* app) {
             SendMessageA(combo433, CB_ADDSTRING, 0, (LPARAM)"view angle");
         }
         SendMessageA(combo433, CB_ADDSTRING, 0, (LPARAM)"all");
+    } else if (chinese) {
+        for (const TextEntry& t : kEnTexts)
+            SetWindowTextW(Dlg(app, t.id), t.zh);
+        SetWindowTextW(Dlg(app, 536), modelMode ? L"\u5230\u6a21\u578b" : L"\u76f8\u673a");
+        SendMessageW(combo433, CB_ADDSTRING, 0, (LPARAM)L"X\u8f74\u79fb\u52a8");
+        SendMessageW(combo433, CB_ADDSTRING, 0, (LPARAM)L"Y\u8f74\u79fb\u52a8");
+        SendMessageW(combo433, CB_ADDSTRING, 0, (LPARAM)L"Z\u8f74\u79fb\u52a8");
+        SendMessageW(combo433, CB_ADDSTRING, 0, (LPARAM)L"\u65cb\u8f6c");
+        if (modelMode) {
+            SendMessageW(combo433, CB_ADDSTRING, 0, (LPARAM)L"\u8ddd\u79bb");
+            SendMessageW(combo433, CB_ADDSTRING, 0, (LPARAM)L"\u89c6\u91ce\u89d2");
+        }
+        SendMessageW(combo433, CB_ADDSTRING, 0, (LPARAM)L"\u5168\u90e8");
     } else {
         for (const TextEntry& t : kEnTexts)
             SetWindowTextW(Dlg(app, t.id), JpControlText(t.id));
@@ -136,14 +167,13 @@ void LocalizeUI(MMDApp* app) {
     SendMessageA(combo433, CB_SETCURSEL, 3, 0);
 
     // model-slot language flag sweep (20 x 5 slots at this+1920); the x64
-    // twin sub_7FF7CB438E70 sweeps all 255 slots (mov r8d, 0FFh ... dec r8
-    // at 0x7FF7CB43A4E0), storing the app language byte into model+0x3560
-    // (= physicsFlags, x64 store at 0x7FF7CB43A4F5; x86 twin 12740 - the
-    // same typed field on both ABIs, never a raw offset).
+    // twin sub_7FF7CB438E0 sweeps all 255 slots (mov r8d, 0FFh ... dec r8
+    // at 0x7FF7CB43A4E0, writing model+0x3560).
     for (int i = 0; i < kModelSlotCount; ++i) {
         unsigned char* slot = s.ModelSlot(i);
         if (slot != nullptr)
-            mdl::Mdl(slot)->physicsFlags =
+            *reinterpret_cast<unsigned char*>(
+                static_cast<unsigned char*>(slot) + 12740) =
                 static_cast<unsigned char>(english);
     }
     if (s.Audio() != nullptr)
@@ -163,6 +193,11 @@ void LocalizeUI(MMDApp* app) {
             SendMessageA(combo434, CB_INSERTSTRING, 0, (LPARAM)"s shadow");
             SendMessageA(combo434, CB_INSERTSTRING, 0, (LPARAM)"light");
             SendMessageA(combo434, CB_INSERTSTRING, 0, (LPARAM)"camera");
+        } else if (chinese) {
+            SendMessageW(combo434, CB_INSERTSTRING, 0, (LPARAM)L"\u91cd\u529b");
+            SendMessageW(combo434, CB_INSERTSTRING, 0, (LPARAM)L"\u81ea\u9634\u5f71");
+            SendMessageW(combo434, CB_INSERTSTRING, 0, (LPARAM)L"\u7167\u660e");
+            SendMessageW(combo434, CB_INSERTSTRING, 0, (LPARAM)L"\u76f8\u673a");
         } else {
             // JP strings verified byte-exact: 重力(0x52D3A4) セルフ影(0x52D398)
             // 照明(0x52D390) カメラ(0x52B784).
@@ -192,6 +227,10 @@ void LocalizeUI(MMDApp* app) {
         SendMessageA(combo436, CB_ADDSTRING, 0, (LPARAM)"camera/light/accessory");  // 0x52D2AC
         SendMessageA(combo474, CB_ADDSTRING, 0, (LPARAM)"ground");                 // 0x52D2A4
         SendMessageA(combo449, CB_ADDSTRING, 0, (LPARAM)"non");                    // 0x52D38C
+    } else if (chinese) {
+        SendMessageW(combo436, CB_ADDSTRING, 0, (LPARAM)L"\u76f8\u673a/\u7167\u660e/\u914d\u4ef6");
+        SendMessageW(combo474, CB_ADDSTRING, 0, (LPARAM)L"\u5730\u9762");
+        SendMessageW(combo449, CB_ADDSTRING, 0, (LPARAM)L"\u65e0");
     } else {
         // Verified byte-exact: 0x52D370 ｶﾒﾗ･照明･ｱｸｾｻﾘ / 0x52D368 地面 /
         // 0x52D360 なし (push sequence 0x442CE0..0x442D31).
@@ -221,12 +260,8 @@ void LocalizeUI(MMDApp* app) {
         if (slotIdx < 0)
             continue;
         unsigned char* slot = s.ModelSlot(slotIdx);
-        mdl::ModelRecord* model = mdl::Mdl(slot);
-        // nameEn/name: x86 8826/8776, x64 8946/8896 (x64 English fills
-        // use model+8946 at 0x7FF7CB43A9AE, Japanese model+8896 at
-        // 0x7FF7CB43AA21) - always through the typed buffers.
         LPARAM name = reinterpret_cast<LPARAM>(
-            english ? model->nameEn : model->name);
+            english ? slot + 8826 : slot + 8776);
         SendMessageA(combo436, CB_ADDSTRING, 0, name);
         SendMessageA(combo474, CB_ADDSTRING, 0, name);
         SendMessageA(combo449, CB_ADDSTRING, 0, name);

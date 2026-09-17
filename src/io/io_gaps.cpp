@@ -1,5 +1,5 @@
 // ===========================================================================
-// io_device_helpers.cpp - assorted gap functions from the 0x403030..0x409700 window
+// io_gaps.cpp - assorted gap functions from the 0x403030..0x409700 window
 // ===========================================================================
 // Covers the remaining "io cluster" virtual addresses not yet represented
 // anywhere in the port:
@@ -10,10 +10,9 @@
 //   already present elsewhere (see the banners below for pointers):
 //                 0x00406950  DrawPhysicsCollisionDebug
 //                 0x00403030  Bullet btRigidBodyConstructionInfo ctor
-//   deliberately deferred (DirectShow AVI recording graph cluster - the
-//   port needs byte-exact reproduction of the MMDxShow.dll custom COM
-//   interfaces; the decoded contract lives at the top of
-//   src/app/dshow_record_graph.cpp):
+//   covered elsewhere (DirectShow AVI recording graph cluster - real
+//   bodies in src/app/dshow_record_graph.cpp; contract decoded at the top
+//   of that file):
 //                 0x004095D0, 0x00409170, 0x004096D0, 0x00409700
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
@@ -194,8 +193,9 @@ bool DirectShowInit(HWND hWnd) {
 //
 // VA 0x004095D0 / 0x00409170 / 0x004096D0 / 0x00409700 - DirectShow AVI
 //   recording graph cluster (pin finder, compressor moniker bind, ...).
-//   Deliberately deferred; contract decoded at the top of
-//   src/app/dshow_record_graph.cpp.
+//   COVERED: real bodies in src/app/dshow_record_graph.cpp (FindPinDShow,
+//   BindSelectedCompressor, FindInputPin, FindOutputPin); contract decoded
+//   at the top of that file.  docs/PORTING_STATUS.md records them COVERED.
 // ---------------------------------------------------------------------------
 
 }  // namespace mikudancestudio

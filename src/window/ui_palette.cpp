@@ -10,7 +10,7 @@
 //   GetClientRect(this+0xA06B8 = kPtrHwnd) into a local RECT; `bottom` is
 //   Rect.bottom everywhere below.
 //   4 gradient rows are driven by ColorLerp (0x40AD00) of the colour pair
-//   this+0xA05E0 / this+0xA05E4 (the two bottom-panel gradient colours), each
+//   this+0xA05E0 / this+0xA05E4 (kDwordCol656864 / kDwordCol656868), each
 //   with an x87-computed factor truncated to float at the call boundary:
 //     t1  = -45.0/((50.0-bottom)-161.0)          (dbl_52C940/190/948)
 //     t2  = ((50.0-bottom)-228.0)/((50.0-bottom)-161.0)   (dbl_52C938)
@@ -44,6 +44,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/ui_translation.hpp"
 #include "mikudancestudio/model.hpp"
 
 namespace mikudancestudio {
@@ -53,14 +54,14 @@ namespace {
 // of HandlePaletteChanged2 (0x42C140).  Bytes match the original exactly
 // (byte_52C6DC / byte_52C728 / byte_52C7E0 / byte_52C7EC / byte_52C808 /
 // byte_52C8A4 / byte_52C8B0 / byte_52C8C0).
-constexpr char kJpPlaying[] = "\x8d\xc4\x90\xb6\x92\x86";  // 再生中 (playing)
-constexpr char kJpAngle[] = "\x8a\x70\x93\x78";          // 角度 (angle)
-constexpr char kJpBonePosition[] = "\x83\x7b\x81\x5b\x83\x93\x88\xca\x92\x75";  // ボーン位置 (bone place)
-constexpr char kJpCameraFollowMode[] = "\x83\x4a\x83\x81\x83\x89\x83\x7b\x81\x5b\x83\x93\x92\xc7\x8f\x5d\x83\x82\x81\x5b\x83\x68\x92\x86";  // カメラボーン追従モード中
-constexpr char kJpCameraFollowModeHint[] = "\x83\x4a\x83\x81\x83\x89\x83\x7b\x81\x5b\x83\x93\x92\xc7\x8f\x5d\x83\x82\x81\x5b\x83\x68\x92\x86\x20\x28\x92\xc7\x8f\x5d\x83\x7b\x83\x5e\x83\x93\x82\xf0\x89\xf0\x8f\x9c\x82\xb5\x82\xc4\x89\xba\x82\xb3\x82\xa2\x29";  // カメラボーン追従モード中 (追従ボタンを解除して下さい)
-constexpr char kJpCameraCenter[] = "\x83\x4a\x83\x81\x83\x89\x92\x86\x90\x53";  // カメラ中心 (camera centre)
-constexpr char kJpCamLightAccessoryPanel[] = "\xb6\xd2\xd7\xa5\x8f\xc6\x96\xbe\xa5\xb1\xb8\xbe\xbb\xd8";  // ｶﾒﾗ･照明･ｱｸｾｻﾘ
-constexpr char kJpCamLightAccessoryPanelFmt[] = "\xb6\xd2\xd7\xa5\x8f\xc6\x96\xbe\xa5\xb1\xb8\xbe\xbb\xd8\x20\x2f\x20\x25\x73";  // ｶﾒﾗ･照明･ｱｸｾｻﾘ / %s
+constexpr char kS52C6DC[] = "\x8d\xc4\x90\xb6\x92\x86";  // 再生中 (playing)
+constexpr char kS52C728[] = "\x8a\x70\x93\x78";          // 角度 (angle)
+constexpr char kS52C7E0[] = "\x83\x7b\x81\x5b\x83\x93\x88\xca\x92\x75";  // ボーン位置 (bone place)
+constexpr char kS52C7EC[] = "\x83\x4a\x83\x81\x83\x89\x83\x7b\x81\x5b\x83\x93\x92\xc7\x8f\x5d\x83\x82\x81\x5b\x83\x68\x92\x86";  // カメラボーン追従モード中
+constexpr char kS52C808[] = "\x83\x4a\x83\x81\x83\x89\x83\x7b\x81\x5b\x83\x93\x92\xc7\x8f\x5d\x83\x82\x81\x5b\x83\x68\x92\x86\x20\x28\x92\xc7\x8f\x5d\x83\x7b\x83\x5e\x83\x93\x82\xf0\x89\xf0\x8f\x9c\x82\xb5\x82\xc4\x89\xba\x82\xb3\x82\xa2\x29";  // カメラボーン追従モード中 (追従ボタンを解除して下さい)
+constexpr char kS52C8A4[] = "\x83\x4a\x83\x81\x83\x89\x92\x86\x90\x53";  // カメラ中心 (camera centre)
+constexpr char kS52C8B0[] = "\xb6\xd2\xd7\xa5\x8f\xc6\x96\xbe\xa5\xb1\xb8\xbe\xbb\xd8";  // ｶﾒﾗ･照明･ｱｸｾｻﾘ
+constexpr char kS52C8C0[] = "\xb6\xd2\xd7\xa5\x8f\xc6\x96\xbe\xa5\xb1\xb8\xbe\xbb\xd8\x20\x2f\x20\x25\x73";  // ｶﾒﾗ･照明･ｱｸｾｻﾘ / %s
 
 }  // namespace
 
@@ -235,7 +236,7 @@ void HandlePaletteChanged(HDC hdc) {
 //   "Playing" is drawn as "Playing"/"再生中" when (this+0x9ED90 == 0) &
 //   (this+0x330 != 0) - the play flag test - else the name/accessory text.
 //   Each mode ends with two 14px label lines; EN paths return early, JP
-//   paths fall through to the shared "角度" (kJpAngle) tail call.
+//   paths fall through to the shared "角度" (kS52C728) tail call.
 //
 // The "palette" name is historical (from the message-0x318 stub list); the
 // function performs no palette API calls - it is the status overlay painter.
@@ -290,49 +291,60 @@ void HandlePaletteChanged2(HDC hdc) {
     if (app->state.optflag[0] != 0) {   // 0x2F8: camera/light mode
         if (app->EnglishUI() != 0) {                             // 0xA0B4C
             if (playing) {
-                DrawGlyph(app, "Playing", hdc, 20, xBase + 10, hideTop - 22,
+                    DrawUiGlyph(app, "Playing", hdc, 20, xBase + 10, hideTop - 22,
                           0xFF, 0xFF, 0xFF, 1);                  // 0x42C287
             } else {
                 // Accessory slot array this+0x9DD70 [byte this+0x9E170].
                 mdl::AccessoryRecord* acc =
                     app->AccessorySlot(app->SelectedAccessorySlot());
                 if (acc == nullptr) {
-                    DrawGlyph(app, "camera light accessary", hdc, 20,
+                    DrawUiGlyph(app, "camera light accessary", hdc, 20,
                               xBase + 10, hideTop - 22, 0xFF, 0xFF, 0xFF, 1);  // 0x42C316
                 } else {
                     sprintf_s(buffer, 0x100, "camera light accessary / %s",
                               acc->name);                        // 0x42C2BC
-                    DrawGlyph(app, buffer, hdc, 20, xBase + 10, hideTop - 22,
-                              0xFF, 0xFF, 0xFF, 1);              // 0x42C2EB
+                    if (app->EnglishUI() == 2) {
+                        wchar_t label[320]{};
+                        wchar_t accessoryName[256]{};
+                        MultiByteToWideChar(CP_ACP, 0, acc->name, -1,
+                                            accessoryName, 256);
+                        swprintf_s(label, L"相机 / 照明 / 配件 / %s", accessoryName);
+                        DrawWideUiGlyph(label, hdc, 20, xBase + 10, hideTop - 25,
+                                        0xFF, 0xFF, 0xFF, 1);
+                    } else {
+                        DrawGlyph(app, buffer, hdc, 20, xBase + 10, hideTop - 22,
+                                  0xFF, 0xFF, 0xFF, 1);
+                    }
+                                                                  // 0x42C2EB
                 }
             }
-            DrawGlyph(app, "camera", hdc, 14, xBase + 90, hideBottom + 10,
+            DrawUiGlyph(app, "camera", hdc, 14, xBase + 90, hideBottom + 10,
                       0, 0, 0, 1);                               // 0x42C33B
-            DrawGlyph(app, "angle", hdc, 14, xBase + 365, hideBottom + 10,
+            DrawUiGlyph(app, "angle", hdc, 14, xBase + 365, hideBottom + 10,
                       0, 0, 0, 1);                               // 0x42C361
             return;
         }
         if (playing) {
-            DrawGlyph(app, kJpPlaying, hdc, 16, xBase + 10, hideTop - 20,
+            DrawGlyph(app, kS52C6DC, hdc, 16, xBase + 10, hideTop - 20,
                       0xFF, 0xFF, 0xFF, 1);                      // 0x42C39A
         } else {
             mdl::AccessoryRecord* acc =
                 app->AccessorySlot(app->SelectedAccessorySlot());
             if (acc == nullptr) {
-                DrawGlyph(app, kJpCamLightAccessoryPanel, hdc, 16, xBase + 10, hideTop - 20,
+                DrawGlyph(app, kS52C8B0, hdc, 16, xBase + 10, hideTop - 20,
                           0xFF, 0xFF, 0xFF, 1);                  // 0x42C429
             } else {
-                sprintf_s(buffer, 0x100, kJpCamLightAccessoryPanelFmt, acc->name);    // 0x42C3CF
+                sprintf_s(buffer, 0x100, kS52C8C0, acc->name);    // 0x42C3CF
                 DrawGlyph(app, buffer, hdc, 16, xBase + 10, hideTop - 20,
                           0xFF, 0xFF, 0xFF, 1);                  // 0x42C3FE
             }
         }
-        DrawGlyph(app, kJpCameraCenter, hdc, 14, xBase + 72, hideBottom + 11,
+        DrawGlyph(app, kS52C8A4, hdc, 14, xBase + 72, hideBottom + 11,
                   0, 0, 0, 1);                                   // 0x42C44C
     } else {                                                     // bone mode
         if (app->EnglishUI() != 0) {
             if (playing) {
-                DrawGlyph(app, "Playing", hdc, 20, xBase + 10, hideTop - 22,
+                DrawUiGlyph(app, "Playing", hdc, 20, xBase + 10, hideTop - 22,
                           0xFF, 0xFF, 0xFF, 1);                  // 0x42C492
             } else {
                 unsigned char* model = app->SelectedModel();
@@ -360,28 +372,28 @@ void HandlePaletteChanged2(HDC hdc) {
                         (traceTarget >= 0);                      // 0x42C553..0x42C572
                     if (traceActive) {
                         if (app->state.viewDirty != 0) {  // 0xA05D1
-                            DrawGlyph(app, "camera bone trace mode (release trace button)",
+                            DrawUiGlyph(app, "camera bone trace mode (release trace button)",
                                       hdc, 16, xBase + width + 30, hideTop - 22,
                                       0xFF, 0xFF, 0xFF, 1);      // 0x42C5A7
-                            DrawGlyph(app, "camera bone trace mode (release trace button)",
+                            DrawUiGlyph(app, "camera bone trace mode (release trace button)",
                                       hdc, 16, xBase + width + 29, hideTop - 23,
                                       0xFF, 0x32, 0x32, 1);      // 0x42C5CE
                         } else {
-                            DrawGlyph(app, "camera bone trace mode",
+                            DrawUiGlyph(app, "camera bone trace mode",
                                       hdc, 16, xBase + width + 30, hideTop - 22,
                                       0xFF, 0xFF, 0xFF, 1);      // 0x42C5E9
                         }
                     }
                 }
             }
-            DrawGlyph(app, "bone place", hdc, 14, xBase + 66, hideBottom + 10,
+            DrawUiGlyph(app, "bone place", hdc, 14, xBase + 66, hideBottom + 10,
                       0, 0, 0, 1);                               // 0x42C60C
-            DrawGlyph(app, "angle", hdc, 14, xBase + 365, hideBottom + 10,
+            DrawUiGlyph(app, "angle", hdc, 14, xBase + 365, hideBottom + 10,
                       0, 0, 0, 1);                               // 0x42C361
             return;
         }
         if (playing) {
-            DrawGlyph(app, kJpPlaying, hdc, 20, xBase + 10, hideTop - 22,
+            DrawGlyph(app, kS52C6DC, hdc, 20, xBase + 10, hideTop - 22,
                       0xFF, 0xFF, 0xFF, 1);                      // 0x42C645
         } else {
             unsigned char* model = app->SelectedModel();
@@ -399,23 +411,23 @@ void HandlePaletteChanged2(HDC hdc) {
                     (traceTarget >= 0);                          // 0x42C6F9..0x42C721
                 if (traceActive) {
                     if (app->state.viewDirty != 0) {  // 0xA05D1
-                        DrawGlyph(app, kJpCameraFollowModeHint, hdc, 16, xBase + width + 30,
+                        DrawGlyph(app, kS52C808, hdc, 16, xBase + width + 30,
                                   hideTop - 20, 0xFF, 0xFF, 0xFF, 1);  // 0x42C756
-                        DrawGlyph(app, kJpCameraFollowModeHint, hdc, 16, xBase + width + 29,
+                        DrawGlyph(app, kS52C808, hdc, 16, xBase + width + 29,
                                   hideTop - 21, 0xFF, 0x32, 0x32, 1);  // 0x42C77D
                     } else {
-                        DrawGlyph(app, kJpCameraFollowMode, hdc, 16, xBase + width + 30,
+                        DrawGlyph(app, kS52C7EC, hdc, 16, xBase + width + 30,
                                   hideTop - 20, 0xFF, 0xFF, 0xFF, 1);  // 0x42C798
                     }
                 }
             }
         }
-        DrawGlyph(app, kJpBonePosition, hdc, 14, xBase + 68, hideBottom + 11,
+        DrawGlyph(app, kS52C7E0, hdc, 14, xBase + 68, hideBottom + 11,
                   0, 0, 0, 1);                                   // 0x42C7BD
     }
 
     // Shared tail of the JP paths: "角度" at xBase+0x171 (369).
-    DrawGlyph(app, kJpAngle, hdc, 14, xBase + 369, hideBottom + 11,
+    DrawGlyph(app, kS52C728, hdc, 14, xBase + 369, hideBottom + 11,
               0, 0, 0, 1);                                       // 0x42C7E3
 }
 

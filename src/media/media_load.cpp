@@ -135,16 +135,15 @@ void MediaAspect(MMDApp* app, std::int32_t width, std::int32_t height,
 
 // ---------------------------------------------------------------------------
 // VA 0x0042AE20 - CopyDirPathW(dest, src): wcscpy_s(dest, 0x3E8, src) thunk
-// for the wchar_t[1000] UserFile directory buffers.  (Body moved here from
-// the command_view_menu.cpp placeholder per its TODO; real port.)
+// for the wchar_t[1000] UserFile directory buffers.
 // ---------------------------------------------------------------------------
-void CopyDirPathW(wchar_t* dest, const wchar_t* src) {
+void CopyDirPathW(wchar_t* dest, const wchar_t* src) {  // was Sub42AE20
     wcscpy_s(dest, 0x3E8, src);                                     // 0x506292
 }
 
 // ---------------------------------------------------------------------------
 // VA 0x0042AE40 - CopyPathW(dest, src): wcscpy_s(dest, 0x100, src) thunk
-// for the wchar_t[256] media path buffers.  (Supersedes the was-0x42AE40
+// for the wchar_t[256] media path buffers.  (Supersedes the was-Sub42AE40
 // stub, since deleted from stubs.cpp.)
 // ---------------------------------------------------------------------------
 void CopyPathW(wchar_t* dest, const wchar_t* src) {
@@ -337,7 +336,7 @@ void LoadAviFile(MMDApp* app) {
 // ---------------------------------------------------------------------------
 // VA 0x004337A0 - LoadBackgroundPicture(this=app).  Reads the path from
 // app+0x9E448 after UserFile resolution; D3DX texture at app+0x9E42C.
-// (Supersedes the was-0x4337A0 stub, since deleted from stubs.cpp.)
+// (Supersedes the was-Sub4337A0 stub, since deleted from stubs.cpp.)
 // ---------------------------------------------------------------------------
 void LoadBackgroundPicture(MMDApp* app) {
     auto& s = *app;

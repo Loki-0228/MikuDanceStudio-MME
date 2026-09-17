@@ -72,8 +72,8 @@
 //                          (0x2F8==0: 0x26E0/0x26E4/0x26E8; 0x2F8!=0:
 //                          0x374/0x378/0x37C/0x380 + 0x384 blobs)
 //   417 1A1  default       no-op
-//   418 1A2  0x00480734    0x4312E0(app)
-//   419 1A3  0x0048072A    0x430F20(app)
+//   418 1A2  0x00480734    Sub4312E0(app)
+//   419 1A3  0x0048072A    Sub430F20(app)
 //   420 1A4  0x004834D2    frame copy: count marked entries (model mode
 //                          0x9DA28/0x9DA2C/0x9DA30, camera mode
 //                          0x9DA34..0x9DA44), track min frame; (re)alloc
@@ -95,7 +95,7 @@
 //                          proc sub_44C5D0)
 //   425-428     default    no-op
 //   429 1AD  0x004862E0    scroll gate: (sidebar-0x54)/26, 0x97C = frame -
-//                          count (min 0), PanelPaint, 0x4C2A00(x, ho),
+//                          count (min 0), PanelPaint, Sub4C2A00(x, ho),
 //                          InvalidateRect(6, 0x5F, sidebar-3, 0x92)
 //   430 1AE  0x00481109    light colour <- selected frame: CB_GETCURSEL
 //                          (0x1B1), first frame with selection mark (0x2F8
@@ -268,15 +268,15 @@ static inline void TraceModelPaste(const char*, ...) {}
 
 // ---------------------------------------------------------------------------
 // External targets ported in other translation units (declared here with
-// their original VAs; not yet registered in ported_funcs.hpp).
+// their original VAs; bodies in the files noted on each line).
 // ---------------------------------------------------------------------------
 void RefreshRequest(int area);                     // VA 0x00440AC0 (ui_refresh)
 void PanelPaint(MMDApp* app);                      // VA 0x00414610 (ui_panel)
-void SelectionReeval(MMDApp* app);                 // VA 0x00430510 (stubs.cpp)
-void CopyDirPathW(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 path copy
-void ReloadModels(MMDApp* app);                    // VA 0x0042E640 (timeline_advance.cpp)
+void SelectionReeval(MMDApp* app);                 // VA 0x00430510 (ui_selection_reeval.cpp)
+void CopyDirPathW(wchar_t* dest, const wchar_t* src); // VA 0x0042AE20 (media_load.cpp) path copy
+void ReloadModels(MMDApp* app);                    // VA 0x0042E640 (timeline_advance.cpp), was Sub42E640
 int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // VA 0x004B4260
-void SnapshotSelectedKeysForUndo(unsigned char* model, int frame);  // VA 0x004A1510
+void SnapshotSelectedKeysForUndo(unsigned char* model, int frame);  // VA 0x004A1510, was Sub4A1510
 
 // ---------------------------------------------------------------------------
 // Cross-translation-unit dependencies.
@@ -285,14 +285,14 @@ void UndoModelEdit(unsigned char* model, std::int32_t* frame);  // VA 0x004A1870
                                                             // model undo step
 void RedoModelEdit(unsigned char* model, std::int32_t* frame);  // VA 0x004A2490
                                                             // model redo step
-void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode);  // VA 0x0041ACD0
+void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode);  // VA 0x0041ACD0, was Sub41ACD0
 void StepFrame(MMDApp* app, bool forward);      // VA 0x00430F20 (fwd) / 0x004312E0
-                                                // (back)/0x4312E0
+                                                // (back), was Sub430F20/Sub4312E0
                                                 // (ui_frame_step.cpp)
 void DeleteMarkedKeyframes(MMDApp* app);                    // VA 0x004316B0
 void StopPlayback(MMDApp* app);             // VA 0x004341E0 stop playback
 void RegisterDisplayKeyCurrent(unsigned char* model, int frame);// VA 0x0049F480
-void DeleteModel(unsigned char* model, int flag);  // VA 0x0040A710 model dispose
+void DeleteModel(unsigned char* model, int flag);  // VA 0x0040A710 model dispose, was Sub40A710
 void SeekSelectedModelToCurrentFrame(MMDApp* app);                    // VA 0x004220C0
 void ApplyModelComboSelection(MMDApp* app);                    // VA 0x0044D940
 INT_PTR CALLBACK SelectNavDlgProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0047A3F0
@@ -302,33 +302,32 @@ INT_PTR CALLBACK SelectNavDlgProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0047A3F0
 bool WaveStartPlayback(void* obj);               // VA 0x004C2760 (media/wave_audio.cpp)
 void WaveSeekAndFeed(void* obj, double seconds);  // VA 0x004C34A0
 
-// Additional stubs defined in src/app/late_ports.cpp (signatures fixed
-// there; stubs.cpp must not be touched).
-void RefreshLightPanel(MMDApp* app);                    // VA 0x00411070
-void RefreshSelfShadowPanel(MMDApp* app);                    // VA 0x00411B90
-void ApplyGravityTrack(MMDApp* app);                    // VA 0x00412330
-void ApplyAccessoryTrack(MMDApp* app, int idx);           // VA 0x00413120
-void SyncAccessoryEditPanel(MMDApp* app);                    // VA 0x004134E0
-bool RegisterBoneKey(unsigned char* model, unsigned char* rec, int frameOffset, unsigned char useSelected);  // VA 0x0049D880
-void ResetBoneKeyCursor(unsigned char* model);           // VA 0x004A4940
-int  PasteAccessoryKeyRecord(MMDApp* app, void* rec, int useSelectedSlot);  // VA 0x00414110
-void IdentityCtor(void* obj);                      // VA 0x004C46F0
+// Dependencies ported in other translation units (call sites preserved).
+void RefreshLightPanel(MMDApp* app);                    // VA 0x00411070 (ui_frame_refresh.cpp)
+void RefreshSelfShadowPanel(MMDApp* app);                    // VA 0x00411B90 (ui_frame_refresh.cpp)
+void ApplyGravityTrack(MMDApp* app);                    // VA 0x00412330 (track_apply.cpp)
+void ApplyAccessoryTrack(MMDApp* app, int idx);           // VA 0x00413120 (accessory_paste.cpp)
+void SyncAccessoryEditPanel(MMDApp* app);                    // VA 0x004134E0 (ui_frame_refresh.cpp)
+bool RegisterBoneKey(unsigned char* model, unsigned char* rec, int frameOffset, unsigned char useSelected);  // VA 0x0049D880 (key_registrars.cpp)
+void ResetBoneKeyCursor(unsigned char* model);           // VA 0x004A4940 (key_registrars.cpp)
+int  PasteAccessoryKeyRecord(MMDApp* app, void* rec, int useSelectedSlot);  // VA 0x00414110, was Sub414110 (accessory_paste.cpp)
+void IdentityCtor(void* obj);                      // VA 0x004C46F0 (stubs.cpp; original is `return this`)
 void* ConstructArrayElements(void* block, std::uint32_t elementSize,
                              std::uint32_t count,
-                             void* ctor);       // VA 0x00401150
+                             void* ctor);       // VA 0x00401150, was Sub401150 (accessory_paste.cpp)
 
-// Newly-required unported dependencies - file-local stub bodies so the
-// call sites below link (stubs.cpp must not be modified).  TODO(port):
-// move each body to src/app/late_ports.cpp when the function is ported.
-// Real body: src/model/key_registrars.cpp (name-based frame mark).
+// Dependencies ported in other translation units / later in this TU
+// (call sites preserved).  MarkKeyTrackRangeByName:
+// src/model/key_registrars.cpp (name-based frame mark);
+// RegisterCameraKey / RegisterLightKey: defined later in this TU.
 int MarkKeyTrackRangeByName(unsigned char* model, std::uint32_t from,
                             std::uint32_t to,
-                            const char* name);   // VA 0x004A27F0
+                            const char* name);   // VA 0x004A27F0, was Sub4A27F0
 int RegisterCameraKey(MMDApp* app, const void* rec,
-                      int overflowAdvertised);             // VA 0x00410AA0 0x374 paste
-int RegisterLightKey(MMDApp* app, const void* rec);      // VA 0x00411900 0x378 paste
-int RegisterSelfShadowKey(MMDApp* app, const void* rec);      // VA 0x004120B0 0x37C paste
-int RegisterGravityKey(MMDApp* app, const void* rec);      // VA 0x00412DF0 0x380 paste
+                      int overflowAdvertised);             // VA 0x00410AA0 0x374 paste, was Sub410AA0
+int RegisterLightKey(MMDApp* app, const void* rec);      // VA 0x00411900 0x378 paste, was Sub411900
+int RegisterSelfShadowKey(MMDApp* app, const void* rec);      // VA 0x004120B0 0x37C paste, was Sub4120B0
+int RegisterGravityKey(MMDApp* app, const void* rec);      // VA 0x00412DF0 0x380 paste, was Sub412DF0
 // FrameRangeDlgProc real body: dialog_procs.cpp (0x0044C5D0).
 
 // ---------------------------------------------------------------------------
@@ -469,25 +468,25 @@ static void FillGravityFrame(mdl::GravityKey& key,
 }
 
 int RegisterCameraKey(MMDApp* app, const void* rec,
-                      int overflowAdvertised) {  // VA 0x00410AA0
+                      int overflowAdvertised) {  // was Sub410AA0, VA 0x00410AA0
     const auto& source = *static_cast<const CameraClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->CameraKeys(), source.frame, source,
                              FillCameraFrame, overflowAdvertised);
 }
 
-int RegisterLightKey(MMDApp* app, const void* rec) {  // VA 0x00411900
+int RegisterLightKey(MMDApp* app, const void* rec) {  // was Sub411900, VA 0x00411900
     const auto& source = *static_cast<const LightClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->LightKeys(), source.frame, source,
                              FillLightFrame);
 }
 
-int RegisterSelfShadowKey(MMDApp* app, const void* rec) {  // VA 0x004120B0
+int RegisterSelfShadowKey(MMDApp* app, const void* rec) {  // was Sub4120B0, VA 0x004120B0
     const auto& source = *static_cast<const ShadowClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->ShadowKeys(), source.frame, source,
                              FillShadowFrame);
 }
 
-int RegisterGravityKey(MMDApp* app, const void* rec) {  // VA 0x00412DF0
+int RegisterGravityKey(MMDApp* app, const void* rec) {  // was Sub412DF0, VA 0x00412DF0
     const auto& source = *static_cast<const GravityClipboardRecord*>(rec);
     return InsertGlobalFrame(app, app->GravityKeys(), source.frame, source,
                              FillGravityFrame);
@@ -510,7 +509,7 @@ static Key* FindGlobalFrame(Key* table, std::uint32_t frame) {
 }
 
 // VA 0x00410560: Camera manipulation "register" button backend
-//.
+// (was Sub410560).
 void RegisterCameraState(MMDApp* app, int frame) {
     CameraClipboardRecord source{};
     const std::uint32_t absolute = static_cast<std::uint32_t>(frame);
@@ -539,13 +538,13 @@ void RegisterCameraState(MMDApp* app, int frame) {
     std::memcpy(source.interpolation, interpolation,
                 sizeof(source.interpolation));
     // 满表文案 x64 一比一照抄 600000（0x7FF7CB47B18D sprintf_s 的实参；
-    // 表容实为 10000 条，孪生粘贴注册器 0x410AA0/x64 0x7FF7CB47B769 才打
+    // 表容实为 10000 条，孪生粘贴注册器 Sub410AA0/x64 0x7FF7CB47B769 才打
     // 10000 —— 原版自身不一致，按行为基准保留）
     RegisterCameraKey(app, &source, 600000);
 }
 
 // VA 0x00411630: Light manipulation "register" button backend
-//.
+// (was Sub411630).
 void RegisterLightState(MMDApp* app, int frame) {
     LightClipboardRecord source{};
     source.frame =
@@ -1177,7 +1176,7 @@ static void Cmd400_ViewResetReload(MMDApp* app) {
 }
 // ------------------------------------------------------------------
 // 408 (0x00487446): play-range edits.  When byte 0x330 != 0: clear it,
-// StopPlayback, and (byte 0xA06CC != 0) 0x4C2680/0x4C2760 on the 0xCC
+// StopPlayback, and (byte 0xA06CC != 0) Sub4C2680/Sub4C2760 on the 0xCC
 // subsystem.  Otherwise read the 0x199 (start) / 0x19A (end) edits via
 // atol; frameA/30 (0x9E654) comes from dword 0x980 when byte 0x9ED99
 // != 0 (0x9EDB6 = 1) or from the 0x199 edit (0x9EDB6 = 1 only when the
@@ -1185,7 +1184,7 @@ static void Cmd400_ViewResetReload(MMDApp* app) {
 // (fallback dword 0x9E16C when 0); 0x9E64C = frameA/30; snapshot
 // IsWindowEnabled of 0x1F1/0x1F2/0x1AF/0x1A5/0x1A6/0x190/0x191 into
 // 0x9EB77..0x9EB7D; byte 0x330 = 1; UpdateBoneFrames; then
-// KillTimer(0x64) + 0x4C2680/0x4C2760 when 0xA02B6, and 0x4C2B80 +
+// KillTimer(0x64) + Sub4C2680/Sub4C2760 when 0xA02B6, and Sub4C2B80 +
 // WaveSeekAndFeed((double)0x9E654) when 0xA03E9 == 0 (both gated on 0xA06CC);
 // finally timeGetTime copies 0x9EDA8/0x9EDAC.
 // ------------------------------------------------------------------
@@ -1259,7 +1258,7 @@ static void Cmd400_PlayRangeEdits(MMDApp* app, HWND hwnd) {
 // over N bytes incl. the NUL) against "全ﾌﾚｰﾑ"/"All frame" (bone+morph+
 // camera sweep), "全表情ﾌﾚｰﾑ"/"All facial" (morph), "全ボーンフﾚｰﾑ"/
 // "All bone" (bone), "選択ボーン"/"Sel Bone" and "選択表情"/"Sel facial"
-// (0x4A27F0 per selected item), else 0x4A27F0 with the raw text.
+// (Sub4A27F0 per selected item), else Sub4A27F0 with the raw text.
 // With 0x2F8 != 0 the 0x1B2 combo cursor selects the app-level table
 // (0x374/0x378/0x37C/0x380 or the accessory slot whose byte +0x49D
 // equals cursor-4, scanning its 0x384 blob).  Every sweep clears the
@@ -1329,7 +1328,7 @@ static void Cmd400_FrameRangeSelect(MMDApp* app, HWND hwnd) {
                 static_cast<std::uint32_t>(to));
         } else if (TextEqN(text, kJpSelBone, 9) ||
                    TextEqN(text, "Sel Bone", 9)) {
-            // selected-bone sweep (loc_4830D0..48310F): 0x4A27F0 per
+            // selected-bone sweep (loc_4830D0..48310F): Sub4A27F0 per
             // selected bone (0x2D94 byte array), name at 0x26BC +
             // i*0x25C
             unsigned char* model = ActiveModel(app);
@@ -1991,7 +1990,7 @@ static void Cmd400_FrameCopy(MMDApp* app, HWND hwnd) {
 // 0x358 morph record (0x28), RegisterDisplayKeyFromRecord per 0x35C camera record (0x18)
 // with the light-record slot fixup (stale model slots severed).
 // 0x2F8 != 0: same over the 0x360..0x370 camera-mode buffers with
-// RegisterCameraKey/RegisterLightKey/RegisterSelfShadowKey/RegisterGravityKey/0x414110.  Common tail:
+// RegisterCameraKey/RegisterLightKey/RegisterSelfShadowKey/RegisterGravityKey/Sub414110.  Common tail:
 // byte 0x9EDB5 = 1, PanelPaint, SelectionReeval, SeekModelFrame(model,
 // frame, 0xA0CC4), and for camera mode the reload chain (ReloadModels,
 // RefreshLightPanel, RefreshSelfShadowPanel, ApplyGravityTrack, ApplyAccessoryTrack per slot, SyncAccessoryEditPanel).
@@ -2468,7 +2467,7 @@ static void Cmd400_CurvePasteToFrames(MMDApp* app, HWND hwnd) {
         SetFocus(hwnd);
     } else {
         unsigned char* model = ActiveModel(app);
-        // original: 0x4A1510(ecx = model, frame = dword app+0x980)
+        // original: Sub4A1510(ecx = model, frame = dword app+0x980)
         SnapshotSelectedKeysForUndo(model, app->state.currentFrame);
         mdl::BoneKey* keys = mdl::BoneKeys(model);
         for (std::int32_t i = 0; i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
@@ -2519,7 +2518,7 @@ static void Cmd400_CurveResetRows(MMDApp* app, HWND hwnd) {
         SetFocus(hwnd);
     } else {
         unsigned char* model = ActiveModel(app);
-        // original: 0x4A1510(ecx = model, frame = dword app+0x980)
+        // original: Sub4A1510(ecx = model, frame = dword app+0x980)
         SnapshotSelectedKeysForUndo(model, app->state.currentFrame);
         mdl::BoneKey* keys = mdl::BoneKeys(model);
         for (std::int32_t i = 0; i < static_cast<std::int32_t>(mdl::kBoneKeyCapacity); ++i) {
@@ -2596,7 +2595,7 @@ static void Cmd400_LoadModel(MMDApp* app, HWND hwnd) {
 // "モデル：%sを削除します..."; name at model+0x227A EN / +0x2248 JP;
 // flags 0x40001 when 0xA0D38 else 1); teardown of the model-edit
 // sub-window (SeekSelectedModelToCurrentFrame, free 0xA0B7C/0xA0C30, DestroyWindow 0xA0B74,
-// enable 0x1B4/0x198); dispose model (0x40A710(model, 1)), clear the
+// enable 0x1B4/0x198); dispose model (Sub40A710(model, 1)), clear the
 // slot, 0xA042C = any-model flag; combo rebuild (CB_RESETCONTENT
 // 0x1B4/0x1DA/0x1C1 with old id, CB_SETCURSEL 0x1B4, CB_GETLBTEXT +
 // CB_ADDSTRING 0x1D7 -> 0x1B2); menu 0x120/0x121 enable, then per
@@ -2927,7 +2926,7 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     // 429 (0x004862E0): frame-scroll gate.  count = (sidebar - 0x54) / 26
     // (magic 0x4EC4EC4F, sar 3); dword 0x97C = frame(0x980) - count when
     // positive else 0; PanelPaint; when byte 0xA06CC != 0:
-    // 0x4C2A00(0xCC sub, x = 0x97C, ho = sidebar) + InvalidateRect of
+    // Sub4C2A00(0xCC sub, x = 0x97C, ho = sidebar) + InvalidateRect of
     // {6, 0x5F, sidebar-3, 0x92}.
     // ------------------------------------------------------------------
     case 429: {

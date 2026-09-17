@@ -69,7 +69,7 @@
 //        BM_SETCHECK(0x19C,0), ApplyCameraReferenceModeChange(app, old
 //        0x340) unless 0x2F8; unchecked: 0x340=0,
 //        ApplyCameraReferenceModeChange(app, old)              0x47FA92-0x47FAE2
-//   532  button 0x214: 0x441070(app)                          0x48BC87-0x48BC8C
+//   532  button 0x214: Sub441070(app)                          0x48BC87-0x48BC8C
 //   533  button 0x215: sub_4414C0(app)                         0x48BC91-0x48BC96
 //   534  no target - empty
 //   535  display-mode checkbox 0x217: BM_GETCHECK(0x217); checked: 0x9ED98=1,
@@ -161,45 +161,45 @@
 namespace mikudancestudio {
 
 // ---- helpers ported in other translation units (declared with original
-//      VAs; not yet registered in ported_funcs.hpp) -------------------------
-void PanelPaint(MMDApp* app);                                   // VA 0x00414610
-void RefreshRequest(int area);                                  // VA 0x00440AC0
-void SelectionReeval(MMDApp* app);                              // VA 0x00430510 (stubs.cpp)
+//      VAs; bodies in the files noted on each line) -------------------------
+void PanelPaint(MMDApp* app);                                   // VA 0x00414610 (ui_panel_paint.cpp)
+void RefreshRequest(int area);                                  // VA 0x00440AC0 (ui_refresh.cpp)
+void SelectionReeval(MMDApp* app);                              // VA 0x00430510 (ui_selection_reeval.cpp)
 void RefreshLightPanel(MMDApp* app);                                    // VA 0x00411070 (ui_frame_refresh.cpp)
 void RefreshSelfShadowPanel(MMDApp* app);                                    // VA 0x00411B90 (ui_frame_refresh.cpp)
 void ApplyGravityTrack(MMDApp* app);                             // VA 0x00412330 (was
-                                                                  //  0x412330; track_apply.cpp)
+                                                                  //  Sub412330; track_apply.cpp)
 void ApplyAccessoryTrack(MMDApp* app, int slot);                  // VA 0x00413120 (was
-                                                                  //  0x413120; accessory_paste.cpp)
+                                                                  //  Sub413120; accessory_paste.cpp)
 void SyncAccessoryEditPanel(MMDApp* app);                                    // VA 0x004134E0 (ui_frame_refresh.cpp)
-void ReloadModels(MMDApp* app);                    // VA 0x0042E640 (timeline_advance.cpp)
+void ReloadModels(MMDApp* app);                    // VA 0x0042E640 (timeline_advance.cpp), was Sub42E640
 
-// ---- not-yet-ported original call targets: declarations only; the stub
-//      bodies are consolidated in src/app/late_ports.cpp (finishing phase)
+// ---- original call targets ported in other translation units (declarations
+//      only here; bodies in the files noted on each line) -------------------
 // ---------------------------------------------------------------------------
 // VA 0x004414C0 - timeline "previous registration" jump (thiscall, app).
-void JumpPrevKeyframe(MMDApp* app);
+void JumpPrevKeyframe(MMDApp* app);                    // (app_gap_bodies.cpp)
 // VA 0x0044D940 - accessory-combo apply helper (thiscall, this = app).
-void ApplyModelComboSelection(MMDApp* app);
+void ApplyModelComboSelection(MMDApp* app);            // (ui_model_reload.cpp)
 // VA 0x00441070 - timeline "next registration" jump (thiscall, this = app;
 //                 called by case 532 at 0x48BC87 - distinct from sub_411070).
-void JumpNextKeyframe(MMDApp* app);
+void JumpNextKeyframe(MMDApp* app);                    // (app_gap_bodies.cpp)
 // VA 0x0041ACD0 - camera-reference switch re-anchor (thiscall(app, old mode
-//                 byte); ).
-void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode);
+//                 byte); was Sub41ACD0).
+void ApplyCameraReferenceModeChange(MMDApp* app, int oldMode);  // (frame_modes.cpp)
 // VA 0x0042D6E0 - bone-edit undo snapshot push (thiscall, this = app; was
-//                 0x42D6E0).
-void PushBoneEditUndo(MMDApp* app);
+//                 Sub42D6E0).
+void PushBoneEditUndo(MMDApp* app);                    // (bone_edit_undo.cpp)
 // VA 0x004C2080 - frame keyframe-register (thiscall on the model, frame,
-//                 3rd arg = app+0xA0CC4; ).
-void RegisterSelectedBoneKeys(unsigned char* model, int frame, int mode);
+//                 3rd arg = app+0xA0CC4; was Sub4C2080).
+void RegisterSelectedBoneKeys(unsigned char* model, int frame, int mode);  // (model_keyframe_edit.cpp)
 // VA 0x0049EEE0 - bone-frame register (thiscall on the model: bone index,
 //                 frame).
-void RegisterMorphKeyCurrent(unsigned char* model, int idx, int frame);
+void RegisterMorphKeyCurrent(unsigned char* model, int idx, int frame);  // (key_registrars.cpp)
 // VA 0x00432FA0 - frame-apply refresh chain (thiscall, this = app).
-void RefreshAfterFrameApply(MMDApp* app);  //  (ui_frame_step.cpp)
+void RefreshAfterFrameApply(MMDApp* app);  // was Sub432FA0 (ui_frame_step.cpp)
 // VA 0x00411DF0 - frame-scroll apply (thiscall(app, frame 0x980)).
-void RegisterSelfShadowState(MMDApp* app, int frame);
+void RegisterSelfShadowState(MMDApp* app, int frame);  // was Sub411DF0
                                                        // (ui_frame_refresh.cpp)
 
 namespace {
@@ -385,6 +385,11 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 500: register-frame button 0x1F4 -------------------------------
     case 500: {
+        // The Enter shortcut re-dispatches 0x1F4 from the frame loop even
+        // with no loaded model (pump_edit_keys.cpp G3); RegisterSelectedBoneKeys
+        // tolerates a null model but the maxFrame read below does not.
+        if (app->SelectedModelSlot() >= kModelSlotCount || ActiveModel(app) == nullptr)
+            break;
         // (0x48026F) dirty flag, then the frame-register helper
         // sub_4C2080(model, frame, app+0xA0CC4).
         app->SceneModified() = 1;
@@ -404,6 +409,12 @@ void CmdControl500(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notif
 
     // ---- 501: "select all frames" button 0x1F5 --------------------------
     case 501: {
+        if (app->SelectedModelSlot() >= kModelSlotCount || ActiveModel(app) == nullptr)
+            break;
+        const auto* record = mdl::Mdl(ActiveModel(app));
+        if (record->boneCount > 0 &&
+            (record->bonePhysicsState == nullptr || record->boneSelection == nullptr))
+            break;
         // (0x47F93D) check the 0x1EA checkbox, re-dispatch WM_COMMAND
         // 0x1EA, then copy the per-bone selection flags 0x2D98 into the
         // 0x2D94 byte array and reset the selected index 0x2D90 to -1.

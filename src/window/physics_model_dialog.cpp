@@ -86,18 +86,18 @@ namespace mikudancestudio {
 
 // Forward declarations (twins of the block in command_view_menu.cpp - the
 // helpers are defined in this file).
-void AddRigidBody(HWND hDlg);                                // VA 0x0045F480
-LRESULT CALLBACK PhysicsEditSubclassProc(HWND, UINT, WPARAM, LPARAM);  // VA 0x0041EC50
-void InitPhysicsModelDialog(HWND hDlg);                      // VA 0x0045F670
-void CollectBodyEdits(MMDApp* app);                          // VA 0x0041FF30
-void CollectJointEdits(MMDApp* app);                         // VA 0x004204F0
-void AddJoint(HWND hDlg);                                    // VA 0x0043CA50
-void ApplyBodyRecordToEdits(HWND hDlg, int idx);             // VA 0x0043CCD0
-void ApplyJointRecordToEdits(HWND hDlg, int idx);            // VA 0x004214A0
-void FlipPhysicsDialogPage(HWND hDlg, int flag);             // VA 0x00421C20
-void UpdateShapeControls(HWND hDlg, int mode, int idx);      // VA 0x00421CE0
-void CommitPhysicsEdits(HWND hDlg);                          // VA 0x004220F0
-void PickPivotBone(HWND hDlg);                               // VA 0x00420DC0
+void AddRigidBody(HWND hDlg);                                // was Sub45F480, VA 0x0045F480
+LRESULT CALLBACK PhysicsEditSubclassProc(HWND, UINT, WPARAM, LPARAM);  // was Sub41EC50, VA 0x0041EC50
+void InitPhysicsModelDialog(HWND hDlg);                      // was Sub45F670, VA 0x0045F670
+void CollectBodyEdits(MMDApp* app);                          // was Sub41FF30, VA 0x0041FF30
+void CollectJointEdits(MMDApp* app);                         // was Sub4204F0, VA 0x004204F0
+void AddJoint(HWND hDlg);                                    // was Sub43CA50, VA 0x0043CA50
+void ApplyBodyRecordToEdits(HWND hDlg, int idx);             // was Sub43CCD0, VA 0x0043CCD0
+void ApplyJointRecordToEdits(HWND hDlg, int idx);            // was Sub4214A0, VA 0x004214A0
+void FlipPhysicsDialogPage(HWND hDlg, int flag);             // was Sub421C20, VA 0x00421C20
+void UpdateShapeControls(HWND hDlg, int mode, int idx);      // was Sub421CE0, VA 0x00421CE0
+void CommitPhysicsEdits(HWND hDlg);                          // was Sub4220F0, VA 0x004220F0
+void PickPivotBone(HWND hDlg);                               // was Sub420DC0, VA 0x00420DC0
 
 // ---- control IDs ----------------------------------------------------------
 constexpr int kAddBodyButton = 685;        // 0x2AD
@@ -177,7 +177,7 @@ constexpr int kJointPageRadio = 801;       // 0x321
 // (x86: 1,400,000 / record 140 = 10,000 slots; the x64 recompile doubled the
 // record sizes with its pointers and raised the pool tenfold:
 // 15,200,000 / 152 = 100,000 slots).
-#if defined(_M_X64)
+#if MIKUDANCESTUDIO_X64
 constexpr int kMaxEditRecords = 100000;    // slots per scratch array
 #else
 constexpr int kMaxEditRecords = 10000;     // x86 original capacity
@@ -365,7 +365,7 @@ float CheckYAngleLimit(HWND hDlg, HWND hEdit, float value) {
 // entry in their list combos (and the joint body-A/B combos for bodies).
 // Everything else forwards to the saved edit proc of 705.
 // ---------------------------------------------------------------------------
-LRESULT CALLBACK PhysicsEditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {  // VA 0x0041EC50
+LRESULT CALLBACK PhysicsEditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {  // was Sub41EC50, VA 0x0041EC50
     MMDApp* app = g_Block;
     if (msg != WM_KEYDOWN || wParam != VK_RETURN)
         return CallWindowProcA(app->FrameCopyEditProc(), hWnd, msg, wParam,
@@ -474,7 +474,7 @@ LRESULT CALLBACK PhysicsEditSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
 // mask), fills the list/bone/group combos and parks the dialog on the
 // rigid-body page.
 // ---------------------------------------------------------------------------
-void InitPhysicsModelDialog(HWND hDlg) {  // VA 0x0045F670
+void InitPhysicsModelDialog(HWND hDlg) {  // was Sub45F670, VA 0x0045F670
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
 
@@ -599,7 +599,7 @@ void InitPhysicsModelDialog(HWND hDlg) {  // VA 0x0045F670
 // (deg -> rad), mass, damping/restitution/friction, and the group-list text
 // ("1 5 9 " -> 16-bit collision mask, bit N set = group N+1).
 // ---------------------------------------------------------------------------
-void CollectBodyEdits(MMDApp* app) {  // VA 0x0041FF30
+void CollectBodyEdits(MMDApp* app) {  // was Sub41FF30, VA 0x0041FF30
     if (app->state.selectedRigidIndex == -1)
         return;
     Rigid& rb = EditBodies()[app->state.selectedRigidIndex];
@@ -647,7 +647,7 @@ void CollectBodyEdits(MMDApp* app) {  // VA 0x0041FF30
 // fill editor defaults (shape sphere, size 2, mass 1, damping 0.5,
 // friction 0.5, restitution 0, bone/group 0, mode 0).
 // ---------------------------------------------------------------------------
-void AddRigidBody(HWND hDlg) {  // VA 0x0045F480
+void AddRigidBody(HWND hDlg) {  // was Sub45F480, VA 0x0045F480
     MMDApp* app = g_Block;
     Rigid* bodies = EditBodies();
 
@@ -691,7 +691,7 @@ void AddRigidBody(HWND hDlg) {  // VA 0x0045F480
 // are validated against -90..90 with a message box and clamped to +-80,
 // matching the Bullet 6DOF y-rotation restriction.
 // ---------------------------------------------------------------------------
-void CollectJointEdits(MMDApp* app) {  // VA 0x004204F0
+void CollectJointEdits(MMDApp* app) {  // was Sub4204F0, VA 0x004204F0
     if (app->state.selectedJointIndex == -1)
         return;
     Joint& jt = EditJoints()[app->state.selectedJointIndex];
@@ -745,7 +745,7 @@ void CollectJointEdits(MMDApp* app) {  // VA 0x004204F0
 // JOINT_<slot>, registers it in the joint list and zeroes every numeric
 // field (both link indices point at scratch slot 0).
 // ---------------------------------------------------------------------------
-void AddJoint(HWND hDlg) {  // VA 0x0043CA50
+void AddJoint(HWND hDlg) {  // was Sub43CA50, VA 0x0043CA50
     MMDApp* app = g_Block;
     Rigid* bodies = EditBodies();
     Joint* joints = EditJoints();
@@ -797,7 +797,7 @@ void AddJoint(HWND hDlg) {  // VA 0x0043CA50
 // edits instead (no selection); the original would sprintf from slot -1
 // for the non-sphere shapes, the port skips the refill in that case.
 // ---------------------------------------------------------------------------
-void UpdateShapeControls(HWND hDlg, int shape, int idx) {  // VA 0x00421CE0
+void UpdateShapeControls(HWND hDlg, int shape, int idx) {  // was Sub421CE0, VA 0x00421CE0
     MMDApp* app = g_Block;
     const bool english = app->state.englishUI != 0;
     Rigid* bodies = EditBodies();
@@ -866,7 +866,7 @@ void UpdateShapeControls(HWND hDlg, int shape, int idx) {  // VA 0x00421CE0
 // 0x421C20 (x64 sub_7FF7CB4B3720) - body/joint page flip: shows one page's
 // control range (685..734 body, 735..799 joint) and hides the other.
 // ---------------------------------------------------------------------------
-void FlipPhysicsDialogPage(HWND hDlg, int bodyPage) {  // VA 0x00421C20
+void FlipPhysicsDialogPage(HWND hDlg, int bodyPage) {  // was Sub421C20, VA 0x00421C20
     if (bodyPage != 0) {
         for (int id = kJointPageFirst; id <= kJointPageLast; ++id)
             ShowWindow(GetDlgItem(hDlg, id), SW_HIDE);
@@ -887,7 +887,7 @@ void FlipPhysicsDialogPage(HWND hDlg, int bodyPage) {  // VA 0x00421C20
 // bone's model-space position into the joint position and refreshes the
 // position edits.
 // ---------------------------------------------------------------------------
-void PickPivotBone(HWND hDlg) {  // VA 0x00420DC0
+void PickPivotBone(HWND hDlg) {  // was Sub420DC0, VA 0x00420DC0
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
     const int sel = static_cast<int>(
@@ -912,7 +912,7 @@ void PickPivotBone(HWND hDlg) {  // VA 0x00420DC0
 // the physical/bone radio + bone-alignment checkbox.  idx == -1 disables
 // and clears the whole body group instead.
 // ---------------------------------------------------------------------------
-void ApplyBodyRecordToEdits(HWND hDlg, int idx) {  // VA 0x0043CCD0
+void ApplyBodyRecordToEdits(HWND hDlg, int idx) {  // was Sub43CCD0, VA 0x0043CCD0
     MMDApp* app = g_Block;
     Rigid* bodies = EditBodies();
     char text[256];
@@ -988,7 +988,7 @@ void ApplyBodyRecordToEdits(HWND hDlg, int idx) {  // VA 0x0043CCD0
 // position (%5.4f), rotation (rad -> deg), the four limit triples and both
 // spring triples (%3.2f).  idx == -1 disables and clears the joint group.
 // ---------------------------------------------------------------------------
-void ApplyJointRecordToEdits(HWND hDlg, int idx) {  // VA 0x004214A0
+void ApplyJointRecordToEdits(HWND hDlg, int idx) {  // was Sub4214A0, VA 0x004214A0
     MMDApp* app = g_Block;
     Rigid* bodies = EditBodies();
     Joint* joints = EditJoints();
@@ -1064,7 +1064,7 @@ void ApplyJointRecordToEdits(HWND hDlg, int idx) {  // VA 0x004214A0
 // negated body rotations), renumbering the scratch combo indices to the
 // compacted order.
 // ---------------------------------------------------------------------------
-void CommitPhysicsEdits(HWND hDlg) {  // VA 0x004220F0
+void CommitPhysicsEdits(HWND hDlg) {  // was Sub4220F0, VA 0x004220F0
     (void)hDlg;
     MMDApp* app = g_Block;
     mdl::ModelRecord* model = mdl::Mdl(app->SelectedModel());
@@ -1268,7 +1268,7 @@ void CommitPhysicsEdits(HWND hDlg) {  // VA 0x004220F0
 //   dirty flag
 //   id 2 (Cancel): seek+re-eval, free, close, re-enable
 // ---------------------------------------------------------------------------
-INT_PTR CALLBACK PhysicsModelDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {  // VA 0x00465020
+INT_PTR CALLBACK PhysicsModelDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {  // was Sub465020, VA 0x00465020
     MMDApp* app = g_Block;
     if (msg == WM_INITDIALOG) {
         if (app->state.floatingWindow != 0)

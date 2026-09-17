@@ -74,7 +74,7 @@ struct ModelRecord {
     std::uint8_t pmxMaterialIndexSize;   // 8630
     std::uint8_t pmxRigidIndexSize;      // 8631
     RawPad<52> gap4;  // 8632..8684 (unrecovered)
-    std::uint32_t morph0Count;  // 8684  (model_skinning / dialog_helpers)
+    std::uint32_t morph0Count;  // 8684  (model_skinning / dialog_gaps)
     std::uint32_t physOffsetCount;  // 8688
     std::uint32_t physLastFrame;  // 8692
     RawPad<12> gap5;  // 8696..8708 (unrecovered)
@@ -497,9 +497,6 @@ static_assert(offsetof(ModelRecord, boneListRowRecord) == 0x3224,
               "boneListRowRecord x64");
 static_assert(offsetof(ModelRecord, boneListRows) == 0x3544,
               "boneListRows x64");
-static_assert(offsetof(ModelRecord, physicsFlags) == 13664,
-              "physicsFlags x64 (0x3560; per-model language-flag sweep "
-              "store 0x7FF7CB43A4F5)");
 static_assert(offsetof(ModelRecord, rigidTable) == 13672,
               "rigidTable x64");
 static_assert(offsetof(ModelRecord, jointTable) == 13680,

@@ -26,6 +26,7 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -36,6 +37,7 @@ namespace {
 }  // namespace
 
 void LoadModelFile(MMDApp* app, const wchar_t* path) {      // 0x460430
+    runtime_log::WritePath("LOAD_MODEL", path);
     HWND hwnd = static_cast<HWND>(app->Hwnd());
     int slot = 0;
     while (app->ModelSlot(slot) != nullptr) {

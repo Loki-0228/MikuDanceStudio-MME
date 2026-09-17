@@ -30,11 +30,11 @@
 //  13. free the seven config pointers +656400/+656408/+656368/+656376/
 //      +656424/+656384/+656416
 //  14. DeleteDC on +736/+724/+744 (no null guards)
-//  15. 0x048 physics wrapper (+650672): DisposePhysicsWorld (0x4030F0)
+//  15. Sub048 physics wrapper (+650672): DisposePhysicsWorld (0x4030F0)
 //      then free; AxisMeshObject (+650656): DisposeAccessory then free;
-//      0x06C recorder (+657088): TeardownDShowGraphCoUninit (0x4096C0)
-//      then free; 0x025C audio ctx (+204): DisposeAudioContext
-//      (0x4C2C40) then free; 0x1D574 render wrapper (+657092):
+//      Sub06C recorder (+657088): TeardownDShowGraphCoUninit (0x4096C0)
+//      then free; Sub025C audio ctx (+204): DisposeAudioContext
+//      (0x4C2C40) then free; Sub1D574 render wrapper (+657092):
 //      DisposeRenderSubsystem (0x406BE0) then free
 //  16. tail: nullsub_1(this + 652088) - empty function at 0x4D5AE0, no-op
 //
@@ -43,10 +43,9 @@
 //              (IMediaEvent::GetEvent loop + message pump) then Release()
 //              every COM interface of the 0x6C recorder object
 //   0x004096C0 TeardownDShowGraphCoUninit - 0x409320 + CoUninitialize
-//   0x004030F0 DisposePhysicsWorld - bullet world teardown through raw
-//              vtable slots (constraint list, collision-object list,
-//              deleting destructors), see src/model/model_dispose.cpp for
-//              the slot map (the same binary Bullet build)
+//   0x004030F0 DisposePhysicsWorld - physics world teardown through
+//              public Bullet APIs (constraints, collision objects and owned
+//              world components), matching src/model/model_dispose.cpp
 //   0x004C2C40 DisposeAudioContext - CloseDataFile (0x4C2680) + Release()
 //              of the two COM members + free of the two path buffers
 //   0x00406BE0 DisposeRenderSubsystem - Release() run over the render
@@ -67,6 +66,8 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include "btBulletDynamicsCommon.h"
+
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/dshow_recorder.hpp"
@@ -80,8 +81,6 @@ void DisposeAccessory(void* accessory);
 namespace {
 
 // ---- helpers (same conventions as src/model/model_dispose.cpp) ------------
-inline void** Vt(void* obj) { return *reinterpret_cast<void***>(obj); }
-
 inline void** FieldPtr(unsigned char* base, std::size_t off) {
     return reinterpret_cast<void**>(base + off);
 }
@@ -125,8 +124,6 @@ inline void ReleaseSlot(ComSlot& slot) {
     }
 }
 
-using FnDelDtor = void(__thiscall*)(void*, unsigned);
-
 template <typename ComSlot>
 void ReleaseRecorderCom(ComSlot& slot) {
     if (slot != nullptr) {
@@ -150,58 +147,42 @@ void ReleaseRecorderCom(ComSlot& slot) {
 // model_dispose.cpp).  Slot map of the binary Bullet build: world vtable
 // +80 = constraint count, +88 = constraint(i), +40 = removeConstraint,
 // +20 = removeCollisionObject; rigid bodies are tagged +244==2 with motion
-// state at +516 and collision shape at +204 (kept as raw byte offsets).
+// state at +516 and collision shape at +204 in the x86 reference only.
+// The implementation below uses the linked Bullet ABI on both architectures.
 // =========================================================================//
 void DisposePhysicsWorld(PhysicsScene* scene) {
-    using FnCount = int(__thiscall*)(void*);
-    using FnItem = void*(__thiscall*)(void*, int);
-    using FnRemoveConstraint = void(__thiscall*)(void*, void*);
-    using FnRemoveObject = void(__thiscall*)(void*, void*);
-
-    unsigned char* world = reinterpret_cast<unsigned char*>(scene->world);
+    // Bullet private offsets and deleting-destructor vtable slots from the
+    // x86 binary are not valid in the x64 build. Match ModelDispose's typed
+    // ownership rules, retaining the original constraints -> bodies -> world
+    // -> solver/broadphase/dispatcher/configuration destruction order.
+    auto* world = scene->world;
     if (world != nullptr) {
-        // 0x40310F: detach and delete every constraint
-        const int n = reinterpret_cast<FnCount>(Vt(world)[20])(world);
-        for (int i = n - 1; i >= 0; --i) {
-            unsigned char* item = static_cast<unsigned char*>(
-                reinterpret_cast<FnItem>(Vt(world)[22])(world, i));
-            reinterpret_cast<FnRemoveConstraint>(Vt(world)[10])(world, item);
-            if (item != nullptr)
-                reinterpret_cast<FnDelDtor>(Vt(item)[0])(item, 1);
+        for (int i = world->getNumConstraints() - 1; i >= 0; --i) {
+            auto* constraint = world->getConstraint(i);
+            world->removeConstraint(constraint);
+            delete constraint;
         }
-        // 0x403145: detach and delete every collision object
-        const int nObj = *reinterpret_cast<std::int32_t*>(world + 8);
-        void** arr = *reinterpret_cast<void***>(world + 16);
-        for (int j = nObj - 1; j >= 0; --j) {
-            unsigned char* obj = static_cast<unsigned char*>(arr[j]);
-            if (*reinterpret_cast<std::int32_t*>(obj + 244) == 2) {
-                if (void* motion = *FieldPtr(obj, 516))
-                    reinterpret_cast<FnDelDtor>(Vt(motion)[0])(motion, 1);
-                if (void* shape = *FieldPtr(obj, 204))
-                    reinterpret_cast<FnDelDtor>(Vt(shape)[0])(shape, 1);
+        for (int i = world->getNumCollisionObjects() - 1; i >= 0; --i) {
+            auto* object = world->getCollisionObjectArray()[i];
+            if (auto* body = btRigidBody::upcast(object)) {
+                delete body->getMotionState();
+                delete body->getCollisionShape();
             }
-            reinterpret_cast<FnRemoveObject>(Vt(world)[5])(world, obj);
-            reinterpret_cast<FnDelDtor>(Vt(obj)[1])(obj, 1);
+            world->removeCollisionObject(object);
+            delete object;
         }
     }
-
-    // 0x40319A: scalar deleting destructors (slot 0, flag 1) on the world
-    // and the four Bullet sub-objects, then Release() (vtable+8) on the
-    // COM-facing members, in the original's exact order (offset comments
-    // are the x86 scene slots of the original 0x48 object).
-    // kDelDtorOffsets {64, 60, 52, 48, 44}:
-    void** const delDtorSlots[] = {
-        reinterpret_cast<void**>(&scene->world),            // 64
-        reinterpret_cast<void**>(&scene->solver),           // 60
-        reinterpret_cast<void**>(&scene->broadphase),       // 52
-        reinterpret_cast<void**>(&scene->dispatcher),       // 48
-        reinterpret_cast<void**>(&scene->collisionConfig)}; // 44
-    for (void** p : delDtorSlots) {
-        if (*p != nullptr) {
-            reinterpret_cast<FnDelDtor>(Vt(*p)[0])(*p, 1);
-            *p = nullptr;
-        }
-    }
+    scene->groundBody = nullptr;
+    delete scene->world;
+    scene->world = nullptr;
+    delete scene->solver;
+    scene->solver = nullptr;
+    delete scene->broadphase;
+    scene->broadphase = nullptr;
+    delete scene->dispatcher;
+    scene->dispatcher = nullptr;
+    delete scene->collisionConfig;
+    scene->collisionConfig = nullptr;
     // kReleaseOffsets {36, 4, 12, 20, 28, 8, 16, 24, 32, 40} - the ten
     // gizmo buffers, Released and nulled in the original's order.
     ReleaseSlot(scene->gizmoBoxSelVB);    // 36
@@ -279,14 +260,14 @@ int NvapiStereoDestroyHandle(void* stereoHandle) {
 // ===========================================================================
 // VA 0x00406BE0 - DisposeRenderSubsystem  (original: sub_406BE0, __thiscall)
 // ===========================================================================
-// this = the 0x1D574 render/locale wrapper at app+0xA06C4,
+// this = the 0x1D574 render/locale wrapper at app+0xA06C4 (kPtrSub1d574),
 // restored as D3DRenderer (d3d_wrapper.hpp).  Member names below carry the
 // original x86 offsets:
 //   * Release() run over the interface slots effect(+120160), shadowSurface
 //     (+120144), hdrTexture(+120136), spriteTexture(+120140),
 //     shadowDepthSurface(+120148), depthStencilSurface(+120124),
 //     backbufferSurface(+120120), captureSurface(+120116), lineVertexBuffer(+120052),
-//     device(+120032), d3d9(+120028) - the same slots the render-wrapper init function seeds;
+//     device(+120032), d3d9(+120028) - the same slots Sub1D574Init seeds;
 //   * the 10000-entry resource pool at +4 (12-byte entries): free the
 //     heapBuffer (+4) member, Release() the comObject (+8) member;
 //   * if stereo was activated (byte +120166, probed by 0x406E18..0x406E42),

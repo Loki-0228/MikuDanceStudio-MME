@@ -5,7 +5,7 @@
 //   0x00432FA0  RefreshAfterFrameApply - re-apply the current frame to every
 //                             model/accessory track and refresh the panels
 // (0x0040D070 is ported once, as PostLanguageSweep2 in ui_view_refresh.cpp;
-//  the 0x40D070 twin that used to live here was that same function.)
+//  the Sub40D070 twin that used to live here was that same function.)
 // ===========================================================================
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -21,14 +21,14 @@
 
 namespace mikudancestudio {
 
-void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame);  // VA 0x004A0080
-void SyncModelEditControls(unsigned char* model);                     // VA 0x004A02C0
+void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame);  // VA 0x004A0080, was Sub4A0080
+void SyncModelEditControls(unsigned char* model);                     // VA 0x004A02C0, was Sub4A02C0
 void RefreshSelfShadowPanel(MMDApp* app);
 void ApplyGravityTrack(MMDApp* app);
 void ApplyAccessoryTrack(MMDApp* app, int index);
 void SyncAccessoryEditPanel(MMDApp* app);
 void AviBgOverlayRefresh(MMDApp* app);
-void WaveRestartAt(void* subsystem, double time);   // VA 0x004C3530
+void WaveRestartAt(void* subsystem, double time);   // VA 0x004C3530, was Sub4C3530
 
 namespace {
 
@@ -173,7 +173,7 @@ void RefreshTimeline(MMDApp* app, bool forward) {
 // original x86 pair 0x00430F20 (frame +1, command 419) / 0x004312E0
 // (frame -1, command 418) differed only in the frame delta (and the 0-guard
 // on the way back), so both are covered by this one parameterized step.
-// VA 0x00430F20 / 0x4312E0, VA 0x004312E0 - the one-line
+// was Sub430F20, VA 0x00430F20 / Sub4312E0, VA 0x004312E0 - the one-line
 // forwarding wrappers this used to be reached through were removed; callers
 // pass the direction flag directly.
 void StepFrame(MMDApp* app, bool forward) {
@@ -190,7 +190,7 @@ void StepFrame(MMDApp* app, bool forward) {
     RefreshTimeline(app, forward);
 }
 
-// VA 0x00432FA0 - re-apply the current frame to every model
+// was Sub432FA0, VA 0x00432FA0 - re-apply the current frame to every model
 // and accessory track after a frame change / key registration and refresh
 // the timeline, panels and physics-reset flag (the "frame-apply refresh
 // chain" of the original command tails).

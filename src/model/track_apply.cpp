@@ -1,7 +1,9 @@
 // ===========================================================================
-// VA 0x00412330 - ApplyGravityTrack  (0x7F1 bytes)  gravity-track apply + physics
+// VA 0x00412330 - ApplyGravityTrack (was Sub412330)  (0x7F1 bytes)  gravity-track apply + physics
 //                                    dialog (hwnd @ app+0xA0CCC) refresh
-// VA 0x00413120 - ApplyAccessoryTrack  (0x3B5 bytes)  accessory key-track apply
+// VA 0x00413120 - ApplyAccessoryTrack (was Sub413120)  (0x3B5 bytes)  accessory key-track apply
+//   (the ported definition lives in src/window/accessory_paste.cpp; the
+//   behaviour notes below cover the pair)
 // ===========================================================================
 // ApplyGravityTrack (called after VMD load, frame seek, physics-dialog edits and
 // PMM load): walks the physical-gravity track at app+0x380 (36B records
@@ -35,6 +37,7 @@
 #include <cstring>
 
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/global_key_layout.hpp"
 #include "mikudancestudio/panel_controls.hpp"
 
 namespace mikudancestudio {
@@ -93,7 +96,7 @@ void RefreshPhysicsDialog(MMDApp* app) {
 }  // namespace
 
 // ---- VA 0x00412330 --------------------------------------------------------
-void ApplyGravityTrack(MMDApp* app) {  // VA 0x00412330
+void ApplyGravityTrack(MMDApp* app) {  // was Sub412330, VA 0x00412330
     const std::uint32_t frame = app->state.currentFrame;
     mdl::GravityKey* const track = app->GravityKeys();
     if (track == nullptr) return;   // guard: 0x466D20 allocates the track
@@ -112,6 +115,8 @@ void ApplyGravityTrack(MMDApp* app) {  // VA 0x00412330
                 RefreshPhysicsDialog(app);
                 return;
             }
+            if (next >= mdl::kTimelineKeyCapacity)
+                break;
             idx = next;
             if (recFrame(idx) >= frame) break;
         }
@@ -125,6 +130,8 @@ void ApplyGravityTrack(MMDApp* app) {  // VA 0x00412330
     }
 
     // between keys: lerp against the previous record (0x412860..0x4128E0)
+    if (rec.previous >= mdl::kTimelineKeyCapacity)
+        return;
     const mdl::GravityKey& prev = track[rec.previous];
     float num = static_cast<float>(
         static_cast<std::int32_t>(frame - recFrame(rec.previous)));
@@ -132,6 +139,8 @@ void ApplyGravityTrack(MMDApp* app) {  // VA 0x00412330
     float den = static_cast<float>(
         static_cast<std::int32_t>(recFrame(idx) - recFrame(rec.previous)));
     if (den < 0) den += kWrap2p32;
+    if (den <= 0.0f)
+        return;
     const float t = num / den;
 
     const int dIter =

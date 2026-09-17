@@ -25,10 +25,14 @@
 #include "mikudancestudio/globals.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                    LPSTR lpCmdLine, int nShowCmd) {
     using namespace mikudancestudio;
+
+    runtime_log::Initialize();
+    runtime_log::SetPhase("construct application");
 
     (void)hPrevInstance;
 
@@ -36,9 +40,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     // semantics), then ctor 0x42AE60 and the global Block assignment.
     MMDApp* app = new (std::nothrow) MMDApp();
     g_Block = app;
-    if (app == nullptr)
-        return 0;  // original would proceed on null only if new failed;
-                   // ctor/defaults below are guarded by early exit.
+    if (app == nullptr) {
+        // The original returned 0 here and vanished without a word; the
+        // startup report keeps the failure visible (dialog, see runtime_log).
+        runtime_log::Fatal("application allocation failed (内存不足 / out of memory)");
+    }
     app->state = MMDAppState{};  // original: memset(p, 0, 0xA4530)
     app->InitDefaults();                                          // 0x40A730
 
@@ -57,10 +63,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         swprintf_s(app->EnvFileName(), 0x100, g_SourceFormat, L"", L"");
     }
 
-    if (!InitMainWindowAndD3D(g_Block, hInstance, nShowCmd))       // 0x47A5B0
-        return 0;
+    runtime_log::Write("INIT window and Direct3D begin");
+    runtime_log::SetPhase("initialize window and Direct3D");
+    if (!InitMainWindowAndD3D(g_Block, hInstance, nShowCmd)) {     // 0x47A5B0
+        // Same deviation as above: the original left with code 0 and no
+        // message, which is exactly the silent launch failure the startup
+        // report now surfaces.
+        runtime_log::Fatal(
+            "window / Direct3D initialization failed (窗口或 Direct3D 初始化失败)");
+    }
+    runtime_log::Write("INIT complete; entering message loop");
 
-    MSG msg;
+    MSG msg{};
     std::uint32_t timeHigh = 0;         // v7/ebp - high 32 bits of last tick
     DWORD timeLow = timeGetTime();      // Time/ebx
     app->MilliToSec() = 0.001f;         // [Block+0xA0B70] = flt_5318D0
@@ -79,7 +93,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     std::uint64_t statsLoops = 0, statsMsgs = 0, statsPumps = 0;
     double statsSleepMs = 0.0, statsPumpMs = 0.0;
     while (msg.message != WM_QUIT) {       // 18
+        runtime_log::SetPhase("message loop");
         if (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            runtime_log::SetPhase("dispatch window message");
+            if (msg.message == WM_CLOSE || msg.message == WM_QUIT)
+                runtime_log::Write("EXIT_MESSAGE message=0x%04X code=%llu", msg.message,
+                    static_cast<unsigned long long>(msg.wParam));
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
             if (pumpStats != nullptr) ++statsMsgs;
@@ -119,7 +138,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             timeHigh = nowHigh;
 
             DWORD pumpT0 = pumpStats != nullptr ? timeGetTime() : 0;
+            runtime_log::SetPhase("FrameDriver");
             FrameDriver(g_Block);                            // 0x46B090
+            runtime_log::SetPhase("message loop");
+            runtime_log::Heartbeat(app->CurrentFrame());
             if (pumpStats != nullptr) {
                 statsPumpMs += timeGetTime() - pumpT0;
                 ++statsPumps;
@@ -144,10 +166,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     if (pumpStats != nullptr) std::fclose(pumpStats);
 
     if (g_Block != nullptr) {
+        // The message loop is over: from here on a fault is a teardown fault
+        // and is recorded without the modal report (the window is gone and
+        // the settings are already written).
+        runtime_log::BeginShutdown();
+        runtime_log::SetPhase("ShutdownCleanup");
         MMDApp* victim = g_Block;
         ShutdownCleanup(g_Block);                            // 0x462C40
+        runtime_log::Write("SHUTDOWN cleanup complete");
+        runtime_log::SetPhase("delete application");
         delete victim;
         g_Block = nullptr;
     }
+    runtime_log::NormalExit(static_cast<int>(msg.wParam));
     return static_cast<int>(msg.wParam);
 }

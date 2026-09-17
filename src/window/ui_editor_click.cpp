@@ -57,34 +57,30 @@
 
 namespace mikudancestudio {
 
-// Forward declarations for functions ported in this wave whose bodies live
-// in other translation units (not yet registered in ported_funcs.hpp;
-// declared here with their original VAs).
-void PanelPaint(MMDApp* app);                                   // VA 0x00414610
-void PostLanguageSweep(MMDApp* app);                            // VA 0x0042F1E0
-void TimelineDrawTicks(int frameOffset, int width);             // VA 0x004C2A00
-void SetFrameNormalized(int frame);                             // VA 0x004C2B80
+// Forward declarations for functions ported in other translation units
+// (declared here with their original VAs; bodies in the files noted).
+void PanelPaint(MMDApp* app);                                   // VA 0x00414610 (ui_panel_paint.cpp)
+void PostLanguageSweep(MMDApp* app);                            // VA 0x0042F1E0 (ui_panel_sweep.cpp)
+void TimelineDrawTicks(int frameOffset, int width);             // VA 0x004C2A00 (ui_timeline_gfx.cpp)
+void SetFrameNormalized(int frame);                             // VA 0x004C2B80 (ui_timeline_gfx.cpp)
 
-// Editor-panel refresh helpers still living in src/app/late_ports.cpp
-// (signatures below are the placeholder ones from stubs.cpp; where the
-// original passes a MODEL pointer or extra arguments the call site casts
-// and marks TODO(port) - see the individual call sites).
-void RefreshLightPanel(MMDApp* app);                                    // VA 0x00411070
-void RefreshSelfShadowPanel(MMDApp* app);                                    // VA 0x00411B90
-void ApplyGravityTrack(MMDApp* app);                                    // VA 0x00412330
-void SyncAccessoryEditPanel(MMDApp* app);                                    // VA 0x004134E0
-void ApplyAccessoryTrack(MMDApp* app, int idx);                           // VA 0x00413120
-void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame);  // VA 0x004A0080
-void SyncModelEditControls(unsigned char* model);                     // VA 0x004A02C0
-void SnapshotSelectedKeysForUndo(unsigned char* model, int frame);    // VA 0x004A1510
+// Editor-panel refresh helpers, ported in other translation units.
+void RefreshLightPanel(MMDApp* app);                                    // VA 0x00411070 (ui_frame_refresh.cpp)
+void RefreshSelfShadowPanel(MMDApp* app);                                    // VA 0x00411B90 (ui_frame_refresh.cpp)
+void ApplyGravityTrack(MMDApp* app);                                    // VA 0x00412330 (track_apply.cpp)
+void SyncAccessoryEditPanel(MMDApp* app);                                    // VA 0x004134E0 (ui_frame_refresh.cpp)
+void ApplyAccessoryTrack(MMDApp* app, int idx);                           // VA 0x00413120 (accessory_paste.cpp)
+void SnapshotPoseBeforeFrameChange(unsigned char* model, int frame);  // VA 0x004A0080, was Sub4A0080 (model_keyframe_edit.cpp)
+void SyncModelEditControls(unsigned char* model);                     // VA 0x004A02C0, was Sub4A02C0 (model_keyframe_edit.cpp)
+void SnapshotSelectedKeysForUndo(unsigned char* model, int frame);    // VA 0x004A1510, was Sub4A1510 (model_keyframe_edit.cpp)
 int SeekModelFrame(unsigned char* model, int frame, int physicsMode);  // VA 0x004B4260
-void WaveRestartAt(void* sub, double v);                       // VA 0x004C3530
-void AviBgOverlayRefresh(MMDApp* app);                                    // VA 0x004168D0
-void AppendBoneKeyToUndo(unsigned char* model, int index);           // VA 0x0049D410
+void WaveRestartAt(void* sub, double v);                       // VA 0x004C3530, was Sub4C3530
+void AviBgOverlayRefresh(MMDApp* app);                                    // VA 0x004168D0 (bg_overlay.cpp)
+void AppendBoneKeyToUndo(unsigned char* model, int index);           // VA 0x0049D410, was Sub49D410 (key_registrars.cpp)
 void PostLanguageSweep2(MMDApp* app);  // VA 0x0040D070 (ui_view_refresh.cpp);
-                                       // was declared here as 0x40D070 - same
+                                       // was declared here as Sub40D070 - same
                                        // function, the local twin was removed
-void SelectionReeval(MMDApp* app);                              // VA 0x00430510 (stubs.cpp)
+void SelectionReeval(MMDApp* app);                              // VA 0x00430510 (ui_selection_reeval.cpp)
 
 // qsort comparator of the selection-stat records - original VA 0x0040EC70:
 //   v2 = a1[3]; v3 = a2[3]; return (v2 >= v3) ? (v2 > v3) : -1;

@@ -248,6 +248,15 @@ inline const char kJpOpenCaption[] =
 
 // Main-window title format set after every successful load/save (v1 load
 // tail 0x45E2A4 / v2 load tail 0x4582C2 / save tail 0x41E747).
-inline const wchar_t kAppTitleFormat[] = L"MikuDanceStudio [%s]";
+//
+// The original's literal is "MikuMikuDance [%s]" and MikuMikuEffect depends on
+// it: MMEffect.dll reads the title with GetWindowText, takes the project path
+// from inside the brackets and loads the matching assignment file
+// ("<project>.emm") - that is how effect assignments survive a pmm round trip
+// and how MME resets its per-object state when another project is opened.
+// Renaming the prefix (the port used "MikuDanceStudio [%s]") makes MME miss
+// the project change: its object table keeps the previous project's entries and
+// its draw hook then dereferences an uninitialised record.
+inline const wchar_t kAppTitleFormat[] = L"MikuMikuDance [%s]";
 
 }  // namespace mikudancestudio::pmm_io

@@ -98,7 +98,7 @@ constexpr UINT kD3dxDefault = 0xFFFFFFFFu;
 //     will report failure.
 // Returns 1 when every non-default name resolved.
 // ===========================================================================
-int CollectToonFileNames(HWND hDlg) {  // VA 0x0041EA20
+int CollectToonFileNames(HWND hDlg) {  // was Sub41EA20, VA 0x0041EA20
     MMDApp* app = g_Block;
     mdl::ModelRecord& model = *mdl::Mdl(app->SelectedModel());
     D3DRenderer* renderer = app->Renderer();
@@ -175,7 +175,7 @@ int CollectToonFileNames(HWND hDlg) {  // VA 0x0041EA20
 // Quirk kept verbatim: before writing vertices, every morph-0 entry
 // OVERWRITES (not adds to) the raw vertex position with its offset.
 // ===========================================================================
-void SaveEnhancedModel(MMDApp* app, const wchar_t* path) {  // 0x41EC10
+void SaveEnhancedModel(MMDApp* app, const wchar_t* path) {  // was Sub41EC10, 0x41EC10
     mdl::ModelRecord& model = *mdl::Mdl(app->SelectedModel());
     D3DRenderer* renderer = app->Renderer();
 
@@ -418,7 +418,7 @@ void SaveEnhancedModel(MMDApp* app, const wchar_t* path) {  // 0x41EC10
 }
 
 // ===========================================================================
-// 0x4A4850 (x64 sub_7FF7CB4F2240) - SetModelColor:
+// 0x4A4850 (x64 sub_7FF7CB4F2240) - SetModelColor (was Sub4A4850):
 // set model colour (ground-shadow tint sweep; called from pmm_load_v1/v2
 // and the menu-286 colour picker).  Skips models whose physicsMode byte is
 // 2, then locks the 16-byte-stride secondary vertex buffer (FVF 0x42:
@@ -455,7 +455,7 @@ void SetModelColor(MMDApp* modelPtr, int r, int g, int b) {
 }
 
 // ---- not-yet-ported original call targets with NO stub elsewhere -------
-// (/43A650/43B720/43BB30 - now InsertBoneCameraFrameLine /
+// (was Sub439E40/43A650/43B720/43BB30 - now InsertBoneCameraFrameLine /
 //  DeleteBoneCameraFrameLine / InsertFacialLightFrameLine /
 //  DeleteFacialLightFrameLine, the four frame-line edit commands in
 //  src/window/frame_line_edit.cpp; declared in ported_funcs.hpp.)
@@ -473,355 +473,406 @@ struct MenuText {
     int pos;
     const char* en;
     const char* jp;
+    const wchar_t* zh;  // Simplified Chinese (port addition)
 };
 
 constexpr MenuText kFileMenu[] = {
-    {0, "new(&N)", "\x90\x56\x8b\x4b\x28\x26\x4e\x29"},
-    {1, "open(&O)", "\x8a\x4a\x82\xad\x28\x26\x4f\x29"},
-    {2, "save(&S)", "\x8f\xe3\x8f\x91\x82\xab\x95\xdb\x91\xb6\x28\x26\x53\x29"},
+    {0, "new(&N)", "\x90\x56\x8b\x4b\x28\x26\x4e\x29", L"新建(&N)"},
+    {1, "open(&O)", "\x8a\x4a\x82\xad\x28\x26\x4f\x29", L"打开(&O)"},
+    {2, "save(&S)", "\x8f\xe3\x8f\x91\x82\xab\x95\xdb\x91\xb6\x28\x26\x53\x29", L"保存(&S)"},
     {3, "save as(&A)",
      "\x96\xbc\x91\x4f\x82\xf0\x95\x74\x82\xaf\x82\xc4\x95\xdb\x91\xb6"
-     "\x28\x26\x41\x29"},
+     "\x28\x26\x41\x29", L"另存为(&A)"},
     {5, "render to AVI file(&V)",
      "\x41\x56\x49\x83\x74\x83\x40\x83\x43\x83\x8b\x82\xc9\x8f\x6f\x97"
-     "\xcd\x28\x26\x56\x29"},
+     "\xcd\x28\x26\x56\x29", L"导出AVI视频(&V)"},
     {6, "render to picture file(&B)",
      "\x89\xe6\x91\x9c\x83\x74\x83\x40\x83\x43\x83\x8b\x82\xc9\x8f\x6f"
-     "\x97\xcd\x28\x26\x42\x29"},
+     "\x97\xcd\x28\x26\x42\x29", L"导出图片(&B)"},
     {8, "load pose data(&P)",
      "\x83\x7c\x81\x5b\x83\x59\x83\x66\x81\x5b\x83\x5e\x93\xc7\x8d\x9e"
-     "\x28\x26\x50\x29"},
+     "\x28\x26\x50\x29", L"载入姿势数据(&P)"},
     {9, "save pose data(&Q)",
      "\x83\x7c\x81\x5b\x83\x59\x83\x66\x81\x5b\x83\x5e\x95\xdb\x91\xb6"
-     "\x28\x26\x51\x29"},
+     "\x28\x26\x51\x29", L"保存姿势数据(&Q)"},
     {0xB, "load motion data(&M)",
      "\x83\x82\x81\x5b\x83\x56\x83\x87\x83\x93\x83\x66\x81\x5b\x83\x5e"
-     "\x93\xc7\x8d\x9e\x28\x26\x4d\x29"},
+     "\x93\xc7\x8d\x9e\x28\x26\x4d\x29", L"载入动作数据(&M)"},
     {0xC, "save motion data(&L)",
      "\x83\x82\x81\x5b\x83\x56\x83\x87\x83\x93\x83\x66\x81\x5b\x83\x5e"
-     "\x95\xdb\x91\xb6\x28\x26\x4c\x29"},
+     "\x95\xdb\x91\xb6\x28\x26\x4c\x29", L"保存动作数据(&L)"},
     {0xE, "load WAV file(&W)",
      "\x57\x41\x56\x83\x74\x83\x40\x83\x43\x83\x8b\x93\xc7\x8d\x9e\x28"
-     "\x26\x57\x29"},
+     "\x26\x57\x29", L"载入WAV音频(&W)"},
     {0xF, "play WAV with frame(&F)",
      "\xcc\xda\xb0\xd1\x88\xda\x93\xae\x8e\x9e\x57\x41\x56\x82\xf0\x96"
-     "\xc2\x82\xe7\x82\xb7\x28\x26\x46\x29"},
+     "\xc2\x82\xe7\x82\xb7\x28\x26\x46\x29", L"移动帧时播放音频(&F)"},
     {0x10, "not play WAV file(&D)",
      "\x57\x41\x56\x83\x74\x83\x40\x83\x43\x83\x8b\x82\xf0\x96\xc2\x82"
-     "\xe7\x82\xb3\x82\xc8\x82\xa2\x28\x26\x44\x29"},
+     "\xe7\x82\xb3\x82\xc8\x82\xa2\x28\x26\x44\x29", L"禁用音频播放(&D)"},
     {0x12, "set default folder to previous(&E)",
      "\xc3\xde\xcc\xab\xd9\xc4\xcc\xab\xd9\xc0\xde\x82\xf0\x91\x4f\x89"
-     "\xf1\x88\xca\x92\x75\x82\xc6\x82\xb7\x82\xe9\x28\x26\x45\x29"},
-    {0x14, "Exit(&X)", "\x8f\x49\x97\xb9\x28\x26\x58\x29"},
+     "\xf1\x88\xca\x92\x75\x82\xc6\x82\xb7\x82\xe9\x28\x26\x45\x29", L"记住上次打开的目录(&E)"},
+    {0x14, "Exit(&X)", "\x8f\x49\x97\xb9\x28\x26\x58\x29", L"退出(&X)"},
 };
 
 constexpr MenuText kEditMenu[] = {
     {0, "bone camera numeric input(&O)",
      "\x83\x7b\x81\x5b\x83\x93\x81\x45\x83\x4a\x83\x81\x83\x89\x90\x94"
-     "\x92\x6c\x93\xfc\x97\xcd\x28\x26\x4f\x29"},
+     "\x92\x6c\x93\xfc\x97\xcd\x28\x26\x4f\x29", L"骨骼 / 相机数值输入(&O)"},
     {1, "bone camera angle initialize(&Z)",
      "\x83\x7b\x81\x5b\x83\x93\x81\x45\x83\x4a\x83\x81\x83\x89\x8a\x70"
-     "\x93\x78\x30\x89\xbb\x28\x26\x5a\x29"},
+     "\x93\x78\x30\x89\xbb\x28\x26\x5a\x29", L"重置骨骼 / 相机角度(&Z)"},
     {3, "delete unused frame(&D)",
-     "\x95\x73\x97\x76\xcc\xda\xb0\xd1\x8d\xed\x8f\x9c\x28\x26\x44\x29"},
+     "\x95\x73\x97\x76\xcc\xda\xb0\xd1\x8d\xed\x8f\x9c\x28\x26\x44\x29", L"删除未使用的帧(&D)"},
     {5, "select all camera frame(&C)",
      "\xb6\xd2\xd7\xcc\xda\xb0\xd1\x82\xb7\x82\xd7\x82\xc4\x91\x49\x91"
-     "\xf0\x28\x26\x43\x29"},
+     "\xf0\x28\x26\x43\x29", L"选择全部相机帧(&C)"},
     {6, "select all light frame(&L)",
      "\x8f\xc6\x96\xbe\xcc\xda\xb0\xd1\x82\xb7\x82\xd7\x82\xc4\x91\x49"
-     "\x91\xf0\x28\x26\x4c\x29"},
+     "\x91\xf0\x28\x26\x4c\x29", L"选择全部照明帧(&L)"},
     {7, "select all self shadow frame(&S)",
      "\xbe\xd9\xcc\x89\x65\xcc\xda\xb0\xd1\x82\xb7\x82\xd7\x82\xc4\x91"
-     "\x49\x91\xf0\x28\x26\x53\x29"},
+     "\x49\x91\xf0\x28\x26\x53\x29", L"选择全部自阴影帧(&S)"},
     {8, "select all gravity frame(&V)",
      "\x8f\x64\x97\xcd\xcc\xda\xb0\xd1\x82\xb7\x82\xd7\x82\xc4\x91\x49"
-     "\x91\xf0\x28\x26\x56\x29"},
+     "\x91\xf0\x28\x26\x56\x29", L"选择全部重力帧(&V)"},
     {9, "select all accessory frame(&A)",
      "\xb1\xb8\xbe\xbb\xd8\xcc\xda\xb0\xd1\x82\xb7\x82\xd7\x82\xc4\x91"
-     "\x49\x91\xf0\x28\x26\x41\x29"},
+     "\x49\x91\xf0\x28\x26\x41\x29", L"选择全部配件帧(&A)"},
     {0xB, "multiply of camera frame position-angle(&G)",
      "\xb6\xd2\xd7\xcc\xda\xb0\xd1\x88\xca\x92\x75\x8a\x70\x93\x78\x95"
-     "\xe2\x90\xb3\x28\x26\x47\x29"},
+     "\xe2\x90\xb3\x28\x26\x47\x29", L"缩放相机帧的位置和角度(&G)"},
     {0xD, "select all bone frame(&N)",
      "\xce\xde\xb0\xdd\xcc\xda\xb0\xd1\x82\xb7\x82\xd7\x82\xc4\x91\x49"
-     "\x91\xf0\x28\x26\x4e\x29"},
+     "\x91\xf0\x28\x26\x4e\x29", L"选择全部骨骼帧(&N)"},
     {0xE, "select all facial frames(&E)",
      "\x95\x5c\x8f\xee\xcc\xda\xb0\xd1\x82\xb7\x82\xd7\x82\xc4\x91\x49"
-     "\x91\xf0\x28\x26\x45\x29"},
+     "\x91\xf0\x28\x26\x45\x29", L"选择全部表情帧(&E)"},
     {0xF, "select all disp/IK/OP frame(&M)",
      "\x95\x5c\x8e\xa6\xa5\x49\x4b\xa5\x8a\x4f\x90\x65\xcc\xda\xb0\xd1"
-     "\x82\xb7\x82\xd7\x82\xc4\x91\x49\x91\xf0\x28\x26\x4d\x29"},
+     "\x82\xb7\x82\xd7\x82\xc4\x91\x49\x91\xf0\x28\x26\x4d\x29", L"选择全部显示 / IK / 外部亲帧(&M)"},
     {0x11, "paste to different flame(F_key)",
      "\x95\xca\xcc\xda\xb0\xd1\x82\xd6\xcd\xdf\xb0\xbd\xc4\x28\x46\xb7"
-     "\xb0\x29"},
+     "\xb0\x29", L"粘贴到指定帧(F键)"},
     {0x13, "insert frame line(bone or camera)(I_key)",
      "\x8b\xf3\xcc\xda\xb0\xd1\x91\x7d\x93\xfc\x28\xce\xde\xb0\xdd\x6f"
-     "\x72\xb6\xd2\xd7\x29\x28\x49\xb7\xb0\x29"},
+     "\x72\xb6\xd2\xd7\x29\x28\x49\xb7\xb0\x29", L"插入帧列（骨骼 / 相机）(I键)"},
     {0x14, "delete frame line(bone or camera)(K_key)",
      "\x97\xf1\xcc\xda\xb0\xd1\x8d\xed\x8f\x9c\x28\xce\xde\xb0\xdd\x6f"
-     "\x72\xb6\xd2\xd7\x29\x28\x4b\xb7\xb0\x29"},
+     "\x72\xb6\xd2\xd7\x29\x28\x4b\xb7\xb0\x29", L"删除帧列（骨骼 / 相机）(K键)"},
     {0x15, "insert frame line(facial or light)(U_key)",
      "\x8b\xf3\xcc\xda\xb0\xd1\x91\x7d\x93\xfc\x28\x95\x5c\x8f\xee\x6f"
-     "\x72\x8f\xc6\x96\xbe\x29\x28\x55\xb7\xb0\x29"},
+     "\x72\x8f\xc6\x96\xbe\x29\x28\x55\xb7\xb0\x29", L"插入帧列（表情 / 照明）(U键)"},
     {0x16, "delete frame line(facial or light)(J_key)",
      "\x97\xf1\xcc\xda\xb0\xd1\x8d\xed\x8f\x9c\x28\x95\x5c\x8f\xee\x6f"
-     "\x72\x8f\xc6\x96\xbe\x29\x28\x4a\xb7\xb0\x29"},
+     "\x72\x8f\xc6\x96\xbe\x29\x28\x4a\xb7\xb0\x29", L"删除帧列（表情 / 照明）(J键)"},
     {0x18, "multiply of bone frame position-angle(R_key)",
      "\xce\xde\xb0\xdd\xcc\xda\xb0\xd1\x88\xca\x92\x75\x8a\x70\x93\x78"
-     "\x95\xe2\x90\xb3\x28\x52\xb7\xb0\x29"},
+     "\x95\xe2\x90\xb3\x28\x52\xb7\xb0\x29", L"缩放骨骼帧的位置和角度(R键)"},
     {0x19, "multiply of facial expression(&T)",
      "\x95\x5c\x8f\xee\x91\xe5\x82\xab\x82\xb3\x95\xe2\x90\xb3\x28\x26"
-     "\x54\x29"},
+     "\x54\x29", L"缩放表情数值(&T)"},
     {0x1B, "apply center position bias(&B)",
      "\xbe\xdd\xc0\xb0\x88\xca\x92\x75\xca\xde\xb2\xb1\xbd\x95\x74\x89"
-     "\xc1\x28\x26\x42\x29"},
+     "\xc1\x28\x26\x42\x29", L"调整中心位置偏移(&B)"},
 };
 
 constexpr MenuText kViewMenu[] = {
     {0, "screen size(&O)",
-     "\x8f\x6f\x97\xcd\x83\x54\x83\x43\x83\x59\x28\x26\x4f\x29"},
-    {2, "separate window(&W)", "\x95\xca\x91\x8b\x28\x26\x57\x29"},
+     "\x8f\x6f\x97\xcd\x83\x54\x83\x43\x83\x59\x28\x26\x4f\x29", L"画面尺寸(&O)"},
+    {2, "separate window(&W)", "\x95\xca\x91\x8b\x28\x26\x57\x29", L"独立窗口(&W)"},
     {3, "to the fore(&F)",
      "\x95\xca\x91\x8b\x8d\xc5\x91\x4f\x97\xf1\x95\x5c\x8e\xa6\x28\x26"
-     "\x46\x29"},
+     "\x46\x29", L"窗口置顶(&F)"},
     {5, "camera & lighting tracking(&C)",
      "\xd3\xc3\xde\xd9\x95\xd2\x8f\x57\x8e\x9e\xb6\xd2\xd7\xa5\x8f\xc6"
-     "\x96\xbe\x92\xc7\x8f\x5d\x28\x26\x43\x29"},
+     "\x96\xbe\x92\xc7\x8f\x5d\x28\x26\x43\x29", L"相机与照明跟随(&C)"},
     {7, "information display(&D)",
-     "\x8f\xee\x95\xf1\x95\x5c\x8e\xa6\x28\x26\x44\x29"},
+     "\x8f\xee\x95\xf1\x95\x5c\x8e\xa6\x28\x26\x44\x29", L"显示信息(&D)"},
     {8, "display coordinate axis(&G)",
-     "\x8d\xc0\x95\x57\x8e\xb2\x95\x5c\x8e\xa6\x28\x26\x47\x29"},
+     "\x8d\xc0\x95\x57\x8e\xb2\x95\x5c\x8e\xa6\x28\x26\x47\x29", L"显示坐标轴(&G)"},
     {0xA, "display ground shadow(&S)",
-     "\x92\x6e\x96\xca\x89\x65\x95\x5c\x8e\xa6\x28\x26\x53\x29"},
+     "\x92\x6e\x96\xca\x89\x65\x95\x5c\x8e\xa6\x28\x26\x53\x29", L"显示地面阴影(&S)"},
     {0xB, "ground shadow color(&X)",
-     "\x92\x6e\x96\xca\x89\x65\x90\x46\x90\xdd\x92\xe8\x28\x26\x58\x29"},
+     "\x92\x6e\x96\xca\x89\x65\x90\x46\x90\xdd\x92\xe8\x28\x26\x58\x29", L"地面阴影颜色(&X)"},
     {0xC, "transparent ground shadow(&T)",
      "\x92\x6e\x96\xca\x89\x65\x90\x46\x93\xa7\x96\xbe\x89\xbb\x28\x26"
-     "\x54\x29"},
+     "\x54\x29", L"透明地面阴影(&T)"},
     {0xE, "character transparent mode(V_key)",
-     "\x94\xbc\x93\xa7\x96\xbe\x89\xbb\x28\x56\xb7\xb0\x29"},
+     "\x94\xbc\x93\xa7\x96\xbe\x89\xbb\x28\x56\xb7\xb0\x29", L"模型半透明(V键)"},
     {0xF, "character Non-display mode(&A)",
-     "\x83\x82\x83\x66\x83\x8b\x94\xf1\x95\x5c\x8e\xa6\x28\x26\x41\x29"},
+     "\x83\x82\x83\x66\x83\x8b\x94\xf1\x95\x5c\x8e\xa6\x28\x26\x41\x29", L"隐藏模型(&A)"},
     {0x11, "thickness of edge line(&E)",
-     "\x83\x47\x83\x62\x83\x57\x91\xbe\x82\xb3\x28\x26\x45\x29"},
+     "\x83\x47\x83\x62\x83\x57\x91\xbe\x82\xb3\x28\x26\x45\x29", L"描边粗细(&E)"},
     {0x12, "edge line color(&B)",
-     "\x83\x47\x83\x62\x83\x57\x90\x46\x28\x26\x42\x29"},
+     "\x83\x47\x83\x62\x83\x57\x90\x46\x28\x26\x42\x29", L"描边颜色(&B)"},
     {0x14, "anti-aliasing(&H)",
      "\x83\x41\x83\x93\x83\x60\x83\x47\x83\x43\x83\x8a\x83\x41\x83\x58"
-     "\x28\x26\x48\x29"},
+     "\x28\x26\x48\x29", L"抗锯齿(&H)"},
     {0x16, "mipmap(anisotropic)(&M)",
      "\x83\x7e\x83\x62\x83\x76\x83\x7d\x83\x62\x83\x76\x28\x88\xd9\x95"
-     "\xfb\x90\xab\x83\x74\x83\x42\x83\x8b\x83\x5e\x29\x28\x26\x4d\x29"},
+     "\xfb\x90\xab\x83\x74\x83\x42\x83\x8b\x83\x5e\x29\x28\x26\x4d\x29", L"多级纹理（各向异性过滤）(&M)"},
     {0x18, "self-shadow(&P)",
      "\x83\x5a\x83\x8b\x83\x74\x83\x56\x83\x83\x83\x68\x83\x45\x95\x5c"
-     "\x8e\xa6\x28\x26\x50\x29"},
+     "\x8e\xa6\x28\x26\x50\x29", L"自阴影(&P)"},
     {0x1A, "wire frame(&R)",
      "\x83\x8f\x83\x43\x83\x84\x81\x5b\x83\x74\x83\x8c\x81\x5b\x83\x80"
-     "\x95\x5c\x8e\xa6\x28\x26\x52\x29"},
+     "\x95\x5c\x8e\xa6\x28\x26\x52\x29", L"线框(&R)"},
     {0x1C, "full screen(Alt+Enter)",  // replaced below when stereo is on
      "\x83\x74\x83\x8b\x83\x58\x83\x4e\x83\x8a\x81\x5b\x83\x93\x95\x5c"
-     "\x8e\xa6\x28\x41\x6c\x74\x2b\x45\x6e\x74\x65\x72\x29"},
-    {0x1E, "fps no limit", "\x66\x70\x73\x96\xb3\x90\xa7\x8c\xc0"},
+     "\x8e\xa6\x28\x41\x6c\x74\x2b\x45\x6e\x74\x65\x72\x29", L"全屏(Alt+Enter)"},
+    {0x1E, "fps no limit", "\x66\x70\x73\x96\xb3\x90\xa7\x8c\xc0", L"不限帧率"},
     {0x1F, "max fps restricted to 30fps",
-     "\x33\x30\x66\x70\x73\x90\xa7\x8c\xc0"},
+     "\x33\x30\x66\x70\x73\x90\xa7\x8c\xc0", L"限制为30帧/秒"},
     {0x20, "max fps restricted to 60fps",
-     "\x36\x30\x66\x70\x73\x90\xa7\x8c\xc0"},
+     "\x36\x30\x66\x70\x73\x90\xa7\x8c\xc0", L"限制为60帧/秒"},
     {0x22, "save CPU power",
-     "\x8f\xc8\x83\x47\x83\x6c\x83\x82\x81\x5b\x83\x68"},
+     "\x8f\xc8\x83\x47\x83\x6c\x83\x82\x81\x5b\x83\x68", L"节省CPU功耗"},
 };
 
 constexpr MenuText kBackgroundMenu[] = {
     {0, "accessories edit(&A)",
      "\x83\x41\x83\x4e\x83\x5a\x83\x54\x83\x8a\x95\xd2\x8f\x57\x28\x26"
-     "\x41\x29"},
+     "\x41\x29", L"配件编辑(&A)"},
     {1, "model draw order(&O)",
-     "\x83\x82\x83\x66\x83\x8b\x95\x60\x89\xe6\x8f\x87\x28\x26\x4f\x29"},
+     "\x83\x82\x83\x66\x83\x8b\x95\x60\x89\xe6\x8f\x87\x28\x26\x4f\x29", L"模型绘制顺序(&O)"},
     {2, "model calculate order(&C)",
-     "\x83\x82\x83\x66\x83\x8b\x8c\x76\x8e\x5a\x8f\x87\x28\x26\x43\x29"},
+     "\x83\x82\x83\x66\x83\x8b\x8c\x76\x8e\x5a\x8f\x87\x28\x26\x43\x29", L"模型计算顺序(&C)"},
     {4, "black background(&D)",
-     "\x94\x77\x8c\x69\x8d\x95\x89\xbb\x28\x26\x44\x29"},
+     "\x94\x77\x8c\x69\x8d\x95\x89\xbb\x28\x26\x44\x29", L"黑色背景(&D)"},
     {6, "load background AVI file(&L)",
      "\x94\x77\x8c\x69\x41\x56\x49\x83\x74\x83\x40\x83\x43\x83\x8b\x93"
-     "\xc7\x8d\x9e\x28\x26\x4c\x29"},
+     "\xc7\x8d\x9e\x28\x26\x4c\x29", L"载入背景AVI视频(&L)"},
     {7, "load background picture file(&R)",
      "\x94\x77\x8c\x69\x89\xe6\x91\x9c\x83\x74\x83\x40\x83\x43\x83\x8b"
-     "\x93\xc7\x8d\x9e\x28\x26\x52\x29"},
+     "\x93\xc7\x8d\x9e\x28\x26\x52\x29", L"载入背景图片(&R)"},
     {9, "show background AVI file(&A)",
-     "\x94\x77\x8c\x69\x41\x56\x49\x95\x5c\x8e\xa6\x28\x26\x41\x29"},
+     "\x94\x77\x8c\x69\x41\x56\x49\x95\x5c\x8e\xa6\x28\x26\x41\x29", L"显示背景视频(&A)"},
     {0xA, "show background picture file(&P)",
-     "\x94\x77\x8c\x69\x89\xe6\x91\x9c\x95\x5c\x8e\xa6\x28\x26\x50\x29"},
+     "\x94\x77\x8c\x69\x89\xe6\x91\x9c\x95\x5c\x8e\xa6\x28\x26\x50\x29", L"显示背景图片(&P)"},
     {0xC, "screen capture mode OFF(&V)",
      "\xbd\xb8\xd8\xb0\xdd\x97\x70\xb7\xac\xcc\xdf\xc1\xac\x4f\x46\x46"
-     "\x28\x26\x56\x29"},
+     "\x28\x26\x56\x29", L"关闭屏幕捕获(&V)"},
     {0xD, "ON.mode01(&M)",
      "\x4f\x4e\xa5\x83\x82\x81\x5b\x83\x68\x82\x50\x28\x91\x53\x89\xe6"
-     "\x96\xca\x29\x20\x28\x26\x4d\x29"},
+     "\x96\xca\x29\x20\x28\x26\x4d\x29", L"开启：模式1(&M)"},
     {0xE, "ON.mode02(&N)",
      "\x4f\x4e\xa5\x83\x82\x81\x5b\x83\x68\x82\x51\x28\x34\x3a\x33\x94"
-     "\xe4\x97\xa6\x29\x20\x28\x26\x4e\x29"},
+     "\xe4\x97\xa6\x29\x20\x28\x26\x4e\x29", L"开启：模式2(&N)"},
     {0xF, "ON.mode03(&B)",
      "\x4f\x4e\xa5\x83\x82\x81\x5b\x83\x68\x82\x52\x28\x94\x77\x8c\x69"
-     "\x41\x56\x49\x29\x20\x28\x26\x42\x29"},
+     "\x41\x56\x49\x29\x20\x28\x26\x42\x29", L"开启：模式3(&B)"},
 };
 
 constexpr MenuText kFacialMenu[] = {
     {0, "delete all mouse frame",
      "\x83\x8a\x83\x62\x83\x76\x83\x74\x83\x8c\x81\x5b\x83\x80\x91\x53"
-     "\x82\xc4\x8d\xed\x8f\x9c"},
+     "\x82\xc4\x8d\xed\x8f\x9c", L"删除全部嘴部帧"},
     {1, "lip-sync with .VSQ file",
      "\x76\x73\x71\x82\xc9\x82\xe6\x82\xe9\x83\x8a\x83\x62\x83\x76\x83"
-     "\x56\x83\x93\x83\x4e"},
+     "\x56\x83\x93\x83\x4e", L"从VSQ文件生成口型"},
     {2, "time shifting mouse frame",
      "\x83\x8a\x83\x62\x83\x76\x83\x74\x83\x8c\x81\x5b\x83\x80\x8e\x9e"
-     "\x8a\xd4\x83\x56\x83\x74\x83\x67"},
+     "\x8a\xd4\x83\x56\x83\x74\x83\x67", L"偏移嘴部帧时间"},
     {4, "delete all eye frame",
      "\x96\xda\x83\x74\x83\x8c\x81\x5b\x83\x80\x91\x53\x82\xc4\x8d\xed"
-     "\x8f\x9c"},
+     "\x8f\x9c", L"删除全部眼部帧"},
     {5, "randomly register blinking",
      "\x82\xdc\x82\xce\x82\xbd\x82\xab\x83\x89\x83\x93\x83\x5f\x83\x80"
-     "\x93\x6f\x98\x5e"},
+     "\x93\x6f\x98\x5e", L"随机登记眨眼"},
     {7, "delete all eyebrow frame",
      "\x82\xdc\x82\xe4\x83\x74\x83\x8c\x81\x5b\x83\x80\x91\x53\x82\xc4"
-     "\x8d\xed\x8f\x9c"},
+     "\x8d\xed\x8f\x9c", L"删除全部眉毛帧"},
     {9, "reset all facial value",
      "\x91\x53\x82\xc4\x82\xcc\x95\x5c\x8f\xee\x83\x8a\x83\x5a\x83\x62"
-     "\x83\x67"},
+     "\x83\x67", L"重置全部表情数值"},
     {0xB, "regist all facial frame(H_key)",
      "\x91\x53\x82\xc4\x82\xcc\x95\x5c\x8f\xee\x83\x74\x83\x8c\x81\x5b"
-     "\x83\x80\x93\x6f\x98\x5e\x28\x48\xb7\xb0\x29"},
+     "\x83\x80\x93\x6f\x98\x5e\x28\x48\xb7\xb0\x29", L"登记全部表情帧(H键)"},
 };
 
 constexpr MenuText kPhysicsMenu[] = {
     {0, "on/off mode(&O)",
      "\x83\x49\x83\x93\x2f\x83\x49\x83\x74\x83\x82\x81\x5b\x83\x68\x28"
-     "\x26\x4f\x29"},
-    {1, "anytime(&E)", "\x8f\xed\x82\xc9\x89\x89\x8e\x5a\x28\x26\x45\x29"},
+     "\x26\x4f\x29", L"按开关状态计算(&O)"},
+    {1, "anytime(&E)", "\x8f\xed\x82\xc9\x89\x89\x8e\x5a\x28\x26\x45\x29", L"始终计算(&E)"},
     {2, "trace mode(&T)",
      "\x83\x67\x83\x8c\x81\x5b\x83\x58\x83\x82\x81\x5b\x83\x68\x28\x26"
-     "\x54\x29"},
+     "\x54\x29", L"跟踪模式(&T)"},
     {3, "no calculation(&N)",
-     "\x89\x89\x8e\x5a\x82\xb5\x82\xc8\x82\xa2\x28\x26\x4e\x29"},
+     "\x89\x89\x8e\x5a\x82\xb5\x82\xc8\x82\xa2\x28\x26\x4e\x29", L"不计算(&N)"},
     {5, "playtime use on/off mode(&P)",
      "\x8d\xc4\x90\xb6\x8e\x9e\x82\xcd\x8f\xed\x82\xc9\x83\x49\x83\x93"
      "\x2f\x83\x49\x83\x74\x83\x82\x81\x5b\x83\x68\x82\xc9\x82\xb7\x82"
-     "\xe9\x28\x26\x50\x29"},
+     "\xe9\x28\x26\x50\x29", L"播放时使用开关模式(&P)"},
     {7, "display bodies(&D)",
-     "\x8d\x84\x91\xcc\x95\x5c\x8e\xa6\x28\x26\x44\x29"},
+     "\x8d\x84\x91\xcc\x95\x5c\x8e\xa6\x28\x26\x44\x29", L"显示刚体(&D)"},
     {9, "gravity setting(&G)",
-     "\x8f\x64\x97\xcd\x90\xdd\x92\xe8\x28\x26\x47\x29"},
+     "\x8f\x64\x97\xcd\x90\xdd\x92\xe8\x28\x26\x47\x29", L"重力设置(&G)"},
     {0xA, "initialize bodies position(&I)",
      "\x8d\x84\x91\xcc\x88\xca\x92\x75\x8f\x89\x8a\xfa\x89\xbb\x28\x26"
-     "\x49\x29"},
-    {0xC, "floor(&F)", "\x8f\xb0\x28\x26\x46\x29"},
+     "\x49\x29", L"初始化刚体位置(&I)"},
+    {0xC, "floor(&F)", "\x8f\xb0\x28\x26\x46\x29", L"地面碰撞(&F)"},
     {0xE, "select physical bone(&B)",
      "\x95\xa8\x97\x9d\x89\x65\x8b\xbf\x83\x7b\x81\x5b\x83\x93\x91\x49"
-     "\x91\xf0\x28\x26\x42\x29"},
+     "\x91\xf0\x28\x26\x42\x29", L"选择物理骨骼(&B)"},
     {0xF, "select physics ON frame(X mark)(&X)",
      "\x91\x53\x82\xc4\x82\xcc\x95\xa8\x97\x9d\x4f\x4e\x83\x74\x83\x8c"
      "\x81\x5b\x83\x80\x28\x58\x88\xf3\x29\x91\x49\x91\xf0\x28\x26\x58"
-     "\x29"},
+     "\x29", L"选择物理开启帧（X标记）(&X)"},
     {0x10, "change physics ON/OFF frame(&C)",
      "\x95\xa8\x97\x9d\x4f\x4e\x2f\x4f\x46\x46\x83\x74\x83\x8c\x81\x5b"
-     "\x83\x80\x95\xcf\x8a\xb7\x28\x26\x43\x29"},
+     "\x83\x80\x95\xcf\x8a\xb7\x28\x26\x43\x29", L"转换物理开关帧(&C)"},
     {0x12, "about physical engine(&A)",
      "\x95\xa8\x97\x9d\x83\x47\x83\x93\x83\x57\x83\x93\x82\xc9\x82\xc2"
-     "\x82\xa2\x82\xc4\x28\x26\x41\x29"},
+     "\x82\xa2\x82\xc4\x28\x26\x41\x29", L"关于物理引擎(&A)"},
 };
 
 constexpr MenuText kMocapMenu[] = {
-    {0, "Kinect(&K)", "Kinect(&K)"},  // one shared literal in the original
-    {2, "capture(&C)", "\xb7\xac\xcc\xdf\xc1\xac\x28\x26\x43\x29"},
+    {0, "Kinect(&K)", "Kinect(&K)", L"Kinect(&K)"},  // one shared literal in the original
+    {2, "capture(&C)", "\xb7\xac\xcc\xdf\xc1\xac\x28\x26\x43\x29", L"捕获(&C)"},
     {4, "L-R reversing(&R)",
-     "\x8d\xb6\x89\x45\x94\xbd\x93\x5d\x28\x26\x52\x29"},
+     "\x8d\xb6\x89\x45\x94\xbd\x93\x5d\x28\x26\x52\x29", L"左右反转(&R)"},
     {5, "initialize lost bone(&L)",
      "\xdb\xbd\xc4\xce\xde\xb0\xdd\x8f\x89\x8a\xfa\x89\xbb\x28\x26\x4c"
-     "\x29"},
+     "\x29", L"重置丢失的骨骼(&L)"},
     {6, "display red man(&D)",
-     "\x90\xd4\x90\x6c\x95\x5c\x8e\xa6\x28\x26\x44\x29"},
+     "\x90\xd4\x90\x6c\x95\x5c\x8e\xa6\x28\x26\x44\x29", L"显示骨架(&D)"},
     {8, "load oni-file(&O)",
-     "\x6f\x6e\x69\xcc\xa7\xb2\xd9\x93\xc7\x8d\x9e\x28\x26\x4f\x29"},
+     "\x6f\x6e\x69\xcc\xa7\xb2\xd9\x93\xc7\x8d\x9e\x28\x26\x4f\x29", L"载入ONI文件(&O)"},
 };
 
 constexpr MenuText kHelpMenu[] = {
-    {0, "Japanese Mode(&J)", "English Mode(&E)"},
+    {0, "Chinese Mode(&C)", "English Mode(&E)", L"日语(&J)"},
     {2, "enhance model(&M)",
-     "\x83\x82\x83\x66\x83\x8b\x8a\x67\x92\xa3\x28\x26\x4d\x29"},
+     "\x83\x82\x83\x66\x83\x8b\x8a\x67\x92\xa3\x28\x26\x4d\x29", L"模型扩展编辑(&M)"},
     {4, "restore texture(&R)",
-     "\xc3\xb8\xbd\xc1\xac\x93\xc7\x92\xbc\x82\xb5\x28\x26\x52\x29"},
+     "\xc3\xb8\xbd\xc1\xac\x93\xc7\x92\xbc\x82\xb5\x28\x26\x52\x29", L"重新载入纹理(&R)"},
     {6, "About(&A)",
-     "\xca\xde\xb0\xbc\xde\xae\xdd\x8f\xee\x95\xf1\x28\x26\x49\x29"},
+     "\xca\xde\xb0\xbc\xde\xae\xdd\x8f\xee\x95\xf1\x28\x26\x49\x29", L"关于(&A)"},
 };
 
 // the "enhance model" submenu below help item 2
 constexpr MenuText kEnhanceMenu[] = {
     {0, "edit English name(&E)",
-     "\x89\x70\x8c\xea\x96\xbc\x95\xd2\x8f\x57\x28\x26\x45\x29"},
+     "\x89\x70\x8c\xea\x96\xbc\x95\xd2\x8f\x57\x28\x26\x45\x29", L"编辑英文名称(&E)"},
     {1, "toon texture(&T)",
      "\xc4\xa9\xb0\xdd\xc3\xb8\xbd\xc1\xac\x95\xcf\x8d\x58\x28\x26\x54"
-     "\x29"},
+     "\x29", L"卡通纹理(&T)"},
     {2, "physics model(&B)",
-     "\x95\xa8\x97\x9d\x89\x89\x8e\x5a\x95\xd2\x8f\x57\x28\x26\x42\x29"},
+     "\x95\xa8\x97\x9d\x89\x89\x8e\x5a\x95\xd2\x8f\x57\x28\x26\x42\x29", L"物理模型(&B)"},
     {4, "save enhanced model(&P)",
      "\x8a\x67\x92\xa3\x83\x82\x83\x66\x83\x8b\x95\xdb\x91\xb6\x28\x26"
-     "\x50\x29"},
+     "\x50\x29", L"保存扩展模型(&P)"},
 };
 
 struct MenuBlock {
     int topPos;
     const char* titleEn;
     const char* titleJp;
+    const wchar_t* titleZh;  // Simplified Chinese (port addition)
     const MenuText* items;
     int itemCount;
 };
 
 constexpr MenuBlock kMenus[] = {
     {0, "file(&F)",
-     "\x83\x74\x83\x40\x83\x43\x83\x8b\x28\x26\x46\x29", kFileMenu,
+     "\x83\x74\x83\x40\x83\x43\x83\x8b\x28\x26\x46\x29", L"\u6587\u4ef6(&F)", kFileMenu,
      static_cast<int>(sizeof(kFileMenu) / sizeof(kFileMenu[0]))},
     {1, "edit(&D)",
-     "\x95\xd2\x8f\x57\x28\x26\x44\x29", kEditMenu,
+     "\x95\xd2\x8f\x57\x28\x26\x44\x29", L"\u7f16\u8f91(&D)", kEditMenu,
      static_cast<int>(sizeof(kEditMenu) / sizeof(kEditMenu[0]))},
     {2, "view(&V)",
-     "\x95\x5c\x8e\xa6\x28\x26\x56\x29", kViewMenu,
+     "\x95\x5c\x8e\xa6\x28\x26\x56\x29", L"\u663e\u793a(&V)", kViewMenu,
      static_cast<int>(sizeof(kViewMenu) / sizeof(kViewMenu[0]))},
     {3, "background(&B)",
-     "\x94\x77\x8c\x69\x28\x26\x42\x29", kBackgroundMenu,
+     "\x94\x77\x8c\x69\x28\x26\x42\x29", L"\u80cc\u666f(&B)", kBackgroundMenu,
      static_cast<int>(sizeof(kBackgroundMenu) / sizeof(kBackgroundMenu[0]))},
     {4, "facial expression(&M)",
-     "\x95\x5c\x8f\xee\x28\x26\x4d\x29", kFacialMenu,
+     "\x95\x5c\x8f\xee\x28\x26\x4d\x29", L"\u8868\u60c5(&M)", kFacialMenu,
      static_cast<int>(sizeof(kFacialMenu) / sizeof(kFacialMenu[0]))},
     {5, "physical operation(&P)",
-     "\x95\xa8\x97\x9d\x89\x89\x8e\x5a\x28\x26\x50\x29", kPhysicsMenu,
+     "\x95\xa8\x97\x9d\x89\x89\x8e\x5a\x28\x26\x50\x29", L"\u7269\u7406\u8ba1\u7b97(&P)", kPhysicsMenu,
      static_cast<int>(sizeof(kPhysicsMenu) / sizeof(kPhysicsMenu[0]))},
     {6, "motion capture(&K)",
      "\xd3\xb0\xbc\xae\xdd\xb7\xac\xcc\xdf\xc1\xac\x28\x26\x4b\x29",
-     kMocapMenu,
+     L"\u52a8\u4f5c\u6355\u6349(&K)", kMocapMenu,
      static_cast<int>(sizeof(kMocapMenu) / sizeof(kMocapMenu[0]))},
     {7, "help(&H)",
-     "\x83\x77\x83\x8b\x83\x76\x28\x26\x48\x29", kHelpMenu,
+     "\x83\x77\x83\x8b\x83\x76\x28\x26\x48\x29", L"\u5e2e\u52a9(&H)", kHelpMenu,
      static_cast<int>(sizeof(kHelpMenu) / sizeof(kHelpMenu[0]))},
 };
 
 }  // namespace
 
-void RefreshMenuLanguage(MMDApp* app) {  // VA 0x0040B5A0
+namespace {
+
+// ASCII -> UTF-16 in-place helper for the Chinese fallback (items whose zh
+// translation is not filled in yet keep the English label).
+void WideFromAscii(wchar_t* buf, int cap, const char* ascii) {
+    int i = 0;
+    for (; i < cap - 1 && ascii != nullptr && ascii[i] != '\0'; ++i)
+        buf[i] = static_cast<unsigned char>(ascii[i]);
+    buf[i] = L'\0';
+}
+
+// Shift-JIS byte string -> UTF-16.  The menu's JP literals are raw SJIS bytes
+// taken verbatim from the original image; the ANSI (A) menu APIs decode them
+// with the *system* code page, which garbles them on non-Japanese locales.
+void SJisToWide(wchar_t* buf, int cap, const char* sjis) {
+    if (sjis == nullptr) {
+        if (cap > 0) buf[0] = L'\0';
+        return;
+    }
+    const int n = MultiByteToWideChar(932 /*CP_SHIFT_JIS*/, 0, sjis, -1,
+                                      buf, cap);
+    if (n <= 0 && cap > 0)
+        buf[0] = L'\0';
+}
+
+}  // namespace
+
+void RefreshMenuLanguage(MMDApp* app) {  // was Sub40B5A0, VA 0x0040B5A0
     HWND hwnd = app->state.hwnd;
     HMENU menu = GetMenu(hwnd);
-    MENUITEMINFOA mii;
-    std::memset(&mii, 0, sizeof(mii));
-    mii.cbSize = sizeof(mii);
-    mii.fMask = 0x40 /*MIIM_STRING*/;
-    const bool english = app->state.englishUI != 0;
+    MENUITEMINFOW miiw;
+    std::memset(&miiw, 0, sizeof(miiw));
+    miiw.cbSize = sizeof(miiw);
+    miiw.fMask = 0x40 /*MIIM_STRING*/;
+    const bool english = app->state.englishUI == 1;
+    const bool chinese = app->state.englishUI == 2;
+    wchar_t wideBuf[256];
+    wchar_t titleBuf[256];
 
     for (const MenuBlock& block : kMenus) {
-        ModifyMenuA(menu, block.topPos, 0x400 /*MF_BYPOSITION*/, 0,
-                    english ? block.titleEn : block.titleJp);
+        if (chinese && block.titleZh != nullptr) {
+            miiw.dwTypeData = const_cast<wchar_t*>(block.titleZh);
+        } else {
+            if (english)
+                WideFromAscii(titleBuf, 256, block.titleEn);
+            else
+                SJisToWide(titleBuf, 256, block.titleJp);
+            miiw.dwTypeData = titleBuf;
+        }
+        // Change only the caption; ModifyMenu without MF_POPUP replaces
+        // the popup with a command and loses its submenu and command state.
+        SetMenuItemInfoW(menu, block.topPos, TRUE, &miiw);
         HMENU sub = GetSubMenu(menu, block.topPos);
         for (int i = 0; i < block.itemCount; ++i) {
             const MenuText& item = block.items[i];
-            mii.dwTypeData =
-                const_cast<char*>(english ? item.en : item.jp);
-            SetMenuItemInfoA(sub, static_cast<UINT>(item.pos), TRUE, &mii);
+            if (chinese && item.zh != nullptr) {
+                miiw.dwTypeData = const_cast<wchar_t*>(item.zh);
+            } else {
+                if (chinese)
+                    WideFromAscii(wideBuf, 256, item.en);
+                else if (english)
+                    WideFromAscii(wideBuf, 256, item.en);
+                else
+                    SJisToWide(wideBuf, 256, item.jp);
+                miiw.dwTypeData = wideBuf;
+            }
+            SetMenuItemInfoW(sub, static_cast<UINT>(item.pos), TRUE, &miiw);
         }
     }
 
@@ -830,21 +881,36 @@ void RefreshMenuLanguage(MMDApp* app) {  // VA 0x0040B5A0
     D3DRenderer* renderer = app->Renderer();
     if (renderer != nullptr && renderer->stereoEnabled != 0) {
         HMENU sub = GetSubMenu(menu, 2);
-        mii.dwTypeData = const_cast<char*>(
-            english ? "NDIVIA 3D Vision(Alt+Enter)"
-                    : "\x4e\x56\x49\x44\x49\x41\x20\x33\x44\x20\x56\x69"
-                      "\x73\x69\x6f\x6e\x95\x5c\x8e\xa6\x28\x41\x6c\x74"
-                      "\x2b\x45\x6e\x74\x65\x72\x29");
-        SetMenuItemInfoA(sub, 0x1C, TRUE, &mii);
+        if (chinese) {
+            miiw.dwTypeData = const_cast<wchar_t*>(L"NVIDIA 3D Vision(Alt+Enter)");
+        } else if (english) {
+            miiw.dwTypeData = const_cast<wchar_t*>(L"NVIDIA 3D Vision(Alt+Enter)");
+        } else {
+            SJisToWide(wideBuf, 256,
+                       "\x4e\x56\x49\x44\x49\x41\x20\x33\x44\x20\x56\x69"
+                       "\x73\x69\x6f\x6e\x95\x5c\x8e\xa6\x28\x41\x6c\x74"
+                       "\x2b\x45\x6e\x74\x65\x72\x29");
+            miiw.dwTypeData = wideBuf;
+        }
+        SetMenuItemInfoW(sub, 0x1C, TRUE, &miiw);
     }
 
     // the "enhance model" submenu hangs below help item 2
     {
         HMENU sub = GetSubMenu(GetSubMenu(menu, 7), 2);
         for (const MenuText& item : kEnhanceMenu) {
-            mii.dwTypeData =
-                const_cast<char*>(english ? item.en : item.jp);
-            SetMenuItemInfoA(sub, static_cast<UINT>(item.pos), TRUE, &mii);
+            if (chinese && item.zh != nullptr) {
+                miiw.dwTypeData = const_cast<wchar_t*>(item.zh);
+            } else {
+                if (chinese)
+                    WideFromAscii(wideBuf, 256, item.en);
+                else if (english)
+                    WideFromAscii(wideBuf, 256, item.en);
+                else
+                    SJisToWide(wideBuf, 256, item.jp);
+                miiw.dwTypeData = wideBuf;
+            }
+            SetMenuItemInfoW(sub, static_cast<UINT>(item.pos), TRUE, &miiw);
         }
     }
 
@@ -853,7 +919,7 @@ void RefreshMenuLanguage(MMDApp* app) {  // VA 0x0040B5A0
 // VA 0x0042AE20 - path copy: real port moved to src/media/media_load.cpp.
 
 // ===========================================================================
-// 0x4076E0 (x64 sub_7FF7CB428F30) - ReloadTextureCache:
+// 0x4076E0 (x64 sub_7FF7CB428F30) - ReloadTextureCache (was Sub4076E0):
 // renderer refresh after the toon reload (menu 278, thiscall on the
 // renderer object).  Walks the shared 10000-entry texture cache and
 // reloads every named entry from disk via D3DXCreateTextureFromFileExW

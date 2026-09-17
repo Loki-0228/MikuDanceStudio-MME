@@ -47,6 +47,7 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/path_workspace.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/effect_api.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -112,7 +113,7 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
     //   a2 hwnd, a3 path, a4 sub1d574 (device), unusedA06CE (a5) app+0xA06CE
     //   (unused), boxGate (a6) constant 1 (message-box gate), englishUi
     //   (a7) EnglishUI *(app+0xA0B4C) (stored to m+12740), sub048 (a8) the
-    //   0x048 pointer *(app+0x9EDB0), typed as PhysicsScene* (stored to
+    //   Sub048 pointer *(app+0x9EDB0), typed as PhysicsScene* (stored to
     //   m+60 - the physics scene wrapper: gizmos +4..44, constraint-id
     //   counter +56, btDiscreteDynamicsWorld* +64), a9 appPathBuf.
     const bool enData = englishUi != 0;
@@ -127,6 +128,9 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
     ResolveUserFilePath(paths, path);                         // 0x4089F0
     wcscpy_s(model.path, 0x100, paths.resolvedPath);
 
+    // MME records this wide path when associating the index-buffer output
+    // slot with the model ID (the PMX parser shares this open path).
+    NotifyEffectFileOpen(model.path);
     int fh = -1;
     errno_t err = _wsopen_s(&fh,
         model.path,
@@ -394,8 +398,8 @@ bool ModelLoadPMD(unsigned char* m, HWND hwnd, const wchar_t* path,
         _read(fh, bone->position, sizeof(bone->position));
         bone->rotQuat[3] = 1.0f;    // scale x/y
         bone->rotQuat2[3] = 1.0f;
-        for (int f = 0; f < 16; ++f)  // +180 identity (x64 0x7FF7CB4D34B0)
-            bone->matWorld[f] = (f % 5 == 0) ? 1.0f : 0.0f;
+        std::memset(bone->matWorld, 0, sizeof(bone->matWorld));
+        bone->matWorld[10] = bone->matWorld[15] = 1.0f;
         bone->slotIndex = -1;
         bone->rigidIdx = -296;
         bone->flags |= mikudancestudio::mdl::kBoneFlagVisible;

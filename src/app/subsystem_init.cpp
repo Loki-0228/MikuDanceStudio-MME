@@ -1,20 +1,20 @@
 // ===========================================================================
 // Residual subsystem-init / wave-seek ports (phase scaffolding cleanup)
 // ===========================================================================
-// VA 0x004C2450 - InitAudioContext : zeroing ctor of the 0x25C audio/timeline ctx
-// VA 0x00401360 - PhysicsSceneInit  : zeroing ctor of the 0x48 physics-scene wrapper
+// VA 0x004C2450 - Sub025CInit : zeroing ctor of the 0x25C audio/timeline ctx
+// VA 0x00401360 - Sub048Init  : zeroing ctor of the 0x48 physics-scene wrapper
 // VA 0x004C34A0 - WaveSeekAndFeed  : wave seek + feed-thread spawn (restart path)
 //
 // Not re-ported here (already covered elsewhere):
 //   0x004C2760 - WaveStartPlayback, real body in src/media/wave_audio.cpp
-//                (its former no-op twin in src/app/late_ports.cpp has since
+//                (its former no-op twin in src/unported/stubs.cpp has since
 //                been deleted; wave_audio.cpp is the only definition).
 //   0x0044D610 - RebuildModelModePanel ("PostModelReload3"), real body in
 //                src/window/ui_model_reload.cpp; two field deviations found
 //                against the disassembly are fixed in that file.
 //
-// NOTE: the no-op InitAudioContext/PhysicsSceneInit/WaveSeekAndFeed twins formerly
-// kept in src/app/late_ports.cpp are gone; this TU holds the only (full
+// NOTE: the no-op Sub025CInit/Sub048Init/WaveSeekAndFeed twins formerly
+// kept in src/unported/stubs.cpp are gone; this TU holds the only (full
 // port) definitions, so there is no duplicate-symbol hazard any more.
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
@@ -154,14 +154,14 @@ void __cdecl WaveFeedThread(void* ctx) {
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// VA 0x004C2450 - InitAudioContext(this): partial zeroing of the 0x25C audio/
+// VA 0x004C2450 - Sub025CInit(this): partial zeroing of the 0x25C audio/
 // timeline context right after the 0x47A648 allocation.  Original op order
 // kept: the wave path's first wchar, the English-UI flag copy, both waveform
 // array pointers, and the trailing dword at +0x258.  (The caller already
 // memset the whole 0x25C block to zero, so these writes are value-neutral -
 // ported verbatim anyway.)
 // ---------------------------------------------------------------------------
-void InitAudioContext(void* sub) {
+void Sub025CInit(void* sub) {
     auto* audio = static_cast<WaveAudioContext*>(sub);
     audio->path[0] = L'\0';                                    // 0x4C2452
     audio->englishUI = 0;                                      // 0x4C2456
@@ -171,7 +171,7 @@ void InitAudioContext(void* sub) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x401360 - PhysicsSceneInit(this): zeroing ctor of the 0x48 physics-scene
+// VA 0x401360 - Sub048Init(this): zeroing ctor of the 0x48 physics-scene
 // wrapper (stored at model+60 by the .pmd/.pmx loaders).  Zeroes dwords 1..17
 // (bytes 0x04..0x44) in the original's unrolled order; dword 0 is left alone
 // (the caller zeroed the whole 0x48 block first).  No destructor calls -
@@ -213,7 +213,7 @@ void PhysicsSceneInit(PhysicsScene* scene) {
 // The original returns char (0 no-buffer / 1 spawned); the shared header
 // declares the return void and no caller checks it - kept void.
 // ---------------------------------------------------------------------------
-void WaveSeekAndFeed(void* obj, double seconds) {
+void WaveSeekAndFeed(void* obj, double seconds) {  // was Sub4C34A0
     auto* audio = static_cast<WaveAudioContext*>(obj);
     if (audio->streamingBuffer == nullptr)                      // 0x4C34A4
         return;                                                 // 0x4C34AA
@@ -235,7 +235,7 @@ void WaveSeekAndFeed(void* obj, double seconds) {
 }
 
 // ---------------------------------------------------------------------------
-// VA 0x004C3530 - WaveRestartAt(this, double): audio-timer
+// VA 0x004C3530 - WaveRestartAt(this, double) (was Sub4C3530): audio-timer
 // restart (the seek
 // entry from ui_frame_step / ui_mouse_misc / ui_editor_click and the frame
 // drivers 0x430F20/0x4312E0/0x446A70/0x44AAA0).  Sequence verbatim:
@@ -245,7 +245,7 @@ void WaveSeekAndFeed(void* obj, double seconds) {
 // ctx dword at +0x258, WaveSeekAndFeed(this, seconds), SetTimer(hwnd, 0x64,
 // 0x21, 0).
 // ---------------------------------------------------------------------------
-void WaveRestartAt(void* obj, double seconds) {  // VA 0x004C3530
+void WaveRestartAt(void* obj, double seconds) {  // was Sub4C3530, VA 0x004C3530
     auto* audio = static_cast<WaveAudioContext*>(obj);
     HWND hwnd = audio->mainWindow;                              // 0x4C3533
     KillTimer(hwnd, 0x64);                                      // 0x4C3539

@@ -8,11 +8,7 @@
 // 0x4089F0: __thiscall(appPathBuf, widePath).  Resolves a user file by
 //   probing, in order: "%s%s"(buf+512 dir, tail-from-"UserFile"), the same
 //   with buf+0, the raw path, then the UserFile\Model / UserFile\Wave /
-//   UserFile\Accessory fallbacks.  The last 3 wchars (&path[len-3]) are
-//   compared case-sensitively against the explicit variants PMD/pmd,
-//   WAV/wav, X/x, VAC/vac (inlined wcscmp at 0x7FF7CB429D78..0x7FF7CB42A033;
-//   the one-char "X"/"x" forms compare 2 words and can never match a
-//   3-wchar tail in the original either - kept as-is).  Result is
+//   UserFile\Accessory fallbacks by extension (pmd/wav/x/vac).  Result is
 //   stored wide at buf wchar 1512 (byte 3024); 0 on failure.
 //
 // 0x407DA0: __thiscall(renderSub, ansiName, wideOut, sizeInWords, dirW).
@@ -102,7 +98,7 @@ const wchar_t* ResolveUserFilePath(PathResolutionWorkspace& workspace,
     const wchar_t* ext = &path[len - 3];
     const wchar_t* scan = ext;
     const wchar_t* sub = nullptr;
-    if (wcscmp(scan, L"pmd") == 0 || wcscmp(scan, L"PMD") == 0)
+    if (wcscmp(scan, L"pmd") == 0 || wcscmp(scan, L"P") == 0)
         sub = L"UserFile\\Model";
     else if (wcscmp(&path[len - 3], L"wav") == 0 ||
              wcscmp(&path[len - 3], L"WAV") == 0)
@@ -110,7 +106,7 @@ const wchar_t* ResolveUserFilePath(PathResolutionWorkspace& workspace,
     else if ((wcscmp(&path[len - 3], L"x") == 0 ||
               wcscmp(&path[len - 3], L"X") == 0) ||
              (wcscmp(&path[len - 3], L"vac") == 0 ||
-              wcscmp(&path[len - 3], L"VAC") == 0))
+              wcscmp(&path[len - 3], L"V") == 0))
         sub = L"UserFile\\Accessory";
     if (sub == nullptr) {
         out[0] = L'\0';

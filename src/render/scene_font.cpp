@@ -27,6 +27,7 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/ui_translation.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -129,7 +130,7 @@ bool InitSceneFontTexture(MMDApp* app) {
     DeleteObject(pen);
 
     for (const Glyph& g : kAtlas)
-        DrawGlyph(app, g.s, hdc, 30, g.x, g.y, 0, 0, 255, 1);
+        DrawUiGlyph(app, g.s, hdc, 30, g.x, g.y, 0, 0, 255, 1);
 
     surface->ReleaseDC(hdc);
     DeleteDC(hdc);

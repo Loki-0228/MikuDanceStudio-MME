@@ -37,7 +37,7 @@
 //   0x7FF7CB44C560  ModelStandardPoseSetup(模型, [0xA1E14]==4,
 //                  kinectMirrorEnabled(0xA1370/x86 0xA03DC),
 //                  kinectInitLostBone(0xA1371/x86 0xA03DD))——x64
-//                  sub_7FF7CB4F3A50 的孪生，port 已在 dialog_helpers.cpp；
+//                  sub_7FF7CB4F3A50 的孪生，port 已在 dialog_gaps.cpp；
 //                  返回“刚才是否在录制”，为 0 -> 跳到 gate B（块尾）。
 //   0x7FF7CB44C5A4  DisableKinect(app)——x64 sub_7FF7CB4C6F00 = x86 0x42A020
 //                  的孪生，port 已在 oni_kinect.cpp。
@@ -79,15 +79,15 @@
 namespace mikudancestudio {
 
 // 既有孪生（定义见各自文件）。
-void ModelVertexHistoryPush(unsigned char* model, int samples);   // dialog_helpers.cpp, x86 0x4B75C0
-char ModelStandardPoseSetup(unsigned char* model, bool recordEnable,     // dialog_helpers.cpp, x64 0x4F3A50
+void ModelVertexHistoryPush(unsigned char* model, int samples);   // dialog_gaps.cpp, x86 0x4B75C0
+char ModelStandardPoseSetup(unsigned char* model, bool recordEnable,     // dialog_gaps.cpp, x64 0x4F3A50
                             unsigned char mirrorLeftRight,
                             unsigned char skeletonFlag);
 void CurvePanelRepaint(MMDApp* app);                                // misc_dialogs.cpp, x64 0x482BB0
 
 namespace {
 
-// ---- 追踪缓冲（0x3B3760 字节，308 字节/样本，dialog_helpers.cpp 分配）-------
+// ---- 追踪缓冲（0x3B3760 字节，308 字节/样本，dialog_gaps.cpp 分配）-------
 // 指针存模型 +8620（x64 0x21E8），游标为 matMisc（x64 0x3CA0/x86 14584）。
 unsigned char* PoseTraceBuffer(unsigned char* model) {
     return static_cast<unsigned char*>(mdl::PoseTraceBuffer(model));

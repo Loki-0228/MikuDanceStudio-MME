@@ -30,6 +30,7 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/ui_translation.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -39,7 +40,7 @@ namespace {
 #include "wm_paint_labels.inc"
 
 void Lbl(MMDApp* a, const char* s, HDC hdc, int size, int x, int y) {
-    DrawGlyph(a, s, hdc, size, x, y,
+    DrawUiGlyph(a, s, hdc, size, x, y,
               a->UiTextRed(), a->UiTextGreen(), a->UiTextBlue(), 0);
 }
 

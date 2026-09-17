@@ -82,14 +82,14 @@ constexpr const char kJpMicWindowRegFailed[] =
 }  // namespace
 
 
-// VA 0x00408EA0 - InitDShowRecorder: zeroing initializer of the 0x6C AVI-codec
+// VA 0x00408EA0 - Sub06CInit: zeroing initializer of the 0x6C AVI-codec
 // subsystem object behind app+0xA06C0.  The original zeroes dwords 0..24
 // and 26, skipping dword 25 (bytes 100..103) - a VC9-unrolled quirk kept
 // verbatim.  The +0x68 capture-interface pointer stays null until the
 // AVI-dump dialog fills it; the 0x9EDD4 step-flag byte is allocated by
 // CreateUIControls 0x467336 (see ui_init.cpp) and must never be null -
 // 0x46E8F5/0x46F08C/0x464A28 dereference it unconditionally.
-void InitDShowRecorder(DShowRecorder* recorder) {
+void Sub06CInit(DShowRecorder* recorder) {
     const std::int32_t selectedCodec = recorder->selectedCodec;
     std::memset(recorder, 0, sizeof(*recorder));
     recorder->selectedCodec = selectedCodec;
@@ -113,19 +113,19 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
         operator new(sizeof(WaveAudioContext), std::nothrow));  // 0x47A648
     s.Audio() = audioContext;
     std::memset(audioContext, 0, sizeof(WaveAudioContext));
-    InitAudioContext(audioContext);                                      // 0x4C2450
+    Sub025CInit(audioContext);                                      // 0x4C2450
 
     auto* recorder = static_cast<DShowRecorder*>(
         operator new(sizeof(DShowRecorder), std::nothrow));     // 0x47A698
     s.Recorder() = recorder;
     recorder->compressor = nullptr;
-    InitDShowRecorder(recorder);                                       // 0x408EA0
+    Sub06CInit(recorder);                                       // 0x408EA0
 
     void* sub04b0 = operator new(sizeof(mdl::AccessoryRecord),
                                  std::nothrow);                 // 0x47A6E1
     s.AxisMeshObject() = sub04b0;
     *static_cast<std::uint32_t*>(sub04b0) = 0;
-    InitAccessoryRecord(sub04b0);                                      // 0x4C4760
+    Sub04B0Init(sub04b0);                                      // 0x4C4760
 
     // 0x47A727: allocation size follows the restored PhysicsScene layout
     // (x86 0x48 / x64 0x90, pinned by static_assert).
@@ -400,8 +400,9 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
                 *close = L'\0';
             wcscpy_s(destination, 0x100, app->EnvFileName() + 1);
         }
-        // TODO(port): verify aP_7/aP_8/aP_9 (Shift-JIS) are the upper-case
-        // extensions ".PMM"/".PMD"/".PMX"; assumed from context.
+        // TODO(port): aP_7/aP_8/aP_9 are the upper-case extensions
+        // ".PMM"/".PMD"/".PMX" - assumed from context, unverified against
+        // the binary.  DEFERRED: docs/PORTING_STATUS.md STARTUP-EXT.
         // The original passes a separate 256-wchar stack local as
         // ExtractDirFromPath's output (its +512 offset lands in an adjacent
         // local); `destination` keeps the full path.  Port fix found by
@@ -429,7 +430,9 @@ bool InitMainWindowAndD3D(MMDApp* app, void* hInstanceIn, int nShowCmd) {
     std::memset(&wndpl, 0, sizeof(wndpl));
     wndpl.length = 44;
     wndpl.flags = 2;                    // WPF_SETMINPOSITION? original: 2
-    wndpl.showCmd = 2 * startMaximized + 1;       // SW_SHOWNORMAL / SW_SHOWMAXIMIZED
+    // Open maximized by default.  The saved rect (X/Y/nWidth/nHeight) is still
+    // written below so "restore" returns to the last non-maximized size.
+    wndpl.showCmd = SW_SHOWMAXIMIZED;
     wndpl.rcNormalPosition.left = X;
     wndpl.rcNormalPosition.top = Y;
     wndpl.rcNormalPosition.right = X + nWidth;

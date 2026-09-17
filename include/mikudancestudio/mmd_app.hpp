@@ -30,6 +30,7 @@
 #include "mikudancestudio/physics_scene.hpp"
 #include "mikudancestudio/path_workspace.hpp"
 #include "mikudancestudio/wave_audio_context.hpp"
+#include "mikudancestudio/keyboard_input.hpp"
 
 namespace mikudancestudio {
 
@@ -181,6 +182,8 @@ public:
     // functions taking MMDApp* read and write `app->state.<field>` exactly
     // like the original's `this-><field>`.
     MMDAppState state;
+
+    LetterHotkeyState& LetterHotkeys() { return m_letterHotkeys; }
 
     // Frame-range output dialog HWND (x86 blob slot 0xA0B50).
     HWND& FrameRangeDialog() {
@@ -1410,13 +1413,19 @@ public:
         return reinterpret_cast<DShowRecorder*&>(state.recorder);
     }
     // AccessoryRecord slot that carries the coordinate-axis gizmo X-file
-    // mesh (was sub04b0 / 0x04B0(); 0x4B0 obj, freed via DisposeAccessory).
+    // mesh (was sub04b0 / Sub04B0(); 0x4B0 obj, freed via DisposeAccessory).
     void*& AxisMeshObject()        { return state.axisMeshObject; }
     // Physics scene wrapper ("0x48 object"), allocated in
     // InitMainWindowAndD3D, filled by SceneConstruct; see physics_scene.hpp.
     PhysicsScene*& Physics()        { return reinterpret_cast<PhysicsScene*&>(state.physicsScene); }
     wchar_t* ExeDir()               { return state.exeDir; }
     unsigned char& EnglishUI()      { return state.englishUI; }  // 658252
+    unsigned char EnglishUI() const { return state.englishUI; }
+    // 0 = Japanese, 1 = English, 2 = Simplified Chinese (added by the port;
+    // the original only had the EN/JP toggle at byte 658252).
+    bool IsChineseUI() const        { return state.englishUI == 2; }
+    bool IsEnglishUI() const        { return state.englishUI == 1; }
+    bool IsJapaneseUI() const       { return state.englishUI == 0; }
 
     // User directory names (wchar_t[1000] each, 0x0047A5B0)
     wchar_t* DirModel()   { return state.dirModel; }
@@ -1443,6 +1452,8 @@ public:
 
 
 private:
+
+    LetterHotkeyState m_letterHotkeys;
 
 #if defined(_M_X64)
     // In the original x86 blob, 0x9E180 is a D3DLIGHT9 overlay spanning

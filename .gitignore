@@ -2,6 +2,7 @@
 build/
 build-*/
 out/
+dist/
 
 # Conan
 recipes/bullet275/bullet-src/
@@ -11,6 +12,8 @@ __pycache__/
 *.pyc
 
 # Binaries / artifacts
+logs/
+*.dmp
 *.exe
 *.dll
 *.lib
@@ -41,3 +44,15 @@ crashdump/
 # Smoke-test artifacts
 _smoke_dump/
 _smoke_*.txt
+# 会话/rollout 记录（不入库）
+rollout-*.jsonl
+
+# 参考发行包（原版二进制，不入库）
+MMD932/
+/MikuMikudance 926 CHS/
+
+# 构建日志
+build.log
+
+# 重构解耦版子项目（独立 git 仓库，不纳入本仓库跟踪）
+mmd-refactor/

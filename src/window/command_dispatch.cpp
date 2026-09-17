@@ -6,9 +6,9 @@
 // below (each keeps its own case -> VA mapping in the header comment):
 //   0x000..0x0FF  File menu          200..250  command_file_menu.cpp
 //   0x0FB..0x12E  View/option menu   251..302  command_view_menu.cpp
-//   0x190..0x1C1  control notif.     400..449  command_frame_edit.cpp
-//   0x1C2..0x1F3  control notif.     450..499  command_panel_toggles.cpp
-//   0x1F4..0x237  control notif.     500..567  command_frame_register.cpp
+//   0x190..0x1C1  control notif.     400..449  command_control_400.cpp
+//   0x1C2..0x1F3  control notif.     450..499  command_control_450.cpp
+//   0x1F4..0x237  control notif.     500..567  command_control_500.cpp
 // The 19 cases implemented directly below (200 / 0xC9..0xDC) predate the
 // family split and stay here; everything else funnels to the families.
 //
@@ -19,7 +19,7 @@
 // combos 0x1B4/0x1BB/0x1D7/0x1C1/0x1C2/0x1DA/0x1DB/0x1F8/0x1FD/0x202/0x207/
 // 0x1B1/0x1B2 in this fixed order.  That chain is ported below as
 // DefaultSelChangeChain (control 0x1B4 heads the original chain but stays
-// ported as family case 436 in command_frame_edit.cpp, equivalent
+// ported as family case 436 in command_control_400.cpp, equivalent
 // semantics).  x86 handler VA per control:
 //   0x1B4 0x4828AA  0x1BB 0x48E214  0x1D7 0x48E2A4  0x1C1 0x48E37C
 //   0x1C2 0x48E62F  0x1DA 0x48E75E  0x1DB 0x48E8FD  0x1F8 0x48EA48
@@ -41,6 +41,7 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 
 namespace mikudancestudio {
 
@@ -428,6 +429,7 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
 }  // namespace
 
 void CommandDispatch(HWND ctrl, WPARAM wParam) {
+    runtime_log::Write("COMMAND id=%u notification=%u", LOWORD(wParam), HIWORD(wParam));
     MMDApp* app = g_Block;
     auto& s = *app;
     HWND hwnd = static_cast<HWND>(s.Hwnd());
@@ -480,12 +482,6 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         break;
     case 0xCF:      // File: save PMM (0x489AF7) - overwrite via stored path,
         //          falling into the save-as flow (case 0xD0) when unnamed
-        // Entry guard first (x64 0x7FF7CB46E041: mov dword [rbx+54h],1 =
-        // dialogFlags[8] before the stored-path test), then the path check
-        // (cmp [rbx+0A1924h] = EnvFileName[0]): quick save via sub_7FF7CB4950A0
-        // when a path exists, else the case 0xD0 save-as flow (which raises
-        // dialogFlags[5]/enterKeyState itself inside CmdSaveScene).
-        s.state.dialogFlags[8] = 1;             // 0x7FF7CB46E041 [app+0x54]
         if (app->EnvFileName()[0] != L'\0') {
             SaveSceneFile(app);
         } else {
@@ -502,10 +498,6 @@ void CommandDispatch(HWND ctrl, WPARAM wParam) {
         CmdSaveMotion(app);
         break;
     case 0xD3: {    // View: information display toggle (0x47EAC7/0x47EB00)
-        // Entry guard (x64 0x7FF7CB45F6EE: mov dword [rbx+44h],1 =
-        // dialogFlags[4]) before the app+0x356 toggle - same pattern as
-        // sibling case 297 (command_view_menu.cpp).
-        s.state.dialogFlags[4] = 1;             // 0x7FF7CB45F6EE [app+0x44]
         auto& flag = s.state.fpsOverlayEnabled;
         if (flag != 0) {
             flag = 0;

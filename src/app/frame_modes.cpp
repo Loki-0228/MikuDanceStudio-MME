@@ -20,11 +20,18 @@
 //   camY += (prevY - curY) * scale;  camX -= (prevX - curX) * scale
 //   then 0x40D070/0x40D130 view refresh under the frame-cursor gate.
 //
-// Runtime float globals (file image differs -> initialized at runtime in the
-// original; initializer not yet located - values from the translated
-// annotations, deviation recorded in ARCHITECTURE.md):
-//   0x52B8F0 = 0.01f   0x52E9C0 = PI/180   0x52E8C0 = PI/360
-//   0x52D738 = best-evidence PI/360 (unknown, TODO(port))
+// Runtime scale globals (definitions below).  x64 empirical (2026-09-07,
+// reference image SHA-256 882C97DC..., see docs/PORTING_STATUS.md):
+//   the x64 image keeps these as FLOAT32 constant-pool entries, not
+//   doubles and not writable globals:
+//     A 0.5f   @0x14012A4F0 and @0x14012A520 (two copies)
+//     B 0.005f @0x140132C2C   C 0.05f @0x140132CB0   D 0.002f @0x140132CF0
+//   plus 0.01f @0x140132C28 (camera-translate alternative) and
+//   PI/180 float @0x140132BA4 in the same pool.  The port keeps the x86
+//   x87-shaped doubles for A/B/C (bit-level deviation vs the float32 x64
+//   pool - open recommendation in docs/PORTING_STATUS.md INIT-MOUSE-A..D);
+//   D is float32 and matches.  x86 0x52B8F0/0x52E9C0/0x52D738/0x52E8C0
+//   image bytes remain unverified (no x86 binary at hand).
 // =========================================================================//
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -519,22 +526,7 @@ void MouseInteractionBegin(MMDApp* app) {
     for (const KeySlot& slot : kKeySlots)
         PollKey(app, app->state.*slot.state, slot.key);
 
-    // Letter hotkeys share the dialog re-entry guard ints (see
-    // MMDAppState::dialogFlags): lowercase and uppercase VK pairs fold
-    // onto the same slot.
-    static constexpr struct { int key; int flagIndex; } kLetterKeys[] = {
-        {'x', 0}, {'X', 0}, {'z', 1}, {'Z', 1},
-        {'c', 2}, {'C', 2}, {'v', 3}, {'V', 3},
-        {'d', 4}, {'D', 4}, {'a', 5}, {'A', 5},
-        {'b', 6}, {'B', 6}, {'g', 7}, {'G', 7},
-        {'s', 8}, {'S', 8}, {'i', 9}, {'I', 9},
-        {'h', 10}, {'H', 10}, {'k', 11}, {'K', 11},
-        {'p', 12}, {'P', 12}, {'u', 13}, {'U', 13},
-        {'j', 14}, {'J', 14}, {'f', 15}, {'F', 15},
-        {'r', 16}, {'R', 16}, {'l', 17}, {'L', 17},
-    };
-    for (const auto& slot : kLetterKeys)
-        PollKey(app, app->state.dialogFlags[slot.flagIndex], slot.key);
+    PollLetterHotkeys(app);
 
     for (int i = 0; i < 10; ++i)
         PollKey(app, app->state.numpadKeyState[i], VK_NUMPAD0 + i);
@@ -596,8 +588,8 @@ void MouseInteractionEnd(MMDApp* app) {
 // value into the "%3.4f" display figure (best evidence: PI/180 divisor)
 double g_Scale52E9F0 = 0.20000000298023224; // VA 0x0052E9F0
 double g_Scale52E8C8 = 0.019999999552965164;// VA 0x0052E8C8
-double g_AngleDegreesScale = 180.0;               // VA 0x0052B760
-double g_AnglePiTruncated = 3.141592025756836;   // VA 0x0052B768
+double g_ConvA52B760 = 180.0;               // VA 0x0052B760
+double g_ConvB52B768 = 3.141592025756836;   // VA 0x0052B768
 
 // ---- light/camera/registry chains (raw listing 10776..11260) --------------
 // Common shape per axis mode (selector A=this+0x24==3, B=this+0xC0==3):
@@ -705,7 +697,7 @@ void ModeAngleAdjust(MMDApp* app, int axis) {
             char buf[0x100];
             sprintf_s(buf, 0x100, "%3.4f",
                       *reinterpret_cast<float*>(slot + kSlotOff[axis]) /
-                          g_AnglePiTruncated * g_AngleDegreesScale);
+                          g_ConvB52B768 * g_ConvA52B760);
             EchoEdit(app, kEdit[axis], buf);
         }
     } else {
@@ -748,7 +740,7 @@ void ModePhysicsBody(MMDApp* app, int) {
 
 // ---------------------------------------------------------------------------
 // VA 0x0041ACD0 - ApplyCameraReferenceModeChange(app, oldMode) (was
-// 0x41ACD0): camera-reference switch re-anchor
+// Sub41ACD0): camera-reference switch re-anchor
 // (command dispatch 0x47FA60/0x47FA88, control 0x213 family).  When the mode
 // byte at +0x340 (kByte340) changes, the accessory ground position stored at
 // app+0x308/+0x30C/+0xA08DC is re-anchored: both the OLD mode (the `mode`

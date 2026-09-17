@@ -68,7 +68,7 @@
 namespace mikudancestudio {
 
 // [sub1d574 + 0x1D4E0] D3D device, same fetch as RenderDeviceOf in
-// app_utilities.cpp (0x429f33: mov 0xa06c4; mov 0x1d4e0).
+// app_gap_bodies.cpp (0x429f33: mov 0xa06c4; mov 0x1d4e0).
 static IDirect3DDevice9* OniRenderDevice(MMDApp* app) {
     D3DRenderer* r = app->Renderer();
     if (r == nullptr)
