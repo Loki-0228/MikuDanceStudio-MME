@@ -108,7 +108,10 @@ maintainer 洛琪's own usage habits and can be changed or dropped as needed.
 
 ### Contributions
 
-洛琪 (GitHub: [Loki-0228](https://github.com/Loki-0228)) maintains this repository
+This repository is forked from the upstream
+[jstzwj/MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio), which carried
+out the bulk of the port and the x64 alignment. 洛琪 (GitHub:
+[Loki-0228](https://github.com/Loki-0228)) maintains this repository
 and contributes MME compatibility work, Chinese UI improvements, playback and
 input fixes, crash diagnostics, and build and release organization.
 
@@ -215,8 +218,10 @@ ctest --test-dir build -C Release --output-on-failure
 
 ### 贡献
 
-洛琪（GitHub：[Loki-0228](https://github.com/Loki-0228)）负责本仓库的维护，
-贡献包括 MME 兼容适配、中文界面改进、播放与输入修复、崩溃诊断，以及构建与发布整理。
+本仓库 fork 自上游 [jstzwj/MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio)，
+主体移植与 x64 对齐由 jstzwj 完成。洛琪（GitHub：[Loki-0228](https://github.com/Loki-0228)）
+负责本仓库的维护，贡献包括 MME 兼容适配、中文界面改进、播放与输入修复、崩溃诊断，
+以及构建与发布整理。
 
 ### 致谢
 
@@ -325,7 +330,9 @@ cmake --install build --config Release --prefix dist
 
 ### 貢献
 
-洛琪（GitHub：[Loki-0228](https://github.com/Loki-0228)）が本リポジトリを保守し、
+本リポジトリは上流の [jstzwj/MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio) からの
+fork で、移植本体と x64 対応は jstzwj によるものです。洛琪（GitHub：
+[Loki-0228](https://github.com/Loki-0228)）が本リポジトリを保守し、
 MME 互換対応、中国語 UI の改善、再生・入力の不具合修正、クラッシュ診断、
 ビルド・配布構成の整備に取り組んでいます。
 
