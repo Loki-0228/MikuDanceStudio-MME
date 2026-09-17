@@ -140,11 +140,17 @@ IME-independent physical key state, and the composition / candidate windows an
 IME creates for this thread no longer disable the shortcuts. Typing inside a
 text field still keeps the letter hotkeys off.
 
+### Contributions
+
+洛琪 (GitHub: [Loki-0228](https://github.com/Loki-0228)) maintains this repository
+and contributes MME compatibility work, Chinese UI improvements, playback and
+input fixes, crash diagnostics, and build and release organization.
+
 ### Acknowledgments
 
-* [MikuMikuDance](https://learnmmd.com/downloads/) (Yu Higuchi) — the program
-  whose behavior this project aligns to; thank you for two decades of
-  contribution to the creative community
+* Thank you to Yu Higuchi (樋口優), the original author of
+  [MikuMikuDance](https://learnmmd.com/downloads/), and to the contributors to
+  the original port for the foundation of this project.
 * [Bullet Physics](https://github.com/bulletphysics/bullet3) (zlib license)
 * The MikuMikuEffect (MME) community effect ecosystem — the 37 `Exp*` APIs in
   `exports/` are compatible with it
@@ -261,10 +267,15 @@ fail-fast 路径仍会绕过进程内处理器，此时不会有窗口。
 把 x64 版的 `d3d9.dll`、`MMHack.dll`、`MMEffect.dll` 放到 exe 同目录，菜单栏右侧就会出现
 `MMEffect` 栏目，之后按常规给模型/配件指定 `.fx` 即可。运行与构建都不需要 DirectX SDK。
 
+### 贡献
+
+洛琪（GitHub：[Loki-0228](https://github.com/Loki-0228)）负责本仓库的维护，
+贡献包括 MME 兼容适配、中文界面改进、播放与输入修复、崩溃诊断，以及构建与发布整理。
+
 ### 致谢
 
-* [MikuMikuDance](https://learnmmd.com/downloads/)（樋口優）——
-  本工程对齐行为的目标程序，感谢二十年来对创作社区的贡献
+* 感谢 [MikuMikuDance](https://learnmmd.com/downloads/) 原作者樋口優，
+  以及原移植工程的贡献者，为本项目奠定基础。
 * [Bullet Physics](https://github.com/bulletphysics/bullet3)（zlib 许可）
 * MikuMikuEffect（MME）社区特效生态 —— `exports/` 的 37 个 `Exp*` API 与之兼容
 
@@ -378,11 +389,16 @@ CRT の無効パラメータも同じ経路で報告されます。Ctrl+C で内
 参照し、IME がこのスレッド用に作る変換／候補ウィンドウもショートカットを無効化しません。
 テキスト入力欄では従来どおり英字ショートカットは無効です。
 
+### 貢献
+
+洛琪（GitHub：[Loki-0228](https://github.com/Loki-0228)）が本リポジトリを保守し、
+MME 互換対応、中国語 UI の改善、再生・入力の不具合修正、クラッシュ診断、
+ビルド・配布構成の整備に取り組んでいます。
+
 ### 謝辞
 
-* [MikuMikuDance](https://learnmmd.com/downloads/)（樋口優）——
-  本プロジェクトが動作を合わせ込む対象のプログラム。20 年にわたる創作コミュニティへの
-  貢献に感謝します
+* [MikuMikuDance](https://learnmmd.com/downloads/) の原作者である樋口優氏と、
+  本プロジェクトの基盤を築いた元の移植プロジェクトの貢献者に感謝します。
 * [Bullet Physics](https://github.com/bulletphysics/bullet3)（zlib ライセンス）
 * MikuMikuEffect（MME）コミュニティのエフェクトエコシステム —— `exports/` の
   37 個の `Exp*` API は互換性を保っています
