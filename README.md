@@ -57,13 +57,15 @@ cmake --build build --config Release
 ```
 
 Artifacts: `build/Release/MikuMikuDance.exe` (the GUI application) and
-`build/Release/Data/MMDxShow.dll` (DirectShow push source filter; the embedded
-manifest resolves the reg-free COM filter from `Data\`, so the build tree
-mirrors the shipped layout and the runtime directory holds the program only -
-static/import libraries go to `build/lib`, PDBs to `build/symbols`). At runtime
-the toon textures (`toon01.bmp..toon10.bmp`, etc.) must be placed under a
-`Data/` directory in the working directory (same layout as the original MMD).
-A release tree contains the shipped files only:
+`build/Release/Data/MMDxShow.dll` (the DirectShow push source filter). The
+filter is loaded reg-free through the embedded manifest as `Data\MMDxShow.dll`,
+so it also sits under `Data\` in the build tree, matching the shipped MMD layout;
+other build products stay out of the runtime directory (static / import libraries
+in `build/lib`, PDBs in `build/symbols`), which holds only the program and that
+`Data\` folder. MMDxShow.dll is loaded only while recording AVI, so a missing copy
+does not affect startup. The toon textures (`toon01.bmp..toon10.bmp`, etc.) must
+be placed under a `Data/` directory in the working directory. A release tree
+contains the shipped files only:
 
 ```bat
 cmake --install build --config Release --prefix dist
@@ -176,12 +178,13 @@ cmake --preset conan-default
 cmake --build build --config Release
 ```
 
-产物：`build/Release/MikuMikuDance.exe`（GUI 主程序）、
-`build/Release/Data/MMDxShow.dll`（DirectShow 推源过滤器；内嵌清单按
-`Data\MMDxShow.dll` 解析免注册 COM，因此构建目录与原版 MMD 布局一致，运行目录只留程序本体——
-静态库/导入库在 `build/lib`，PDB 在 `build/symbols`；MMDxShow.dll 只在 AVI 录制时加载，
-缺少它不影响启动）。运行时需要 `toon01.bmp..toon10.bmp` 等 toon 纹理放在工作目录
-`Data/` 下。发布目录只含发布文件：
+产物：`build/Release/MikuMikuDance.exe`（GUI 主程序）与
+`build/Release/Data/MMDxShow.dll`（DirectShow 推源过滤器）。该过滤器由内嵌清单按
+`Data\MMDxShow.dll` 免注册加载 COM，所以构建树里也放在 `Data\` 下，与原版 MMD 的发布布局
+一致；静态库/导入库、PDB 等其它构建产物不落在运行目录（分别在 `build/lib`、
+`build/symbols`），运行目录只有程序本体和这个 `Data\`。MMDxShow.dll 只在 AVI 录制时加载，
+缺少它不影响启动。运行时还需把 `toon01.bmp..toon10.bmp` 等 toon 纹理放在工作目录 `Data/`
+下。发布目录只含发布文件：
 
 ```bat
 cmake --install build --config Release --prefix dist
@@ -292,14 +295,16 @@ cmake --preset conan-default
 cmake --build build --config Release
 ```
 
-成果物：`build/Release/MikuMikuDance.exe`（GUI アプリケーション）、
-`build/Release/Data/MMDxShow.dll`（DirectShow プッシュソースフィルタ。埋め込み
-マニフェストは `Data\MMDxShow.dll` をレジストリ不要 COM として解決するため、ビルドツリーは
-配布レイアウトと同じく `Data\` に置きます。静的／インポートライブラリは `build/lib`、
-PDB は `build/symbols` に出力され、実行ディレクトリにはプログラム本体だけが残ります）。
-実行時にはトゥーンテクスチャ（`toon01.bmp..toon10.bmp` 等）を作業ディレクトリの `Data/`
-以下に配置する必要があります。テスト実行ファイルは `EXCLUDE_FROM_ALL` のため既定の
-ビルドにも配布物にも含まれません。
+成果物：`build/Release/MikuMikuDance.exe`（GUI アプリケーション）と
+`build/Release/Data/MMDxShow.dll`（DirectShow プッシュソースフィルタ）。このフィルタは
+埋め込みマニフェストにより `Data\MMDxShow.dll` としてレジストリ不要で読み込まれるため、
+ビルドツリーでも `Data\` に置かれ、オリジナル MMD と同じ配布レイアウトになります。静的／
+インポートライブラリ（`build/lib`）と PDB（`build/symbols`）は実行ディレクトリには入らず、
+実行ディレクトリはプログラム本体とこの `Data\` だけです。MMDxShow.dll は AVI 録画時にのみ
+読み込まれるため、無くても起動には影響しません。実行時にはトゥーンテクスチャ
+（`toon01.bmp..toon10.bmp` 等）を作業ディレクトリの `Data/` 以下に配置する必要があります。
+テスト実行ファイルは `EXCLUDE_FROM_ALL` のため既定のビルドにも配布物にも含まれません。
+配布ディレクトリには配布ファイルのみが含まれます：
 
 ```bat
 cmake --install build --config Release --prefix dist
