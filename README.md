@@ -117,17 +117,17 @@ input fixes, crash diagnostics, and build and release organization.
 
 ### Acknowledgments
 
-* **Yu Higuchi (樋口優)**, original author of
+- Yu Higuchi (樋口優), original author of
   [MikuMikuDance](https://learnmmd.com/downloads/), whose application provides
   the behavior and feature reference for this project.
-* **jstzwj and the upstream contributors**, for their work on the
+- [Bullet Physics](https://github.com/bulletphysics/bullet3) developers and
+  contributors, for the physics engine used in this project (zlib license).
+- jstzwj and the upstream contributors, for their work on the
   [MikuDanceStudio port](https://github.com/jstzwj/MikuDanceStudio).
-* **舞力介入P**, original author of MikuMikuEffect (MME), for bringing effect
+- 舞力介入P, original author of MikuMikuEffect (MME), for bringing effect
   extensions to MMD. See the [MME introduction coauthored by its creator](https://codezine.jp/article/detail/5997).
-* **MME community effect authors and contributors**, for sharing effects,
+- MME community effect authors and contributors, for sharing effects,
   tools, and knowledge.
-* **[Bullet Physics](https://github.com/bulletphysics/bullet3) developers and
-  contributors**, for the physics engine used in this project (zlib license).
 
 ### License
 
@@ -273,15 +273,15 @@ ctest --test-dir build -C Release -R keyboard_input_regressions --output-on-fail
 
 ### 致谢
 
-- **樋口優**：[MikuMikuDance](https://learnmmd.com/downloads/) 原作者。
+- 樋口優：[MikuMikuDance](https://learnmmd.com/downloads/) 原作者。
   原版 MMD 是本项目行为与功能对齐的基础。
-- **jstzwj 及上游贡献者**：感谢他们在
-  [MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio) 移植工程中的工作。
-- **舞力介入P**：MikuMikuEffect（MME）原作者，感谢其为 MMD 带来的特效扩展能力。
-  可参阅[作者参与撰写的 MME 介绍](https://codezine.jp/article/detail/5997)。
-- **MME 社区的特效作者与贡献者**：感谢他们创作和分享特效、工具与使用经验。
-- **[Bullet Physics](https://github.com/bulletphysics/bullet3) 开发者与贡献者**：
+- [Bullet Physics](https://github.com/bulletphysics/bullet3) 开发者与贡献者：
   本项目使用其物理引擎（zlib 许可）。
+- jstzwj 及上游贡献者：感谢他们在
+  [MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio) 移植工程中的工作。
+- 舞力介入P：MikuMikuEffect（MME）原作者，感谢其为 MMD 带来的特效扩展能力。
+  可参阅[作者参与撰写的 MME 介绍](https://codezine.jp/article/detail/5997)。
+- MME 社区的特效作者与贡献者：感谢他们创作和分享特效、工具与使用经验。
 
 ### 许可
 
@@ -391,17 +391,17 @@ MME 互換対応、中国語 UI の改善、再生・入力の不具合修正、
 
 ### 謝辞
 
-* **樋口優氏**：[MikuMikuDance](https://learnmmd.com/downloads/) の原作者。
+- 樋口優氏：[MikuMikuDance](https://learnmmd.com/downloads/) の原作者。
   オリジナル MMD の動作と機能を本プロジェクトの目標としています。
-* **jstzwj 氏および上流の貢献者の皆様**：
+- [Bullet Physics](https://github.com/bulletphysics/bullet3) の開発者・貢献者の皆様：
+  本プロジェクトで使用する物理エンジン（zlib ライセンス）に感謝します。
+- jstzwj 氏および上流の貢献者の皆様：
   [MikuDanceStudio](https://github.com/jstzwj/MikuDanceStudio) の移植作業に感謝します。
-* **舞力介入P 氏**：MikuMikuEffect（MME）の原作者。
+- 舞力介入P 氏：MikuMikuEffect（MME）の原作者。
   MMD にエフェクト拡張機能をもたらしてくださったことに感謝します。
   [作者が共著した MME 紹介記事](https://codezine.jp/article/detail/5997)もご覧ください。
-* **MME コミュニティのエフェクト作者・貢献者の皆様**：
+- MME コミュニティのエフェクト作者・貢献者の皆様：
   エフェクト、ツール、ノウハウの共有に感謝します。
-* **[Bullet Physics](https://github.com/bulletphysics/bullet3) の開発者・貢献者の皆様**：
-  本プロジェクトで使用する物理エンジン（zlib ライセンス）に感謝します。
 
 ### ライセンス
 
