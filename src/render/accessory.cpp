@@ -347,7 +347,9 @@ void RenderAccessoryFixedOne(MMDApp* app, void* accessory,
         for (DWORD i = 0; i < count; ++i) {
             ++mdl::Accessory(accessory)->currentMaterial;
             DrawSubset(accessory, i);
+            AccessoryTrace("acs order=%d mat=%u after-DrawSubset", mdl::Accessory(accessory)->order, static_cast<unsigned>(i));
             ResetAccessoryTextureStages(device);
+            AccessoryTrace("acs order=%d mat=%u after-ResetStages", mdl::Accessory(accessory)->order, static_cast<unsigned>(i));
         }
     } else {
         for (DWORD i = 0; i < count; ++i) {
@@ -371,7 +373,9 @@ void RenderAccessoryFixedOne(MMDApp* app, void* accessory,
                     ? *reinterpret_cast<void**>(mdl::Accessory(accessory)->mesh)
                     : nullptr);
             DrawSubset(accessory, i);
+            AccessoryTrace("acs order=%d mat=%u after-DrawSubset", mdl::Accessory(accessory)->order, static_cast<unsigned>(i));
             ResetAccessoryTextureStages(device);
+            AccessoryTrace("acs order=%d mat=%u after-ResetStages", mdl::Accessory(accessory)->order, static_cast<unsigned>(i));
         }
     }
     mdl::Accessory(accessory)->currentMaterial = -1;
@@ -915,7 +919,9 @@ void RenderAccessoriesFixedRange(MMDApp* app, int firstOrder,
         RenderAccessoryFixedOne(app, accessory, false);
         app->ActiveRenderObject() = nullptr;
     }
+    AccessoryTrace("acs tail: before SetAccessoryLight");
     SetAccessoryLight(app, device, false);
+    AccessoryTrace("acs tail: after SetAccessoryLight");
 }
 
 void RenderAccessoriesProjectedGroundShadow(MMDApp* app) {
@@ -1056,6 +1062,9 @@ void RenderAccessoriesEffectRange(MMDApp* app, int firstOrder,
             app->ActiveRenderObject() = nullptr;
             continue;
         }
+        AccessoryTrace("acs order=%d step=effect-branch hdr=%p",
+            mdl::Accessory(accessory)->order,
+            static_cast<void*>(sub->hdrTexture));
         app->ActiveRenderPass() = AccessoryRenderPass::Effect;
         device->SetTexture(0, sub->hdrTexture);
         device->SetTextureStageState(1, D3DTSS_TEXCOORDINDEX, 1);
@@ -1113,10 +1122,15 @@ void RenderAccessoriesEffectRange(MMDApp* app, int firstOrder,
             FxFloat4(effect, "EgColor", edge);
             FxFloat4(effect, "SpcColor", specular);
             FxFloat4(effect, "DifColor", diffuse);
+            AccessoryTrace("acs order=%d mat=%u step=effect-material",
+                mdl::Accessory(accessory)->order, static_cast<unsigned>(i));
             SelectEffectTechnique(accessory, sub, device, effect, i,
                 AccessoryScreenTexture(app));
             FxBegin(effect);
             FxBeginPass(effect);
+            AccessoryTrace("acs order=%d mat=%u step=effect-DrawSubset mesh=%p",
+                mdl::Accessory(accessory)->order, static_cast<unsigned>(i),
+                mdl::Accessory(accessory)->mesh);
             DrawSubset(accessory, i);
             FxEndPass(effect);
             FxEnd(effect);
@@ -1126,7 +1140,9 @@ void RenderAccessoriesEffectRange(MMDApp* app, int firstOrder,
         device->SetPixelShader(nullptr);
         app->ActiveRenderObject() = nullptr;
     }
+    AccessoryTrace("acs tail: before SetAccessoryLight");
     SetAccessoryLight(app, device, false);
+    AccessoryTrace("acs tail: after SetAccessoryLight");
 }
 
 }  // namespace mikudancestudio

@@ -1631,11 +1631,19 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     device->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
     device->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
     runtime_log::SetPhase("fx: accessories post-model");
+    // Per-call records for the effect tail: a fault inside d3d9 after the
+    // accessory range names the exact device call that tripped it.
+    runtime_log::Write("fx tail: before RenderAccessoriesEffectRange");
     RenderAccessoriesEffectRange(app, accessorySplit, 255);
+    runtime_log::Write("fx tail: before SetVertexShader");
     device->SetVertexShader(nullptr);
+    runtime_log::Write("fx tail: before SetPixelShader");
     device->SetPixelShader(nullptr);
+    runtime_log::Write("fx tail: before SetTexture0");
     device->SetTexture(0, nullptr);
+    runtime_log::Write("fx tail: before RestoreTextureStages");
     RestoreTextureStages(device);
+    runtime_log::Write("fx tail: after RestoreTextureStages");
     // Frame tail, x64 sub_7FF7CB4C1E60 @0x7FF7CB4C461F/0x7FF7CB4C463D (after
     // the accessory-light restore SetLight at 0x7FF7CB4C4601):
     // DESTBLEND(20)=INVSRCALPHA then FILLMODE(8)=SOLID - the same closing
