@@ -20,12 +20,19 @@
 #include <new>
 
 #include "mikudancestudio/text_encoding.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/d3dx_effect.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/mmd_app.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 
 namespace mikudancestudio {
 void RefreshRequest(int area);
@@ -359,7 +366,24 @@ void SelectEffectTechnique(void* accessory, D3DRenderer* sub,
     device->SetTexture(1, nullptr);
     device->SetTexture(2, nullptr);
     if (type == 3) {
-        device->SetTexture(1, screenTexture);
+        // Screen/reflection materials (the Ray-style stage uses these) sample
+        // the accessory screen capture.  That slot is created lazily by
+        // CaptureAccessoryScreenTexture and released on device reset, so a
+        // stale or bogus value used to travel straight into SetTexture - the
+        // observed crash is a read at 0xFFFFFFFFFFFFFFFF inside d3d9.dll.
+        // Only hand the device a plausible user-mode pointer; anything else is
+        // logged and replaced with "no texture", which the effect tolerates.
+        IDirect3DTexture9* screen = screenTexture;
+        const std::uintptr_t address =
+            reinterpret_cast<std::uintptr_t>(screen);
+        if (address != 0 && (address < 0x10000 || address == ~std::uintptr_t(0))) {
+            runtime_log::Write(
+                "FX screen texture invalid pointer=%p material=%u",
+                static_cast<const void*>(screen),
+                static_cast<unsigned>(material));
+            screen = nullptr;
+        }
+        device->SetTexture(1, screen);
         FxTechnique(effect, "DiffuseBSTextureTec");
         return;
     }
