@@ -1588,6 +1588,10 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
                 if (app->ModelNonDisplayMode() != 0)
                     break;
                 app->ActiveRenderObject() = model;
+                // Names the last object reached before a fault inside Direct3D.
+                runtime_log::Write("FX model slot=%d order=%d toon=%u", slot,
+                                   order,
+                                   static_cast<unsigned>(mdl::Mdl(model)->toonFlag));
                 if (mdl::Mdl(model)->toonFlag != 0) {
                     app->ActiveRenderPass() = AccessoryRenderPass::Effect;
                     device->SetTexture(0, sub->hdrTexture);
