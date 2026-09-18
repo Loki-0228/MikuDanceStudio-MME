@@ -19,6 +19,7 @@
 #include "mikudancestudio/frame_presentation.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/effect_api.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 
 namespace mikudancestudio {
 namespace {
@@ -388,6 +389,9 @@ void RenderFrameScene(MMDApp* app) {
 
     app->state.renderPassCount = 1;
     BeginEffectObjectRegistration();
+    // Frame-stage phases: a fault inside Direct3D then reports which stage of
+    // the frame was running (the crash window shows the phase name).
+    runtime_log::SetPhase("frame: BeginScene");
     if (FAILED(device->BeginScene()))
         return;
     InstallEffectMenuCompatibility(app);
@@ -398,6 +402,7 @@ void RenderFrameScene(MMDApp* app) {
 
     // 0x46DDF6..0x46DE5F is deliberately a loop: render callbacks may add
     // another pass by incrementing A0270 while a pass is in progress.
+    runtime_log::SetPhase("frame: render passes");
     while (app->state.renderPassCount > 0) {
         --app->state.renderPassCount;
         if (effectRenderer)
@@ -406,6 +411,8 @@ void RenderFrameScene(MMDApp* app) {
         else
             RenderModelsFixed(app);
     }
+
+    runtime_log::SetPhase("frame: compose self shadow");
 
     ComposeSelfShadow(app, sub, device);
     ComposeCallbackTexture(app, device);
