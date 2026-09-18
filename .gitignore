@@ -51,6 +51,10 @@ rollout-*.jsonl
 MMD932/
 /MikuMikudance 926 CHS/
 
+# 本地模型/动作/舞台素材（不入库）
+/MMD Dream Grassland/
+/极星动力LIVE舞台 Ray用一键渲染/
+
 # 构建日志
 build.log
 
