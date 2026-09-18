@@ -12,6 +12,9 @@
 #include <d3d9.h>
 
 #include <algorithm>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -288,6 +291,23 @@ void SetAccessoryLight(MMDApp* app, IDirect3DDevice9* device,
     device->SetLight(0, &light);
 }
 
+// Diagnostic-only real-time trace.  Nothing is opened (and no file is ever
+// created) unless MIKUDANCESTUDIO_TRACE_FILE names a path, so a normal run -
+// including every release run - still writes nothing to disk.
+void AccessoryTrace(const char* format, ...) {
+    const char* path = std::getenv("MIKUDANCESTUDIO_TRACE_FILE");
+    if (path == nullptr || path[0] == '\0')
+        return;
+    FILE* stream = std::fopen(path, "a");
+    if (stream == nullptr)
+        return;
+    va_list args;
+    va_start(args, format);
+    std::vfprintf(stream, format, args);
+    va_end(args);
+    std::fputc('\n', stream);
+    std::fclose(stream);
+}
 void RenderAccessoryFixedOne(MMDApp* app, void* accessory,
                              bool projectedGroundShadow) {
     if (accessory == nullptr || mdl::Accessory(accessory)->visible == 0)
@@ -334,12 +354,22 @@ void RenderAccessoryFixedOne(MMDApp* app, void* accessory,
             ++mdl::Accessory(accessory)->currentMaterial;
             // 0x4C4D86: texture states first, then the material copy
             // (alpha scaled by +1184) immediately before the subset draw.
+            AccessoryTrace("acs order=%d mat=%u before-texture mesh=%p screen=%p",
+                mdl::Accessory(accessory)->order, static_cast<unsigned>(i),
+                mdl::Accessory(accessory)->mesh,
+                static_cast<void*>(AccessoryScreenTexture(app)));
             ConfigureFixedTexture(accessory, sub, device, i,
                                   AccessoryScreenTexture(app));
             D3DMATERIAL9 material =
                 *reinterpret_cast<D3DMATERIAL9*>(materials + 68 * i);
             material.Diffuse.a *= mdl::Accessory(accessory)->opacity;
             device->SetMaterial(&material);
+            AccessoryTrace("acs order=%d mat=%u before-DrawSubset mesh=%p vtbl=%p",
+                mdl::Accessory(accessory)->order, static_cast<unsigned>(i),
+                mdl::Accessory(accessory)->mesh,
+                mdl::Accessory(accessory)->mesh != nullptr
+                    ? *reinterpret_cast<void**>(mdl::Accessory(accessory)->mesh)
+                    : nullptr);
             DrawSubset(accessory, i);
             ResetAccessoryTextureStages(device);
         }
