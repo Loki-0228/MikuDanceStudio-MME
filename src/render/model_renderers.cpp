@@ -14,6 +14,7 @@
 #include <type_traits>
 
 #include "mikudancestudio/d3dx_effect.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/model_alpha_pass.hpp"
@@ -1544,6 +1545,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
 
     const int accessorySplit = std::max(0, std::min(
         app->AccessoryRenderSplitOrder(), 255));
+    runtime_log::SetPhase("fx: accessories pre-model");
     RenderAccessoriesEffectRange(app, 0, accessorySplit);
     BeginProjectedShadowPass(sub, device);
     RenderProjectedGroundShadowPass(app, device);
@@ -1576,6 +1578,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     // x64 twin sub_7FF7CB4C1E60+0x4C3570..0x4C36D0 (toonFlag dispatch at
     // model+0x3B68): order and slot both run to 0xFF (cmp edi,0FFh
     // @0x4C36CA / cmp edx,0FFh @0x4C359C).
+    runtime_log::SetPhase("fx: model draw walk");
     for (auto alphaPass : {ModelAlphaPass::Opaque, ModelAlphaPass::Translucent}) {
         for (int order = 0; order < kModelSlotCount; ++order) {
             for (int slot = 0; slot < kModelSlotCount; ++slot) {
@@ -1623,6 +1626,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
     device->SetTextureStageState(0, D3DTSS_TEXCOORDINDEX, 0);
     device->SetSamplerState(0, D3DSAMP_ADDRESSU, D3DTADDRESS_WRAP);
     device->SetSamplerState(0, D3DSAMP_ADDRESSV, D3DTADDRESS_WRAP);
+    runtime_log::SetPhase("fx: accessories post-model");
     RenderAccessoriesEffectRange(app, accessorySplit, 255);
     device->SetVertexShader(nullptr);
     device->SetPixelShader(nullptr);
