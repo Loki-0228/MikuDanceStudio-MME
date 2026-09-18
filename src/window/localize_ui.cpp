@@ -91,13 +91,30 @@ const wchar_t* JpControlText(int id) {
     for (const ui::ControlSpec& c : ui::kControls) {
         if (c.id != id)
             continue;
-        if (c.wtext != nullptr)
+        if (c.wtext != nullptr && c.wtext[0] != L'\0')
             return c.wtext;
-        int i = 0;
-        for (; i < 63 && c.atext != nullptr && c.atext[i] != '\0'; ++i)
-            buf[i] = static_cast<unsigned char>(c.atext[i]);
-        buf[i] = L'\0';
-        return buf;
+        if (c.atext != nullptr) {
+            int i = 0;
+            for (; i < 63 && c.atext[i] != '\0'; ++i)
+                buf[i] = static_cast<unsigned char>(c.atext[i]);
+            buf[i] = L'\0';
+            return buf;
+        }
+        // The JP creation string is empty (494 "select all"/501 "unregisted":
+        // the x64 reference string table carries no Japanese caption for them
+        // - tools/strcheck2_result.json - and neither does the CHS 9.26
+        // image).  Re-setting that empty string left both buttons blank in the
+        // Japanese UI, so fall back to the English caption from kEnTexts.
+        for (const TextEntry& t : kEnTexts) {
+            if (t.id != id)
+                continue;
+            int i = 0;
+            for (; i < 63 && t.en[i] != '\0'; ++i)
+                buf[i] = static_cast<unsigned char>(t.en[i]);
+            buf[i] = L'\0';
+            return buf;
+        }
+        return L"";
     }
     return L"";
 }

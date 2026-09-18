@@ -18,4 +18,12 @@ std::wstring ModelName(const mdl::ModelRecord& model, bool english);
 // UI identity comes from the resolved source file, not language-specific metadata.
 std::wstring ModelLabel(const mdl::ModelRecord& model, bool english);
 std::wstring MorphName(const mdl::MorphRecord& morph, bool english);
+// Message boxes whose text comes from the byte-exact Shift-JIS literals of the
+// original image (the JP branches) or from plain ASCII (the EN branches).
+// MessageBoxA would decode those bytes with the *system* code page and garble
+// every Japanese line on a non-Japanese Windows, so decode as CP932 and call
+// MessageBoxW.  owner is an HWND (kept as void* so this header stays
+// Windows-free); the return value matches MessageBoxW.
+int MessageBoxJp(void* owner, const char* body, const char* caption,
+                 unsigned int flags);
 }

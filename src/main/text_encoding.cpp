@@ -132,4 +132,16 @@ std::wstring MorphName(const mdl::MorphRecord& morph, bool english) {
     Decode(narrow, 932, result);
     return result;
 }
+
+int MessageBoxJp(void* owner, const char* body, const char* caption,
+                 unsigned int flags) {
+    std::wstring wideBody;
+    std::wstring wideCaption;
+    // The JP literals are byte-exact Shift-JIS; ASCII (the EN branch) decodes
+    // identically under CP932, so both branches can share this path.
+    if (!Decode(body, 932, wideBody)) wideBody = Display(body);
+    if (!Decode(caption, 932, wideCaption)) wideCaption = Display(caption);
+    return MessageBoxW(static_cast<HWND>(owner), wideBody.c_str(),
+                       wideCaption.c_str(), flags);
+}
 }

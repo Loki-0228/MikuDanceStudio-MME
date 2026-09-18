@@ -37,8 +37,11 @@
 //     WM_SETTEXT); fovRad = float(fov * 0.01745329238474369) (double mul
 //     dbl_52BB20); D3DXMatrixPerspectiveFovLH(&proj, fovRad, aspect, 1.0f,
 //     100000.0f) with aspect = locale+0x1D4EC (float), near = fld1,
-//     far = flt_52BB28 = 100000.0f; scene vtable slot 0xB0 called
-//     __stdcall(obj, 3 /*D3DTS_PROJECTION*/, &proj); RefreshRequest(-1).
+//     far = flt_52BB28 = 100000.0f; device vtable byte +0xB0 called
+//     __stdcall(device, 3 /*D3DTS_PROJECTION*/, &proj); RefreshRequest(-1).
+//     On x86 +0xB0 is 4-byte slot 44 = SetTransform; on x64 (8-byte slots)
+//     it would be slot 22 = GetGammaRamp, so the port calls
+//     IDirect3DDevice9::SetTransform directly (like the 446/448 twins).
 //   560  physics-interval ratio slider (0x230)
 //     this+0xA0D2C (658732) = (double)(10000-pos)/100000.0 (dbl_52BA00);
 //     echo "%d" (raw pos) into 561 via SetWindowTextA; this+0xA0B0D
@@ -267,13 +270,15 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
             d3dx::D3DXMATRIXF proj;
             // near = fld1 (1.0f), far = flt_52BB28 (100000.0f)
             d3dx->perspectiveFovLH(&proj, fovRad, aspect, 1.0f, 100000.0f);
-            // scene object vtable slot 0xB0: __stdcall(obj, 3, &proj)
-            void* scene = locale->device;  // 0x1D4E0
-            using SetProj = void(__stdcall*)(void*, int, void*);
-            SetProj setProj = *reinterpret_cast<SetProj*>(
-                static_cast<unsigned char*>(*reinterpret_cast<void**>(scene)) +
-                0xB0);
-            setProj(scene, 3 /*D3DTS_PROJECTION*/, &proj);
+            // The original installs the projection through the device's +0xB0
+            // vtable byte offset, which on x86 (4-byte slots) is slot 44 =
+            // IDirect3DDevice9::SetTransform.  x64 slots are 8 bytes wide, so
+            // the raw offset lands on GetGammaRamp there and the call silently
+            // did nothing (slider value changed, viewport did not).  Call the
+            // typed interface exactly like the 446/448 twins do.
+            IDirect3DDevice9* device = locale->device;  // 0x1D4E0
+            device->SetTransform(D3DTS_PROJECTION,
+                                 reinterpret_cast<const D3DMATRIX*>(&proj));
         }
         RefreshRequest(-1);
     }

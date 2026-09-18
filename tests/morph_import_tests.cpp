@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/text_encoding.hpp"
@@ -95,8 +96,18 @@ void UnicodeComboRegression() {
     model->hwnd = parent; model->boneTable = &bone;
     model->morphs = morphs.data(); model->morphCount = 4;
     auto* bytes = reinterpret_cast<unsigned char*>(model.get());
-    for (int english : {0, 1, 0}) {
-        model->physicsFlags = static_cast<unsigned char>(english);
+    // Name language is a UI-language decision (0 JP / 1 EN / 2 CHS), taken from
+    // the live UI language: the per-model physicsFlags byte used to drive it,
+    // but PMX loads never set it and pmd_load stored the raw language byte, so
+    // the tree panel and the combos could disagree (CHS showed English bone
+    // names next to Japanese morph names).
+    auto app = std::make_unique<MMDApp>();
+    MMDApp* previousBlock = g_Block;
+    g_Block = app.get();
+    for (int language : {0, 1, 2}) {
+        app->EnglishUI() = language;
+        // A stale per-model flag must not override the UI language any more.
+        model->physicsFlags = static_cast<unsigned char>(language == 1);
         model->selectedMorphs[0] = 999; model->selectedMorphs[1] = 1;
         model->selectedMorphs[2] = -1; model->selectedMorphs[3] = 0;
         PostLoadInit(bytes);
@@ -104,7 +115,7 @@ void UnicodeComboRegression() {
         SendMessageW(combos[1], CB_GETLBTEXT, 0, reinterpret_cast<LPARAM>(text));
         Check(std::wstring(text) == fullName, "full PMX Unicode name and English fallback");
         SendMessageW(combos[1], CB_GETLBTEXT, 1, reinterpret_cast<LPARAM>(text));
-        Check(std::wstring(text) == (english ? L"blink alternate" : fullName),
+        Check(std::wstring(text) == (language == 1 ? L"blink alternate" : fullName),
               "language switch preserves Unicode names");
         Check(SendMessageW(combos[1], CB_GETCURSEL, 0, 0) == 1 &&
               SendMessageW(combos[1], CB_GETITEMDATA, 0, 0) == 0 &&
@@ -115,6 +126,16 @@ void UnicodeComboRegression() {
         Check(model->selectedMorphs[0] == 3 && model->selectedMorphs[2] == 2 &&
               model->selectedMorphs[3] == -1, "stale and empty category selections reset safely");
     }
+    // The reported CHS symptom: an English flag left over from a PMX load must
+    // not flip the names while the UI is Chinese.
+    app->EnglishUI() = 2;
+    model->physicsFlags = 1;
+    PostLoadInit(bytes);
+    wchar_t chsText[256]{};
+    SendMessageW(combos[1], CB_GETLBTEXT, 1, reinterpret_cast<LPARAM>(chsText));
+    Check(std::wstring(chsText) == fullName,
+          "Chinese UI keeps the model's own names despite a stale English flag");
+    g_Block = previousBlock;
     DestroyWindow(parent);
 }
 void VerifyVmd(const wchar_t* path) {

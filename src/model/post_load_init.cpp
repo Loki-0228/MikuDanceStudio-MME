@@ -40,6 +40,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/text_encoding.hpp"
 
@@ -83,7 +84,8 @@ void RefreshMorphGroup(unsigned char* m, mdl::MorphPanel panel, int comboId,
     for (std::uint32_t i = 0; model->morphs != nullptr && i < model->morphCount; ++i) {
         const auto& morph = model->morphs[i];
         if (morph.panel != panel) continue;
-        const auto name = text_encoding::MorphName(morph, model->physicsFlags != 0);
+        const auto name = text_encoding::MorphName(
+            morph, g_Block != nullptr && g_Block->EnglishUI() == 1);
         const LRESULT row = SendMessageW(combo, CB_ADDSTRING, 0,
                                          reinterpret_cast<LPARAM>(name.c_str()));
         if (row == CB_ERR || row == CB_ERRSPACE) continue;
@@ -117,7 +119,13 @@ void PostLoadInit(unsigned char* m) {
     SendMessage(boneCombo, CB_RESETCONTENT, 0, 0);
     mdl::ModelRecord* model = mdl::Mdl(m);
     mikudancestudio::mdl::BoneRecord* bones = model->boneTable;
-    const bool useEnglishNames = model->physicsFlags != 0;
+    // The combo names follow the English UI only, exactly like the tree panel
+    // (ui_panel_sweep.cpp) and the palette.  Reading the per-model flag here
+    // was inconsistent twice over: PMX loads never set it, and pmd_load stored
+    // the raw language byte, so CHS/JP could show English bones next to
+    // Japanese morph names (and vice versa).  Naming is a UI-language
+    // decision, so take it from the live UI language.
+    const bool useEnglishNames = g_Block != nullptr && g_Block->EnglishUI() == 1;
     const int chainCount = static_cast<int>(model->ikChainCount);
     if (chainCount > 0) {
         for (int i = 0; i < chainCount; ++i) {

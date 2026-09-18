@@ -857,7 +857,15 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
                     b[2] = 0.0f;  // 0x148
                     b[3] = 0.0f;  // 0x14C
                     b[4] = 0.0f;  // 0x150
-                    // 0x154 untouched by the original
+                    // 0x154 (quat z) must be cleared as well: the change
+                    // detection above (g5) already compares it against 0.0,
+                    // so skipping the store left every Z-rotated bone with a
+                    // residual rotation after 初期化 - the reported "some
+                    // bones are not reset".  An earlier port revision carried
+                    // the store over as "untouched by the original", which is
+                    // inconsistent with g5 and with the identity this branch
+                    // is meant to write.
+                    b[5] = 0.0f;  // 0x154
                     b[6] = 1.0f;  // 0x158
                     frameFlag[i] = 1;
                 }

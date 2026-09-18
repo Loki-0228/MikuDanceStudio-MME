@@ -1820,14 +1820,17 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
                                                 : kCaptionPasteJp;
         const std::uint32_t flags =
             app->state.floatingWindow != 0 ? (MB_OKCANCEL | MB_TOPMOST) : MB_OKCANCEL;
-        if (MessageBoxA(MainHwnd(app), msg, cap, flags) != 1) {
+        // The JP bodies/captions are byte-exact Shift-JIS literals from the
+        // original image; MessageBoxA would decode them with the system code
+        // page and show mojibake on a non-Japanese Windows.
+        if (text_encoding::MessageBoxJp(MainHwnd(app), msg, cap, flags) != 1) {
             break;
         }
         if (!isAcc) {
             // ---------------- bone paste (0x485677) ----------------
             unsigned char* model = ActiveModel(app);
             if (mdl::Mdl(model)->selectedBone == -1) {
-                MessageBoxA(
+                text_encoding::MessageBoxJp(
                     MainHwnd(app),
                     app->EnglishUI() != 0 ? "Please select bone."
                                           : kMsgSelectBoneJp,
@@ -1948,7 +1951,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         // ---------------- accessary paste (0x4854B5) ----------------
         const std::uint8_t slotIdx = app->SelectedObjectSlot();
         if (app->AccessorySlot(slotIdx) == nullptr) {
-            MessageBoxA(
+            text_encoding::MessageBoxJp(
                 MainHwnd(app),
                 app->EnglishUI() != 0 ? "Please select accessary."
                                       : kMsgSelectAccJp,

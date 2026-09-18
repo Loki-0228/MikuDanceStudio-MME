@@ -107,7 +107,11 @@ void DrawPanelText(MMDApp* app, const char* text, HDC hdc, int size, int x,
 // Display-frame name row (0x42FB18/0x42FB98 and siblings).
 void DrawFrameName(MMDApp* app, const mdl::DisplayGroup& frame,
                    HDC hdc, int y, const std::uint32_t& color) {
-    const bool english = app->EnglishUI() != 0;
+    // Model names follow the *English* UI only: Chinese/Japanese show the
+    // model's own (JP) names, which is also what the 443/504/... combos built
+    // by PostLoadInit do (physicsFlags == EnglishUI() == 1).  Testing != 0
+    // made the tree English while the combos stayed Japanese under CHS.
+    const bool english = app->EnglishUI() == 1;
     DrawPanelText(app,
                   english ? frame.nameEn : frame.name,
                   hdc, 12, 12, y, color);
@@ -116,7 +120,7 @@ void DrawFrameName(MMDApp* app, const mdl::DisplayGroup& frame,
 // Rigid-group / face record name row (0x430401/0x430443, 0x43020C/0x430247).
 void DrawRecordName(MMDApp* app, const mdl::FrameGroup& record, HDC hdc, int y,
                     const std::uint32_t& color) {
-    const bool english = app->EnglishUI() != 0;
+    const bool english = app->EnglishUI() == 1;
     DrawPanelText(app,
                   english ? record.nameEn : record.name,
                   hdc, 12, 15, y, color);
@@ -135,7 +139,7 @@ void PanelPaint(MMDApp* app);  // VA 0x00414610 (defined in ui_panel_paint.cpp)
 
 void PostLanguageSweep(MMDApp* app) {
     auto& s = *app;
-    const bool english = s.EnglishUI() != 0;                        // 658252
+    const bool english = s.EnglishUI() == 1;                        // 658252
     const std::size_t slotIdx = s.SelectedModelSlot();  // 2320
     HDC panel = s.PanelDC();                                       // 724
     // listH = the 0x1D574 render wrapper's "list height" field
