@@ -1802,9 +1802,23 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         app->state.dialogFlags[15] = 1;
         const std::uint8_t opt = app->state.optflag[0];
         const bool isAcc = opt != 0;
+        // Was a silent no-op, which reads as "F does nothing" - the menu is
+        // live whenever the F key is pressed, so say why the command cannot
+        // run instead of returning without feedback.  No JP literal exists for
+        // this case in the original image (tools/strcheck2_result.json), so the
+        // English wording is shown in every language rather than inventing
+        // Shift-JIS bytes.
         const auto& clipboardCounts = app->ClipboardCounts();
         if (isAcc ? clipboardCounts.accessories == 0
                   : clipboardCounts.bones == 0) {
+            text_encoding::MessageBoxJp(
+                MainHwnd(app),
+                isAcc ? "There is no accessory frame data copied.\n"
+                        "Copy accessory frames first, then press F."
+                      : "There is no bone frame data copied.\n"
+                        "Copy bone frames first, then press F.",
+                "paste to difference flame",
+                app->state.floatingWindow != 0 ? MB_TOPMOST : MB_OK);
             break;
         }
         const char* msg = app->EnglishUI() != 0
