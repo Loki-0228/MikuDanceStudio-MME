@@ -397,12 +397,15 @@ void RenderFrameScene(MMDApp* app) {
     InstallEffectMenuCompatibility(app);
 
     const bool effectRenderer = UseEffectModelRenderer(app);
-    if (effectRenderer)
+    if (effectRenderer) {
+        runtime_log::SetPhase("frame: shadow map");
         RenderShadowMap(app, reinterpret_cast<const float*>(&frameWorld));
+    }
 
     // 0x46DDF6..0x46DE5F is deliberately a loop: render callbacks may add
     // another pass by incrementing A0270 while a pass is in progress.
-    runtime_log::SetPhase("frame: render passes");
+    runtime_log::SetPhase(effectRenderer ? "frame: models effect draw"
+                                         : "frame: models fixed draw");
     while (app->state.renderPassCount > 0) {
         --app->state.renderPassCount;
         if (effectRenderer)
