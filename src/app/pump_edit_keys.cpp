@@ -134,14 +134,20 @@ bool PumpPanelFocusChain(MMDApp* app, HWND focus) {
     // control (id 0) when any arrow key fires (order: LEFT, RIGHT, UP,
     // DOWN - independent ifs, several can fire in one frame).
     const auto arrowsToPanelRoot = [&]() {
+        // The panel root control has no id in this port (every main-panel
+        // control starts at 400), so GetDlgItem(main, 0) is NULL and
+        // SetFocus(NULL) cleared the thread focus - which killed the letter
+        // ladder and the Delete gate in one go.  Fall back to the main window.
+        const HWND root = GetDlgItem(main, 0);
+        const HWND target = root != nullptr ? root : main;
         if (state.leftKeyState == 1)
-            SetFocus(GetDlgItem(main, 0));
+            SetFocus(target);
         if (state.rightKeyState == 1)
-            SetFocus(GetDlgItem(main, 0));
+            SetFocus(target);
         if (state.upKeyState == 1)
-            SetFocus(GetDlgItem(main, 0));
+            SetFocus(target);
         if (state.downKeyState == 1)
-            SetFocus(GetDlgItem(main, 0));
+            SetFocus(target);
     };
 
     // ---- 0x44DF19: frame-scale edits 0x199 <-> 0x19A ----------------------

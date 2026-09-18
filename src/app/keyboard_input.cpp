@@ -38,16 +38,28 @@ bool IsTextEntryWindow(HWND focus) noexcept {
 }
 }  // namespace
 
+bool FocusAllowsLetterHotkeys(void* main, void* floating, void* focus) noexcept {
+    const HWND mainWindow = static_cast<HWND>(main);
+    const HWND floatingWindow = static_cast<HWND>(floating);
+    const HWND focusWindow = static_cast<HWND>(focus);
+    // A cleared thread focus must not disable the letter shortcuts: the panel
+    // pump parks focus on the panel root through GetDlgItem(main, 0), which is
+    // NULL in this port (no id-0 control exists), so SetFocus(NULL) left the
+    // whole letter ladder - and the Delete gate that also tests focus == main -
+    // dead until the user clicked a control again.
+    if (focusWindow == nullptr) return true;
+    if (!FocusAcceptsLetterHotkeys(mainWindow, floatingWindow, focusWindow))
+        return false;
+    return !IsTextEntryWindow(focusWindow);
+}
+
 bool LetterHotkeyInputAllowed(const MMDApp* app) noexcept {
     if (!app) return false;
     const HWND foreground = GetForegroundWindow();
     const HWND main = app->state.hwnd;
     const HWND floating = app->state.floatingWindow;
     if (!foreground || (foreground != main && foreground != floating)) return false;
-    const HWND focus = GetFocus();
-    if (!focus) return false;
-    if (!FocusAcceptsLetterHotkeys(main, floating, focus)) return false;
-    return !IsTextEntryWindow(focus);
+    return FocusAllowsLetterHotkeys(main, floating, GetFocus());
 }
 
 void PollLetterHotkeys(MMDApp* app) {

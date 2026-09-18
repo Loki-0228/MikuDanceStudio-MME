@@ -89,7 +89,19 @@ namespace {
 
 void PollKey(MMDApp* app, std::int32_t& keyState, int virtualKey) {
     const std::int32_t oldState = keyState;
-    const bool down = (GetKeyState(virtualKey) & 0x8000) != 0;
+    bool down = (GetKeyState(virtualKey) & 0x8000) != 0;
+    if (!down) {
+        // A Chinese/Japanese IME can consume the keystroke before the thread
+        // key-state table records it - the same reason the letter ladder also
+        // reads GetAsyncKeyState.  That global state is only meaningful while
+        // this process owns the foreground window, so gate it that way.
+        const HWND foreground = GetForegroundWindow();
+        const HWND main = app->state.hwnd;
+        if (foreground != nullptr &&
+            (foreground == main || foreground == app->state.floatingWindow) &&
+            (GetAsyncKeyState(virtualKey) & 0x8000) != 0)
+            down = true;
+    }
     std::int32_t state = 0;
     if (down)
         state = oldState == 0 ? 1 : 3;

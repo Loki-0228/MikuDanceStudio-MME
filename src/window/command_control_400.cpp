@@ -3104,6 +3104,10 @@ void CmdControl400(MMDApp* app, HWND hwnd, std::uint16_t id,
     case 423:
         DeleteMarkedKeyframes(app);
         app->SceneModified() = 1;
+        // Return focus to the main window like the sibling key commands do:
+        // the Delete shortcut gate requires focus == main, so clicking this
+        // button used to leave the focus on the button and killed the Del key.
+        SetFocus(hwnd);
         break;
 
     case 442:  // accessory edit dialog (0x0048D759) -> Cmd400_AccessoryEditDialog

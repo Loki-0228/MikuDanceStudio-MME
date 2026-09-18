@@ -80,6 +80,26 @@ int main() {
     ConsumeLetterHotkeys(app.get()); // no foreground window, even with an A edge
     std::puts("PASS dialog flags isolated and inactive consumer");
 
+    // Focus rule: a cleared focus must stay eligible (the panel pump used to
+    // SetFocus(GetDlgItem(main, 0)) == SetFocus(NULL), which silently disabled
+    // every letter shortcut and the Delete gate); a text field must not.
+    HWND owner = CreateWindowExW(0, L"STATIC", L"hotkey test", WS_OVERLAPPED,
+                                 0, 0, 320, 240, nullptr, nullptr,
+                                 GetModuleHandleW(nullptr), nullptr);
+    Check(owner != nullptr, "create hotkey test window");
+    HWND edit = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE,
+                                0, 0, 100, 20, owner, nullptr,
+                                GetModuleHandleW(nullptr), nullptr);
+    Check(edit != nullptr, "create hotkey test edit");
+    Check(FocusAllowsLetterHotkeys(owner, nullptr, nullptr),
+          "Cleared focus must keep letter shortcuts alive");
+    Check(FocusAllowsLetterHotkeys(owner, nullptr, owner),
+          "Main-window focus accepts letter shortcuts");
+    Check(!FocusAllowsLetterHotkeys(owner, nullptr, edit),
+          "Text-field focus must keep letter shortcuts off");
+    DestroyWindow(owner);
+    std::puts("PASS focus rule for the letter ladder");
+
     for (int slot : {0, 254, 255}) {
         app->SelectedModelSlot() = static_cast<std::uint8_t>(slot);
         for (int id = 494; id <= 498; ++id)

@@ -40,5 +40,9 @@ private:
 // keep working while a Chinese/Japanese IME is switched on; the poll combines
 // the thread key state with the IME-independent physical key state.
 bool LetterHotkeyInputAllowed(const MMDApp* app) noexcept;
+// The focus half of that rule, split out so it is testable without owning the
+// foreground window: a cleared focus (the panel pump used to call
+// SetFocus(NULL)) is *eligible*, a foreign or text-entry focus is not.
+bool FocusAllowsLetterHotkeys(void* main, void* floating, void* focus) noexcept;
 void PollLetterHotkeys(MMDApp* app);
 }
