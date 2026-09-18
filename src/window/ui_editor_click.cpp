@@ -699,6 +699,12 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
     {
         unsigned char* m = ActiveModel(app);
         const std::int32_t row = Div14(y - 0xA0);
+        // The row table is 200 entries and only rows that were painted carry a
+        // live record; guard the derived index instead of reading past it.
+        if (row < 0 || row >= 200) {
+            PostLanguageSweep2(app);
+            return;
+        }
         const std::int32_t idx =
             mikudancestudio::mdl::Mdl(m)->boneListRowRecord[row];
         if (idx >= 0) {
@@ -709,6 +715,11 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
                 *p = 1;
                 mikudancestudio::mdl::Mdl(m)->selectedBone = idx;
             }
+            // Repaint the label column here: the visible bone-row highlight
+            // (themeColors[34] rows in PanelPaint) is produced by
+            // PostLanguageSweep, so without it a click on a bone name changed
+            // the state but showed nothing until some later repaint.
+            PostLanguageSweep(app);
             // via 0x44702D
         } else if (idx == -999) {                       // 0xFFFFFC19
             const std::int32_t want = -1 - idx;
