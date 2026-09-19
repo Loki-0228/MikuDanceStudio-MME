@@ -14,6 +14,7 @@
 #include <type_traits>
 
 #include "mikudancestudio/d3dx_effect.hpp"
+#include "mikudancestudio/d3d_object_guard.hpp"
 #include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
@@ -366,6 +367,61 @@ void SortTransparentModelMaterials(D3DRenderer* sub, unsigned char* model,
     }
     indices->Unlock();
     vertices->Unlock();
+}
+
+// A D3D9 object handed to a vtable method must be a committed user-mode
+// address whose first qword - the vtable - points into an image's executable
+// code (see include/mikudancestudio/d3d_object_guard.hpp).  A field that was
+// never written - or was reached through an offset that only holds it on x86 -
+// otherwise reaches the device as a sentinel such as -1 and the fault surfaces
+// inside d3d9.dll, far from the caller that passed it.
+void ReportInvalidResource(const char* what, unsigned char* model,
+                           const void* pointer) noexcept {
+    runtime_log::Write("RESOURCE invalid %s=%p model=%p", what, pointer,
+                       static_cast<void*>(model));
+    runtime_log::Trace("RESOURCE invalid %s=%p model=%p index_count=%u "
+                       "vertex_count=%u", what, pointer,
+                       static_cast<void*>(model),
+                       model != nullptr
+                           ? static_cast<unsigned>(mdl::Mdl(model)->indexCount)
+                           : 0u,
+                       model != nullptr
+                           ? static_cast<unsigned>(mdl::Mdl(model)->vertexCount)
+                           : 0u);
+    if (model != nullptr) {
+        runtime_log::WritePath("RESOURCE model path", mdl::Mdl(model)->path);
+        char utf8[1024]{};
+        if (WideCharToMultiByte(CP_UTF8, 0, mdl::Mdl(model)->path, -1, utf8,
+                                sizeof(utf8), nullptr, nullptr))
+            runtime_log::Trace("RESOURCE model path=%s", utf8);
+    }
+}
+
+// Per-slot resource tripwire.  The model walk reports the first frame on which
+// a slot's vertex/index buffer stops being a plausible D3D object, so a field
+// session names the model and the moment instead of only the d3d9 fault.
+std::uint8_t g_modelResourceState[kModelSlotCount];
+
+void ValidateModelResources(unsigned char* model, int slot) noexcept {
+    if (slot < 0 || slot >= kModelSlotCount)
+        return;
+    const void* vertexBuffer = mdl::Mdl(model)->vertexBuffer;
+    const void* indexBuffer = mdl::Mdl(model)->indexBuffer;
+    const std::uint8_t state =
+        PlausibleD3dObject(vertexBuffer) && PlausibleD3dObject(indexBuffer)
+            ? 1 : 2;
+    if (g_modelResourceState[slot] == state)
+        return;
+    g_modelResourceState[slot] = state;
+    runtime_log::Write("RESOURCE model slot=%d %s vb=%p ib=%p", slot,
+                       state == 1 ? "ok" : "invalid", vertexBuffer,
+                       indexBuffer);
+    char utf8[1024]{};
+    if (WideCharToMultiByte(CP_UTF8, 0, mdl::Mdl(model)->path, -1, utf8,
+                            sizeof(utf8), nullptr, nullptr))
+        runtime_log::Trace("RESOURCE model slot=%d %s vb=%p ib=%p path=%s",
+                           slot, state == 1 ? "ok" : "invalid", vertexBuffer,
+                           indexBuffer, utf8);
 }
 
 void ModelVertexFormat(unsigned char* model, DWORD* fvf, UINT* stride) {
@@ -941,6 +997,17 @@ void DrawModelMaterials(MMDApp* app, unsigned char* model, bool effectPass,
     if (device == nullptr || materials == nullptr || vertices == nullptr ||
         indices == nullptr)
         return;
+    // A pointer that survived the null test can still be a sentinel: any code
+    // path that leaves the model's resource fields unwritten makes every
+    // SetStreamSource/SetIndices/DrawIndexedPrimitive call fault inside
+    // d3d9.dll.  Screen both buffers before the material loop binds them.
+    if (!PlausibleD3dObject(vertices) || !PlausibleD3dObject(indices)) {
+        if (!PlausibleD3dObject(vertices))
+            ReportInvalidResource("vertex_buffer", model, vertices);
+        if (!PlausibleD3dObject(indices))
+            ReportInvalidResource("index_buffer", model, indices);
+        return;
+    }
 
     DWORD fvf;
     UINT stride;
@@ -1588,6 +1655,7 @@ void RenderModelsEffect(MMDApp* app, const float frameMatrix[16]) { // 0x4277E0
                 if (app->ModelNonDisplayMode() != 0)
                     break;
                 app->ActiveRenderObject() = model;
+                ValidateModelResources(model, slot);
                 // Names the last object reached before a fault inside Direct3D.
                 runtime_log::Write("FX model slot=%d order=%d toon=%u", slot,
                                    order,

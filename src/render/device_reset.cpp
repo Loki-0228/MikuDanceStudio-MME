@@ -71,6 +71,10 @@ bool PostDeviceReset(MMDApp* app) {
     runtime_log::Write("DEVICE_RESET size=%ux%u hr=0x%08lX",
         r->presentParameters.BackBufferWidth, r->presentParameters.BackBufferHeight,
         static_cast<unsigned long>(reset));
+    runtime_log::Trace("DEVICE_RESET size=%ux%u hr=0x%08lX",
+        r->presentParameters.BackBufferWidth,
+        r->presentParameters.BackBufferHeight,
+        static_cast<unsigned long>(reset));
     // A failed Reset leaves the device lost. Do not ask effects to recreate
     // resources or issue rendering calls until a later reset succeeds.
     if (FAILED(reset))

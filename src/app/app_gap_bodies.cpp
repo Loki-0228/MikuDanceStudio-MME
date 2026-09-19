@@ -517,8 +517,15 @@ void JumpNextKeyframe(MMDApp* app) {  // 0x441070
     if (mikudancestudio::mdl::Mdl(model)->facialFrameCount != 0) {                                    // 0x441300
         int count = mikudancestudio::mdl::Mdl(model)->facialFrameCount;
         mdl::MorphKey* base = mdl::MorphKeys(model);
+        // The x86 body reads the display-frame table pointer at model+9948
+        // (= displayFrames) and walks the 23-byte morph-track records 42 bytes
+        // into it.  9948 is an x86 layout constant: on x64 displayFrames sits
+        // at +10120 and byte 9948 falls inside path[] (wchar_t[256] at +9544),
+        // so the raw offset dereferenced eight characters of the model path as
+        // a pointer.
         const unsigned char* rec =
-            *reinterpret_cast<unsigned char**>(model + 9948) + 42;
+            reinterpret_cast<const unsigned char*>(mdl::DisplayFrames(model)) +
+            42;
         do {                                                        // 0x441396
             if (rec[2] != 0) {                                      // 0x441333
                 std::uint32_t node =
@@ -773,8 +780,15 @@ void JumpPrevKeyframe(MMDApp* app) {  // 0x4414C0
     if (mikudancestudio::mdl::Mdl(model)->facialFrameCount != 0) {                                    // 0x441858
         int count = mikudancestudio::mdl::Mdl(model)->facialFrameCount;
         mdl::MorphKey* base = mdl::MorphKeys(model);
+        // The x86 body reads the display-frame table pointer at model+9948
+        // (= displayFrames) and walks the 23-byte morph-track records 42 bytes
+        // into it.  9948 is an x86 layout constant: on x64 displayFrames sits
+        // at +10120 and byte 9948 falls inside path[] (wchar_t[256] at +9544),
+        // so the raw offset dereferenced eight characters of the model path as
+        // a pointer.
         const unsigned char* rec =
-            *reinterpret_cast<unsigned char**>(model + 9948) + 42;
+            reinterpret_cast<const unsigned char*>(mdl::DisplayFrames(model)) +
+            42;
         do {                                                        // 0x441946
             if (rec[2] != 0) {                                      // 0x441890
                 std::uint32_t node =

@@ -169,6 +169,73 @@ void AppendRecentLines(int& used) noexcept {
     }
 }
 
+// ---- faulting backtrace ---------------------------------------------------
+// A fault inside a system DLL (d3d9.dll above all) names only that module in
+// the exception record; the callers that made the fatal call are the part the
+// report actually needs.  The chain is therefore unwound from the faulting
+// context with the kernel-provided table walker, which reads the already
+// mapped .pdata of every image: no allocation, no symbol handler, no file.
+constexpr int kBacktraceFrames = 24;
+void* backtraceFrames[kBacktraceFrames];
+int backtraceCount = 0;
+
+void CaptureBacktrace(const CONTEXT* context) noexcept {
+#if defined(_M_X64)
+    backtraceCount = 0;
+    if (context == nullptr) return;
+    CONTEXT current = *context;
+    backtraceFrames[backtraceCount++] = reinterpret_cast<void*>(current.Rip);
+    while (backtraceCount < kBacktraceFrames && current.Rip != 0) {
+        DWORD64 imageBase = 0;
+        PRUNTIME_FUNCTION entry =
+            RtlLookupFunctionEntry(current.Rip, &imageBase, nullptr);
+        if (entry == nullptr) {
+            // Leaf function: no unwind data, the return address is on top of
+            // the stack.  The stack being walked is the one this handler is
+            // already running on, so the read stays inside a mapped page.
+            const DWORD64* stack = reinterpret_cast<const DWORD64*>(current.Rsp);
+            if (stack == nullptr) break;
+            current.Rip = *stack;
+            current.Rsp += sizeof(DWORD64);
+        } else {
+            void* handlerData = nullptr;
+            DWORD64 establisherFrame = 0;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, current.Rip, entry,
+                             &current, &handlerData, &establisherFrame,
+                             nullptr);
+        }
+        if (current.Rip == 0) break;
+        backtraceFrames[backtraceCount++] =
+            reinterpret_cast<void*>(current.Rip);
+    }
+#endif
+}
+
+// "module.dll+0x1234" for an address inside a mapped image, else the address.
+void FormatFrame(wchar_t* buffer, int capacity, const void* address) noexcept {
+    buffer[0] = L'\0';
+    const ULONG_PTR value = reinterpret_cast<ULONG_PTR>(address);
+    HMODULE module = nullptr;
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(value), &module) &&
+        module != nullptr) {
+        wchar_t path[MAX_PATH]{};
+        const DWORD length = GetModuleFileNameW(module, path, MAX_PATH);
+        const wchar_t* name = path;
+        for (DWORD i = 0; i < length; ++i) {
+            if (path[i] == L'\\' || path[i] == L'/') name = path + i + 1;
+        }
+        _snwprintf_s(buffer, static_cast<size_t>(capacity), _TRUNCATE,
+                     L"%ls+0x%llX", name,
+                     static_cast<unsigned long long>(
+                         value - reinterpret_cast<ULONG_PTR>(module)));
+        return;
+    }
+    _snwprintf_s(buffer, static_cast<size_t>(capacity), _TRUNCATE, L"%p",
+                 address);
+}
+
 // The one visible artefact of a fatal fault: a modal window that stays up
 // until the user acknowledges it.
 void ShowLastError(const char* reason, const EXCEPTION_RECORD* record) noexcept {
@@ -205,7 +272,16 @@ void ShowLastError(const char* reason, const EXCEPTION_RECORD* record) noexcept 
     }
     AppendText(used, L"阶段 / phase: %ls\r\n",
                Widen(phase.load(), narrow, _countof(narrow)));
-    AppendText(used, L"线程 / thread: %lu\r\n\r\n", GetCurrentThreadId());
+    AppendText(used, L"线程 / thread: %lu\r\n", GetCurrentThreadId());
+    if (backtraceCount > 0) {
+        AppendText(used, L"调用栈 / backtrace (module+offset):\r\n");
+        for (int i = 0; i < backtraceCount; ++i) {
+            wchar_t frame[320];
+            FormatFrame(frame, _countof(frame), backtraceFrames[i]);
+            AppendText(used, L"  #%d %ls\r\n", i, frame);
+        }
+    }
+    AppendText(used, L"\r\n");
     AppendText(used, L"最后记录 / last messages:\r\n");
     AppendRecentLines(used);
     AppendText(used, L"\r\n(Ctrl+C 复制以上信息 / Ctrl+C copies this text)\r\n");
@@ -271,6 +347,8 @@ LONG WINAPI OnCrash(EXCEPTION_POINTERS* pointers) noexcept {
     }
     // Same teardown rule as Fail(): a fault while the program is already
     // closing is recorded, not reported.
+    if (pointers != nullptr && pointers->ContextRecord != nullptr)
+        CaptureBacktrace(pointers->ContextRecord);
     if (!shuttingDown.load(std::memory_order_relaxed))
         ShowLastError(nullptr, &record);
     // Returning EXCEPTION_EXECUTE_HANDLER lets the system finish the process
@@ -314,6 +392,32 @@ void WritePath(const char* label, const wchar_t* path) noexcept {
 }
 
 void SetPhase(const char* value) noexcept { phase.store(value, std::memory_order_relaxed); }
+
+void TraceV(const char* format, va_list args) noexcept {
+    // Opt-in only: the shipped program never opens a file.  The guards call
+    // this so a field session can see what they rejected without a crash.
+    const char* path = std::getenv("MIKUDANCESTUDIO_TRACE_FILE");
+    if (path == nullptr || path[0] == '\0')
+        return;
+    FILE* stream = std::fopen(path, "a");
+    if (stream == nullptr)
+        return;
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+    std::fprintf(stream, "%02u:%02u:%02u.%03u ", now.wHour, now.wMinute,
+                 now.wSecond, now.wMilliseconds);
+    std::vfprintf(stream, format, args);
+    std::fputc('\n', stream);
+    std::fflush(stream);
+    std::fclose(stream);
+}
+
+void Trace(const char* format, ...) noexcept {
+    va_list args;
+    va_start(args, format);
+    TraceV(format, args);
+    va_end(args);
+}
 
 void Heartbeat(int frame) noexcept {
     ULONGLONG now = GetTickCount64();

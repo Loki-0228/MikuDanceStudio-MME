@@ -23,6 +23,7 @@
 #include <new>
 
 #include "mikudancestudio/text_encoding.hpp"
+#include "mikudancestudio/d3d_object_guard.hpp"
 #include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/runtime_log.hpp"
@@ -147,9 +148,31 @@ using MeshDrawSubset = HRESULT(__stdcall*)(void*, DWORD);
 
 void DrawSubset(void* accessory, DWORD index) {
     void* mesh = mdl::Accessory(accessory)->mesh;
-    if (mesh != nullptr)
+    // The mesh is an ID3DXMesh; DrawSubset forwards to the device with the
+    // mesh's own vertex/index buffers, so a sentinel left in the field faults
+    // inside d3d9.dll rather than here (see d3d_object_guard.hpp).
+    if (mesh != nullptr && !PlausibleD3dObject(mesh)) {
+        runtime_log::Write("RESOURCE invalid accessory_mesh=%p accessory=%p",
+                           mesh, accessory);
+        runtime_log::Trace("RESOURCE invalid accessory_mesh=%p accessory=%p "
+                           "materials=%u", mesh, accessory,
+                           static_cast<unsigned>(
+                               mdl::Accessory(accessory)->materialCount));
+        if (mdl::Accessory(accessory)->sourcePath[0] != L'\0') {
+            runtime_log::WritePath("RESOURCE accessory path",
+                                   mdl::Accessory(accessory)->sourcePath);
+            char utf8[1024]{};
+            if (WideCharToMultiByte(CP_UTF8, 0,
+                                    mdl::Accessory(accessory)->sourcePath, -1,
+                                    utf8, sizeof(utf8), nullptr, nullptr))
+                runtime_log::Trace("RESOURCE accessory path=%s", utf8);
+        }
+        return;
+    }
+    if (mesh != nullptr) {
         reinterpret_cast<MeshDrawSubset>(
             (*reinterpret_cast<void***>(mesh))[3])(mesh, index);
+    }
 }
 
 void AccessoryPlacement(MMDApp* app, void* accessory, Matrix* world) {
@@ -542,6 +565,9 @@ void ShowCannotFindXfile(MMDApp* app) {
 
 }  // namespace
 
+// Declared before LoadAccessoryObject, defined below it (with the VA note).
+bool NormalizeAccessoryMeshFvf(void*& mesh, IDirect3DDevice9* device);
+
 // VA 0x004C4700 - moved out of the anonymous namespace so the PMM loaders
 // (0x459221 / 0x4541D9) and the shutdown chain (0x462F9C / 0x46324D) bind to
 // this one definition instead of the old no-op stub (was Sub4C4700).
@@ -562,8 +588,7 @@ void DisposeAccessory(void* accessory) {
     record.texturePaths = nullptr;
 }
 
-bool LoadAccessoryObject(MMDApp* app, void* accessory, const wchar_t* path) {
-    auto* sub = app->Renderer();
+bool LoadAccessoryObject(MMDApp* app, void* accessory, const wchar_t* path) {    auto* sub = app->Renderer();
     TraceAccessoryLoadStage("entry", accessory);
     PathResolutionWorkspace& paths = app->PathWorkspace();
     const wchar_t* resolved = ResolveUserFilePath(paths, path);
@@ -694,24 +719,49 @@ bool LoadAccessoryObject(MMDApp* app, void* accessory, const wchar_t* path) {
 
     TraceAccessoryLoadStage("materials-complete", mesh);
 
+    // The FVF normalisation lives in NormalizeAccessoryMeshFvf (see below) so
+    // the ID3DXMesh vtable slots it depends on stay under a regression test.
+    void*& meshSlot = mdl::Accessory(accessory)->mesh;
+    NormalizeAccessoryMeshFvf(meshSlot, sub->device);
+    TraceAccessoryLoadStage("complete", meshSlot);
+    return true;
+}
+
+// 0x4C5F40 tail: the loader normalises the accessory mesh to the FVF the
+// fixed-function accessory pass expects (274 = XYZ | NORMAL | TEX1) by cloning
+// it through the ID3DXMesh options/FVF pair.  Kept as its own entry point so
+// the vtable slots it depends on stay covered by a regression test.
+//
+// The slots are the ones d3dx9_43.dll actually installs on a mesh, verified on
+// a live ID3DXMesh (tests/pmm_reload_tests.cpp probes the same object):
+//   3 DrawSubset   4 GetNumFaces  5 GetNumVertices  6 GetFVF
+//   7 GetVertexBuffer  8 GetNumBytesPerVertex  9 GetOptions
+//  10 GetDeclaration  11 CloneMeshFVF
+// The numeric order differs from the DirectX SDK header's textual order (it is
+// not "GetNumVertices then GetNumFaces", and CloneMeshFVF sits directly behind
+// GetDeclaration), so the slots are spelled out instead of derived.
+bool NormalizeAccessoryMeshFvf(void*& mesh, IDirect3DDevice9* device) {
+    if (mesh == nullptr || device == nullptr || !d3dx::Get().Load())
+        return false;
     using MeshGetDword = DWORD(__stdcall*)(void*);
     using MeshCloneFvf = HRESULT(__stdcall*)(void*, DWORD, DWORD,
                                               IDirect3DDevice9*, void**);
-    if (reinterpret_cast<MeshGetDword>(
-            (*reinterpret_cast<void***>(mesh))[6])(mesh) != 274) {
-        DWORD options = reinterpret_cast<MeshGetDword>(
-            (*reinterpret_cast<void***>(mesh))[9])(mesh);
-        void* clone = nullptr;
-        if (SUCCEEDED(reinterpret_cast<MeshCloneFvf>(
-                (*reinterpret_cast<void***>(mesh))[11])(
-                    mesh, options, 274, sub->device,
-                    &clone))) {
-            ReleaseCom(mesh);
-            mdl::Accessory(accessory)->mesh = clone;
-            api.computeNormals(clone, nullptr);
-        }
-    }
-    TraceAccessoryLoadStage("complete", mdl::Accessory(accessory)->mesh);
+    constexpr std::size_t kMeshGetFvf = 6;
+    constexpr std::size_t kMeshGetOptions = 9;
+    constexpr std::size_t kMeshCloneMeshFvf = 11;
+    void*** vtable = reinterpret_cast<void***>(mesh);
+    if (reinterpret_cast<MeshGetDword>((*vtable)[kMeshGetFvf])(mesh) == 274)
+        return true;
+    const DWORD options =
+        reinterpret_cast<MeshGetDword>((*vtable)[kMeshGetOptions])(mesh);
+    void* clone = nullptr;
+    if (FAILED(reinterpret_cast<MeshCloneFvf>((*vtable)[kMeshCloneMeshFvf])(
+            mesh, options, 274, device, &clone)) ||
+        clone == nullptr)
+        return false;
+    ReleaseCom(mesh);
+    mesh = clone;
+    d3dx::Get().computeNormals(clone, nullptr);
     return true;
 }
 
