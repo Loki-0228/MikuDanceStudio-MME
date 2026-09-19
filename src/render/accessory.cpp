@@ -16,8 +16,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <cwchar>
 #include <new>
@@ -26,17 +24,12 @@
 #include "mikudancestudio/d3d_object_guard.hpp"
 #include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
-#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/d3dx_effect.hpp"
-#include "mikudancestudio/runtime_log.hpp"
+#include "mikudancestudio/d3dx_mesh.hpp"
 #include "mikudancestudio/mmd_app.hpp"
-#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
-#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/model.hpp"
-#include "mikudancestudio/runtime_log.hpp"
 #include "mikudancestudio/panel_controls.hpp"
-#include "mikudancestudio/runtime_log.hpp"
 
 namespace mikudancestudio {
 void RefreshRequest(int area);
@@ -778,7 +771,10 @@ bool LoadAccessoryObject(MMDApp* app, void* accessory, const wchar_t* path) {   
     // The FVF normalisation lives in NormalizeAccessoryMeshFvf (see below) so
     // the ID3DXMesh vtable slots it depends on stay under a regression test.
     void*& meshSlot = mdl::Accessory(accessory)->mesh;
-    NormalizeAccessoryMeshFvf(meshSlot, sub->device);
+    if (!NormalizeAccessoryMeshFvf(meshSlot, sub->device)) {
+        ReleaseCom(meshSlot);
+        return false;
+    }
     TraceAccessoryLoadStage("complete", meshSlot);
     return true;
 }
@@ -788,65 +784,29 @@ bool LoadAccessoryObject(MMDApp* app, void* accessory, const wchar_t* path) {   
 // it through the ID3DXMesh options/FVF pair.  Kept as its own entry point so
 // the vtable slots it depends on stay covered by a regression test.
 //
-// The slots are the ones d3dx9_43.dll actually installs on a mesh, verified on
-// a live ID3DXMesh (tests/pmm_reload_tests.cpp probes the same object):
-//   3 DrawSubset   4 GetNumFaces  5 GetNumVertices  6 GetFVF
-//   7 GetVertexBuffer  8 GetNumBytesPerVertex  9 GetOptions
-//  10 GetDeclaration  11 CloneMeshFVF
-// The numeric order differs from the DirectX SDK header's textual order (it is
-// not "GetNumVertices then GetNumFaces", and CloneMeshFVF sits directly behind
-// GetDeclaration), so the slots are spelled out instead of derived.
+// GetDeclaration writes an array of vertex elements; it must never be called
+// as GetVertexBuffer with a pointer-sized output slot (that corrupts the stack).
 bool NormalizeAccessoryMeshFvf(void*& mesh, IDirect3DDevice9* device) {
     if (mesh == nullptr || device == nullptr || !d3dx::Get().Load())
         return false;
-    using MeshGetDword = DWORD(__stdcall*)(void*);
-    using MeshCloneFvf = HRESULT(__stdcall*)(void*, DWORD, DWORD,
-                                              IDirect3DDevice9*, void**);
-    constexpr std::size_t kMeshGetFvf = 6;
-    constexpr std::size_t kMeshGetOptions = 9;
-    constexpr std::size_t kMeshCloneMeshFvf = 11;
-    void*** vtable = reinterpret_cast<void***>(mesh);
-    const DWORD sourceFvf =
-        reinterpret_cast<MeshGetDword>((*vtable)[kMeshGetFvf])(mesh);
-    if (sourceFvf == 274)
-        return true;
-    const DWORD options =
-        reinterpret_cast<MeshGetDword>((*vtable)[kMeshGetOptions])(mesh);
-    void* clone = nullptr;
-    const HRESULT cloned = reinterpret_cast<MeshCloneFvf>(
-        (*vtable)[kMeshCloneMeshFvf])(mesh, options, 274, device, &clone);
-    runtime_log::Trace("MESH_CLONE source=%p fvf=%lu options=0x%lX hr=0x%08lX "
-                       "clone=%p", mesh, static_cast<unsigned long>(sourceFvf),
-                       static_cast<unsigned long>(options),
-                       static_cast<unsigned long>(cloned), clone);
-    if (FAILED(cloned) || clone == nullptr)
+    IDirect3DDevice9* owner = nullptr;
+    if (FAILED(d3dx::MeshDevice(mesh, &owner)) || owner == nullptr)
         return false;
-    // The clone only replaces the source when it owns its buffers.  d3dx9's
-    // CloneMeshFVF does not always convert: for the accessory that carries FVF
-    // 338 in the field scene it returns a mesh that *shares* the source's
-    // vertex buffer (probed on a live mesh, tests/pmm_reload_tests.cpp).  The
-    // loader releases the source immediately below, so adopting such a clone
-    // leaves ID3DXMesh::DrawSubset binding a buffer whose owner is gone - the
-    // access violation the crash report shows inside d3d9.dll.  When the buffers
-    // are shared the source mesh is kept instead: it is the object that owns
-    // them and it renders with its own, consistent FVF.
-    using GetBuffer = HRESULT(__stdcall*)(void*, void**);
-    constexpr std::size_t kMeshGetVertexBuffer = 7;
-    void* sourceVertexBuffer = nullptr;
-    void* cloneVertexBuffer = nullptr;
-    reinterpret_cast<GetBuffer>((*vtable)[kMeshGetVertexBuffer])(
-        mesh, &sourceVertexBuffer);
-    reinterpret_cast<GetBuffer>(
-        (*reinterpret_cast<void***>(clone))[kMeshGetVertexBuffer])(
-        clone, &cloneVertexBuffer);
-    if (sourceVertexBuffer == nullptr || cloneVertexBuffer == nullptr ||
-        sourceVertexBuffer == cloneVertexBuffer) {
-        ReleaseCom(clone);
+    const bool sameDevice = owner == device;
+    owner->Release();
+    if (sameDevice && d3dx::MeshFvf(mesh) == 274)
         return true;
-    }
+    // Let the clone own its references. Sharing COM buffers is legal, but
+    // sharing a vertex buffer while changing its layout is not requested.
+    constexpr DWORD kShareVertexBuffer = 0x1000;
+    const DWORD options = d3dx::MeshOptions(mesh) & ~kShareVertexBuffer;
+    void* clone = nullptr;
+    const HRESULT hr = d3dx::CloneMeshFvf(mesh, options, 274, device, &clone);
+    if (FAILED(hr) || clone == nullptr)
+        return false;
     ReleaseCom(mesh);
     mesh = clone;
-    d3dx::Get().computeNormals(clone, nullptr);
+    d3dx::Get().computeNormals(mesh, nullptr);
     return true;
 }
 

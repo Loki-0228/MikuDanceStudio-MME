@@ -7,11 +7,11 @@
 // Field report (defect 2): after switching the UI language to Chinese, loading
 // a PMM can kill the process.
 //
-// Both landed in the render passes: a resource field that was never written
-// (or was reached through an x86-only offset) reached Direct3D as a sentinel
-// and the access violation surfaced inside d3d9.dll.  The cases below pin the
-// three concrete places that produced it.
+// Pin resource initialization, x64 offsets and the actual D3DX mesh ABI here.
+// A crash inside d3d9.dll can also be delayed damage from the PMX bone-morph
+// work buffer; morph_runtime_tests and scene_lifecycle_tests cover that cause.
 #include "mikudancestudio/d3d_object_guard.hpp"
+#include "mikudancestudio/d3dx_mesh.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 
@@ -38,16 +38,12 @@ void Check(bool condition, const char* description) {
     }
 }
 
-// ID3DXMesh vtable accessors, spelled out because the DirectX SDK headers are
-// not part of the build.  The values are the ones d3dx9_43.dll really installs
-// (probed on a live mesh - the SDK header's textual order is not the slot
-// order: GetNumFaces precedes GetNumVertices and CloneMeshFVF sits at 11).
+// ID3DXBaseMesh slots, verified against d3dx9mesh.h and real buffer descriptors.
 constexpr std::size_t kMeshDrawSubset = 3;
 constexpr std::size_t kMeshGetNumFaces = 4;
 constexpr std::size_t kMeshGetNumVertices = 5;
 constexpr std::size_t kMeshGetFvf = 6;
 constexpr std::size_t kMeshGetOptions = 9;
-constexpr std::size_t kMeshCloneMeshFvf = 11;
 
 DWORD MeshDword(void* mesh, std::size_t slot) {
     using Getter = DWORD(__stdcall*)(void*);
@@ -61,15 +57,37 @@ HRESULT MeshDraw(void* mesh, DWORD subset) {
         (*reinterpret_cast<void***>(mesh))[kMeshDrawSubset])(mesh, subset);
 }
 
-// Slot 7 is GetVertexBuffer (it takes an out pointer - calling it as a plain
-// getter faults, which is how the slot order was established).
-constexpr std::size_t kMeshGetVertexBuffer = 7;
-
-HRESULT VertexBufferOf(void* mesh, void** vertexBuffer) {
-    using Getter = HRESULT(__stdcall*)(void*, void**);
-    return reinterpret_cast<Getter>(
-        (*reinterpret_cast<void***>(mesh))[kMeshGetVertexBuffer])(mesh,
-                                                                 vertexBuffer);
+void FillMesh(void* mesh, DWORD fvf) {
+    IDirect3DVertexBuffer9* vb = nullptr;
+    IDirect3DIndexBuffer9* ib = nullptr;
+    Check(SUCCEEDED(mikudancestudio::d3dx::MeshVertexBuffer(mesh, &vb)) && vb,
+          "GetVertexBuffer returns a real COM resource");
+    Check(SUCCEEDED(mikudancestudio::d3dx::MeshIndexBuffer(mesh, &ib)) && ib,
+          "GetIndexBuffer returns a real COM resource");
+    D3DVERTEXBUFFER_DESC vd{}; D3DINDEXBUFFER_DESC id{};
+    Check(SUCCEEDED(vb->GetDesc(&vd)) && vd.FVF == fvf, "VB descriptor matches mesh layout");
+    Check(SUCCEEDED(ib->GetDesc(&id)) && id.Format == D3DFMT_INDEX16, "IB descriptor has 16-bit indices");
+    void* data = nullptr;
+    Check(SUCCEEDED(vb->Lock(0, 0, &data, 0)), "lock vertices");
+    std::memset(data, 0, vd.Size);
+    const unsigned stride = vd.Size / MeshDword(mesh, kMeshGetNumVertices);
+    for (unsigned i = 0; i < 6; ++i) {
+        auto* vertex = reinterpret_cast<float*>(static_cast<unsigned char*>(data) + i * stride);
+        vertex[0] = (i % 3 == 1) ? .5f : -.5f;
+        vertex[1] = (i % 3 == 2) ? .5f : -.5f;
+        vertex[2] = .5f;
+    }
+    vb->Unlock();
+    Check(SUCCEEDED(ib->Lock(0, 0, &data, 0)), "lock indices");
+    for (unsigned short i = 0; i < 6; ++i) static_cast<unsigned short*>(data)[i] = i;
+    ib->Unlock();
+    using LockAttributes = HRESULT(WINAPI*)(void*, DWORD, DWORD**);
+    DWORD* attributes = nullptr;
+    Check(SUCCEEDED((mikudancestudio::d3dx::MeshMethod<LockAttributes, 24>(mesh)(mesh, 0, &attributes))),
+          "lock attributes");
+    attributes[0] = attributes[1] = 0;
+    mikudancestudio::d3dx::MeshMethod<HRESULT(WINAPI*)(void*), 25>(mesh)(mesh);
+    vb->Release(); ib->Release();
 }
 
 }  // namespace
@@ -81,8 +99,8 @@ int main() {
     std::setvbuf(stderr, nullptr, _IONBF, 0);
 
     // --- the resource guard itself ----------------------------------------
-    // The sentinel that reached d3d9 was a field nobody had written: -1 must be
-    // rejected before the device ever sees it, while a live object passes.
+    // Reject obvious sentinels before device calls. This check alone cannot
+    // establish that an arbitrary non-null pointer is a live COM object.
     Check(!PlausibleD3dObject(nullptr), "null is not a D3D object");
     Check(!PlausibleD3dObject(reinterpret_cast<const void*>(
               static_cast<std::uintptr_t>(0xFFFFFFFFFFFFFFFFull))),
@@ -142,23 +160,25 @@ int main() {
     Check(PlausibleD3dObject(mesh), "a live mesh passes the guard");
     std::puts("PASS ID3DXMesh vtable slots 6/9 on a real mesh");
 
+    FillMesh(mesh, kSourceFvf);
     void* before = mesh;
     Check(NormalizeAccessoryMeshFvf(mesh, device),
           "a non-274 mesh is normalised");
     Check(mesh != nullptr && PlausibleD3dObject(mesh),
           "the normalised mesh is still a live object");
     const DWORD normalisedFvf = MeshDword(mesh, kMeshGetFvf);
-    Check(normalisedFvf == 274 || normalisedFvf == kSourceFvf,
+    Check(normalisedFvf == 274,
           "the normalised mesh reports one consistent FVF");
-    Check(mesh != before || normalisedFvf == kSourceFvf,
-          "a clone that shares the source's buffers is rejected, not adopted");
-    // D3DXCreateMeshFVF builds a mesh without an attribute table, so the draw
-    // itself may report D3DXERR_INVALIDDATA; what matters here is that the
-    // clone is a coherent object the draw path can walk (no fault, a result
-    // from the D3DX facility).
+    Check(mesh != before,
+          "changing the vertex layout produces a new mesh");
+    // Require successful drawing of initialized geometry after releasing the
+    // original mesh. Merely surviving a failed DrawSubset would miss the bug.
+    device->SetRenderState(D3DRS_LIGHTING, FALSE);
+    device->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+    Check(SUCCEEDED(device->BeginScene()), "begin real draw");
     const HRESULT draw = MeshDraw(mesh, 0);
-    Check(SUCCEEDED(draw) || (static_cast<unsigned long>(draw) & 0xFFFF0000ul) ==
-                                 0x88760000ul,
+    device->EndScene();
+    Check(SUCCEEDED(draw),
           "the cloned mesh is walkable by DrawSubset");
     Check(MeshDword(mesh, kMeshGetNumFaces) == 2 &&
               MeshDword(mesh, kMeshGetNumVertices) == 6,
@@ -175,37 +195,24 @@ int main() {
           "a 274 mesh reports success");
     Check(already == untouched, "a 274 mesh is not cloned");
 
-    // The field scene's only FVF-338 accessory goes through this path.  The
-    // crash it covers: d3dx9 may return a clone that *shares* the source's
-    // buffers, and the loader releases the source right afterwards, so drawing
-    // the clone reads a buffer whose owner is gone - the fault the report shows
-    // inside ID3DXMesh::DrawSubset -> d3d9.dll.  Whatever the runtime hands
-    // back, the mesh that survives must stay drawable.
-    {
+    // Repeatedly load/convert/draw/dispose the field scene's FVF-338 layout.
+    // Old tests accidentally called GetDeclaration into an 8-byte pointer and
+    // accepted failed draws; require real initialized geometry and success.
+    for (int cycle = 0; cycle < 20; ++cycle) {
         void* source = nullptr;
-        Check(SUCCEEDED(createMesh(2, 6, kOptions, 338, device, &source)),
-              "create a 338 mesh");
-        void* sourceVb = nullptr;
-        Check(SUCCEEDED(VertexBufferOf(source, &sourceVb)) && sourceVb != nullptr,
-              "the 338 source has a vertex buffer");
-        void* normalised = source;
-        Check(NormalizeAccessoryMeshFvf(normalised, device),
-              "the 338 mesh is normalised");
-        void* survivingVb = nullptr;
-        Check(SUCCEEDED(VertexBufferOf(normalised, &survivingVb)) &&
-                  survivingVb != nullptr,
-              "the surviving mesh has a vertex buffer");
-        for (int i = 0; i < 200; ++i) {
-            const HRESULT hr = MeshDraw(normalised, 0);
-            Check(SUCCEEDED(hr) ||
-                      (static_cast<unsigned long>(hr) & 0xFFFF0000ul) ==
-                          0x88760000ul,
-                  "repeated draws of the normalised mesh stay coherent");
+        Check(SUCCEEDED(createMesh(2, 6, kOptions, 338, device, &source)), "create 338 mesh");
+        FillMesh(source, 338);
+        Check(NormalizeAccessoryMeshFvf(source, device), "convert 338 mesh");
+        Check(MeshDword(source, kMeshGetFvf) == 274, "conversion actually changed FVF");
+        IDirect3DDevice9* owner = nullptr;
+        Check(SUCCEEDED(d3dx::MeshDevice(source, &owner)) && owner == device, "mesh retains current device");
+        owner->Release();
+        for (int frame = 0; frame < 10; ++frame) {
+            Check(SUCCEEDED(device->BeginScene()), "begin scene");
+            Check(SUCCEEDED(MeshDraw(source, 0)), "real DrawSubset succeeds after original mesh release");
+            device->EndScene();
         }
-        Check(MeshDword(normalised, kMeshGetFvf) == 274 ||
-                  MeshDword(normalised, kMeshGetFvf) == 338,
-              "the surviving mesh reports one consistent FVF");
-        reinterpret_cast<IUnknown*>(normalised)->Release();
+        reinterpret_cast<IUnknown*>(source)->Release();
     }
 
     // --- the x86 displayFrames offset the frame seek used to read ----------
