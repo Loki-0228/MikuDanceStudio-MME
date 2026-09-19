@@ -146,6 +146,50 @@ IDirect3DTexture9* CachedTexture(D3DRenderer* sub, const wchar_t* path) {
 
 using MeshDrawSubset = HRESULT(__stdcall*)(void*, DWORD);
 
+// Field diagnostic (active only while MIKUDANCESTUDIO_TRACE_FILE names a path):
+// snapshots the first qwords of each accessory mesh's object header on first
+// draw and reports the first frame on which they change.  The reported crash
+// sits inside ID3DXMesh::DrawSubset, which binds the mesh's own device and
+// buffers; a header that mutates between frames is heap corruption, one that is
+// already wrong on the first draw is a creation-side defect.
+void TraceMeshHeader(void* mesh) noexcept {
+    static const char* path = nullptr;
+    static bool resolved = false;
+    if (!resolved) {
+        resolved = true;
+        path = std::getenv("MIKUDANCESTUDIO_TRACE_FILE");
+    }
+    if (path == nullptr || path[0] == '\0')
+        return;
+    constexpr int kWords = 8;
+    struct Entry {
+        const void* mesh;
+        void* words[kWords];
+    };
+    static Entry entries[64];
+    static int count = 0;
+    const auto* words = reinterpret_cast<void* const*>(mesh);
+    for (int i = 0; i < count; ++i) {
+        if (entries[i].mesh != mesh)
+            continue;
+        if (std::memcmp(entries[i].words, words, sizeof(entries[i].words)) == 0)
+            return;
+        std::memcpy(entries[i].words, words, sizeof(entries[i].words));
+        runtime_log::Trace("MESHHEADER %p CHANGED %p %p %p %p %p %p %p %p", mesh,
+                           words[0], words[1], words[2], words[3], words[4],
+                           words[5], words[6], words[7]);
+        return;
+    }
+    if (count >= 64)
+        return;
+    entries[count].mesh = mesh;
+    std::memcpy(entries[count].words, words, sizeof(entries[count].words));
+    ++count;
+    runtime_log::Trace("MESHHEADER %p first %p %p %p %p %p %p %p %p", mesh,
+                       words[0], words[1], words[2], words[3], words[4],
+                       words[5], words[6], words[7]);
+}
+
 void DrawSubset(void* accessory, DWORD index) {
     void* mesh = mdl::Accessory(accessory)->mesh;
     // The mesh is an ID3DXMesh; DrawSubset forwards to the device with the
@@ -170,6 +214,7 @@ void DrawSubset(void* accessory, DWORD index) {
         return;
     }
     if (mesh != nullptr) {
+        TraceMeshHeader(mesh);
         reinterpret_cast<MeshDrawSubset>(
             (*reinterpret_cast<void***>(mesh))[3])(mesh, index);
     }
