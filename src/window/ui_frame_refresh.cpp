@@ -24,6 +24,7 @@
 
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/bone_combo.hpp"
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/panel_controls.hpp"
 
@@ -230,16 +231,7 @@ void SyncAccessoryEditPanel(MMDApp* app) {
             unsigned char* model = app->ModelSlot(parentSlot);
             if (model != nullptr) {
                 const mdl::ModelRecord& record = *mdl::Mdl(model);
-                const std::int32_t boneCount = record.boneCount;
-                mdl::BoneRecord* bones = record.boneTable;
-                for (std::int32_t i = 0; i < boneCount; ++i) {
-                    mdl::BoneRecord* bone = &bones[i];
-                    const mdl::BoneType type = bone->type;
-                    if (type < mdl::BoneType::InertTip ||
-                        type == mdl::BoneType::FixedAxis)
-                        SendMessageA(boneCombo, CB_ADDSTRING, 0,
-                                     reinterpret_cast<LPARAM>(bone->name));
-                }
+                FillBoneCombo(boneCombo, &record, app->EnglishUI() == 1);
                 SendMessageA(modelCombo, CB_SETCURSEL,
                              static_cast<WPARAM>(record.comboSelIndex), 0);
             }
@@ -251,31 +243,7 @@ void SyncAccessoryEditPanel(MMDApp* app) {
     if (parentSlot >= 0) {
         unsigned char* model = app->ModelSlot(parentSlot);
         if (model != nullptr) {
-            mdl::BoneRecord* bones = mdl::Mdl(model)->boneTable;
-            const std::int32_t boneIndex =
-                accessory->parentBone;
-            if (bones != nullptr && boneIndex >= 0) {
-                const char* wanted = bones[boneIndex].name;
-                HWND boneCombo = GetDlgItem(main, panel::kAttachBoneCombo);
-                char actual[108]{};
-                const LRESULT current =
-                    SendMessageA(boneCombo, CB_GETCURSEL, 0, 0);
-                if (current >= 0)
-                    SendMessageA(boneCombo, CB_GETLBTEXT, current,
-                                 reinterpret_cast<LPARAM>(actual));
-                if (current < 0 || std::strcmp(wanted, actual) != 0) {
-                    const LRESULT count =
-                        SendMessageA(boneCombo, CB_GETCOUNT, 0, 0);
-                    for (LRESULT i = 0; i < count; ++i) {
-                        SendMessageA(boneCombo, CB_GETLBTEXT, i,
-                                     reinterpret_cast<LPARAM>(actual));
-                        if (std::strcmp(wanted, actual) == 0) {
-                            SendMessageA(boneCombo, CB_SETCURSEL, i, 0);
-                            break;
-                        }
-                    }
-                }
-            }
+            SelectBoneCombo(GetDlgItem(main, panel::kAttachBoneCombo), accessory->parentBone);
         }
     }
 

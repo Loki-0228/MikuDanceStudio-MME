@@ -30,6 +30,7 @@
 #include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/bone_combo.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/ui_language.hpp"
 #include "ui_controls.inc"
@@ -363,6 +364,17 @@ void LocalizeUI(MMDApp* app) {
         SendMessageW(combo436, CB_ADDSTRING, 0, name);
         SendMessageW(combo474, CB_ADDSTRING, 0, name);
         SendMessageW(combo449, CB_ADDSTRING, 0, name);
+    }
+
+    const int parentSlot = s.CameraParentModel();
+    FillBoneCombo(Dlg(app, 450), parentSlot >= 0 && parentSlot < kModelSlotCount
+        ? mdl::Mdl(s.ModelSlot(parentSlot)) : nullptr, english);
+    SelectBoneCombo(Dlg(app, 450), s.CameraParentBone());
+    if (const auto* acc = s.AccessorySlot(s.SelectedAccessorySlot())) {
+        const int slot = acc->parentModel;
+        FillBoneCombo(Dlg(app, 475), slot >= 0 && slot < kModelSlotCount
+            ? mdl::Mdl(s.ModelSlot(slot)) : nullptr, english);
+        SelectBoneCombo(Dlg(app, 475), acc->parentBone);
     }
 
     SendMessageA(combo436, CB_SETCURSEL, sel436, 0);

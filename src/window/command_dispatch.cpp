@@ -39,6 +39,7 @@
 #include "mikudancestudio/accessory_layout.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/bone_combo.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
 #include "mikudancestudio/runtime_log.hpp"
@@ -75,38 +76,9 @@ constexpr std::size_t kModelComboOrder2D7C = 0x2D7C;
 // UiUsesEnglishNames() test - with `!= 0` the Chinese UI listed English bone
 // names here while the morph combos stayed on the model's own names.
 void RepopulateBoneCombo(MMDApp* app, HWND combo, std::int32_t modelSlot) {
-    unsigned char* model = app->ModelSlot(modelSlot);
-    const mdl::ModelRecord* record = mdl::Mdl(model);
-    const mdl::BoneRecord* bones = record->boneTable;
-    for (std::int32_t i = 0;
-         i < static_cast<std::int32_t>(record->boneCount); ++i) {
-        const mdl::BoneType type = bones[i].type;
-        if (type == mdl::BoneType::FixedAxis ||
-            type < mdl::BoneType::InertTip) {
-            const char* name = UiUsesEnglishNames(app->state.englishUI)
-                                   ? bones[i].nameEn
-                                   : bones[i].name;
-            SendMessageA(combo, CB_ADDSTRING, 0,
-                         reinterpret_cast<LPARAM>(name));
-        }
-    }
-    SendMessageA(combo, CB_SETCURSEL, 0, 0);
-}
-
-// Shared body of the 0x1C2/0x1DB bone combos (0x48e6b3..0x48e745 /
-// 0x48e98d..0x48ea43): the first bone whose EN (+0x14) or JP (+0x0) name
-// equals the combo text (the original's inline two-byte-step compare).
-std::int32_t FindBoneByName(unsigned char* model, const char* text) {
-    const mdl::ModelRecord* record = mdl::Mdl(model);
-    const mdl::BoneRecord* bones = record->boneTable;
-    for (std::int32_t i = 0;
-         i < static_cast<std::int32_t>(record->boneCount); ++i) {
-        if (strcmp(bones[i].nameEn, text) == 0 ||
-            strcmp(bones[i].name, text) == 0) {
-            return i;
-        }
-    }
-    return -1;
+    FillBoneCombo(combo, mdl::Mdl(app->ModelSlot(modelSlot)),
+                  UiUsesEnglishNames(app->EnglishUI()));
+    SendMessageW(combo, CB_SETCURSEL, 0, 0);
 }
 
 // Shared body of the four facial morph-row combos 0x1F8/0x1FD/0x202/0x207
@@ -279,19 +251,13 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
     }
 
     // ---- 0x1C2 (0x48e62f): camera manipulation parent BONE combo.  The
-    // combo text is matched against the parent model's bone names; a hit
-    // stores the bone index into the parent-bone field (0xA0434) and
+    // item data stores the bone index into the parent-bone field (0xA0434) and
     // refreshes the timeline row selection.
     if (ctrl == GetDlgItem(hwnd, panel::kBoneRegisterCombo)) {
-        char text[0x100];
-        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kBoneRegisterCombo),
-                                         CB_GETCURSEL, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, panel::kBoneRegisterCombo), CB_GETLBTEXT, sel,
-                     reinterpret_cast<LPARAM>(text));
         const std::int32_t parent = app->CameraParentModel();
-        if (parent >= 0) {
+        if (parent >= 0 && parent < kModelSlotCount) {
             const std::int32_t index =
-                FindBoneByName(app->ModelSlot(parent), text);
+                SelectedComboBone(ctrl, mdl::Mdl(app->ModelSlot(parent)));
             if (index >= 0) {
                 app->CameraParentBone() = index;
                 RefreshRequest(-1);
@@ -343,20 +309,14 @@ bool DefaultSelChangeChain(MMDApp* app, HWND hwnd, HWND ctrl) {
         return true;
     }
 
-    // ---- 0x1DB (0x48e8fd): accessory parent BONE combo.  The combo text
-    // is matched against the accessory's parent model bones; a hit stores
-    // the bone index into acc+0x234 and refreshes the timeline row.
+    // ---- 0x1DB (0x48e8fd): accessory parent BONE combo. Item data stores
+    // the bone index into acc+0x234, independent of duplicate/translated names.
     if (ctrl == GetDlgItem(hwnd, panel::kAttachBoneCombo)) {
-        char text[0x100];
-        const LRESULT sel = SendMessageA(GetDlgItem(hwnd, panel::kAttachBoneCombo),
-                                         CB_GETCURSEL, 0, 0);
-        SendMessageA(GetDlgItem(hwnd, panel::kAttachBoneCombo), CB_GETLBTEXT, sel,
-                     reinterpret_cast<LPARAM>(text));
         mdl::AccessoryRecord* acc =
             app->AccessorySlot(app->SelectedAccessorySlot());
-        if (acc != nullptr && acc->parentModel >= 0) {
+        if (acc != nullptr && acc->parentModel >= 0 && acc->parentModel < kModelSlotCount) {
             const std::int32_t index =
-                FindBoneByName(app->ModelSlot(acc->parentModel), text);
+                SelectedComboBone(ctrl, mdl::Mdl(app->ModelSlot(acc->parentModel)));
             if (index >= 0) {
                 acc->parentBone = index;
                 RefreshRequest(

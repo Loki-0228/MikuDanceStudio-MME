@@ -112,6 +112,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/scene_ownership.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/bone_combo.hpp"
 #include "mikudancestudio/panel_controls.hpp"
 
 // Shared PMM record readers, the Rd helper and the byte-identical halves of
@@ -2014,17 +2015,8 @@ static bool LoadSceneV2_AccessoryBlock(PmmV2LoadContext& ctx, int fd) {
             if (parentSlot >= 0 && parentSlot < kModelSlotCount &&
                 slots[parentSlot] != nullptr &&
                 mdl::Mdl(slots[parentSlot])->boneCount > 0) {
-                for (std::int32_t b = 0;
-                     b < static_cast<std::int32_t>(
-                             mdl::Mdl(slots[parentSlot])->boneCount); ++b) {
-                    const mdl::BoneRecord& bone =
-                        mdl::Bones(slots[parentSlot])[b];
-                    if (bone.type < mdl::BoneType::InertTip ||
-                        bone.type == mdl::BoneType::FixedAxis)
-                        SendMessageA(GetDlgItem(main, panel::kAttachBoneCombo), CB_ADDSTRING,
-                                     0,
-                                     reinterpret_cast<LPARAM>(bone.name));
-                }
+                FillBoneCombo(GetDlgItem(main, panel::kAttachBoneCombo),
+                              mdl::Mdl(slots[parentSlot]), s->EnglishUI() == 1);
             }
             SyncAccessoryEditPanel(s);                                       // 0x456608
         }
@@ -2472,21 +2464,7 @@ static void LoadSceneV2_PhysicsTracksAndClose(PmmV2LoadContext& ctx, int fd,
                      0);
     }
     RefillBoneRegisterCombo(s, s->state.cameraParentModel);       // 0x457D27
-    if (s->state.cameraParentModel >= 0) {
-        const LRESULT n = SendMessageA(GetDlgItem(main, panel::kBoneRegisterCombo), CB_GETCOUNT, 0,
-                                       0);
-        unsigned char* m = slots[s->state.cameraParentModel];
-        for (LRESULT i = 0; i < n; ++i) {
-            SendMessageA(GetDlgItem(main, panel::kBoneRegisterCombo), CB_GETLBTEXT,
-                         static_cast<WPARAM>(i),
-                         reinterpret_cast<LPARAM>(lbText));
-            const mdl::BoneRecord& bone = mdl::Bones(m)[
-                s->state.cameraParentBone];
-            if (strcmp(lbText, bone.name) == 0)
-                SendMessageA(GetDlgItem(main, panel::kBoneRegisterCombo), CB_SETCURSEL,
-                             static_cast<WPARAM>(i), 0);
-        }
-    }
+    SelectBoneCombo(GetDlgItem(main, panel::kBoneRegisterCombo), s->state.cameraParentBone);
     // 16 config dwords (0x457E79..0x457F60)
     Rd(fd, &s->state.cameraAttachmentBasis, 4);      // 0xA0438
     for (int i = 0; i < 15; ++i)
@@ -2639,21 +2617,9 @@ static void LoadSceneV2_SuccessTail(PmmV2LoadContext& ctx,
                 }
             }
             if (s->state.cameraParentModel == workspace.modelSlot) {
-                unsigned char* m = slots[workspace.modelSlot];
                 s->state.cameraParentBone = remapBoneIndex(
                     s->state.cameraParentBone);
-                const LRESULT n = SendMessageA(GetDlgItem(main, panel::kBoneRegisterCombo),
-                                               CB_GETCOUNT, 0, 0);
-                for (LRESULT k = 0; k < n; ++k) {
-                    SendMessageA(GetDlgItem(main, panel::kBoneRegisterCombo), CB_GETLBTEXT,
-                                 static_cast<WPARAM>(k),
-                                 reinterpret_cast<LPARAM>(lbText));
-                    const mdl::BoneRecord& bone = mdl::Bones(m)[
-                        s->state.cameraParentBone];
-                    if (strcmp(lbText, bone.name) == 0)
-                        SendMessageA(GetDlgItem(main, panel::kBoneRegisterCombo), CB_SETCURSEL,
-                                     static_cast<WPARAM>(k), 0);
-                }
+                SelectBoneCombo(GetDlgItem(main, panel::kBoneRegisterCombo), s->state.cameraParentBone);
             }
             for (std::size_t keyIndex = 0;
                  keyIndex < kGlobalKeyCapacity; ++keyIndex) {

@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <string>
 
-namespace mikudancestudio::mdl { struct ModelRecord; struct MorphRecord; }
+namespace mikudancestudio::mdl { struct ModelRecord; struct MorphRecord; struct BoneRecord; }
 namespace mikudancestudio::text_encoding {
 // PMM has fixed byte fields and no declared code page. Keep legacy encodings
 // when exact; use a UTF-8 BOM only for text no legacy code page can represent.
@@ -18,6 +18,7 @@ std::wstring ModelName(const mdl::ModelRecord& model, bool english);
 // UI identity comes from the resolved source file, not language-specific metadata.
 std::wstring ModelLabel(const mdl::ModelRecord& model, bool english);
 std::wstring MorphName(const mdl::MorphRecord& morph, bool english);
+std::wstring BoneName(const mdl::BoneRecord& bone, bool english);
 // Message boxes whose text comes from the byte-exact Shift-JIS literals of the
 // original image (the JP branches) or from plain ASCII (the EN branches).
 // MessageBoxA would decode those bytes with the *system* code page and garble

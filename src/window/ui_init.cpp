@@ -42,6 +42,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/ui_translation.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/bone_combo.hpp"
 #include "mikudancestudio/panel_controls.hpp"
 #include "mikudancestudio/ui_language.hpp"
 #include "ui_controls.inc"
@@ -551,8 +552,10 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
         // Original mixes CreateWindowExW/A per control; the table carries the
         // exact wire bytes for both variants (wide flag from the original
         // call site), so ANSI captions reach the A entry points verbatim.
-        HWND control = c.wide
-            ? CreateWindowExW(c.ex, c.wcls, c.wtext, c.style,
+        const bool modelNames = c.id == 434 || c.id == 443 || c.id == 450 || c.id == 475;
+        HWND control = (c.wide || modelNames)
+            ? CreateWindowExW(c.ex, modelNames ? L"COMBOBOX" : c.wcls,
+                              modelNames ? L"" : c.wtext, c.style,
                               EvalPos(c.x, sidebar), EvalPos(c.y, sidebar),
                               c.w, c.h, hwnd,
                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(c.id)),
@@ -739,35 +742,9 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 // ---------------------------------------------------------------------------
 void RefillBoneRegisterCombo(MMDApp* app, int slot) {
     HWND combo = GetDlgItem(static_cast<HWND>(app->Hwnd()), panel::kBoneRegisterCombo);
-    SendMessageA(combo, CB_RESETCONTENT, 0, 0);                  // 0x41006D
-    if (slot >= 0) {
-        unsigned char* model = app->ModelSlot(slot);
-        if (model != nullptr) {
-            // x86 +11652 == ModelRecord::boneCount, but the x64 record moves it
-            // to 12560 (the two undo rings grow 28 -> 40 bytes per slot), so the
-            // raw offset read undo-ring memory on the shipping x64 build: with a
-            // freshly loaded model that dword is 0 and the bone list of the
-            // bone/camera panel came up EMPTY, and after any bone edit it fed
-            // garbage indices into the loop.  Use the typed field.
-            const std::int32_t boneCount =
-                static_cast<std::int32_t>(mikudancestudio::mdl::Mdl(model)->boneCount);
-            mikudancestudio::mdl::BoneRecord* bones =
-                mikudancestudio::mdl::Bones(model);
-            for (std::int32_t i = 0; i < boneCount; ++i) {       // 0x4100B1
-                mikudancestudio::mdl::BoneRecord* bone = &bones[i];
-                const mdl::BoneType type = bone->type;
-                if (type < mdl::BoneType::InertTip ||
-                    type == mdl::BoneType::FixedAxis) {
-                    const char* name =
-                        UiUsesEnglishNames(app->EnglishUI())
-                            ? reinterpret_cast<const char*>(bone->nameEn)
-                            : reinterpret_cast<const char*>(bone);
-                    SendMessageA(combo, CB_ADDSTRING, 0,
-                                 reinterpret_cast<LPARAM>(name));
-                }
-            }
-        }
-    }
+    const auto* model = slot >= 0 && slot < kModelSlotCount && app->ModelSlot(slot)
+        ? mdl::Mdl(app->ModelSlot(slot)) : nullptr;
+    FillBoneCombo(combo, model, UiUsesEnglishNames(app->EnglishUI()));
     PostLanguageSweep2(app);                                     // 0x410132
 }
 

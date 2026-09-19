@@ -73,6 +73,13 @@ HWND Dlg(unsigned char* m, int id) {
     return GetDlgItem(*reinterpret_cast<HWND*>(m), id);
 }
 
+template<std::size_t N>
+void AddLegacyName(HWND combo, const char (&text)[N]) {
+    std::wstring name;
+    text_encoding::Decode(std::string(text, strnlen_s(text, N)).c_str(), 932, name);
+    SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
+}
+
 // One morph-category group (see header comment).
 void RefreshMorphGroup(unsigned char* m, mdl::MorphPanel panel, int comboId,
                        int sliderId, int editId, std::size_t selector) {
@@ -130,10 +137,9 @@ void PostLoadInit(unsigned char* m) {
     if (chainCount > 0) {
         for (int i = 0; i < chainCount; ++i) {
             const std::int32_t boneIdx = mdl::IkChains(m)[i].boneIndex;
-            SendMessageA(boneCombo, CB_ADDSTRING, 0,
-                reinterpret_cast<LPARAM>(
-                    useEnglishNames ? bones[boneIdx].nameEn
-                                    : bones[boneIdx].name));
+            const auto name = boneIdx >= 0 && static_cast<std::uint32_t>(boneIdx) < model->boneCount
+                ? text_encoding::BoneName(bones[boneIdx], useEnglishNames) : std::wstring{};
+            SendMessageW(boneCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
         }
     }
     if (mdl::IkChains(m) != nullptr) {
@@ -182,15 +188,13 @@ void PostLoadInit(unsigned char* m) {
                 sprintf_s(buf, 0x100, "bone%02d", i);
             else
                 sprintf_s(buf, 0x100, kJpBoneFmt, i);
-            SendMessageA(frameCombo, CB_ADDSTRING, 0,
-                         reinterpret_cast<LPARAM>(buf));
+            AddLegacyName(frameCombo, buf);
         }
     } else if (useEnglishNames) {
         SendMessageA(frameCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("All frame"));
-        SendMessageA(frameCombo, CB_ADDSTRING, 0,
-            reinterpret_cast<LPARAM>(
-                bones[model->displayRootBone].nameEn));
+        const auto rootName = text_encoding::BoneName(bones[model->displayRootBone], true);
+        SendMessageW(frameCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(rootName.c_str()));
         SendMessageA(frameCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("disp/IK/OP"));
         SendMessageA(frameCombo, CB_ADDSTRING, 0,
@@ -202,22 +206,19 @@ void PostLoadInit(unsigned char* m) {
         const auto* groups =
             model->displayFrames;
         for (std::uint8_t g = 0; g < model->facialFrameCount; ++g)
-            SendMessageA(frameCombo, CB_ADDSTRING, 0,
-                         reinterpret_cast<LPARAM>(groups[g].nameEn));
+            AddLegacyName(frameCombo, groups[g].nameEn);
         SendMessageA(frameCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>("All bone"));
         const auto* frames =
             static_cast<const mdl::FrameGroup*>(model->rbGroups);
         const std::int32_t frameCount = model->rigidBodyCount;
         for (int f = 0; f < frameCount; ++f)
-            SendMessageA(frameCombo, CB_ADDSTRING, 0,
-                         reinterpret_cast<LPARAM>(frames[f].nameEn));
+            AddLegacyName(frameCombo, frames[f].nameEn);
     } else {
         SendMessageW(frameCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpAllFrame));
-        SendMessageA(frameCombo, CB_ADDSTRING, 0,
-            reinterpret_cast<LPARAM>(
-                bones[model->displayRootBone].name));
+        const auto rootName = text_encoding::BoneName(bones[model->displayRootBone], false);
+        SendMessageW(frameCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(rootName.c_str()));
         SendMessageW(frameCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpDispIkOp));
         SendMessageW(frameCombo, CB_ADDSTRING, 0,
@@ -229,16 +230,14 @@ void PostLoadInit(unsigned char* m) {
         const auto* groups =
             model->displayFrames;
         for (std::uint8_t g = 0; g < model->facialFrameCount; ++g)
-            SendMessageA(frameCombo, CB_ADDSTRING, 0,
-                         reinterpret_cast<LPARAM>(groups[g].name));
+            AddLegacyName(frameCombo, groups[g].name);
         SendMessageW(frameCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpAllBone));
         const auto* frames =
             static_cast<const mdl::FrameGroup*>(model->rbGroups);
         const std::int32_t frameCount = model->rigidBodyCount;
         for (int f = 0; f < frameCount; ++f)
-            SendMessageA(frameCombo, CB_ADDSTRING, 0,
-                         reinterpret_cast<LPARAM>(frames[f].name));
+            AddLegacyName(frameCombo, frames[f].name);
     }
     SendMessageA(frameCombo, CB_SETCURSEL,
                  model->frameRegistrationSelection, 0);

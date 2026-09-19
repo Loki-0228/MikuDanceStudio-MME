@@ -31,6 +31,7 @@
 #include "mikudancestudio/panel_controls.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/ui_language.hpp"
+#include "mikudancestudio/bone_combo.hpp"
 #include "../src/window/ui_controls.inc"  // generated creation table (caption sweep)
 
 #include <array>
@@ -66,15 +67,6 @@ const char* LanguageName(unsigned char language) {
                                    : "Chinese";
 }
 
-// Combo item text.  Combo 443/450 are ANSI windows (CreateWindowExA in the
-// creation table), the four morph combos are Unicode windows; each side is read
-// with the message that matches the window, exactly like the production code.
-std::string ItemTextA(HWND combo, int index) {
-    char buffer[256]{};
-    SendMessageA(combo, CB_GETLBTEXT, index, reinterpret_cast<LPARAM>(buffer));
-    return buffer;
-}
-
 std::wstring ItemTextW(HWND combo, int index) {
     wchar_t buffer[256]{};
     SendMessageW(combo, CB_GETLBTEXT, index, reinterpret_cast<LPARAM>(buffer));
@@ -97,9 +89,7 @@ HWND MakeCombo(HWND parent, int id, bool wide) {
 // ---------------------------------------------------------------------------
 // Defect 3: one language for every list.
 //
-// The bone names are deliberately ASCII so the assertion is independent of the
-// host ANSI code page (the ANSI combos translate SJIS names through CP_ACP);
-// the morph names are wide, which is how PMX supplies them.
+// Use actual Japanese and full PMX Unicode names on non-Japanese Windows.
 // ---------------------------------------------------------------------------
 void NameLanguageRegression() {
     // The rule itself: Chinese is not English.
@@ -113,8 +103,8 @@ void NameLanguageRegression() {
                                   GetModuleHandleW(nullptr), nullptr);
     Check(parent != nullptr, "create hidden control owner");
 
-    HWND ikCombo = MakeCombo(parent, panel::kIkChainCombo, false);              // 443
-    HWND boneCombo = MakeCombo(parent, panel::kBoneRegisterCombo, false);       // 450
+    HWND ikCombo = MakeCombo(parent, panel::kIkChainCombo, true);              // 443
+    HWND boneCombo = MakeCombo(parent, panel::kBoneRegisterCombo, true);       // 450
     HWND morphCombos[4] = {
         MakeCombo(parent, panel::kMorphCombo0, true),                           // 504
         MakeCombo(parent, panel::kMorphCombo1, true),                           // 509
@@ -126,9 +116,10 @@ void NameLanguageRegression() {
           "create the language test combos");
 
     std::array<mdl::BoneRecord, 2> bones{};
-    std::strcpy(bones[0].name, "bone-jp");
+    std::strcpy(bones[0].name, "\x83\x5A\x83\x93\x83\x5E\x81\x5B");
     std::strcpy(bones[0].nameEn, "bone-en");
-    std::strcpy(bones[1].name, "ik-jp");
+    bones[1].jpText = const_cast<wchar_t*>(L"左足ＩＫ_中文_長い骨の名前");
+    bones[1].enText = const_cast<wchar_t*>(L"ik-en");
     std::strcpy(bones[1].nameEn, "ik-en");
     bones[1].type = mdl::BoneType::Ik;
 
@@ -173,30 +164,32 @@ void NameLanguageRegression() {
     for (unsigned char language : languages) {
         app->EnglishUI() = language;
         const bool englishNames = UiUsesEnglishNames(language);
-        const std::string expectedBone = englishNames ? "bone-en" : "bone-jp";
+        const std::wstring expectedBone = englishNames ? L"bone-en" : L"センター";
         const std::wstring expectedMorph = englishNames ? L"morph-en1" : L"morph-jp1";
 
         PostLoadInit(reinterpret_cast<unsigned char*>(model.get()));
         RefillBoneRegisterCombo(app.get(), 0);
 
         // IK chain combo 443 and the model/camera follow-bone list (450).
-        Check(ItemTextA(ikCombo, 0) == expectedBone,
+        Check(ItemTextW(ikCombo, 0) == expectedBone,
               "IK bone combo follows the UI language");
-        Check(ItemTextA(boneCombo, 0) == expectedBone,
+        Check(ItemTextW(boneCombo, 0) == expectedBone,
               "follow-bone list follows the UI language (RefillBoneRegisterCombo)");
-        Check(ItemTextA(boneCombo, 0) == ItemTextA(ikCombo, 0),
+        Check(ItemTextW(boneCombo, 0) == ItemTextW(ikCombo, 0),
               "the two bone lists must agree");
 
         // The facial (morph) list is the reference: same language or not.
         const std::wstring morphName = ItemTextW(morphCombos[1], 0);
         Check(morphName == expectedMorph, "facial list follows the UI language");
-        const bool bonesEnglish = ItemTextA(boneCombo, 0) == "bone-en";
+        const bool bonesEnglish = ItemTextW(boneCombo, 0) == L"bone-en";
         const bool morphsEnglish = morphName == L"morph-en1";
         Check(bonesEnglish == morphsEnglish,
               "bone list and facial list must use one language");
-        std::printf("PASS %s UI: bone list \"%s\", facial list \"%ls\"\n",
-                    LanguageName(language), ItemTextA(boneCombo, 0).c_str(),
-                    morphName.c_str());
+        Check(ItemTextW(boneCombo, 1) == (englishNames ? L"ik-en" : L"左足ＩＫ_中文_長い骨の名前"),
+              "PMX names retain Unicode and their complete length");
+        SelectBoneCombo(boneCombo, 1);
+        Check(SelectedComboBone(boneCombo, model.get()) == 1, "selection uses bone identity");
+        std::printf("PASS %s UI: Unicode bones and morphs\n", LanguageName(language));
     }
 
     // The reported case, from a language switch instead of a fresh load: a
@@ -207,10 +200,22 @@ void NameLanguageRegression() {
     app->EnglishUI() = kUiChinese;
     PostLoadInit(reinterpret_cast<unsigned char*>(model.get()));
     RefillBoneRegisterCombo(app.get(), 0);
-    Check(ItemTextA(boneCombo, 0) == "bone-jp" &&
+    Check(ItemTextW(boneCombo, 0) == L"センター" &&
               ItemTextW(morphCombos[1], 0) == L"morph-jp1",
           "EN -> CHS switch keeps bone and facial lists in one language");
     std::puts("PASS English -> Chinese switch keeps one name language");
+
+    bones[0].jpText = bones[1].jpText;
+    FillBoneCombo(boneCombo, model.get(), false);
+    SelectBoneCombo(boneCombo, 1);
+    Check(SelectedComboBone(boneCombo, model.get()) == 1,
+          "duplicate display names select the requested bone index");
+    bones[0].type = mdl::BoneType::InertTip;
+    FillBoneCombo(boneCombo, model.get(), false);
+    SelectBoneCombo(boneCombo, 1);
+    Check(SendMessageW(boneCombo, CB_GETCURSEL, 0, 0) == 0 &&
+          SelectedComboBone(boneCombo, model.get()) == 1,
+          "filtered bone lists retain actual bone indices");
 
     g_Block = previousBlock;
     DestroyWindow(parent);

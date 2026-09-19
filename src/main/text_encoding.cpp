@@ -133,6 +133,17 @@ std::wstring MorphName(const mdl::MorphRecord& morph, bool english) {
     return result;
 }
 
+std::wstring BoneName(const mdl::BoneRecord& bone, bool english) {
+    const wchar_t* wide = english ? bone.enText : bone.jpText;
+    if (wide && *wide) return wide;
+    if (bone.jpText && *bone.jpText) return bone.jpText;
+    const char* narrow = english && bone.nameEn[0] ? bone.nameEn : bone.name;
+    std::wstring result;
+    const std::string bounded(narrow, strnlen_s(narrow, sizeof(bone.name)));
+    Decode(bounded.c_str(), 932, result);
+    return result;
+}
+
 int MessageBoxJp(void* owner, const char* body, const char* caption,
                  unsigned int flags) {
     std::wstring wideBody;

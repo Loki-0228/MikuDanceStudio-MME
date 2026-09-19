@@ -117,6 +117,7 @@
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/bone_combo.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/scene_ownership.hpp"
 #include "mikudancestudio/panel_controls.hpp"
@@ -1151,22 +1152,13 @@ static bool LoadSceneV1_AccessoryBlock(PmmV1LoadContext& ctx, int fd) {
             SendMessageA(GetDlgItem(main, panel::kAccessoryCombo), CB_SETCURSEL,  // 0x45C390
                          accessory.order, 0);
             const std::int32_t parentSlot = accessory.parentModel;
-            unsigned char* pm = slots[parentSlot];
+            unsigned char* pm = parentSlot >= 0 && parentSlot < kModelSlotCount
+                ? slots[parentSlot] : nullptr;
             if (pm != nullptr &&
                 static_cast<std::int32_t>(
                     mikudancestudio::mdl::Mdl(pm)->boneCount) > 0) {
-                for (std::int32_t b = 0;
-                     b < static_cast<std::int32_t>(
-                             mikudancestudio::mdl::Mdl(pm)->boneCount);
-                     ++b) {
-                    const mikudancestudio::mdl::BoneRecord& entry =
-                        mikudancestudio::mdl::Bones(pm)[b];
-                    if (entry.type < mikudancestudio::mdl::BoneType::InertTip ||
-                        entry.type == mikudancestudio::mdl::BoneType::FixedAxis)
-                        SendMessageA(GetDlgItem(main, panel::kAttachBoneCombo),
-                                     CB_ADDSTRING, 0,
-                                     reinterpret_cast<LPARAM>(entry.name));
-                }
+                FillBoneCombo(GetDlgItem(main, panel::kAttachBoneCombo),
+                              mdl::Mdl(pm), s->EnglishUI() == 1);
             }
             SyncAccessoryEditPanel(s);                                        // 0x45C479
         }
@@ -1682,44 +1674,7 @@ static void LoadSceneV1_ReadGatedTail(PmmV1LoadContext& ctx, int fd) {
                                             }
                                             RefillBoneRegisterCombo(s, sel0); // 0x45DCAE
 
-                                            if (sel0 >= 0) {
-                                                const LRESULT n =
-                                                    SendMessageA(
-                                                        GetDlgItem(
-                                                            main, panel::kBoneRegisterCombo),
-                                                        CB_GETCOUNT, 0,
-                                                        0);     // 0x45DCD5
-                                                for (LRESULT i = 0;
-                                                     i < n; ++i) {
-                                                    SendMessageA(
-                                                        GetDlgItem(
-                                                            main, panel::kBoneRegisterCombo),
-                                                        CB_GETLBTEXT,
-                                                        static_cast<
-                                                            WPARAM>(i),
-                                                        reinterpret_cast<
-                                                            LPARAM>(
-                                                            lbText));
-                                                    mdl::BoneRecord*
-                                                        entry =
-                                                        mdl::Bones(slots[sel0]) +
-                                                        static_cast<
-                                                            std::size_t>(
-                                                                sel1);
-                                                    if (strcmp(
-                                                            lbText,
-                                                            entry->name) ==
-                                                        0)
-                                                        SendMessageA(
-                                                            GetDlgItem(
-                                                                main,
-                                                                panel::kBoneRegisterCombo),
-                                                            CB_SETCURSEL,
-                                                            static_cast<
-                                                                WPARAM>(i),
-                                                            0);  // 0x45DDD3
-                                                }
-                                            }
+                                            SelectBoneCombo(GetDlgItem(main, panel::kBoneRegisterCombo), sel1);
                                         }
                                         unsigned char bdd = 0;
                                         const int gotDDFC =
