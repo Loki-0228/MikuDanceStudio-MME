@@ -349,6 +349,23 @@ if (MIKUDANCESTUDIO_BUILD_ENCODING_TESTS)
 endif()
 
 # ---------------------------------------------------------------------------
+# User-acceptance regression tests: the defects reported by the field test
+# round (UI language consistency, panel text, camera FOV, bone editing
+# shortcuts, list selection, clipboard dialogs, PMM reload).
+# ---------------------------------------------------------------------------
+option(MIKUDANCESTUDIO_BUILD_UI_TESTS "Build user-acceptance regression tests" OFF)
+if (MIKUDANCESTUDIO_BUILD_UI_TESTS)
+    enable_testing()
+    foreach (ui_test ui_language_tests panel_key_tests window_interaction_tests pmm_reload_tests)
+        add_executable(${ui_test} EXCLUDE_FROM_ALL tests/${ui_test}.cpp)
+        target_link_libraries(${ui_test} PRIVATE mikudancestudio_core winmm dsound)
+        set_target_properties(${ui_test} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
+        add_test(NAME ${ui_test} COMMAND ${ui_test})
+    endforeach()
+endif()
+
+# ---------------------------------------------------------------------------
 # Main executable.  WIN32 subsystem matches the original PE header
 # (Subsystem 2, GUI).  Exports (Exp*) come from exports/MikuMikuDance.def
 # exactly like the original export table at RVA 0x00141328.
