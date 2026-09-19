@@ -1169,9 +1169,20 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
     // !windRan here, that freezes physics while the noise mode is active.
     if (runWorldPass && !idleNoStep &&
         s.state.frameCopyDialog == 0) {
+        // Third bisect level (crash investigation): with
+        // MIKUDANCESTUDIO_SKIP_PHYSICS_SYNC set, only the per-model kinematic
+        // sync (the segment that pushes bone transforms into the rigid bodies
+        // and therefore into the broadphase) is skipped; the solver and the
+        // readback keep running.
+        static const bool skipSync = [] {
+            char value[8]{};
+            return GetEnvironmentVariableA("MIKUDANCESTUDIO_SKIP_PHYSICS_SYNC",
+                                           value, sizeof(value)) > 0 &&
+                   value[0] != '\0' && value[0] != '0';
+        }();
         // x64 twin: 255 count-down walk (mov edi, 0FFh at 0x7FF7CB44C74B).
         for (int j = 0; j < kModelSlotCount; ++j)
-            if (models[j] != nullptr)
+            if (models[j] != nullptr && !skipSync)
                 ModelKinematicSync(models[j]);              // 0x46FD4D
 #ifdef MIKUDANCESTUDIO_DIAG
         if (captureStages)
