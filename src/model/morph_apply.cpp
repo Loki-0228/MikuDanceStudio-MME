@@ -74,7 +74,8 @@ void QuatMul(float out[4], const float a[4], const float b[4]) {
 // quaternion by `w` through axis-angle and accumulate into the 32-byte work
 // record selected by the entry's bone index.
 void AccumBoneEntry(mdl::BoneMorphOffsetRecord* work,
-                    const mdl::PmxBoneMorphEntry& ent, float w) {
+                    int workCount, const mdl::PmxBoneMorphEntry& ent, float w) {
+    if (!work || ent.boneIndex < 0 || ent.boneIndex >= workCount) return;
     mdl::BoneMorphOffsetRecord& rec = work[ent.boneIndex];
     float x = ent.rotation[0];
     float y = ent.rotation[1];
@@ -169,13 +170,36 @@ void AccumMatMorph(mdl::MaterialMorphPool* addP,
         if (mi == -1) {
             for (int s = 0; s < matCount; ++s)
                 ApplyMatSlot(addP[s], mulP[s], ent, w);
-        } else {
+        } else if (mi >= 0 && mi < matCount) {
             ApplyMatSlot(addP[mi], mulP[mi], ent, w);
         }
     }
 }
 
 }  // namespace
+
+// Entries retain PMX bone indices. The accumulator must therefore be indexed
+// by bone, not by the number/order of morph entries (which can be sparse and
+// can reference the same bone several times). Apply each bone's total once.
+void InitializeBoneMorphOffsets(unsigned char* m) {
+    auto& model = *mdl::Mdl(m);
+    auto*& work = mdl::BoneMorphOffsets(m);
+    operator delete(work);
+    work = nullptr;
+    mdl::BoneMorphOffsetCount(m) = 0;
+    bool hasEntries = false;
+    for (std::uint32_t i = 0; i < model.morphCount; ++i)
+        hasEntries |= model.morphs[i].type == 2 && model.morphs[i].boneCount > 0;
+    if (!hasEntries || model.boneCount == 0) return;
+    work = static_cast<mdl::BoneMorphOffsetRecord*>(
+        operator new(sizeof(*work) * model.boneCount));
+    mdl::BoneMorphOffsetCount(m) = static_cast<int>(model.boneCount);
+    for (std::uint32_t i = 0; i < model.boneCount; ++i) {
+        work[i] = {};
+        work[i].boneIndex = static_cast<int>(i);
+        work[i].rotation[3] = 1.f;
+    }
+}
 
 void ModelApplyMorphs(unsigned char* m) {
     mdl::ModelRecord& model = *mdl::Mdl(m);
@@ -205,17 +229,18 @@ void ModelApplyMorphs(unsigned char* m) {
             if (morph.type == 2) {                    // bone morph
                 const int n = morph.boneCount;
                 for (int k = 0; k < n; ++k)
-                    AccumBoneEntry(work, morph.boneEntries[k], w);
+                    AccumBoneEntry(work, workCount, morph.boneEntries[k], w);
             }
         } else {                                      // group morph
             for (int k = 0; k < morph.groupCount; ++k) {
                 const mdl::PmxGroupMorphEntry& ref = morph.groupEntries[k];
+                if (ref.morphIndex < 0 || ref.morphIndex >= morphCount) continue;
                 const mdl::MorphRecord& target = morphs[ref.morphIndex];
                 if (target.type == 2) {
                     const int en = target.boneCount;
                     const float w2 = w * ref.weight;
                     for (int e = 0; e < en; ++e)
-                        AccumBoneEntry(work, target.boneEntries[e], w2);
+                        AccumBoneEntry(work, workCount, target.boneEntries[e], w2);
                 }
             }
         }
@@ -225,7 +250,8 @@ void ModelApplyMorphs(unsigned char* m) {
     const int matCount = static_cast<int>(model.materialCount);
     auto* addP = mdl::MaterialMorphAdd(m);
     auto* mulP = mdl::MaterialMorphMul(m);
-    std::memset(addP, 0, sizeof(*addP) * static_cast<std::size_t>(matCount));
+    if (matCount > 0)
+        std::memset(addP, 0, sizeof(*addP) * static_cast<std::size_t>(matCount));
     for (int i = 0; i < matCount; ++i) {
         mdl::MaterialMorphChannels& slot = mulP[i].channels;
         for (float& value : slot.diffuse) value = 1.0f;
@@ -249,6 +275,7 @@ void ModelApplyMorphs(unsigned char* m) {
         } else {                                      // group morph
             for (int k = 0; k < morph.groupCount; ++k) {
                 const mdl::PmxGroupMorphEntry& ref = morph.groupEntries[k];
+                if (ref.morphIndex < 0 || ref.morphIndex >= morphCount) continue;
                 const mdl::MorphRecord& target = morphs[ref.morphIndex];
                 if (target.type == 8)
                     AccumMatMorph(addP, mulP, matCount, target,

@@ -662,6 +662,7 @@ void SetPhysicsMode(unsigned char* m, int afterPhysics,
         mdl::BoneMorphOffsetRecord* records = mdl::BoneMorphOffsets(m);
         for (int i = 0; i < recCount; ++i) {
             const mdl::BoneMorphOffsetRecord& record = records[i];
+            if (record.boneIndex < 0 || record.boneIndex >= boneCount) continue;
             mikudancestudio::mdl::BoneRecord* bone = &bones[record.boneIndex];
             bone->physicsOffset[0] += record.translation[0];
             bone->physicsOffset[1] += record.translation[1];

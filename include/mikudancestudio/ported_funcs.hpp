@@ -139,6 +139,7 @@ void SetPhysicsMode(unsigned char* model, int a2,
                     unsigned char* const* modelSlots,
                     int a4);                          // VA 0x004A9220
 void ModelApplyMorphs(unsigned char* model);          // VA 0x004970B0
+void InitializeBoneMorphOffsets(unsigned char* model);
 void UpdateModelVertexBuffers(MMDApp* app, unsigned char* model,
                               const float frameWorld[16]); // VA 0x004B0C50
 void CreateRigidBody(PhysicsScene* scene, void** out, int shape, float sx, float sy,

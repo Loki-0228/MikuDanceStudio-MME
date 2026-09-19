@@ -356,7 +356,7 @@ endif()
 option(MIKUDANCESTUDIO_BUILD_UI_TESTS "Build user-acceptance regression tests" OFF)
 if (MIKUDANCESTUDIO_BUILD_UI_TESTS)
     enable_testing()
-    foreach (ui_test ui_language_tests panel_key_tests window_interaction_tests pmm_reload_tests)
+    foreach (ui_test ui_language_tests panel_key_tests window_interaction_tests pmm_reload_tests morph_runtime_tests)
         add_executable(${ui_test} EXCLUDE_FROM_ALL tests/${ui_test}.cpp)
         target_link_libraries(${ui_test} PRIVATE mikudancestudio_core winmm dsound)
         set_target_properties(${ui_test} PROPERTIES
@@ -384,6 +384,30 @@ add_executable(MikuDanceStudio WIN32
     ${MIKUDANCESTUDIO_GEN_RES}
     ${CMAKE_CURRENT_SOURCE_DIR}/exports/MikuMikuDance.def
 )
+
+if (MIKUDANCESTUDIO_BUILD_UI_TESTS)
+    # Optional real-scene stress runner. No user assets are distributed with it.
+    add_executable(scene_lifecycle_tests EXCLUDE_FROM_ALL tests/scene_lifecycle_tests.cpp
+        res/MMD.rc ${MIKUDANCESTUDIO_GEN_RES})
+    target_link_libraries(scene_lifecycle_tests PRIVATE mikudancestudio_core winmm dsound)
+    target_link_options(scene_lifecycle_tests PRIVATE "/MANIFEST:NO"
+        "${CMAKE_CURRENT_SOURCE_DIR}/${MIKUDANCESTUDIO_GEN_RES}")
+    set_target_properties(scene_lifecycle_tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/$<CONFIG>")
+    # Explicit opt-in host for locally installed MME. MMHack imports the host
+    # by filename and ordinal, so a normal test executable cannot exercise it.
+    add_executable(scene_lifecycle_mme_tests EXCLUDE_FROM_ALL tests/scene_lifecycle_tests.cpp
+        res/MMD.rc ${MIKUDANCESTUDIO_GEN_RES} exports/MikuMikuDance.def)
+    target_link_libraries(scene_lifecycle_mme_tests PRIVATE mikudancestudio_core winmm dsound)
+    target_compile_definitions(scene_lifecycle_mme_tests PRIVATE REQUIRE_MME=1)
+    target_link_options(scene_lifecycle_mme_tests PRIVATE "/MANIFEST:NO"
+        "${CMAKE_CURRENT_SOURCE_DIR}/${MIKUDANCESTUDIO_GEN_RES}")
+    set_target_properties(scene_lifecycle_mme_tests PROPERTIES
+        OUTPUT_NAME "MikuMikuDance" ENABLE_EXPORTS ON
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/mme/lib/$<CONFIG>"
+        PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/mme/symbols/$<CONFIG>"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests/mme/$<CONFIG>")
+endif()
 
 target_link_libraries(MikuDanceStudio PRIVATE
     mikudancestudio_core

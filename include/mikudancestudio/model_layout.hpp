@@ -78,7 +78,7 @@ struct ModelRecord {
     std::uint32_t physOffsetCount;  // 8688
     std::uint32_t physLastFrame;  // 8692
     RawPad<12> gap5;  // 8696..8708 (unrecovered)
-    std::int32_t boneMorphCount;  // 8708  (pmx_load boneMorphTotal store)
+    std::int32_t boneMorphCount;  // 8708  (bone-indexed morph work pool length)
     RawPad<12> gap6;  // 8712..8724 (unrecovered)
     PmdVertexMorphEntry* morph0Table;  // 8724  (16-byte PMD morph entries)
     void* boneMorphTable;  // 8728  (pmx_load 32-byte entries)

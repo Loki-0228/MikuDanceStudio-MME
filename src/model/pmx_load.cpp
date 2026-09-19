@@ -916,7 +916,7 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
     _read(fh, &model.morphCount, sizeof(model.morphCount));
     const std::int32_t morphCount = static_cast<std::int32_t>(model.morphCount);
     TracePmxOffset(fh, "morphs-begin", morphCount, 0);
-    std::int32_t boneMorphTotal = 0, uvMorphTotal = 0, uv2Total = 0,
+    std::int32_t uvMorphTotal = 0, uv2Total = 0,
                  uv3Total = 0, uv4Total = 0, uv5Total = 0;
     const std::uint8_t vertIdxSize = model.pmxVertexIndexSize;
     const std::uint8_t morphIdxSize = model.pmxMorphIndexSize;
@@ -1058,7 +1058,6 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
                     }
                     _read(fh, entry.translation, sizeof(entry.translation));
                     _read(fh, entry.rotation, sizeof(entry.rotation));
-                    ++boneMorphTotal;
                 }
                 morph.offsetCount = 0;
                 break;
@@ -1158,33 +1157,7 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
     if (vmap)
         operator delete(vmap);
 
-    if (boneMorphTotal > 0) {                               // 32B records
-        mdl::BoneMorphOffsetCount(m) = boneMorphTotal;
-        mdl::BoneMorphOffsets(m) = static_cast<mdl::BoneMorphOffsetRecord*>(
-            operator new(sizeof(mdl::BoneMorphOffsetRecord) * boneMorphTotal));
-        std::memset(mdl::BoneMorphOffsets(m), 0,
-                    sizeof(mdl::BoneMorphOffsetRecord) * boneMorphTotal);
-        int w = 0;
-        for (std::int32_t i = 0; i < morphCount; ++i) {
-            const mdl::MorphRecord& morph = mdl::Morphs(m)[i];
-            if (morph.type != 2)
-                continue;
-            for (int o = 0; o < morph.boneCount; ++o) {
-                mdl::BoneMorphOffsetRecord& rec =
-                    mdl::BoneMorphOffsets(m)[w];
-                rec.boneIndex = morph.boneEntries[o].boneIndex;
-                ++w;
-            }
-        }
-        // record tails: pos zero, quat identity (+28 = 1)
-        for (int r = 0; r < boneMorphTotal; ++r) {
-            mdl::BoneMorphOffsetRecord& rec = mdl::BoneMorphOffsets(m)[r];
-            rec.translation[0] = rec.translation[1] =
-                rec.translation[2] = 0.0f;
-            rec.rotation[0] = rec.rotation[1] = rec.rotation[2] = 0.0f;
-            rec.rotation[3] = 1.0f;
-        }
-    }
+    InitializeBoneMorphOffsets(m);
 
     // UV / additional-UV morph slot records (20B: {vertIdx, vert data})
     struct UvFamily { std::size_t type, morphFamily; };
