@@ -1780,7 +1780,9 @@ void CmdViewMenu(MMDApp* app, HWND hwnd, std::uint16_t id,
         static const struct {
             int id;
             int flagIdx;
-            void (*frameLineOp)(MMDApp*);
+            // Every frame-line op returns the number of key records it
+            // moved/removed (0 = nothing to do; defect 7).
+            int (*frameLineOp)(MMDApp*);
         } kFrameEditDialogs[] = {
             {255, 9, InsertBoneCameraFrameLine},    // 0x439E40
             {256, 11, DeleteBoneCameraFrameLine},   // 0x43A650

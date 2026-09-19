@@ -735,6 +735,22 @@ void CmdControl450(MMDApp* app, HWND hwnd, std::uint16_t id,
     // math follows the original x87 shape (double intermediates).
     // ------------------------------------------------------------------
     case 495: {
+        // Same guard the 494/501 siblings carry: a model whose per-bone arrays
+        // are not allocated yet (boneCount already set, arrays still null) must
+        // not be walked - the reset loop reads boneSelection[0] immediately and
+        // writes bonePhysicsState[i] for every selected bone.  Guard before the
+        // undo push or any UI side effect, like the family prologue above
+        // (defect 6: the "part of the selection is not reset" report must not
+        // be able to degenerate into a fault on a partially loaded model).
+        {
+            auto* const guard = mikudancestudio::mdl::Mdl(ActiveModel(app));
+            if (guard->boneCount > 0 &&
+                (guard->boneTable == nullptr ||
+                 guard->boneSelection == nullptr ||
+                 guard->bonePhysicsState == nullptr)) {
+                break;
+            }
+        }
         PushBoneEditUndo(app);  // prep (thiscall)
         unsigned char* model = ActiveModel(app);
         auto* modelRecord = mikudancestudio::mdl::Mdl(model);

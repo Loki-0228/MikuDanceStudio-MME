@@ -319,16 +319,64 @@ void PumpInterpolationToggle(MMDApp* app, HWND focus,
 // {0x1AA, 0x1A9, 0x1A1, 0x19A, 0x199}, then DeleteMarkedKeyframes rebuilds the
 // model-edit state.
 // ---------------------------------------------------------------------------
+// The gate itself is a pure function so the rule is assertable without a
+// window (tests/panel_key_tests.cpp).  `focus == main` alone was the reported
+// failure: after the user clicks ANY panel control (the bone panel's
+// 全選択/初期化/登録 buttons, the radio rows, a combo, the slider ...) the focus
+// is that control, not the main window, so the Delete key went dead exactly in
+// the "select all bones, then delete" workflow.  The window half is therefore
+// now the same rule the letter ladder uses - the main/floating window, any
+// window inside them, or a cleared focus (FocusAllowsLetterHotkeys) - while a
+// focused text field and the five frame edits keep the key (text editing).
+bool DeleteShortcutAllowed(const MMDApp* app, bool focusAcceptsKeys,
+                           bool focusInFrameEdit) noexcept {
+    if (app == nullptr) {
+        return false;
+    }
+    if (!focusAcceptsKeys || focusInFrameEdit) {
+        return false;
+    }
+    if (app->state.deleteKeyState != 1) {          // +0xB8/x64 +0xBC cell
+        return false;
+    }
+    if (app->PlaybackActive() != 0) {              // +0x330
+        return false;
+    }
+    return true;
+}
+
 void PumpDeleteRebuild(MMDApp* app, HWND focus, bool focusNotInPanelEdit) {
+    (void)focus;  // the focus decision is taken from the FRESH GetFocus below
     const HWND main = static_cast<HWND>(app->Hwnd());
-    if (!(focus == main && app->state.deleteKeyState == 1 &&
-          app->PlaybackActive() == 0 && focusNotInPanelEdit))
-        return;
     const HWND current = GetFocus();                      // 0x44F13F
     static const int kFrameEdits[] = {0x1AA, 0x1A9, 0x1A1, 0x19A, 0x199};
+    bool inFrameEdit = false;
     for (int id : kFrameEdits) {
-        if (GetDlgItem(main, id) == current)
-            return;
+        if (GetDlgItem(main, id) == current) {
+            inFrameEdit = true;
+            break;
+        }
+    }
+    const bool focusAcceptsKeys = FocusAllowsLetterHotkeys(
+        main, static_cast<HWND>(app->FloatingWindow()), current);
+    // The panel-edit sweep still owns its half of the rule.
+    if (!focusNotInPanelEdit) {
+        return;
+    }
+    if (!DeleteShortcutAllowed(app, focusAcceptsKeys, inFrameEdit)) {
+        return;
+    }
+    // Delete removes the keyframes of the SELECTED bones on the current frame
+    // in addition to the explicitly marked ones ("全選択 -> Del"): the mark
+    // array (bone key +0x39 allocated byte) is what the deletion backend walks,
+    // so the selected bones' current-frame records are marked first.  With no
+    // key to delete the call returns 0 and the tables stay untouched.
+    if (unsigned char* model = app->SelectedModel(); model != nullptr) {
+        const std::uint8_t slot = app->SelectedModelSlot();
+        if (slot < kModelSlotCount) {
+            MarkSelectedBoneKeysAtFrame(model,
+                                        static_cast<int>(app->CurrentFrame()));
+        }
     }
     DeleteMarkedKeyframes(app);                                       // 0x4316B0
 }

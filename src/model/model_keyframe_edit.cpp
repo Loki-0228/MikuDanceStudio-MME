@@ -492,6 +492,61 @@ void BeginRangeScaleBoneUndo(unsigned char* model, int frame,
 // VA 0x004A09E0: delete every marked model-mode key.  The three key arrays
 // retain their fixed-capacity slots; non-root records are unlinked and reset,
 // while root records keep their track-head role with default values.
+// ---- defect 6: Del must cover the SELECTED bones, not just the marked keys --
+// The Delete shortcut used to look only at the mark byte (+0x39 allocated) that
+// the timeline click / frame-range selection writes.  "Select all bones (494)
+// then press Del" therefore did nothing at a frame that carried keys, because
+// nothing had ever been marked.  The original's DeleteMarkedKeyframes still
+// owns the removal (undo ring, unlink, interpolation rebuild, panel refresh);
+// this helper only marks the records that belong to the current frame and to a
+// bone whose selection byte (boneSelection, 0x2D94 x86 / 0x3120 x64 - the same
+// array 494 writes and 495 reads) is set.  Returns the number of records
+// marked; 0 = nothing to delete, tables untouched.
+int MarkSelectedBoneKeysAtFrame(unsigned char* model, int frame) {
+    if (model == nullptr) {
+        return 0;
+    }
+    mdl::BoneKey* const keys = mdl::BoneKeys(model);
+    const std::int32_t boneCount =
+        static_cast<std::int32_t>(mikudancestudio::mdl::Mdl(model)->boneCount);
+    const unsigned char* const selected =
+        mikudancestudio::mdl::Mdl(model)->boneSelection;
+    if (keys == nullptr || boneCount <= 0 || selected == nullptr ||
+        frame < 0) {
+        return 0;
+    }
+    const std::uint32_t wanted = static_cast<std::uint32_t>(frame);
+    int marked = 0;
+    for (std::int32_t bone = 0; bone < boneCount; ++bone) {
+        if (selected[bone] == 0) {
+            continue;
+        }
+        // Walk this bone's own chain from its head record (index == bone);
+        // frame 0 means "empty slot" everywhere in the key tables, so the head
+        // record itself can never match wanted != 0.  The chain terminator is
+        // index 0, which is also bone 0's head record - the guard counter stops
+        // a corrupt self-referencing chain.
+        std::int32_t index = bone;
+        for (std::size_t guard = 0; guard <= mdl::kBoneKeyCapacity; ++guard) {
+            if (index < 0 ||
+                static_cast<std::size_t>(index) >= mdl::kBoneKeyCapacity) {
+                break;
+            }
+            mdl::BoneKey& key = keys[index];
+            if (key.allocated == 0 && wanted != 0 && key.frame == wanted) {
+                key.allocated = 1;
+                ++marked;
+            }
+            const std::int32_t next = static_cast<std::int32_t>(key.next);
+            if (next == 0) {
+                break;
+            }
+            index = next;
+        }
+    }
+    return marked;
+}
+
 void DeleteMarkedModelKeys(unsigned char* model, int frame) {  // was Sub4A09E0, VA 0x004A09E0
     if (model == nullptr) return;
     mdl::BoneKey* const boneKeys = mdl::BoneKeys(model);

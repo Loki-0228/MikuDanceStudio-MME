@@ -596,20 +596,18 @@ void SetupFrameWorldTransform(MMDApp* app) {
     device->SetTransform(D3DTS_WORLD,
                          reinterpret_cast<const D3DMATRIX*>(&world));
 
-    // 0x46BC20..0x46BC9F: the alternate projection used by the orthographic
-    // view mode.  The normal perspective projection remains the one written
-    // by RefreshMainWindowViewport.
-    if (app->state.cameraPerspective != 0) {
-        Matrix projection{};
-        projection.m[0][0] = -2.0f / app->CameraDistance();
-        projection.m[1][1] =
-            sub->aspectRatio *
-            projection.m[0][0];
-        projection.m[2][2] = 0.0013f;
-        projection.m[3][3] = 1.0f;
-        device->SetTransform(D3DTS_PROJECTION,
-            reinterpret_cast<const D3DMATRIX*>(&projection));
-    }
+    // 0x46BC20..0x46BC9F / x64 0x140027E96..0x140027F1F: the projection the
+    // frame installs.  The original rebuilds ONE of the two matrices here -
+    // the orthographic one while the パース byte (cameraPerspective, x64
+    // app+0x354) is set, and otherwise leaves the perspective matrix that the
+    // camera panels installed.  The port rebuilds BOTH from the live state:
+    // since the FOV slider (447 / 0x14003ED20) is a one-shot device write, a
+    // stale matrix - left behind by a device-state reset, by an ortho toggle
+    // or by any other SetTransform writer - used to survive indefinitely and
+    // the slider looked dead until something else rebuilt it.  Deriving the
+    // matrix from state.cameraFov every frame makes "drag = next frame shows
+    // it" an invariant (defect 5).
+    ApplyFrameCameraProjection(app);
 
     // 0x46BCAA..0x46BD72: MMD keeps camera translation in the world matrix
     // and still installs this fixed +Z look-at view.  Omitting it leaves the

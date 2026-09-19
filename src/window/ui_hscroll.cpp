@@ -254,32 +254,15 @@ void HandleHScroll(LPARAM lParam, WPARAM wParam) {
     else if (ctrl == GetDlgItem(hwnd, panel::kFovSlider)) {
         const LRESULT pos = SendMessageA(GetDlgItem(hwnd, panel::kFovSlider),
                                          TBM_GETPOS, 0, 0);
-        app->CameraFov() = static_cast<float>(pos);
+        // State write + projection install in one shared body
+        // (ApplyCameraFovSlider, ui_viewport_refresh.cpp): the same builder is
+        // re-run by SetupFrameWorldTransform for every rendered frame, so the
+        // value can no longer be dropped by a competing SetTransform (defect 5).
+        ApplyCameraFovSlider(app, static_cast<int>(pos));
+
         char buf[256];
         sprintf_s(buf, 0x100, "%3d", static_cast<int>(app->CameraFov()));
         EchoEditText(hwnd, 448, buf);
-
-        // fovRad = float(fovDeg * dbl_52BB20), dbl_52BB20 = 0.01745329238474369
-        const float fovRad = static_cast<float>(
-            static_cast<double>(app->CameraFov()) * 0.01745329238474369);
-        D3DRenderer* locale = app->Renderer();
-        const float aspect = locale->aspectRatio;  // 0x1D4EC
-
-        auto* d3dx = &d3dx::Get();
-        if (d3dx->Load()) {
-            d3dx::D3DXMATRIXF proj;
-            // near = fld1 (1.0f), far = flt_52BB28 (100000.0f)
-            d3dx->perspectiveFovLH(&proj, fovRad, aspect, 1.0f, 100000.0f);
-            // The original installs the projection through the device's +0xB0
-            // vtable byte offset, which on x86 (4-byte slots) is slot 44 =
-            // IDirect3DDevice9::SetTransform.  x64 slots are 8 bytes wide, so
-            // the raw offset lands on GetGammaRamp there and the call silently
-            // did nothing (slider value changed, viewport did not).  Call the
-            // typed interface exactly like the 446/448 twins do.
-            IDirect3DDevice9* device = locale->device;  // 0x1D4E0
-            device->SetTransform(D3DTS_PROJECTION,
-                                 reinterpret_cast<const D3DMATRIX*>(&proj));
-        }
         RefreshRequest(-1);
     }
     // ---- 560: physics-interval ratio slider --------------------------------

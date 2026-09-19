@@ -7,7 +7,9 @@
 #include <d3d9.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstring>
 
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/mmd_app.hpp"
@@ -27,6 +29,126 @@ struct ScreenVertex {
     float v;
 };
 static_assert(sizeof(ScreenVertex) == 28);
+
+}  // namespace
+
+// ===========================================================================
+// Camera projection funnel - the single perspective/orthographic builder.
+// ===========================================================================
+// Original call sites of the perspective build (all five use the same shape:
+// fov = cameraFov(0x9F0B4) * 0.01745329238474369, aspect = wrapper+0x3A9D0,
+// zn = 1.0f, zf = 100000.0f, then SetTransform(D3DTS_PROJECTION = 3)):
+//   447 FOV slider   0x14003ED20..0x14003EE33   (ui_hscroll.cpp)
+//   448 FOV edit     0x14005489B..0x140054975   (ui_edit_commit.cpp)
+//   camera key seek  0x140059D73..0x140059DEF   (timeline_advance.cpp)
+//   viewport refresh 0x1400218B0..0x140021912   (RefreshMainWindowViewport)
+//   device init      0x1400379C0..             (d3d_init.cpp, PI/4 seed)
+// The per-frame orthographic override (cameraPerspective != 0, byte 0x354)
+// is 0x140027E96..0x140027F1F: memset(0), m00 = -2/cameraDistance,
+// m11 = aspect*m00, m22 = 0.0013f, m33 = 1.0f, SetTransform(3).
+// ===========================================================================
+
+// Perspective matrix of the live camera state into `out` (row-major float[16],
+// D3DXMatrixPerspectiveFovLH layout).  Pure: no device required, so the FOV
+// data flow is assertable without a window (tests/panel_key_tests.cpp).
+bool BuildCameraPerspectiveProjection(const MMDApp* app, float aspect,
+                                      float out[16]) {
+    if (app == nullptr || out == nullptr || !(aspect > 0.0f)) {
+        return false;
+    }
+    // dbl_52BB20 (0x140132BA8) = 0.01745329238474369, mulss: the original
+    // converts degrees to radians in single precision.  (The state member is
+    // read directly - CameraFov() has no const overload.)
+    const float fovDegrees = app->state.cameraFov;
+    const float fovRadians = static_cast<float>(
+        static_cast<double>(fovDegrees) * 0.01745329238474369);
+    if (!(fovRadians > 0.0f)) {
+        return false;
+    }
+
+    auto& api = d3dx::Get();
+    if (api.Load()) {
+        d3dx::D3DXMATRIXF matrix{};
+        // zn = flt_140132984 (1.0f), zf = flt_140132B44 (100000.0f).
+        api.perspectiveFovLH(&matrix, fovRadians, aspect, 1.0f, 100000.0f);
+        std::memcpy(out, &matrix, sizeof(matrix));
+        return true;
+    }
+    // The original cannot start without the d3dx import; keep the restored
+    // build operable with the identical closed form (same constants, same
+    // row-major layout D3DXMatrixPerspectiveFovLH writes).
+    constexpr float kNear = 1.0f;
+    constexpr float kFar = 100000.0f;
+    const float yScale = 1.0f / std::tan(fovRadians * 0.5f);
+    const float xScale = yScale / aspect;
+    std::memset(out, 0, 16 * sizeof(float));
+    out[0] = xScale;
+    out[5] = yScale;
+    out[10] = kFar / (kFar - kNear);
+    out[11] = 1.0f;
+    out[14] = -kNear * kFar / (kFar - kNear);
+    return true;
+}
+
+CameraFrameProjection CameraFrameProjectionFor(const MMDApp* app) {
+    if (app == nullptr) {
+        return CameraFrameProjection::None;
+    }
+    return app->state.cameraPerspective != 0
+        ? CameraFrameProjection::Orthographic
+        : CameraFrameProjection::Perspective;
+}
+
+CameraFrameProjection ApplyFrameCameraProjection(MMDApp* app) {
+    const CameraFrameProjection kind = CameraFrameProjectionFor(app);
+    if (kind == CameraFrameProjection::None) {
+        return kind;
+    }
+    D3DRenderer* wrapper = app->Renderer();
+    if (wrapper == nullptr) {
+        return kind;
+    }
+    IDirect3DDevice9* device = wrapper->device;
+    if (device == nullptr) {
+        return kind;
+    }
+    float aspect = wrapper->aspectRatio;
+    if (!(aspect > 0.0f)) {
+        aspect = 4.0f / 3.0f;
+    }
+
+    float projection[16]{};
+    if (kind == CameraFrameProjection::Orthographic) {
+        // x64 0x140027E96..0x140027F1F (the port's previous inline copy).
+        const float m00 = -2.0f / app->CameraDistance();
+        projection[0] = m00;
+        projection[5] = aspect * m00;
+        projection[10] = 0.0013f;
+        projection[15] = 1.0f;
+    } else if (!BuildCameraPerspectiveProjection(app, aspect, projection)) {
+        return CameraFrameProjection::None;
+    }
+    device->SetTransform(
+        D3DTS_PROJECTION,
+        reinterpret_cast<const D3DMATRIX*>(projection));
+    return kind;
+}
+
+// The 447 slider body (0x14003ED20..0x14003EE33), split from the WM_HSCROLL
+// dispatch so the value flow is testable: TBM_GETPOS -> cameraFov ->
+// perspective build -> SetTransform.  Returns true when the value changed.
+bool ApplyCameraFovSlider(MMDApp* app, int position) {
+    if (app == nullptr) {
+        return false;
+    }
+    const float value = static_cast<float>(position);
+    const bool changed = app->CameraFov() != value;
+    app->CameraFov() = value;
+    ApplyFrameCameraProjection(app);
+    return changed;
+}
+
+namespace {
 
 void WriteQuad(IDirect3DVertexBuffer9* buffer, float left, float top,
                float right, float bottom, float uRight, float vBottom) {

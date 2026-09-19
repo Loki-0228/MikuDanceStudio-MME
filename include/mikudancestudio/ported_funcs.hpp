@@ -425,14 +425,57 @@ void CopyDirPathW(wchar_t* dest, const wchar_t* src);  // was Sub42AE20, VA 0x00
                                                        //  directory buffers)
 void SelectFrameGroup(MMDApp*, int group);        // 0xD9/0xDA/0xDC target
 // ---- frame-line edit commands (src/window/frame_line_edit.cpp) -----------
-void InsertBoneCameraFrameLine(MMDApp* app);  // was Sub439E40, VA 0x00439E40
-                                             //  insert frame line (bone/cam)
-void DeleteBoneCameraFrameLine(MMDApp* app);  // was Sub43A650, VA 0x0043A650
-                                             //  delete frame line (bone/cam)
-void InsertFacialLightFrameLine(MMDApp* app); // was Sub43B720, VA 0x0043B720
+int InsertBoneCameraFrameLine(MMDApp* app);   // was Sub439E40, VA 0x00439E40
+int DeleteBoneCameraFrameLine(MMDApp* app);   // was Sub43A650, VA 0x0043A650
+// Bone-mode table surgery of the two commands above, WITHOUT the UI tail
+// (seek/panel/timeline refresh): same walks, same undo bookkeeping, so the
+// frame-line contract is assertable without a device or a window
+// (tests/panel_key_tests.cpp).  Both return the number of key records changed
+// and treat "0" as "nothing to do" (the undo ring stays untouched).
+int ShiftBoneKeysForFrameLineInsert(MMDApp* app, std::uint32_t frame);
+int ShiftBoneKeysForFrameLineDelete(MMDApp* app, std::uint32_t frame,
+                                    bool autoInterp);
+int InsertFacialLightFrameLine(MMDApp* app); // was Sub43B720, VA 0x0043B720
                                              //  insert frame line (facial/light)
-void DeleteFacialLightFrameLine(MMDApp* app); // was Sub43BB30, VA 0x0043BB30
-                                             //  delete frame line (facial/light)
+int DeleteFacialLightFrameLine(MMDApp* app);  // was Sub43BB30, VA 0x0043BB30
+                                              //  delete frame line (facial/light)
+// The two bone/camera frame-line commands return the number of key records
+// they moved (insert) / removed (delete); 0 means "nothing to do", so the
+// I/K consumers can tell the two cases apart without inspecting the tables
+// (defect 7: I/K on a frame that already carries a keyframe).
+
+// ---- camera projection funnel (src/window/ui_viewport_refresh.cpp) -------
+// Which projection the frame installs; the selector byte is
+// cameraPerspective (x64 app+0x354, x86 app+0x31C).
+enum class CameraFrameProjection { None, Perspective, Orthographic };
+CameraFrameProjection CameraFrameProjectionFor(const MMDApp* app);
+// Rebuilds the projection of the LIVE camera state on the device and returns
+// which kind it installed.  Called every frame from SetupFrameWorldTransform
+// so the visible field of view always equals state.cameraFov (defect 5) while
+// the orthographic override (x64 0x140027E96) stays the only alternative.
+CameraFrameProjection ApplyFrameCameraProjection(MMDApp* app);
+// Perspective matrix of the live camera state (row-major float[16] in
+// D3DXMatrixPerspectiveFovLH layout).  Pure - needs no device.
+bool BuildCameraPerspectiveProjection(const MMDApp* app, float aspect,
+                                      float out[16]);
+// The 447 WM_HSCROLL body: state write + projection install.  Returns true
+// when the value actually changed.
+bool ApplyCameraFovSlider(MMDApp* app, int position);
+
+// ---- Delete shortcut gate + selected-bone key removal -------------------
+// (src/app/pump_edit_keys.cpp G8 / src/model/model_keyframe_edit.cpp)
+// Pure precondition of the Delete shortcut, split from the window plumbing so
+// the rule is testable without a window (defect 6).  `focusAcceptsKeys` is the
+// focus half (main/floating window or a cleared focus, never a text entry -
+// the same rule the letter ladder uses: FocusAllowsLetterHotkeys);
+// `focusInFrameEdit` is the FRESH GetFocus probe against the five frame edits.
+bool DeleteShortcutAllowed(const MMDApp* app, bool focusAcceptsKeys,
+                           bool focusInFrameEdit) noexcept;
+// Marks every bone-key record that sits exactly on `frame` and belongs to a
+// bone selected in the model's boneSelection array (0x2D94 x86 / 0x3120 x64)
+// so DeleteMarkedKeyframes removes it.  Returns the number of records marked;
+// 0 means "nothing to delete" and leaves the tables untouched.
+int MarkSelectedBoneKeysAtFrame(unsigned char* model, int frame);
 
 // ---- DxOpenNI / Kinect loader (src/app/oni_kinect.cpp) ------------------
 void OpenNiInit(MMDApp* app, const char* sjisPath);  // VA 0x00429CB0
