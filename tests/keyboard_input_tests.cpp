@@ -7,6 +7,7 @@
 
 namespace mikudancestudio {
 void ConsumeLetterHotkeys(MMDApp*);
+void DispatchLetterHotkeys(MMDApp*, HWND);
 void CmdControl450(MMDApp*, HWND, std::uint16_t, std::uint16_t);
 void CmdControl500(MMDApp*, HWND, std::uint16_t, std::uint16_t);
 }
@@ -97,7 +98,26 @@ int main() {
           "Main-window focus accepts letter shortcuts");
     Check(!FocusAllowsLetterHotkeys(owner, nullptr, edit),
           "Text-field focus must keep letter shortcuts off");
+    HWND button = CreateWindowExW(0, L"BUTTON", L"select", WS_CHILD | WS_VISIBLE,
+                                  0, 25, 100, 20, owner, nullptr,
+                                  GetModuleHandleW(nullptr), nullptr);
+    Check(button != nullptr, "create hotkey test button");
+    app->Hwnd() = owner;
+    auto pressB = [&](HWND focus) {
+        std::memset(keys, 0, sizeof(keys));
+        app->LetterHotkeys().Update(keys, true);
+        keys['B'] = 0x80;
+        app->LetterHotkeys().Update(keys, true);
+        DispatchLetterHotkeys(app.get(), focus);
+    };
+    pressB(button);
+    Check(app->state.blackBackgroundEnabled == 1, "consumer accepts panel-button focus");
+    pressB(nullptr);
+    Check(app->state.blackBackgroundEnabled == 0, "consumer accepts cleared focus");
+    pressB(edit);
+    Check(app->state.blackBackgroundEnabled == 0, "consumer rejects text-field focus");
     DestroyWindow(owner);
+    app->Hwnd() = nullptr;
     std::puts("PASS focus rule for the letter ladder");
 
     for (int slot : {0, 254, 255}) {

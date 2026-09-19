@@ -11,10 +11,9 @@
 //
 // Common gate, recomputed per block in the original (x86 registers ebx=app,
 // var_14C4=GetFocus(), var_14D0="focus not in a panel edit"):
-//   focusOK       = GetFocus() == main window || ViewportInputActive()
-//                   (byte 0x9EDD1, set at 0x46FF29/0x46FF32 from the
-//                   foreground window - already maintained by
-//                   MouseInteractionBegin)
+//   focusOK       = foreground belongs to the app, and focus accepts
+//                   shortcuts (including panel buttons and cleared focus).
+//                   Use the same rule as the keyboard sampling layer.
 //   focusInEdit   = focus is one of the panel edits 0x1C1 / 0x1C2 / 0x1DA /
 //                   0x1DB / 0x220..0x226 / 0x22A on (floating ? floating :
 //                   main) - the controls whose TAB/caret sections clear the
@@ -93,15 +92,14 @@ HWND LadderOwner(MMDApp* app) {
 }
 
 // The panel edits whose focus suppresses the ladder (see header).
-bool FocusInPanelEdit(MMDApp* app) {
+bool FocusInPanelEdit(MMDApp* app, HWND focus) {
     const HWND owner = LadderOwner(app);
-    const HWND focus = GetFocus();
     static const int kEdits[] = {
         0x1C1, 0x1C2, 0x1DA, 0x1DB,
         0x220, 0x221, 0x222, 0x223, 0x224, 0x225, 0x226, 0x22A,
     };
     for (int id : kEdits) {
-        if (GetDlgItem(owner, id) == focus)
+        if (focus != nullptr && GetDlgItem(owner, id) == focus)
             return true;
     }
     return false;
@@ -116,16 +114,14 @@ void SendMenuCommand(MMDApp* app, int id) {
 
 }  // namespace
 
-void ConsumeLetterHotkeys(MMDApp* app) {
-    // GetFocus is thread-local and can retain a control while another app
-    // is foreground. Recheck eligibility at consumption as well as polling.
-    if (!LetterHotkeyInputAllowed(app)) return;
+// Dispatch an eligible input snapshot. The pump checks foreground ownership
+// below; keeping focus explicit also lets tests exercise the real I/K/F routes
+// without activating a window over the user's current application.
+void DispatchLetterHotkeys(MMDApp* app, HWND focus) {
     auto& state = app->state;
     const HWND main = static_cast<HWND>(app->Hwnd());
-    const HWND focus = GetFocus();                        // var_14C4
-    const bool focusOK =
-        focus == main || app->ViewportInputActive() != 0;  // 0x9EDD1
-    const bool focusInEdit = FocusInPanelEdit(app);        // !var_14D0
+    const bool focusOK = FocusAllowsLetterHotkeys(main, app->FloatingWindow(), focus);
+    const bool focusInEdit = FocusInPanelEdit(app, focus);
     const bool shift = state.shiftModifierState == 3;      // +0x24
     const bool ctrl = state.ctrlModifierState == 3;        // +0xC0
     const bool playing = app->PlaybackActive() != 0;       // +0x330
@@ -387,6 +383,11 @@ void ConsumeLetterHotkeys(MMDApp* app) {
         !focusInEdit && pressed(kSlotR)) {
         SendMenuCommand(app, 0xFB);                        // case 251
     }
+}
+
+void ConsumeLetterHotkeys(MMDApp* app) {
+    if (!LetterHotkeyInputAllowed(app)) return;
+    DispatchLetterHotkeys(app, GetFocus());
 }
 
 }  // namespace mikudancestudio
