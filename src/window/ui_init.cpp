@@ -43,6 +43,7 @@
 #include "mikudancestudio/ui_translation.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/ui_language.hpp"
 #include "ui_controls.inc"
 
 namespace mikudancestudio {
@@ -728,6 +729,13 @@ bool CreateUIControls(MMDApp* app, HWND hwnd) {
 // (+0) name selected by the UI flag; finishes with PostLanguageSweep
 // (0x40D070).  Negative slot only clears.  (Return value is the sweep's
 // BOOL; callers ignore it.)
+// The original's UI flag is two-valued, so its `!= 0` test means "English
+// UI"; the port's third language (2 = Chinese) is not English, hence the
+// shared UiUsesEnglishNames() test.  Control 450 is the follow-bone list of
+// the model/camera panel (0x1C2, filled on scene load from the camera's
+// parent model and re-filled by RepopulateBoneCombo when that model changes) -
+// with `!= 0` the Chinese UI showed English bone names there while the four
+// morph combos (post_load_init.cpp, `== 1`) showed the model's own names.
 // ---------------------------------------------------------------------------
 void RefillBoneRegisterCombo(MMDApp* app, int slot) {
     HWND combo = GetDlgItem(static_cast<HWND>(app->Hwnd()), panel::kBoneRegisterCombo);
@@ -735,8 +743,14 @@ void RefillBoneRegisterCombo(MMDApp* app, int slot) {
     if (slot >= 0) {
         unsigned char* model = app->ModelSlot(slot);
         if (model != nullptr) {
+            // x86 +11652 == ModelRecord::boneCount, but the x64 record moves it
+            // to 12560 (the two undo rings grow 28 -> 40 bytes per slot), so the
+            // raw offset read undo-ring memory on the shipping x64 build: with a
+            // freshly loaded model that dword is 0 and the bone list of the
+            // bone/camera panel came up EMPTY, and after any bone edit it fed
+            // garbage indices into the loop.  Use the typed field.
             const std::int32_t boneCount =
-                *reinterpret_cast<std::int32_t*>(model + 11652);
+                static_cast<std::int32_t>(mikudancestudio::mdl::Mdl(model)->boneCount);
             mikudancestudio::mdl::BoneRecord* bones =
                 mikudancestudio::mdl::Bones(model);
             for (std::int32_t i = 0; i < boneCount; ++i) {       // 0x4100B1
@@ -745,7 +759,7 @@ void RefillBoneRegisterCombo(MMDApp* app, int slot) {
                 if (type < mdl::BoneType::InertTip ||
                     type == mdl::BoneType::FixedAxis) {
                     const char* name =
-                        app->EnglishUI() != 0
+                        UiUsesEnglishNames(app->EnglishUI())
                             ? reinterpret_cast<const char*>(bone->nameEn)
                             : reinterpret_cast<const char*>(bone);
                     SendMessageA(combo, CB_ADDSTRING, 0,

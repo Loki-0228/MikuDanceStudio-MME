@@ -81,6 +81,7 @@
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/ui_language.hpp"
 
 namespace mikudancestudio {
 
@@ -550,8 +551,12 @@ void InitPhysicsModelDialog(HWND hDlg) {  // was Sub45F670, VA 0x0045F670
     }
     mdl::BoneRecord* bones = model->boneTable;
     for (std::uint32_t b = 0; b < model->boneCount; ++b) {
+        // Names follow the shared rule (only the English UI takes nameEn):
+        // `englishUI != 0` made the Chinese UI list English bone names here
+        // while the main panel's morph combos showed the model's own names.
         const char* name =
-            app->state.englishUI != 0 ? bones[b].nameEn : bones[b].name;
+            UiUsesEnglishNames(app->state.englishUI) ? bones[b].nameEn
+                                                     : bones[b].name;
         SendMessageA(GetDlgItem(hDlg, kBoneCombo), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(name));
         SendMessageA(GetDlgItem(hDlg, kPivotBoneCombo), CB_ADDSTRING, 0,

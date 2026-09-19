@@ -188,6 +188,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/ui_language.hpp"
 
 namespace mikudancestudio {
 
@@ -2629,8 +2630,13 @@ static void Cmd400_DeleteModel(MMDApp* app, HWND hwnd) {
     unsigned char* model = app->ModelSlot(found);
     const mdl::ModelRecord& record = *mdl::Mdl(model);
     char text[0x100];
+    // The box text keeps the original boolean test (the Chinese UI uses the
+    // English box), but the *model name* inside it follows the shared name
+    // rule: only the English UI takes nameEn (see ui_language.hpp).
+    const bool englishNames = UiUsesEnglishNames(app->state.englishUI);
     if (app->state.englishUI != 0) {
-        sprintf_s(text, 0x100, kMsgDelModelEn, record.nameEn);
+        sprintf_s(text, 0x100, kMsgDelModelEn,
+                  englishNames ? record.nameEn : record.name);
     } else {
         sprintf_s(text, 0x100, kMsgDelModelJp, record.name);
     }

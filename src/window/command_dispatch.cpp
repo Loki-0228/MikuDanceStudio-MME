@@ -42,6 +42,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
 #include "mikudancestudio/runtime_log.hpp"
+#include "mikudancestudio/ui_language.hpp"
 
 namespace mikudancestudio {
 
@@ -69,6 +70,10 @@ constexpr std::size_t kModelComboOrder2D7C = 0x2D7C;
 // 0x48e7f5..0x48e8db): repopulate a bone combo with the model's selectable
 // bones (type byte +0x1E4 == 8 or < 7; EN name +0x14 when the english-UI
 // byte 0xA0B4C is set, JP name +0x0 otherwise) and set the cursor to 0.
+// The original's byte is two-valued, so its `!= 0` test means "English UI";
+// the port's third language (2 = Chinese) is not English, hence the shared
+// UiUsesEnglishNames() test - with `!= 0` the Chinese UI listed English bone
+// names here while the morph combos stayed on the model's own names.
 void RepopulateBoneCombo(MMDApp* app, HWND combo, std::int32_t modelSlot) {
     unsigned char* model = app->ModelSlot(modelSlot);
     const mdl::ModelRecord* record = mdl::Mdl(model);
@@ -78,7 +83,7 @@ void RepopulateBoneCombo(MMDApp* app, HWND combo, std::int32_t modelSlot) {
         const mdl::BoneType type = bones[i].type;
         if (type == mdl::BoneType::FixedAxis ||
             type < mdl::BoneType::InertTip) {
-            const char* name = app->state.englishUI != 0
+            const char* name = UiUsesEnglishNames(app->state.englishUI)
                                    ? bones[i].nameEn
                                    : bones[i].name;
             SendMessageA(combo, CB_ADDSTRING, 0,

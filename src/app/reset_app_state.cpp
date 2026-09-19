@@ -26,6 +26,8 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/scene_ownership.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/ui_language.hpp"
+#include "mikudancestudio/ui_translation.hpp"
 
 namespace mikudancestudio {
 void ReloadModels(MMDApp* app);   // VA 0x0042E640 (timeline_advance.cpp), was Sub42E640
@@ -186,43 +188,43 @@ void ResetAppState(MMDApp* app) {
     ReleaseAccessoriesAndTracks(*app);                            // 0x44EA10
 
     // ---- combo refills ------------------------------------------------------
+    // Application-owned vocabulary (not model names): the English string is the
+    // key for the Chinese dictionary, so the CHS pass shares the EN branch
+    // through AddUiComboText and the Japanese UI keeps its own literals - the
+    // same three-way split LocalizeUI uses for these combos.  Testing the
+    // language byte with `!= 0` alone made the Chinese UI fall into the English
+    // branch and refill every combo with English text after a "new scene".
     SendMessageA(GetDlgItem(hwnd, panel::kIkChainCombo), CB_RESETCONTENT, 0, 0);
     SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_RESETCONTENT, 0, 0);
-    if (app->state.englishUI != 0) {
-        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("camera"));
-        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("light"));
-        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("s shadow"));
-        SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("gravity"));
+    HWND scopeCombo = GetDlgItem(hwnd, panel::kRegisterScopeCombo);
+    if (app->state.englishUI != kUiJapanese) {   // English UI or the Chinese pass
+        static const char* kScopes[] = {"camera", "light", "s shadow", "gravity"};
+        for (const char* name : kScopes)
+            AddUiComboText(app, scopeCombo, name);
     } else {
-        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+        SendMessageW(scopeCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpCamera));
-        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+        SendMessageW(scopeCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpLight));
-        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+        SendMessageW(scopeCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpSelfShadow));
-        SendMessageW(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_ADDSTRING, 0,
+        SendMessageW(scopeCombo, CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpGravity));
     }
     SendMessageA(GetDlgItem(hwnd, panel::kRegisterScopeCombo), CB_SETCURSEL, 0, 0);
     SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_RESETCONTENT, 0, 0);
-    if (app->state.englishUI != 0)
-        SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("camera/light/accessory"));
+    if (app->state.englishUI != kUiJapanese)
+        AddUiComboText(app, GetDlgItem(hwnd, panel::kMainComboModel),
+                       "camera/light/accessory");
     else
         SendMessageW(GetDlgItem(hwnd, panel::kMainComboModel), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpCamLightAcc));
     SendMessageA(GetDlgItem(hwnd, panel::kMainComboModel), CB_SETCURSEL, 0, 0);
     SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround), CB_RESETCONTENT, 0, 0);
     SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal), CB_RESETCONTENT, 0, 0);
-    if (app->state.englishUI != 0) {
-        SendMessageA(GetDlgItem(hwnd, panel::kMainComboGround), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("ground"));
-        SendMessageA(GetDlgItem(hwnd, panel::kMainComboNormal), CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>("non"));
+    if (app->state.englishUI != kUiJapanese) {
+        AddUiComboText(app, GetDlgItem(hwnd, panel::kMainComboGround), "ground");
+        AddUiComboText(app, GetDlgItem(hwnd, panel::kMainComboNormal), "non");
     } else {
         SendMessageW(GetDlgItem(hwnd, panel::kMainComboGround), CB_ADDSTRING, 0,
                      reinterpret_cast<LPARAM>(kJpGround));
@@ -233,13 +235,12 @@ void ResetAppState(MMDApp* app) {
                                        433};
     for (int id : kResetCombos)
         SendMessageA(GetDlgItem(hwnd, id), CB_RESETCONTENT, 0, 0);
-    if (app->state.englishUI != 0) {
+    if (app->state.englishUI != kUiJapanese) {
         static const char* kChannels[] = {"x axis move", "y axis move",
                                           "z axis move", "rotation",
                                           "distance", "view angle", "all"};
         for (const char* name : kChannels)
-            SendMessageA(GetDlgItem(hwnd, panel::kInterpCurveCombo), CB_ADDSTRING, 0,
-                         reinterpret_cast<LPARAM>(name));
+            AddUiComboText(app, GetDlgItem(hwnd, panel::kInterpCurveCombo), name);
     } else {
         static const wchar_t* kChannels[] = {kJpMoveX, kJpMoveY, kJpMoveZ,
                                              kJpRotation, kJpDistance,

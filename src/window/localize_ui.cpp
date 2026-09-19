@@ -25,11 +25,13 @@
 #include <Windows.h>
 
 #include <cstdint>
+#include <string>
 
 #include "mikudancestudio/text_encoding.hpp"
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
+#include "mikudancestudio/ui_language.hpp"
 #include "ui_controls.inc"
 
 namespace mikudancestudio {
@@ -82,50 +84,130 @@ HWND Dlg(MMDApp* app, int id) {
     return GetDlgItem(static_cast<HWND>(app->Hwnd()), id);
 }
 
-const wchar_t* JpControlText(int id) {
-    // JP branch re-sets the creation strings; single source = ui_controls.inc
-    // (regenerated dual-encoding table: wide-variant captions come back
-    // verbatim, ANSI-variant captions are ASCII and widened in place, which
-    // matches the original's SetWindowTextW re-set of the same strings).
+// ---- Japanese captions the generated creation table cannot supply ----------
+// Three main-window captions are unusable in ui_controls.inc (the table
+// generated from the original's control-creation function):
+//
+//   494 / 501 - bone-operation panel "select all" / "select unregistered".
+//     The original passes both captions through an indirect CreateWindowExW
+//     argument the generator could not resolve, so the table carries L""; the
+//     first fix fell back to the *English* captions, which left two English
+//     labels on the Japanese panel (field report: the panel still has buttons
+//     without their text).  The originals are recovered from two independent
+//     sources:
+//       * the CHS 9.26 reference image kept in this workspace
+//         ("MikuMikudance 926 CHS\MikuMikudance.exe") carries the UTF-16
+//         creation-caption block, and its translated twins sit in creation
+//         order right after 框　選 (= BOX選択, control 491):
+//           file 0x12A9D8  選中全部   (= 494, select all)
+//           file 0x12A9E8  選未註冊   (= 501, select unregistered)
+//         four full-width glyphs each - exactly the width the 60x24 buttons
+//         were laid out for (a fifth glyph would overrun them), and proof that
+//         the captions exist in every MMD build;
+//       * MMD's Japanese documentation names the same two buttons
+//         「全て選択」and「未登録選」 (four glyphs each), matching the English
+//         "select all" / "unregisted" pair already in kEnTexts.
+//
+//   562 - self-shadow mode "off".  The table captured it as the ANSI byte
+//     string "q_j0W0", the known byte-shifted re-read of a UTF-16 literal:
+//     its "j0W0" tail are the bytes of L"なし" (the identical artifact
+//     physics_model_dialog.cpp documents for the "none" combo entry).  The
+//     original caption is なし, the JP counterpart of the EN "off" caption.
+//
+// The table stores UTF-16 because all three controls are Unicode windows; no
+// Shift-JIS byte string is invented.
+struct JpCaptionFix { int id; const wchar_t* jp; };
+constexpr JpCaptionFix kJpCaptionFixes[] = {
+    {494, L"\u5168\u3066\u9078\u629e"},  // 全て選択  select all bones
+    {501, L"\u672a\u767b\u9332\u9078"},  // 未登録選  select unregistered bones
+    {562, L"\u306a\u3057"},              // なし      self-shadow mode off
+};
+
+// ASCII -> wide into one scratch buffer (valid until the next call), matching
+// the original's SetWindowTextW re-set of the ASCII creation strings.
+const wchar_t* WidenAscii(const char* text) {
     static wchar_t buf[64];
+    int i = 0;
+    for (; text != nullptr && i < 63 && text[i] != '\0'; ++i)
+        buf[i] = static_cast<unsigned char>(text[i]);
+    buf[i] = L'\0';
+    return buf;
+}
+
+const char* EnControlText(int id) {
+    for (const TextEntry& t : kEnTexts)
+        if (t.id == id)
+            return t.en;
+    return "";
+}
+
+const wchar_t* ZhControlText(int id) {
+    for (const TextEntry& t : kEnTexts)
+        if (t.id == id)
+            return t.zh;
+    return L"";
+}
+
+const wchar_t* JpControlText(int id) {
+    // Recovered originals first (see kJpCaptionFixes).
+    for (const JpCaptionFix& fix : kJpCaptionFixes)
+        if (fix.id == id)
+            return fix.jp;
+    // Then the JP creation caption of ui_controls.inc: single source of truth
+    // for every control the generator could resolve (wide-variant captions
+    // come back verbatim, ANSI-variant captions are ASCII and widened in
+    // place, which matches the original's SetWindowTextW re-set of the same
+    // strings).
     for (const ui::ControlSpec& c : ui::kControls) {
         if (c.id != id)
             continue;
         if (c.wtext != nullptr && c.wtext[0] != L'\0')
             return c.wtext;
-        if (c.atext != nullptr) {
-            int i = 0;
-            for (; i < 63 && c.atext[i] != '\0'; ++i)
-                buf[i] = static_cast<unsigned char>(c.atext[i]);
-            buf[i] = L'\0';
-            return buf;
-        }
-        // The JP creation string is empty (494 "select all"/501 "unregisted":
-        // the x64 reference string table carries no Japanese caption for them
-        // - tools/strcheck2_result.json - and neither does the CHS 9.26
-        // image).  Re-setting that empty string left both buttons blank in the
-        // Japanese UI, so fall back to the English caption from kEnTexts.
-        for (const TextEntry& t : kEnTexts) {
-            if (t.id != id)
-                continue;
-            int i = 0;
-            for (; i < 63 && t.en[i] != '\0'; ++i)
-                buf[i] = static_cast<unsigned char>(t.en[i]);
-            buf[i] = L'\0';
-            return buf;
-        }
-        return L"";
+        // An empty creation caption (or an ANSI variant without one) must fall
+        // through to the English caption below: re-setting the empty string is
+        // exactly what left buttons blank in the Japanese UI.  The old code
+        // returned its empty buffer for any non-null atext, including "".
+        if (c.atext != nullptr && c.atext[0] != '\0')
+            return WidenAscii(c.atext);
+        break;
     }
-    return L"";
+    // No Japanese caption exists in the image for this id: fall back to the
+    // English caption rather than clearing the control (never invent SJIS).
+    return WidenAscii(EnControlText(id));
 }
 
 }  // namespace
 
+// Caption written to a main-window control for `language`.  Never null; empty
+// only for ids that carry no caption at all (icon-only toggles, edits,
+// trackbars, and the mode-dependent panel toggle 536).
+std::wstring UiControlCaption(int id, unsigned char language) {
+    if (language == kUiEnglish)
+        return WidenAscii(EnControlText(id));
+    if (language == kUiChinese)
+        return ZhControlText(id);
+    return JpControlText(id);
+}
+
+// Number of main-window controls whose caption LocalizeUI rewrites in every
+// language (the kEnTexts table).  Exposed so the regression test can assert
+// that none of them can end up with an empty caption in any language.
+int UiLocalizedControlCount() {
+    return static_cast<int>(sizeof(kEnTexts) / sizeof(kEnTexts[0]));
+}
+
+int UiLocalizedControlId(int index) {
+    if (index < 0 || index >= UiLocalizedControlCount())
+        return -1;
+    return kEnTexts[index].id;
+}
+
 void LocalizeUI(MMDApp* app) {
     RefreshMenuLanguage(app);
     auto& s = *app;
-    const bool english = s.EnglishUI() == 1;                       // 658252
-    const bool chinese = s.EnglishUI() == 2;
+    // Name language follows the shared rule; the CHS pass is not "English".
+    const bool english = UiUsesEnglishNames(s.EnglishUI());        // 658252
+    const bool chinese = s.EnglishUI() == kUiChinese;
     const bool modelMode = s.state.optflag[0] != 0;  // 760
 
     HWND combo433 = Dlg(app, 433);

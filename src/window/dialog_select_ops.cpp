@@ -44,6 +44,7 @@
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/ui_language.hpp"
 
 namespace mikudancestudio {
 
@@ -88,8 +89,19 @@ unsigned char* ModelAt(MMDApp* app, int slot) {
     return app->ModelSlot(slot);
 }
 
+// The dialog's *labels* follow the original boolean test: the port shows the
+// English dialog templates to the Chinese UI as well (unchanged behaviour).
 bool English(MMDApp* app) {
     return app->state.englishUI != 0;  // 0xA0B4C / x64 0xA1B90
+}
+
+// The dialog's *names* (root bone, bone list, model list) follow the shared
+// name rule instead: only the English UI takes the English name fields.  With
+// the two-valued original byte the two tests were the same expression; the
+// port's third language (2 = Chinese) made the bone list English while the
+// main panel's morph combos stayed on the model's own names.
+bool EnglishNames(MMDApp* app) {
+    return UiUsesEnglishNames(app->state.englishUI);
 }
 
 // Dialog-side view of one 20-byte boneOrderTable entry.  The bone-order walk
@@ -170,7 +182,7 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466
         do {
             const int boneIdx = records[item].boneIndex;             // 0x46679D
             const char* name =
-                English(app) ? bones[boneIdx].nameEn : bones[boneIdx].name;
+                EnglishNames(app) ? bones[boneIdx].nameEn : bones[boneIdx].name;
             AddSelectNavString(combo669, name);                      // 0x4667C1
             if (mdl::Mdl(model)->selectedBone == boneIdx)  // 0x4667F1
                 selItem = item;
@@ -226,7 +238,7 @@ void InitSelectNavDialog(MMDApp* app, HWND hDlg) {  // was Sub466630, VA 0x00466
             continue;                                                // LABEL_40
         const mdl::ModelRecord* const mrec = mdl::Mdl(m);
         const char* name =
-            English(app) ? mrec->nameEn : mrec->name;  // x64 0x22F2 / 0x22C0
+            EnglishNames(app) ? mrec->nameEn : mrec->name;  // x64 0x22F2 / 0x22C0
         if (slot == app->SelectedModelSlot()) {                      // 0x46692A
             sprintf_s(Buffer, 0x100, "(%s)", name);                  // 0x466951
             AddSelectNavString(combo673, Buffer);
@@ -326,7 +338,7 @@ void RebuildTargetBoneList(MMDApp* app, HWND hDlg, int keepSelection) {  // was 
         const mdl::BoneType type = bones[i].type;
         if (type < mdl::BoneType::InertTip ||
             type == mdl::BoneType::FixedAxis) {
-            const char* name = English(app) ? bones[i].nameEn : bones[i].name;
+            const char* name = EnglishNames(app) ? bones[i].nameEn : bones[i].name;
             AddSelectNavString(combo677, name);                      // 0x43D4AC
             boneIds[n++] = i;                                        // 0x43D4BC
         }
