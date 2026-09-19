@@ -51,6 +51,7 @@
 #include "mikudancestudio/mmd_app.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/panel_controls.hpp"
+#include "mikudancestudio/runtime_log.hpp"
 #include "frame_state_dump.hpp"
 
 // key_ladder.cpp (registered in CMakeLists next to frame_modes_bone.cpp):
@@ -348,6 +349,28 @@ void TimelineAdvance(MMDApp* app) {
 }
 
 void FrameDriver(MMDApp* app) {
+    // Opt-in heap tripwire for the crash investigation.  The field crashes are
+    // intermittent (0%..50% between batches) and only surface later, wherever a
+    // corrupted block is next used, so the crash itself is a poor bisect
+    // signal.  With MIKUDANCESTUDIO_HEAP_CHECK set, every frame validates the
+    // process heap and reports the FIRST frame on which it is already corrupt -
+    // a signal that is independent of whether a crash follows.
+    static const bool heapCheck = [] {
+        char value[8]{};
+        return GetEnvironmentVariableA("MIKUDANCESTUDIO_HEAP_CHECK", value,
+                                       sizeof(value)) > 0 &&
+               value[0] != '\0' && value[0] != '0';
+    }();
+    if (heapCheck) {
+        static bool reported = false;
+        if (!reported && !HeapValidate(GetProcessHeap(), 0, nullptr)) {
+            reported = true;
+            runtime_log::Write("HEAP invalid at FrameDriver entry frame=%d",
+                               static_cast<int>(app->CurrentFrame()));
+            runtime_log::Trace("HEAP invalid at FrameDriver entry frame=%d",
+                               static_cast<int>(app->CurrentFrame()));
+        }
+    }
     if (app->SceneMutationInProgress())
         return;
 #ifdef MIKUDANCESTUDIO_DIAG
