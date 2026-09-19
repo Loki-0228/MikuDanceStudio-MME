@@ -833,6 +833,20 @@ void ModelPhysicsReadback(unsigned char* m) {
 // kinematic bodies are pushed from the bones before the step and the
 // dynamic result is read back after the settle iterations.
 void PhysicsFrame(MMDApp* app, unsigned char selActive) {
+    // Bisect switch for the crash investigation: with MIKUDANCESTUDIO_SKIP_PHYSICS
+    // set, this frame's whole physics update (kinematic sync, stepSimulation and
+    // readback) is a no-op.  If the heap-corruption crashes disappear, the
+    // corruption is inside the physics build/step; if they stay, the physics
+    // world is only another victim.  Unset in the shipped case costs one cached
+    // environment probe.
+    static const bool skipPhysics = [] {
+        char value[8]{};
+        return GetEnvironmentVariableA("MIKUDANCESTUDIO_SKIP_PHYSICS", value,
+                                       sizeof(value)) > 0 &&
+               value[0] != '\0' && value[0] != '0';
+    }();
+    if (skipPhysics)
+        return;
     auto& s = *app;
     // ---- gate A: the shared message-seen / pump counter ------------------
     // ONE field in both originals (x64 app+0xA1E18 / x86 app+0xA0D6C =
