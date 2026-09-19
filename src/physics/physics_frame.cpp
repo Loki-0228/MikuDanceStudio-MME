@@ -1190,7 +1190,17 @@ void PhysicsFrame(MMDApp* app, unsigned char selActive) {
         if (stepCount < 16) stepLabels[stepCount] = "main";
         ++stepCount;
 #endif
-        world->stepSimulation(mainDt, 10, 1.0f / 60.0f);
+        // Second bisect level (crash investigation): skipping only the solver
+        // steps keeps the scene build/sync/readback, so a crash that survives
+        // here comes from the build side rather than from the solver.
+        static const bool skipStep = [] {
+            char value[8]{};
+            return GetEnvironmentVariableA("MIKUDANCESTUDIO_SKIP_PHYSICS_STEP",
+                                           value, sizeof(value)) > 0 &&
+                   value[0] != '\0' && value[0] != '0';
+        }();
+        if (!skipStep)
+            world->stepSimulation(mainDt, 10, 1.0f / 60.0f);
         if (moved && count == 3)
             stepWorld("extra");                              // 0x46FD97
 #ifdef MIKUDANCESTUDIO_DIAG
