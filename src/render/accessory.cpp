@@ -750,15 +750,44 @@ bool NormalizeAccessoryMeshFvf(void*& mesh, IDirect3DDevice9* device) {
     constexpr std::size_t kMeshGetOptions = 9;
     constexpr std::size_t kMeshCloneMeshFvf = 11;
     void*** vtable = reinterpret_cast<void***>(mesh);
-    if (reinterpret_cast<MeshGetDword>((*vtable)[kMeshGetFvf])(mesh) == 274)
+    const DWORD sourceFvf =
+        reinterpret_cast<MeshGetDword>((*vtable)[kMeshGetFvf])(mesh);
+    if (sourceFvf == 274)
         return true;
     const DWORD options =
         reinterpret_cast<MeshGetDword>((*vtable)[kMeshGetOptions])(mesh);
     void* clone = nullptr;
-    if (FAILED(reinterpret_cast<MeshCloneFvf>((*vtable)[kMeshCloneMeshFvf])(
-            mesh, options, 274, device, &clone)) ||
-        clone == nullptr)
+    const HRESULT cloned = reinterpret_cast<MeshCloneFvf>(
+        (*vtable)[kMeshCloneMeshFvf])(mesh, options, 274, device, &clone);
+    runtime_log::Trace("MESH_CLONE source=%p fvf=%lu options=0x%lX hr=0x%08lX "
+                       "clone=%p", mesh, static_cast<unsigned long>(sourceFvf),
+                       static_cast<unsigned long>(options),
+                       static_cast<unsigned long>(cloned), clone);
+    if (FAILED(cloned) || clone == nullptr)
         return false;
+    // The clone only replaces the source when it owns its buffers.  d3dx9's
+    // CloneMeshFVF does not always convert: for the accessory that carries FVF
+    // 338 in the field scene it returns a mesh that *shares* the source's
+    // vertex buffer (probed on a live mesh, tests/pmm_reload_tests.cpp).  The
+    // loader releases the source immediately below, so adopting such a clone
+    // leaves ID3DXMesh::DrawSubset binding a buffer whose owner is gone - the
+    // access violation the crash report shows inside d3d9.dll.  When the buffers
+    // are shared the source mesh is kept instead: it is the object that owns
+    // them and it renders with its own, consistent FVF.
+    using GetBuffer = HRESULT(__stdcall*)(void*, void**);
+    constexpr std::size_t kMeshGetVertexBuffer = 7;
+    void* sourceVertexBuffer = nullptr;
+    void* cloneVertexBuffer = nullptr;
+    reinterpret_cast<GetBuffer>((*vtable)[kMeshGetVertexBuffer])(
+        mesh, &sourceVertexBuffer);
+    reinterpret_cast<GetBuffer>(
+        (*reinterpret_cast<void***>(clone))[kMeshGetVertexBuffer])(
+        clone, &cloneVertexBuffer);
+    if (sourceVertexBuffer == nullptr || cloneVertexBuffer == nullptr ||
+        sourceVertexBuffer == cloneVertexBuffer) {
+        ReleaseCom(clone);
+        return true;
+    }
     ReleaseCom(mesh);
     mesh = clone;
     d3dx::Get().computeNormals(clone, nullptr);

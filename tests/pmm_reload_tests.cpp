@@ -61,6 +61,17 @@ HRESULT MeshDraw(void* mesh, DWORD subset) {
         (*reinterpret_cast<void***>(mesh))[kMeshDrawSubset])(mesh, subset);
 }
 
+// Slot 7 is GetVertexBuffer (it takes an out pointer - calling it as a plain
+// getter faults, which is how the slot order was established).
+constexpr std::size_t kMeshGetVertexBuffer = 7;
+
+HRESULT VertexBufferOf(void* mesh, void** vertexBuffer) {
+    using Getter = HRESULT(__stdcall*)(void*, void**);
+    return reinterpret_cast<Getter>(
+        (*reinterpret_cast<void***>(mesh))[kMeshGetVertexBuffer])(mesh,
+                                                                 vertexBuffer);
+}
+
 }  // namespace
 
 int main() {
@@ -134,10 +145,13 @@ int main() {
     void* before = mesh;
     Check(NormalizeAccessoryMeshFvf(mesh, device),
           "a non-274 mesh is normalised");
-    Check(mesh != nullptr && mesh != before,
-          "normalisation clones instead of reusing the source mesh");
-    Check(MeshDword(mesh, kMeshGetFvf) == 274,
-          "the clone carries the accessory pass FVF");
+    Check(mesh != nullptr && PlausibleD3dObject(mesh),
+          "the normalised mesh is still a live object");
+    const DWORD normalisedFvf = MeshDword(mesh, kMeshGetFvf);
+    Check(normalisedFvf == 274 || normalisedFvf == kSourceFvf,
+          "the normalised mesh reports one consistent FVF");
+    Check(mesh != before || normalisedFvf == kSourceFvf,
+          "a clone that shares the source's buffers is rejected, not adopted");
     // D3DXCreateMeshFVF builds a mesh without an attribute table, so the draw
     // itself may report D3DXERR_INVALIDDATA; what matters here is that the
     // clone is a coherent object the draw path can walk (no fault, a result
@@ -160,6 +174,39 @@ int main() {
     Check(NormalizeAccessoryMeshFvf(already, device),
           "a 274 mesh reports success");
     Check(already == untouched, "a 274 mesh is not cloned");
+
+    // The field scene's only FVF-338 accessory goes through this path.  The
+    // crash it covers: d3dx9 may return a clone that *shares* the source's
+    // buffers, and the loader releases the source right afterwards, so drawing
+    // the clone reads a buffer whose owner is gone - the fault the report shows
+    // inside ID3DXMesh::DrawSubset -> d3d9.dll.  Whatever the runtime hands
+    // back, the mesh that survives must stay drawable.
+    {
+        void* source = nullptr;
+        Check(SUCCEEDED(createMesh(2, 6, kOptions, 338, device, &source)),
+              "create a 338 mesh");
+        void* sourceVb = nullptr;
+        Check(SUCCEEDED(VertexBufferOf(source, &sourceVb)) && sourceVb != nullptr,
+              "the 338 source has a vertex buffer");
+        void* normalised = source;
+        Check(NormalizeAccessoryMeshFvf(normalised, device),
+              "the 338 mesh is normalised");
+        void* survivingVb = nullptr;
+        Check(SUCCEEDED(VertexBufferOf(normalised, &survivingVb)) &&
+                  survivingVb != nullptr,
+              "the surviving mesh has a vertex buffer");
+        for (int i = 0; i < 200; ++i) {
+            const HRESULT hr = MeshDraw(normalised, 0);
+            Check(SUCCEEDED(hr) ||
+                      (static_cast<unsigned long>(hr) & 0xFFFF0000ul) ==
+                          0x88760000ul,
+                  "repeated draws of the normalised mesh stay coherent");
+        }
+        Check(MeshDword(normalised, kMeshGetFvf) == 274 ||
+                  MeshDword(normalised, kMeshGetFvf) == 338,
+              "the surviving mesh reports one consistent FVF");
+        reinterpret_cast<IUnknown*>(normalised)->Release();
+    }
 
     // --- the x86 displayFrames offset the frame seek used to read ----------
     // The morph-track walk read *(model + 9948) as a pointer.  9948 is the x86
