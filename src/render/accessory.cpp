@@ -191,6 +191,17 @@ void TraceMeshHeader(void* mesh) noexcept {
 }
 
 void DrawSubset(void* accessory, DWORD index) {
+    // Bisect switch for the crash investigation: with
+    // MIKUDANCESTUDIO_SKIP_ACCESSORY_DRAW set, the accessory mesh draw is not
+    // issued at all.  If the field crash disappears, the corruption lives in
+    // this draw path; if it stays, the accessory draw is only the victim.
+    // Unset (the shipped case) costs one cached env probe.
+    static const bool skip = [] {
+        const char* value = std::getenv("MIKUDANCESTUDIO_SKIP_ACCESSORY_DRAW");
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }();
+    if (skip)
+        return;
     void* mesh = mdl::Accessory(accessory)->mesh;
     // The mesh is an ID3DXMesh; DrawSubset forwards to the device with the
     // mesh's own vertex/index buffers, so a sentinel left in the field faults
