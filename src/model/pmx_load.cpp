@@ -1328,8 +1328,15 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             }
         }
     }
-    // Root bone from the first PMX display frame's first bone entry.
-    if (frameCount > 0 && frames[0].count > 0 && !frames[0].special) {
+    // Root bone from the first PMX display frame's first entry: the original
+    // only tests that the entry exists and is a *bone* entry (x64
+    // 0x7FF7CB4D0377 `cmp dword [rsi+10h],0` / `cmp byte [rax],0` /
+    // 0x7FF7CB4D0389 `mov [rbx+3CA8h],eax`), it never looks at the frame's
+    // special flag.  Standard models keep their bones in the special "Root"
+    // frame, so requiring !special left displayRootBone at its reset value:
+    // the first list row then showed bones[0] and boneListRowRecord[0] named
+    // the wrong bone (the row a click selects).
+    if (frameCount > 0 && frames[0].count > 0 && frames[0].entries[0].type == 0) {
         model.displayRootBone = frames[0].entries[0].index;
     }
     // group name table (m+9936)
@@ -1348,8 +1355,15 @@ bool LoadPMX(unsigned char* m, D3DRenderer* sub, std::uint8_t showInfo,
             mdl::Bones(m)[model.displayRootBone];
         strcpy_s(displayGroups[0].name, sizeof(displayGroups[0].name),
                  rootBone.name);
+        // 0x140132048: the panel's fixed second row, byte-exact from the image
+        // (the separators really are ASCII '?'), English twin 0x140132058
+        // "Disp/IK/OP"; the previous "Root" was invented text.
+        static const char kGroup1Jp[] =
+            "\x95\x5C\x8E\xA6"  // 表示
+            "?IK?"
+            "\x8A\x4F\x90\x65";  // 外親
         strcpy_s(displayGroups[1].name, sizeof(displayGroups[1].name),
-                 "Root");
+                 kGroup1Jp);
         strcpy_s(displayGroups[0].nameEn, sizeof(displayGroups[0].nameEn),
                  rootBone.nameEn);
         strcpy_s(displayGroups[1].nameEn, sizeof(displayGroups[1].nameEn),

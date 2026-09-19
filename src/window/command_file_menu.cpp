@@ -1084,6 +1084,32 @@ LRESULT __stdcall GroundShadowColorEditSubclassProc(HWND hWnd, UINT uMsg,
     return DefWindowProcA(hWnd, uMsg, wParam, lParam);
 }
 
+// ---------------------------------------------------------------------------
+// Case 250 ("paste to another frame", F key) preconditions.  The command
+// needs (1) frame data copied for the current mode - bone frames in model
+// mode, accessory frames in display mode - and (2) a target to paste onto (a
+// selected bone / a selected accessory).  Both misses used to end in a silent
+// `break`, which is exactly the field report "the OK button does nothing":
+// the confirmation was shown, the user pressed OK and no paste happened
+// because there was nothing to paste.  Factored into a pure predicate so a
+// regression test can pin the three outcomes independently of the dialog.
+// ---------------------------------------------------------------------------
+enum class PasteFrameGate {
+    Ready,            // clipboard filled and a target selected
+    NoClipboardData,  // nothing copied for this mode
+    NoTarget,         // nothing selected to paste onto
+};
+
+PasteFrameGate PasteFrameGateOf(bool accessoryMode,
+                                std::uint32_t copiedFrames,
+                                bool targetSelected) {
+    if (copiedFrames == 0)
+        return PasteFrameGate::NoClipboardData;
+    if (!targetSelected)
+        return PasteFrameGate::NoTarget;
+    return PasteFrameGate::Ready;
+}
+
 void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify) {
     (void)notify;
     switch (id) {
@@ -1809,8 +1835,16 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         // English wording is shown in every language rather than inventing
         // Shift-JIS bytes.
         const auto& clipboardCounts = app->ClipboardCounts();
-        if (isAcc ? clipboardCounts.accessories == 0
-                  : clipboardCounts.bones == 0) {
+        // Target: the selected bone (model mode) / a selected accessory slot
+        // (display mode) - the same test the two "please select" boxes use.
+        const bool targetSelected =
+            isAcc ? (app->AccessorySlot(app->SelectedObjectSlot()) != nullptr)
+                  : (ActiveModel(app) != nullptr &&
+                     mdl::Mdl(ActiveModel(app))->selectedBone != -1);
+        const std::uint32_t copiedFrames =
+            isAcc ? clipboardCounts.accessories : clipboardCounts.bones;
+        if (PasteFrameGateOf(isAcc, copiedFrames, targetSelected) ==
+            PasteFrameGate::NoClipboardData) {
             text_encoding::MessageBoxJp(
                 MainHwnd(app),
                 isAcc ? "There is no accessory frame data copied.\n"
@@ -1843,7 +1877,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         if (!isAcc) {
             // ---------------- bone paste (0x485677) ----------------
             unsigned char* model = ActiveModel(app);
-            if (mdl::Mdl(model)->selectedBone == -1) {
+            if (!targetSelected) {
                 text_encoding::MessageBoxJp(
                     MainHwnd(app),
                     app->EnglishUI() != 0 ? "Please select bone."
@@ -1964,7 +1998,7 @@ void CmdFileMenu(MMDApp* app, HWND hwnd, std::uint16_t id, std::uint16_t notify)
         }
         // ---------------- accessary paste (0x4854B5) ----------------
         const std::uint8_t slotIdx = app->SelectedObjectSlot();
-        if (app->AccessorySlot(slotIdx) == nullptr) {
+        if (!targetSelected) {
             text_encoding::MessageBoxJp(
                 MainHwnd(app),
                 app->EnglishUI() != 0 ? "Please select accessary."

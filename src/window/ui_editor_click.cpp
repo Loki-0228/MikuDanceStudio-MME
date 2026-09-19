@@ -110,6 +110,47 @@ static int Div14(int v) {
     return v / 14;
 }
 
+// Bone-list row -> bone index.  The label column keeps one record per drawn
+// line (model+0x3224, 200 entries): the 20-byte display records of a bone row
+// carry the bone index, morph rows carry -1-morphIndex and rows that were
+// never painted keep the -999 sentinel.  The click handler must therefore
+// treat "record in [0, boneCount)" as a bone row and everything else as "no
+// bone on this row" - reading past boneCount indexes boneSelection /
+// selectedBone outside their allocation (the original has no such guard
+// because only painted rows are hit; the port is defensive and the guard is
+// what makes the mapping testable).
+//   Original: 0x446C8A / x64 0x7FF7CB459F00 (`movsxd rdx,[r8+rax*4+0x3224]`
+//   then `test edx,edx / js` to the -999 morph path).
+int BoneListRowBoneIndex(const mikudancestudio::mdl::ModelRecord* record,
+                         std::int32_t row) {
+    if (record == nullptr)
+        return -1;
+    if (row < 0 || row >= 200)  // the row table is 200 entries wide
+        return -1;
+    const std::int32_t idx = record->boneListRowRecord[row];
+    if (idx < 0)  // -999 sentinel or a -1-morph row
+        return -1;
+    if (static_cast<std::uint32_t>(idx) >= record->boneCount)
+        return -1;  // stale record (e.g. left over from a previous model)
+    return idx;
+}
+
+// Same row, but only the -1-morph records are of interest: returns the morph
+// index encoded in the record (-1 - record) or -1 when the row is not a morph
+// row.  A -999 record encodes want == 998, which never matches a real morph,
+// exactly like the original's `or r11,-1 / sub r11d,edx` fall-through.
+std::int32_t BoneListRowMorphIndex(const mikudancestudio::mdl::ModelRecord* record,
+                                   std::int32_t row) {
+    if (record == nullptr)
+        return -1;
+    if (row < 0 || row >= 200)
+        return -1;
+    const std::int32_t idx = record->boneListRowRecord[row];
+    if (idx >= 0 || idx == -999)
+        return -1;
+    return -1 - idx;
+}
+
 // Active model pointer = slot[byte this+0x910] of the 100-slot array at
 // this+0x780.  (sub_446A70 pattern @ 0x446B48, re-read every use like the
 // original reloads it in every loop iteration)
@@ -698,6 +739,7 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
     // loc_446C8A: row lookup + selection toggle
     {
         unsigned char* m = ActiveModel(app);
+        mdl::ModelRecord* const record = mikudancestudio::mdl::Mdl(m);
         const std::int32_t row = Div14(y - 0xA0);
         // The row table is 200 entries and only rows that were painted carry a
         // live record; guard the derived index instead of reading past it.
@@ -705,8 +747,11 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
             PostLanguageSweep2(app);
             return;
         }
-        const std::int32_t idx =
-            mikudancestudio::mdl::Mdl(m)->boneListRowRecord[row];
+        // Bone rows: the record is the bone index.  The mapping also rejects
+        // records that point outside boneCount (a row painted for another
+        // model / a stale table), so the selection below can never write
+        // outside boneSelection.
+        const std::int32_t idx = BoneListRowBoneIndex(record, row);
         if (idx >= 0) {
             unsigned char* p = mikudancestudio::mdl::Mdl(m)->boneSelection + idx;
             if (*p != 0) {
@@ -721,8 +766,13 @@ static void HandleLButtonDown_NameColumnHit(MMDApp* app, HWND hwnd,
             // the state but showed nothing until some later repaint.
             PostLanguageSweep(app);
             // via 0x44702D
-        } else if (idx == -999) {                       // 0xFFFFFC19
-            const std::int32_t want = -1 - idx;
+        } else if (BoneListRowMorphIndex(record, row) >= 0) {
+            // Any negative record other than the -999 sentinel is a morph row
+            // and encodes its morph index as -1-idx; -999 (a row without a
+            // record) skips the morph search and falls through to the row-type
+            // dispatch below, exactly like the original's
+            // `test edx,edx / js` + `cmp edx,0xFFFFFC19 / je` pair.
+            const std::int32_t want = BoneListRowMorphIndex(record, row);
             const std::int32_t morphCount =
                 static_cast<std::int32_t>(mdl::Mdl(m)->facialFrameCount);
             int i = 0;

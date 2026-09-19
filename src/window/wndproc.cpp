@@ -238,10 +238,28 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         HandleMouseMove(static_cast<std::uint32_t>(lParam),
                         HIWORD(lParam));                          // 0x444CC0
         return 0;
-    case WM_LBUTTONDOWN:
+    case WM_LBUTTONDOWN: {
+        // HandleLButtonDown (0x446A70) judges the click on the *stored* mouse
+        // position (state.mouseX/mouseY), which HandleMouseMove only writes
+        // after its three auto-hide gates (0x444CC6) have let the move
+        // through.  A press that arrives without a preceding stored move -
+        // the first click after the window is re-activated, and every click
+        // while a hide-rect gate is armed - was therefore routed with a stale
+        // position: the derived row hit a row that was never painted (record
+        // -999, type 0), so the bone list cleared its selection and selected
+        // nothing ("clicking a bone does not select it").  The press carries
+        // its own client coordinates in lParam; latch them first, mirroring
+        // HandleMouseMove's store (0x444D5B, including the 0xEA60 wrap).
+        const int clickX = static_cast<int>(lParam & 0xFFFFu);
+        const int clickY = static_cast<int>((lParam >> 16) & 0xFFFFu);
+        if (s.MouseX() != clickX || s.MouseY() != clickY) {
+            s.MouseX() = clickX > 0xEA60 ? clickX - 0x10000 : clickX;
+            s.MouseY() = clickY > 0xEA60 ? clickY - 0x10000 : clickY;
+        }
         SetCapture(static_cast<HWND>(s.Hwnd()));
         HandleLButtonDown(app);                                   // 0x446A70
         return 0;
+    }
     case WM_LBUTTONUP:
         ReleaseCapture();
         HandleLButtonUp(app);                                     // 0x44A9A0

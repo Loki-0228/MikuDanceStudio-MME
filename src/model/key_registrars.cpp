@@ -94,6 +94,7 @@
 #include "mikudancestudio/d3dx_dyn.hpp"
 #include "mikudancestudio/ported_funcs.hpp"
 #include "mikudancestudio/model.hpp"
+#include "mikudancestudio/text_encoding.hpp"
 
 #include "keyframe_common.hpp"
 
@@ -123,18 +124,23 @@ const char kJpFrameRegTitle[] =  // 0x52B908 "フレーム登録"
 // HWND is read from model+0
 void OverflowBox(unsigned char* m, int limit) {
     char text[256];
+    HWND owner = *reinterpret_cast<HWND*>(m);
     // x64 sub_7FF7CB4E9390 @0x7FF7CB4E9D4B: language byte selects both the
-    // format and the caption ("register frame" / フレーム登録).
+    // format and the caption ("register frame" / フレーム登録).  Both bodies go
+    // through MessageBoxJp: the JP literals are byte-exact Shift-JIS, and
+    // MessageBoxA decodes them with the *system* code page (CP936 on a Chinese
+    // Windows), which garbles every line of this box - the box the F-key
+    // "paste to another frame" command (case 250) can raise from
+    // RegisterBoneKey.  ASCII decodes identically under CP932, so the English
+    // branch is unaffected.
     if (mikudancestudio::mdl::Mdl(m)->physicsFlags != 0) {
         sprintf_s(text, 0x100,
                   "You cannot regist over %d point\n"
                   "Please execute 'delete unused frame'", limit);
-        MessageBoxA(*reinterpret_cast<HWND*>(m), text,
-                    "register frame", 0);
+        text_encoding::MessageBoxJp(owner, text, "register frame", 0);
     } else {
         sprintf_s(text, 0x100, kJpOverflow, limit);
-        MessageBoxA(*reinterpret_cast<HWND*>(m), text,
-                    kJpFrameRegTitle, 0);
+        text_encoding::MessageBoxJp(owner, text, kJpFrameRegTitle, 0);
     }
 }
 
